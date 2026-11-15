@@ -13,11 +13,12 @@ export function testClient() {
 
 export function renderApp(path = '/', client: PlumeApi = testClient()) {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
-  return render(
+  const result = render(
     <ThemeProvider>
       <ApiProvider client={client}>
         <RouterProvider router={router} />
       </ApiProvider>
     </ThemeProvider>,
   );
+  return { ...result, router };
 }

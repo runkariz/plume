@@ -27,7 +27,14 @@ export interface CanonNodeData extends Record<string, unknown> {
   field: string;
   type: string;
   required: boolean;
-  support: { apiId: string; text: string; color: string; name: string; support: string }[];
+  support: {
+    apiId: string;
+    text: string;
+    color: string;
+    url?: string | null;
+    name: string;
+    support: string;
+  }[];
 }
 export interface GroupNodeData extends Record<string, unknown> {
   kind: 'group';
@@ -36,6 +43,7 @@ export interface GroupNodeData extends Record<string, unknown> {
   build: string;
   text: string;
   color: string;
+  url?: string | null;
 }
 export interface EdgeData extends Record<string, unknown> {
   field: string;
@@ -85,6 +93,7 @@ export function buildGraph(snap: ModelSnapshot): { nodes: ModelNode[]; edges: Mo
           apiId: a.id,
           text: a.logo.text,
           color: a.logo.color,
+          url: a.logo.url,
           name: a.shortName,
           support: f.support[a.id] ?? 'unsupported',
         })),
@@ -138,6 +147,7 @@ export function buildGraph(snap: ModelSnapshot): { nodes: ModelNode[]; edges: Mo
         build: api.build,
         text: api.logo.text,
         color: api.logo.color,
+        url: api.logo.url,
       },
     });
     used.forEach((u, i) => {

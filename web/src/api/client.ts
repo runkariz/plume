@@ -17,6 +17,7 @@ import {
   type ModelListItem,
   type Job,
   type ModelSnapshot,
+  type SuggestQuery,
   type SuggestResponse,
   type JobEvent,
   type MaintainerIdentity,
@@ -65,7 +66,11 @@ export interface PlumeApi {
   checkCall(id: string, req: CheckCallRequest, signal?: AbortSignal): Promise<CheckCallResponse>;
   // canonical models
   listModelCandidates(signal?: AbortSignal): Promise<ApiList>;
-  suggestModels(apis: string[], signal?: AbortSignal): Promise<SuggestResponse>;
+  suggestModels(
+    apis: string[],
+    query?: SuggestQuery,
+    signal?: AbortSignal,
+  ): Promise<SuggestResponse>;
   /**
    * Without the maintainer token: a session for Claude (the model is stored unlisted). With it: a server-side job
    * (202) unless `engine: "claude"`.
@@ -337,12 +342,17 @@ export function createApiClient(
       call<CheckCallResponse>(`/v1/apis/${enc(id)}/check-call`, { method: 'POST', body, signal }),
     listModelCandidates: async (signal) =>
       normaliseList(await call<ApiList>('/v1/models/candidates', { signal })),
-    suggestModels: async (apis, signal) => {
-      const r = await call<SuggestResponse>('/v1/models/suggest', {
-        method: 'POST',
-        body: { apis },
-        signal,
-      });
+    suggestModels: async (apis, query = {}, signal) => {
+      // only what was asked for is sent: the server's defaults (multi, 24 per page) apply to the rest
+      const body: Record<string, unknown> = { apis };
+      if (query.q) body.q = query.q;
+      if (query.only && query.only !== 'multi') body.only = query.only;
+      if (query.require?.length) body.require = query.require;
+      if (query.inAll) body.inAll = true;
+      if (query.writeOnly) body.writeOnly = true;
+      if (query.limit) body.limit = query.limit;
+      if (query.offset) body.offset = query.offset;
+      const r = await call<SuggestResponse>('/v1/models/suggest', { method: 'POST', body, signal });
       return { ...r, apis: r.apis.map(withLabel) };
     },
     generateModel: (body, signal) =>

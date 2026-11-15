@@ -7,6 +7,7 @@ import type {
   Job,
   ReviewRequest,
   SearchRequest,
+  SuggestQuery,
 } from '@/api/types';
 import { apiRef, modelCandidates, productSnapshot, sampleSuggestions } from './modelData';
 import {
@@ -39,6 +40,13 @@ import {
   sampleTrace,
   shopifyItems,
 } from './data';
+
+/** The package icon route of an API that has one (`logo.url` is null for the others, as the real API sends). */
+function withIcon<
+  T extends { id: string; logo: { text: string; color: string; url?: string | null } },
+>(a: T): T {
+  return { ...a, logo: { ...a.logo, url: iconApis.has(a.id) ? `/v1/apis/${a.id}/icon` : null } };
+}
 
 const notFound = () => HttpResponse.json({ detail: 'API not found' }, { status: 404 });
 
@@ -153,18 +161,27 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
   const script = buildScript(opts.failBuild);
 
   return [
-    http.get(`${base}/v1/models/candidates`, () => HttpResponse.json({ items: modelCandidates })),
+    http.get(`${base}/v1/models/candidates`, () =>
+      HttpResponse.json({ items: modelCandidates.map(withIcon) }),
+    ),
     http.post(`${base}/v1/models/suggest`, async ({ request }) => {
-      const { apis } = (await request.json()) as { apis: string[] };
+      const body = (await request.json()) as { apis: string[] } & SuggestQuery;
+      const { apis } = body;
       if (!Array.isArray(apis) || apis.length < 2)
         return HttpResponse.json({ detail: 'Pick at least two APIs' }, { status: 422 });
       if (apis.some((id) => !apiRef(id)))
         return HttpResponse.json({ detail: 'Unknown API in the selection' }, { status: 404 });
-      return HttpResponse.json(sampleSuggestions(apis));
+      if ((body.require ?? []).some((id) => !apis.includes(id)))
+        return HttpResponse.json(
+          { error: 'bad_request', message: 'require must be a subset of apis' },
+          { status: 400 },
+        );
+      const r = sampleSuggestions(apis, body);
+      return HttpResponse.json({ ...r, apis: r.apis.map(withIcon) });
     }),
     // W12: signed in, "Generate" runs on the server (a job, 202); without the token it is the Claude session and the
     // model is stored unlisted. `ready` only names a model the caller may see (official, or unreleased with the token).
-    // Mock behaviour by concept: `location` = no server model key (503), `customer` = the job fails, `shipment` = refused once.
+    // Mock behaviour by concept: `refund` = no server model key (503), `customer` = the job fails, `shipment` = refused once.
     http.post(`${base}/v1/models/generate`, async ({ request }) => {
       const body = (await request.json()) as GenerateRequest;
       const maintainer = isMaintainer(request);
@@ -182,7 +199,7 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
           (m.visibility === 'official' || (maintainer && m.visibility === 'unreleased')),
       )?.model.id;
       if (engine === 'server' && !existing) {
-        if (body.concept === 'location')
+        if (body.concept === 'refund')
           return HttpResponse.json(
             {
               error: 'llm_unavailable',

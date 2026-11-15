@@ -32,7 +32,7 @@ function GroupNode({ data }: NodeProps<ModelNode>) {
   return (
     <div className="g-group">
       <div className="g-group-head">
-        <ApiAvatar text={d.text} color={d.color} size={26} />
+        <ApiAvatar text={d.text} color={d.color} url={d.url} size={26} />
         <b>{d.name}</b>
         <span className="muted small" title={d.build}>
           build {shortBuild(d.build)}
@@ -67,6 +67,7 @@ function CanonicalNode({ data, selected }: NodeProps<ModelNode>) {
               key={s.apiId}
               text={s.text}
               color={s.color}
+              url={s.url}
               name={s.name}
               kind={
                 s.support === 'supported'

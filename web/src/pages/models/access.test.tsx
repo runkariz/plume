@@ -59,7 +59,7 @@ describe('Generate on the server (signed-in maintainer)', () => {
   it('says so when the server has no model key (503) and offers the Claude flow', async () => {
     authStore.signIn('pl_ok', 'maintainer');
     renderApp(suggest);
-    await userEvent.click(await screen.findByRole('button', { name: 'Generate Location' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Generate Refund' }));
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Server-side generation is not configured on this Plume');
     await userEvent.click(within(alert).getByRole('button', { name: 'Use Claude instead' }));
