@@ -390,6 +390,114 @@ describe('a model set result', () => {
   });
 });
 
+describe('the owner key of a new lineage (shown once, in the view only)', () => {
+  const KEY = 'ok-widget-3f9a0c71d2e84b5f';
+  const all = seedSets();
+  const stored = all.find((x) => x.set.id === SET_OFFICIAL);
+  const set = stored ? setJson(all, stored) : (undefined as never);
+
+  async function shown(structured: unknown, caps: object = {}) {
+    const h = fakeHost();
+    render(<WidgetApp connection={h.conn} />);
+    await h.reply(h.sent[0]?.id, { hostCapabilities: caps, hostContext: { theme: 'light' } });
+    const push = (sc: unknown) =>
+      h.push({ jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: result(sc) });
+    await push(structured);
+    return { h, push };
+  }
+
+  it('is read from structuredContent.owner_key for a model and for a set (and ownerKey too)', () => {
+    const model = { ...inventorySnapshot, visibility: 'unlisted' };
+    expect(extractModel(result({ accepted: true, owner_key: KEY, model }))).toMatchObject({
+      kind: 'model',
+      ownerKey: KEY,
+    });
+    expect(extractModel(result({ accepted: true, ownerKey: KEY, set }))).toMatchObject({
+      kind: 'set',
+      ownerKey: KEY,
+    });
+    for (const none of [undefined, null, '', '  ', 5, {}])
+      expect(extractModel(result({ accepted: true, owner_key: none, model }))).toMatchObject({
+        ownerKey: null,
+      });
+  });
+
+  it('shows the key with Copy and the words that say what it is for, for a model', async () => {
+    await shown({
+      accepted: true,
+      owner_key: KEY,
+      model: { ...inventorySnapshot, visibility: 'unlisted' },
+    });
+    expect(await screen.findByText('Your model is saved, and unlisted')).toBeInTheDocument();
+    expect(screen.getByText(/Keep this key to find or list your models later/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Owner key')).toHaveValue(KEY);
+    expect(screen.getByRole('button', { name: 'Copy key' })).toBeInTheDocument();
+  });
+
+  it('says "model set" for a set', async () => {
+    await shown({ accepted: true, owner_key: KEY, set });
+    expect(await screen.findByText('Your model set is saved, and unlisted')).toBeInTheDocument();
+    expect(screen.getByLabelText('Owner key')).toHaveValue(KEY);
+  });
+
+  it('shows nothing when the result has no key', async () => {
+    await shown({ accepted: true, model: { ...inventorySnapshot, visibility: 'official' } });
+    await screen.findByRole('heading', { name: 'Inventory' });
+    expect(screen.queryByLabelText('Owner key')).not.toBeInTheDocument();
+    expect(screen.queryByText(/is saved, and unlisted/)).not.toBeInTheDocument();
+  });
+
+  it('copies with the clipboard API; when the sandbox refuses it, falls back; when that fails too, says so', async () => {
+    await shown({
+      accepted: true,
+      owner_key: KEY,
+      model: { ...inventorySnapshot, visibility: 'unlisted' },
+    });
+    const copyBtn = await screen.findByRole('button', { name: 'Copy key' });
+    // 1. the clipboard API works
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    await userEvent.click(copyBtn);
+    expect(writeText).toHaveBeenCalledWith(KEY);
+    expect(await screen.findByText('Key copied')).toBeInTheDocument();
+    // 2. the clipboard API is refused by the sandbox: the browser's copy command is tried
+    writeText.mockRejectedValue(new Error('NotAllowedError'));
+    const exec = vi.fn().mockReturnValue(true);
+    Object.defineProperty(document, 'execCommand', { value: exec, configurable: true });
+    await userEvent.click(copyBtn);
+    expect(exec).toHaveBeenCalledWith('copy');
+    // 3. neither works: the key is selected and the person is told to copy it by hand
+    exec.mockReturnValue(false);
+    await userEvent.click(copyBtn);
+    expect(await screen.findByText(/Copy failed: the key is selected/)).toBeInTheDocument();
+  });
+
+  it('can be dismissed, and a retry that returns a NEW key shows it again', async () => {
+    const model = { ...inventorySnapshot, visibility: 'unlisted' };
+    const { push } = await shown({ accepted: true, owner_key: KEY, created: true, model });
+    await userEvent.click(await screen.findByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByLabelText('Owner key')).not.toBeInTheDocument();
+    // the same draft again (created:false) comes back with a new key for the same model
+    await push({ accepted: true, owner_key: 'ok-second-key', created: false, model });
+    expect(await screen.findByLabelText('Owner key')).toHaveValue('ok-second-key');
+  });
+
+  it('is only text and only in the view: never a link, never stored', async () => {
+    const stash = vi.spyOn(Storage.prototype, 'setItem');
+    await shown({
+      accepted: true,
+      owner_key: KEY,
+      share_url: 'https://plume.example/models/x',
+      model: { ...inventorySnapshot, visibility: 'unlisted' },
+    });
+    await screen.findByLabelText('Owner key');
+    expect(document.body.innerHTML.split(KEY).length - 1).toBe(1); // once, in the field's value
+    expect(screen.queryByRole('link', { name: new RegExp(KEY) })).not.toBeInTheDocument();
+    expect(stash).not.toHaveBeenCalled();
+    stash.mockRestore();
+  });
+});
+
 describe('the view', () => {
   async function shown(structured: unknown, caps: object = {}) {
     const h = fakeHost();

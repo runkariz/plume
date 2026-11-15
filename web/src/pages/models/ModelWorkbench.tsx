@@ -119,7 +119,7 @@ export function ModelWorkbench({
           }}
         />
       </div>
-      <Card className="pad wb-detail" role="region" aria-label="Mapping detail">
+      <Card className="pad wb-detail" role="region" aria-label="Mapping detail" tabIndex={0}>
         {selection ? (
           <MappingDetail snap={snap} sel={selection} renderDocLink={renderDocLink} />
         ) : (

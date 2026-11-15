@@ -91,3 +91,16 @@ body {
   height: auto;
   max-height: 340px;
 }
+
+/* the owner key: the field takes the width, the buttons follow (wrapping in a narrow chat column) */
+.widget-key {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+.widget-key .input {
+  flex: 1 1 220px;
+  min-width: 0;
+}

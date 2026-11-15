@@ -98,6 +98,8 @@ Where to change what:
   `localStorage` is the list of **owner keys** (`plume-owner-keys`, `src/lib/ownerKeys.ts`): the server hands one
   out once when someone without a token creates a model, and it only lists "Your models" (it cannot change or
   release anything; a model's link works without it).
+  A key from another browser, or from the Claude view, is pasted under "Have an owner key?" on the Models page
+  (`OwnerKeyPaste`): it is checked against the server (POST) first, so a mistyped key is not kept.
 - **No third-party requests.** Fonts are self-hosted (`@fontsource-variable/*`); an API's icon is loaded only
   from a relative `/v1/...` path on the API (`src/lib/icon.ts`), never from an external URL, with the letter logo
   as the fallback. Do not add analytics or CDNs.
@@ -171,6 +173,11 @@ A **model set** result (`structuredContent.kind === "model_set"`, or `{set}` fro
 the same `SetWorkbench` as the web page (diagram, control box, detail), read only (no design choices; "Open in
 Plume" is the way on), plus the models and relations as text and the open questions. `SetDetail` takes its links as
 render props, so the bundle contains no router.
+
+A new lineage made without a token (submit_model_draft / submit_model_set) carries its **owner key** only in
+`structuredContent.owner_key` (the tool text just points to the view): the widget shows it once (`OwnerKeyNotice`:
+the key, Copy with a fallback for a sandbox that refuses the clipboard, Dismiss), in memory only, and says to paste
+it in "Your models". A retry of the same draft returns a new key and shows it again.
 
 Rules it must keep (the host's default CSP is `default-src 'none'`, scripts and styles inline, images `data:`,
 `connect-src 'none'`, and the frame has no storage):

@@ -79,6 +79,17 @@ export function seedModels(): StoredModel[] {
     seed(inventorySnapshot, 'inventory', { visibility: 'official', lineageId: 'L-inventory' }),
     seed(productSnapshot, 'product', { visibility: 'official', lineageId: 'L-product' }),
     seed(order40Snapshot, 'Order', { visibility: 'official', lineageId: 'L-order' }),
+    // an older official model of the same concept (other case) over the same APIs: not in the list, named by sameConcept
+    seed(
+      {
+        ...order40Snapshot,
+        id: 'm-order0lder0a1b2c3d4e5f60718293a4b5c',
+        name: 'Order (older)',
+        generatedAt: '2026-11-01T09:00:00Z',
+      },
+      'order',
+      { visibility: 'official', lineageId: 'L-order-older' },
+    ),
     // a model with nested objects and arrays, reachable by its link only (not in the official list)
     seed(nestedSnapshot, 'order-nested', {
       visibility: 'unlisted',
@@ -120,7 +131,7 @@ export function lineageOf(all: StoredModel[], m: StoredModel): ModelLineage {
 
 const REVISE = (m: StoredModel) =>
   `Use the Plume connector. Call revise_model with id "${m.model.id}" to start from the ${m.model.name} model, ` +
-  `change what you need, then submit the result with submit_model_draft(session_id, draft, based_on="${m.model.id}"). ` +
+  `change what you need, then submit the result with submit_model_draft(model_session, draft, based_on="${m.model.id}"). ` +
   `Plume checks every citation before it stores the new version.`;
 
 /** The model JSON the API sends: the snapshot plus visibility, lineage, share path and the revise prompt. */
@@ -140,7 +151,24 @@ export function decorate(all: StoredModel[], m: StoredModel): ModelSnapshot {
     sharePath: `/models/${m.model.id}`,
     shareUrl: null,
     revisePrompt: REVISE(m),
+    sameConcept: sameConceptOf(all, m),
   };
+}
+
+const sameApis = (a: string[], b: string[]) =>
+  a.length === b.length && [...a].sort().join() === [...b].sort().join();
+
+/** Other official models of the same concept (case-insensitive) over the same APIs. */
+export function sameConceptOf(all: StoredModel[], m: StoredModel): string[] {
+  return all
+    .filter(
+      (x) =>
+        x !== m &&
+        x.visibility === 'official' &&
+        x.concept.toLowerCase() === m.concept.toLowerCase() &&
+        sameApis(x.apis, m.apis),
+    )
+    .map((x) => x.model.id);
 }
 
 export function listItem(all: StoredModel[], m: StoredModel): ModelListItem {

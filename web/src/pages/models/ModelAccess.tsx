@@ -93,6 +93,25 @@ export function LineageHistory({
   );
 }
 
+/** "Other versions of this concept": other official models of the same concept over the same APIs. */
+export function SameConceptLine({ snap }: { snap: Pick<ModelSnapshot, 'id' | 'sameConcept'> }) {
+  const others = (snap.sameConcept ?? []).filter((id) => id !== snap.id);
+  if (others.length === 0) return null;
+  return (
+    <p className="same-concept muted small">
+      Other official models of this concept over the same APIs:{' '}
+      {others.map((id, i) => (
+        <span key={id}>
+          {i > 0 ? ', ' : ''}
+          <Link to={`/models/${id}`} className="mono">
+            {id}
+          </Link>
+        </span>
+      ))}
+    </p>
+  );
+}
+
 function useCopy() {
   const [state, setState] = useState<'idle' | 'ok' | 'fail'>('idle');
   async function copy(text: string) {

@@ -5,8 +5,8 @@ import type { CallToolResult } from './protocol';
 
 /** What a tool result means for the view. */
 export type Shown =
-  | { kind: 'model'; model: ModelSnapshot; link: string | null }
-  | { kind: 'set'; set: ModelSet; link: string | null }
+  | { kind: 'model'; model: ModelSnapshot; link: string | null; ownerKey: string | null }
+  | { kind: 'set'; set: ModelSet; link: string | null; ownerKey: string | null }
   | { kind: 'refused'; issues: DraftIssue[] }
   | { kind: 'pending'; status: string }
   | { kind: 'error'; message: string }
@@ -31,6 +31,12 @@ function looksLikeModel(v: unknown): v is ModelSnapshot {
  * sends {accepted, snapshot_id, share_url, model}, get_generation sends the job and the model once it succeeded.
  * So the view reads `structuredContent.model ?? structuredContent`. A refused draft carries its issues instead.
  */
+/** The owner key of a new lineage made without a token: the server sends it only here, never in the text. */
+function ownerKeyOf(sc: Record<string, unknown>): string | null {
+  const k = sc.owner_key ?? sc.ownerKey;
+  return typeof k === 'string' && k.trim() !== '' ? k : null;
+}
+
 export function extractModel(result: CallToolResult): Shown {
   const text = result.content?.find((c) => c.type === 'text')?.text;
   if (result.isError) return { kind: 'error', message: text ?? 'The tool failed.' };
@@ -45,7 +51,7 @@ export function extractModel(result: CallToolResult): Shown {
       (typeof sc.share_url === 'string' && sc.share_url) ||
       (typeof asSet.shareUrl === 'string' && asSet.shareUrl) ||
       null;
-    return { kind: 'set', set: normaliseSet(asSet), link: setLink };
+    return { kind: 'set', set: normaliseSet(asSet), link: setLink, ownerKey: ownerKeyOf(sc) };
   }
   const candidate = looksLikeModel(sc.model) ? sc.model : sc;
   if (!looksLikeModel(candidate)) {
@@ -57,7 +63,7 @@ export function extractModel(result: CallToolResult): Shown {
     (typeof sc.share_url === 'string' && sc.share_url) ||
     (typeof candidate.shareUrl === 'string' && candidate.shareUrl) ||
     null;
-  return { kind: 'model', model: normalise(candidate), link };
+  return { kind: 'model', model: normalise(candidate), link, ownerKey: ownerKeyOf(sc) };
 }
 
 const NEUTRAL = '#6a655e';

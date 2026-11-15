@@ -422,6 +422,8 @@ export interface ModelSnapshot {
   shareUrl?: string | null;
   /** The text of "Modify with Claude", built by the server (it names the tools). */
   revisePrompt?: string;
+  /** The ids of the other official models of the same concept (case-insensitive) over the same APIs. */
+  sameConcept?: string[];
   /** True when a pinned API has a newer build: the model is built on older docs. */
   stale?: boolean;
   staleInputs?: StaleInput[];
