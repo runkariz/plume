@@ -42,6 +42,19 @@ class Settings(BaseSettings):
         description="auto = vertex if PLUME_VERTEX_API_KEY, else gemini if PLUME_GEMINI_API_KEY, "
         "else the offline hash embedder.",
     )
+    vertex_key_file: Path | None = Field(
+        default=None,
+        description="File holding the Vertex AI express key for server-side model generation "
+        "(maintainer). Read on every call, never logged. Unset = generation answers 503.",
+    )
+    model_llm: str = Field(
+        default="gemini-2.5-pro", description="Gemini model for server-side model generation."
+    )
+    model_max_rounds: int = Field(default=3, ge=1, le=10)
+    web_public_url: str | None = Field(
+        default=None,
+        description="The web UI's public base URL; model share links are <this>/models/{id}.",
+    )
     embed_model: str = "gemini-embedding-001"
     embed_dims: Literal[768] = 768
     embed_batch_size: int | None = Field(default=None, ge=1, le=250)

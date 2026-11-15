@@ -4,6 +4,7 @@ the same JSON as ``claudePayload`` so the web can display what Claude receives."
 from typing import Any
 
 from plume.application.models.concepts import Suggestions
+from plume.application.models.sessions import revise_prompt
 from plume.application.reader.dto import (
     ApiOverview,
     BuildRef,
@@ -14,7 +15,7 @@ from plume.application.reader.dto import (
     SearchResult,
 )
 from plume.domain.knowledge.citation import Citation
-from plume.domain.models.snapshot import ModelSnapshot
+from plume.domain.models.snapshot import ModelSnapshot, Visibility
 from plume.domain.models.validation import Issue
 
 Json = dict[str, Any]
@@ -230,7 +231,11 @@ def snapshot_payload(
     }
 
 
-def model_list_item(m: ModelSnapshot, stale_inputs: list[dict[str, str | None]]) -> Json:
+def model_list_item(
+    m: ModelSnapshot,
+    stale_inputs: list[dict[str, str | None]],
+    versions: int | None = None,
+) -> Json:
     return {
         "snapshot_id": m.snapshot_id,
         "name": m.draft.name,
@@ -239,6 +244,47 @@ def model_list_item(m: ModelSnapshot, stale_inputs: list[dict[str, str | None]])
         "created_at": m.created_at.isoformat(),
         "stale": bool(stale_inputs),
         "stale_inputs": stale_inputs,
+        "visibility": m.visibility,
+        "official": m.visibility == Visibility.OFFICIAL,
+        "version": m.version,
+        "versions": versions if versions is not None else m.version,
+        "lineage_id": m.lineage,
+    }
+
+
+def share_path(snapshot_id: str) -> str:
+    return f"/models/{snapshot_id}"
+
+
+def access_payload(m: ModelSnapshot, lineage: Json, web_url: str | None) -> Json:
+    """Who can see the model, where it came from, its versions and its link (camelCase)."""
+    path = share_path(m.snapshot_id)
+    return {
+        "visibility": m.visibility,
+        "official": m.visibility == Visibility.OFFICIAL,
+        "origin": m.origin,
+        "generator": m.generator,
+        "releasedAt": m.released_at.isoformat() if m.released_at else None,
+        "basedOn": m.based_on,
+        "lineage": {
+            "id": lineage["id"],
+            "version": lineage["version"],
+            "versions": lineage["versions"],
+            "basedOn": lineage["based_on"],
+            "latestId": lineage["latest_id"],
+            "history": [
+                {
+                    "id": h["id"],
+                    "version": h["version"],
+                    "createdAt": h["created_at"],
+                    "visibility": h["visibility"],
+                }
+                for h in lineage["history"]
+            ],
+        },
+        "sharePath": path,
+        "shareUrl": web_url.rstrip("/") + path if web_url else None,
+        "revisePrompt": revise_prompt(m.snapshot_id),
     }
 
 

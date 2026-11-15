@@ -16,10 +16,12 @@ from plume import __version__
 from plume.application.jobs.maintainer import MaintainerJobs, job_payload
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.models.concepts import SuggestConcepts
-from plume.application.models.sessions import ModelDraftRefusedError, ModelSessions
+from plume.application.models.generate import GenerateModels
+from plume.application.models.sessions import ModelSessions
 from plume.application.reader.resolve import BuildResolver
 from plume.domain.shared.ids import BuildId
 from plume.interfaces import payloads
+from plume.interfaces.mcp.model_tools import register_model_tools
 from plume.interfaces.mcp.reader_server import _run
 
 INSTRUCTIONS = """\
@@ -32,8 +34,12 @@ Plume maintainer tools. Canonical models across 2..N APIs:
    doc_ids to read other documents of the pinned build).
 4. Write the model, then submit_model_draft(session_id, draft). Plume checks every citation
    (document exists, quote is in it, field and endpoint exist). A refusal lists issue codes;
-   fix and resubmit. An accepted draft becomes an immutable snapshot (status
-   generated_unverified): get_model(id).
+   fix and resubmit. An accepted draft becomes an immutable UNRELEASED snapshot: review it
+   (get_model) and release_model(id) to make it official, or discard_model(id).
+5. Or let Plume write it: generate_model(apis, concept) runs its LLM with the same validation
+   and returns a job; get_generation(job_id) until succeeded, then review and release.
+6. Changing a model: revise_model(id) then submit_model_draft(..., based_on=id) = a new
+   (unreleased) version of the same model; list_models(visibility="unreleased") to review.
 Before reusing a stored model (list_models / get_model), check stale: true means a pinned
 build is no longer latest; regenerate it with a new session or ask.
 Build control: publish_build(api, build, tag) moves a tag (refused when the quality gate
@@ -53,6 +59,8 @@ class McpMaintainerDependencies:
     resolver: Callable[[], BuildResolver]
     tag_build: Callable[[], TagBuild]
     jobs: Callable[[], MaintainerJobs] | None = None
+    generate: Callable[[], GenerateModels] | None = None
+    web_public_url: str | None = None
 
 
 def _names(resolver: BuildResolver, apis: list[str]) -> dict[str, str]:
@@ -78,86 +86,9 @@ def create_maintainer_server(deps: McpMaintainerDependencies) -> MCPServer:
         """Concepts shared by 2..6 APIs (deterministic), with coverage per API."""
         return await _run(lambda: payloads.suggestions_payload(deps.suggest().execute(apis)))
 
-    @server.tool(annotations=WRITE, structured_output=True)
-    async def start_model_session(apis: list[str], concept: str) -> dict[str, Any]:
-        """Pin the latest build of each API for one concept (e.g. "Order"). Returns session_id."""
-
-        def run() -> dict[str, Any]:
-            s = deps.models().start(apis, concept)
-            return {
-                "session_id": s.session_id,
-                "concept": s.concept,
-                "inputs": [{"api": i.api, "build": i.build} for i in s.inputs],
-                "next": "Call get_model_context(session_id).",
-            }
-
-        return await _run(run)
-
-    @server.tool(annotations=READ, structured_output=True)
-    async def get_model_context(session_id: str) -> dict[str, Any]:
-        """Index of the evidence: per API the concept's documents with field counts, plus the
-        draft format and the citation rules. Read the fields with get_model_evidence."""
-        return await _run(lambda: deps.models().context(session_id))
-
-    @server.tool(annotations=READ, structured_output=True)
-    async def get_model_evidence(
-        session_id: str, api: str, doc_ids: list[str] | None = None, cursor: int = 0
-    ) -> dict[str, Any]:
-        """Fields (path, type, location, required, description) of the concept's documents in
-        one API of the session, at most ~20k characters per call. Follow next_cursor until null.
-        Copy paths exactly into the draft and quote descriptions verbatim as evidence."""
-        return await _run(lambda: deps.models().evidence(session_id, api, doc_ids, cursor))
-
-    @server.tool(annotations=WRITE, structured_output=True)
-    async def submit_model_draft(session_id: str, draft: dict[str, Any]) -> dict[str, Any]:
-        """Submit the canonical model (JSON as in draft_format). Accepted -> snapshot; refused ->
-        issues with codes (MISSING_CITATION, QUOTE_NOT_FOUND, FIELD_NOT_FOUND, ...)."""
-
-        def run() -> dict[str, Any]:
-            try:
-                result = deps.models().submit(session_id, draft)
-            except ModelDraftRefusedError as exc:
-                return payloads.refusal_payload(exc.issues)
-            snap = result.snapshot
-            names = _names(deps.resolver(), [i.api for i in snap.inputs])
-            return {
-                "accepted": True,
-                "created": result.created,
-                "snapshot_id": snap.snapshot_id,
-                "model": payloads.snapshot_payload(snap, names),
-            }
-
-        return await _run(run)
-
-    @server.tool(annotations=READ, structured_output=True)
-    async def get_model(snapshot_id: str) -> dict[str, Any]:
-        """A stored canonical model snapshot."""
-
-        def run() -> dict[str, Any]:
-            service = deps.models()
-            snap = service.snapshot(snapshot_id)
-            return payloads.snapshot_payload(
-                snap,
-                _names(deps.resolver(), [i.api for i in snap.inputs]),
-                service.stale_inputs(snap),
-            )
-
-        return await _run(run)
-
-    @server.tool(annotations=READ, structured_output=True)
-    async def list_models(api: str | None = None) -> dict[str, Any]:
-        """Stored model snapshots (newest first), optionally for one API."""
-
-        def run() -> dict[str, Any]:
-            service = deps.models()
-            return {
-                "models": [
-                    payloads.model_list_item(m, service.stale_inputs(m)) for m in service.list(api)
-                ],
-                "note": payloads.STALE_HINT,
-            }
-
-        return await _run(run)
+    register_model_tools(
+        server, deps.models, deps.resolver, _run, True, deps.web_public_url, deps.generate
+    )
 
     @server.tool(annotations=WRITE, structured_output=True)
     async def publish_build(api: str, build: str, tag: str = "latest") -> dict[str, Any]:

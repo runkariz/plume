@@ -2036,6 +2036,28 @@
             "minLength": 1,
             "title": "Concept",
             "type": "string"
+          },
+          "engine": {
+            "anyOf": [
+              {
+                "enum": [
+                  "claude",
+                  "server"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "claude = a session your Claude fills (default without the token); server = Plume generates it with its LLM (maintainer token; default with it).",
+            "title": "Engine"
+          },
+          "force": {
+            "default": false,
+            "description": "server engine: generate even if a model already exists.",
+            "title": "Force",
+            "type": "boolean"
           }
         },
         "required": [
@@ -2422,6 +2444,127 @@
         "title": "Me",
         "type": "object"
       },
+      "MineRequest": {
+        "properties": {
+          "ownerKeys": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Ownerkeys",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ownerKeys"
+        ],
+        "title": "MineRequest",
+        "type": "object"
+      },
+      "ModelJobOut": {
+        "properties": {
+          "apis": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Apis",
+            "type": "array"
+          },
+          "concept": {
+            "title": "Concept",
+            "type": "string"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "eventsUrl": {
+            "title": "Eventsurl",
+            "type": "string"
+          },
+          "generator": {
+            "title": "Generator",
+            "type": "string"
+          },
+          "jobId": {
+            "title": "Jobid",
+            "type": "string"
+          },
+          "maxRounds": {
+            "title": "Maxrounds",
+            "type": "integer"
+          },
+          "round": {
+            "title": "Round",
+            "type": "integer"
+          },
+          "sessionId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessionid"
+          },
+          "snapshotId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshotid"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updatedAt": {
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "jobId",
+          "status",
+          "apis",
+          "concept",
+          "sessionId",
+          "round",
+          "maxRounds",
+          "snapshotId",
+          "error",
+          "generator",
+          "createdAt",
+          "updatedAt",
+          "eventsUrl"
+        ],
+        "title": "ModelJobOut",
+        "type": "object"
+      },
       "ModelList": {
         "properties": {
           "items": {
@@ -2459,9 +2602,19 @@
             "title": "Id",
             "type": "string"
           },
+          "lineageId": {
+            "default": "",
+            "title": "Lineageid",
+            "type": "string"
+          },
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "official": {
+            "default": true,
+            "title": "Official",
+            "type": "boolean"
           },
           "stale": {
             "description": "A pinned build is no longer the API's latest.",
@@ -2474,6 +2627,27 @@
             },
             "title": "Staleinputs",
             "type": "array"
+          },
+          "version": {
+            "default": 1,
+            "title": "Version",
+            "type": "integer"
+          },
+          "versions": {
+            "default": 1,
+            "title": "Versions",
+            "type": "integer"
+          },
+          "visibility": {
+            "default": "official",
+            "enum": [
+              "official",
+              "unreleased",
+              "unlisted",
+              "discarded"
+            ],
+            "title": "Visibility",
+            "type": "string"
           }
         },
         "required": [
@@ -2674,6 +2848,53 @@
           "apiId"
         ],
         "title": "ReviewRequest",
+        "type": "object"
+      },
+      "RevisedSession": {
+        "properties": {
+          "basedOn": {
+            "title": "Basedon",
+            "type": "string"
+          },
+          "claudePrompt": {
+            "title": "Claudeprompt",
+            "type": "string"
+          },
+          "concept": {
+            "title": "Concept",
+            "type": "string"
+          },
+          "contextUrl": {
+            "title": "Contexturl",
+            "type": "string"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/PinnedInput"
+            },
+            "title": "Inputs",
+            "type": "array"
+          },
+          "sessionId": {
+            "title": "Sessionid",
+            "type": "string"
+          },
+          "startingDraft": {
+            "additionalProperties": true,
+            "title": "Startingdraft",
+            "type": "object"
+          }
+        },
+        "required": [
+          "sessionId",
+          "basedOn",
+          "concept",
+          "inputs",
+          "startingDraft",
+          "claudePrompt",
+          "contextUrl"
+        ],
+        "title": "RevisedSession",
         "type": "object"
       },
       "SearchHit": {
@@ -2896,6 +3117,77 @@
           "webhookEndpoints"
         ],
         "title": "SectionCounts",
+        "type": "object"
+      },
+      "SessionStatus": {
+        "properties": {
+          "apis": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Apis",
+            "type": "array"
+          },
+          "basedOn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basedon"
+          },
+          "concept": {
+            "title": "Concept",
+            "type": "string"
+          },
+          "sessionId": {
+            "title": "Sessionid",
+            "type": "string"
+          },
+          "snapshotId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshotid"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "submitted"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visibility"
+          }
+        },
+        "required": [
+          "sessionId",
+          "status",
+          "snapshotId",
+          "visibility",
+          "apis",
+          "concept",
+          "basedOn"
+        ],
+        "title": "SessionStatus",
         "type": "object"
       },
       "StaleInput": {
@@ -5489,6 +5781,7 @@
     },
     "/v1/models": {
       "get": {
+        "description": "Official models (the latest released version of each). With the maintainer token,\n`visibility=unreleased|all` lists the others too. Newest first.",
         "operationId": "list_models_v1_models_get",
         "parameters": [
           {
@@ -5518,6 +5811,33 @@
               "title": "Limit",
               "type": "integer"
             }
+          },
+          {
+            "in": "query",
+            "name": "visibility",
+            "required": false,
+            "schema": {
+              "default": "official",
+              "pattern": "^(official|unreleased|all)$",
+              "title": "Visibility",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
           }
         ],
         "responses": {
@@ -5541,6 +5861,16 @@
             },
             "description": "Bad Request"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -5560,6 +5890,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           }
         },
         "summary": "List Models",
@@ -5602,6 +5942,16 @@
               }
             },
             "description": "Not Found"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           }
         },
         "summary": "Candidates",
@@ -5612,8 +5962,26 @@
     },
     "/v1/models/generate": {
       "post": {
-        "description": "Start a model session. Plume does not run an LLM: Claude writes the model through the\nmaintainer MCP (or POST .../draft). If a snapshot already exists for the same concept on\nthe current builds, its id is returned.",
+        "description": "engine=claude (default without the token): start a session your Claude fills; the\nmodel is stored unlisted (unreleased with the token). engine=server (maintainer token;\ndefault with it): Plume generates the model with its LLM \u2192 202 with the job; the model\nis stored unreleased. `ready` returns an existing model only when the caller may see it\n(official; unreleased too for a maintainer).",
         "operationId": "generate_v1_models_generate_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -5630,6 +5998,318 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GenerateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelJobOut"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Generate",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models/jobs/{job_id}": {
+      "get": {
+        "description": "A server-side generation job (maintainer).",
+        "operationId": "get_job_v1_models_jobs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelJobOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Job",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models/jobs/{job_id}/events": {
+      "get": {
+        "description": "Server-sent events; `event:` = queued|started|context|round|refused|accepted|failed|\ndone. Resume with the Last-Event-ID header. The stream ends after `done`.",
+        "operationId": "job_events_v1_models_jobs__job_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "last-event-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Job Events",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models/mine": {
+      "post": {
+        "description": "The latest version of each model started with one of these owner keys (POST so the\nkeys stay out of URLs and logs).",
+        "operationId": "mine_v1_models_mine_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MineRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelList"
                 }
               }
             },
@@ -5664,9 +6344,92 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           }
         },
-        "summary": "Generate",
+        "summary": "Mine",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models/sessions/{session_id}": {
+      "get": {
+        "description": "For pollers: `submitted` with the snapshot id once a draft was accepted.",
+        "operationId": "session_status_v1_models_sessions__session_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Session Status",
         "tags": [
           "models"
         ]
@@ -5729,6 +6492,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           }
         },
         "summary": "Context",
@@ -5739,6 +6512,7 @@
     },
     "/v1/models/sessions/{session_id}/draft": {
       "post": {
+        "description": "Validate and store a draft: unlisted without the token (the response carries the\nmodel's link and, for a new model, its `ownerKey`, shown once), unreleased with it.\n`basedOn` makes it the next version of that model when you may add to it.",
         "operationId": "submit_v1_models_sessions__session_id__draft_post",
         "parameters": [
           {
@@ -5748,6 +6522,22 @@
             "schema": {
               "title": "Session Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "basedOn",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Basedon"
             }
           },
           {
@@ -5827,6 +6617,16 @@
               }
             },
             "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           }
         },
         "summary": "Submit",
@@ -5931,6 +6731,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           }
         },
         "summary": "Evidence",
@@ -5992,6 +6802,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           }
         },
         "summary": "Suggest Concepts",
@@ -6002,7 +6822,7 @@
     },
     "/v1/models/{snapshot_id}": {
       "get": {
-        "description": "A model snapshot (ModelSnapshot in the web client).",
+        "description": "A model (ModelSnapshot in the web client): official and unlisted ones for anyone with\nthe id; unreleased ones with the maintainer token (404 otherwise).",
         "operationId": "get_model_v1_models__snapshot_id__get",
         "parameters": [
           {
@@ -6012,6 +6832,22 @@
             "schema": {
               "title": "Snapshot Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],
@@ -6023,6 +6859,327 @@
                   "additionalProperties": true,
                   "title": "Response Get Model V1 Models  Snapshot Id  Get",
                   "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Model",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models/{snapshot_id}/discard": {
+      "post": {
+        "description": "Throw away an unreleased model. 409 unless it is unreleased.",
+        "operationId": "discard_v1_models__snapshot_id__discard_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Discard V1 Models  Snapshot Id  Discard Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Discard",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models/{snapshot_id}/release": {
+      "post": {
+        "description": "Make an unreleased model official (listed publicly). 409 unless it is unreleased.",
+        "operationId": "release_v1_models__snapshot_id__release_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Release V1 Models  Snapshot Id  Release Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Release",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models/{snapshot_id}/revise": {
+      "post": {
+        "description": "A session on the current builds with this model as the starting draft. Submit with\nbasedOn to make a new version (an official model revised without the token becomes a new\nunlisted model based on it).",
+        "operationId": "revise_v1_models__snapshot_id__revise_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevisedSession"
                 }
               }
             },
@@ -6057,9 +7214,19 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
           }
         },
-        "summary": "Get Model",
+        "summary": "Revise",
         "tags": [
           "models"
         ]

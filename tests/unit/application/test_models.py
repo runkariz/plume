@@ -110,17 +110,23 @@ def test_evidence_pages_stay_under_budget(stack: FakeStack) -> None:
 def test_good_draft_becomes_an_immutable_snapshot(stack: FakeStack) -> None:
     models = stack.models()
     session = models.start(APIS, "Order")
-    result = models.submit(session.session_id, _draft("good"))
+    result = models.submit(session.session_id, _draft("good"), maintainer=True)
     assert result.created
     snap = result.snapshot
     assert snap.status == "generated_unverified"
+    assert snap.visibility == "unreleased"
     assert snap.citations_checked == 10
     assert snap.coverage() == {"test-catalog-api": (5, 5), "second-catalog-api": (5, 5)}
-    again = models.submit(session.session_id, _draft("good"))
+    again = models.submit(session.session_id, _draft("good"), maintainer=True)
     assert not again.created
     assert again.snapshot.snapshot_id == snap.snapshot_id
     assert models.snapshot(snap.snapshot_id) == snap
-    assert models.existing(APIS, "orders") == snap
+    assert models.existing(APIS, "orders") is None  # unreleased: not offered publicly
+    assert models.existing(APIS, "orders", maintainer=True) == snap
+    assert models.list("second-catalog-api") == []
+    released = models.release(snap.snapshot_id)
+    assert released.visibility == "official"
+    assert models.existing(APIS, "orders") == released
     assert [m.snapshot_id for m in models.list("second-catalog-api")] == [snap.snapshot_id]
     assert models.list("shopify") == []
 
@@ -171,7 +177,8 @@ def test_snapshots_go_stale_when_a_pinned_build_moves(stack: FakeStack, tmp_path
 
     models = stack.models()
     session = models.start(APIS, "Order")
-    snap = models.submit(session.session_id, _draft("good")).snapshot
+    sid = models.submit(session.session_id, _draft("good"), maintainer=True).snapshot.snapshot_id
+    snap = models.release(sid)
     assert models.stale_inputs(snap) == []
     assert models.existing(APIS, "Order") == snap
 
@@ -194,3 +201,107 @@ def test_concept_spelling_is_normalised(stack: FakeStack) -> None:
     assert normalize_concept("Product/Offer") == "Product/Offer"
     assert normalize_concept("SKU") == "SKU"
     assert stack.models().start(APIS, "order").concept == "Order"
+
+
+# -- access: unlisted user models, lineages, owner keys, release/discard ----------------------
+
+
+def test_user_models_are_unlisted_with_a_random_id_and_owner_key(stack: FakeStack) -> None:
+    from plume.application.errors import NotFoundError  # noqa: PLC0415
+
+    models = stack.models()
+    session = models.start(APIS, "Order", "user")
+    result = models.submit(session.session_id, _draft("good"))
+    snap = result.snapshot
+    assert (snap.visibility, snap.origin, snap.version) == ("unlisted", "user", 1)
+    assert snap.snapshot_id.startswith("u-")
+    assert len(snap.snapshot_id) >= 22
+    assert snap.key.startswith("m-")  # the content hash, kept for dedup only
+    assert result.owner_key
+    assert result.owner_key.startswith("pk_")
+    retry = models.submit(session.session_id, _draft("good"))  # same draft again: same model
+    assert (retry.created, retry.snapshot.snapshot_id, retry.owner_key) == (
+        False,
+        snap.snapshot_id,
+        None,
+    )
+    assert models.visible_snapshot(snap.snapshot_id) == snap  # the link works for anyone
+    assert models.list() == []
+    assert models.existing(APIS, "Order") is None
+    assert [m.snapshot_id for m in models.mine([result.owner_key])] == [snap.snapshot_id]
+    assert models.mine(["pk_wrong"]) == []
+    assert models.session_status(session.session_id)["snapshot_id"] == snap.snapshot_id
+    other = models.submit(models.start(APIS, "Order", "user").session_id, _draft("good"))
+    assert other.snapshot.snapshot_id != snap.snapshot_id  # another user, another lineage
+    with pytest.raises(NotFoundError):
+        models.visible_snapshot("u-guess")
+
+
+def test_revisions_make_versions_in_a_lineage(stack: FakeStack) -> None:
+    models = stack.models()
+    first = models.submit(models.start(APIS, "Order", "user").session_id, _draft("good"))
+    v1 = first.snapshot
+    revision = models.revise(v1.snapshot_id)
+    assert revision["based_on"] == v1.snapshot_id
+    assert revision["starting_draft"]["name"] == v1.draft.name
+    changed = dict(_draft("good"), description="Revised description.")
+    v2 = models.submit(revision["session_id"], changed).snapshot
+    assert (v2.lineage, v2.version, v2.based_on) == (v1.snapshot_id, 2, v1.snapshot_id)
+    v3 = models.submit(
+        models.revise(v2.snapshot_id)["session_id"],
+        dict(changed, description="Third."),
+        based_on=v2.snapshot_id,
+    ).snapshot
+    info = models.lineage_info(v3)
+    assert (info["version"], info["versions"], info["latest_id"]) == (3, 3, v3.snapshot_id)
+    assert [h["version"] for h in info["history"]] == [1, 2, 3]
+    assert [m.snapshot_id for m in models.mine([first.owner_key or ""])] == [v3.snapshot_id]
+    assert models.snapshot(v1.snapshot_id) == v1  # versions never change
+
+
+def test_maintainer_flow_release_discard_and_official_forks(stack: FakeStack) -> None:
+    from plume.application.errors import NotFoundError  # noqa: PLC0415
+    from plume.application.models.sessions import ModelStateError  # noqa: PLC0415
+
+    models = stack.models()
+    snap = models.submit(models.start(APIS, "Order").session_id, _draft("good"), maintainer=True)
+    sid = snap.snapshot.snapshot_id
+    assert snap.owner_key is None
+    with pytest.raises(NotFoundError):
+        models.visible_snapshot(sid)  # unreleased: hidden without the token
+    assert models.visible_snapshot(sid, maintainer=True).visibility == "unreleased"
+    official = models.release(sid)
+    with pytest.raises(ModelStateError):
+        models.release(sid)
+    with pytest.raises(ModelStateError):
+        models.discard(sid)
+    # a user revising the official model starts their own unlisted lineage
+    user = models.submit(
+        models.revise(sid)["session_id"], dict(_draft("good"), description="Mine.")
+    )
+    assert (user.snapshot.visibility, user.snapshot.version) == ("unlisted", 1)
+    assert user.snapshot.lineage != official.lineage
+    assert user.snapshot.based_on == sid
+    assert user.owner_key
+    # a maintainer revision is the next (unreleased) version of the official lineage
+    v2 = models.submit(
+        models.revise(sid, maintainer=True)["session_id"],
+        dict(_draft("good"), description="Better."),
+        maintainer=True,
+    ).snapshot
+    assert (v2.lineage, v2.version, v2.visibility) == (official.lineage, 2, "unreleased")
+    assert models.lineage_info(official)["versions"] == 1  # public view: unreleased hidden
+    assert models.lineage_info(official, maintainer=True)["versions"] == 2
+    discarded = models.discard(v2.snapshot_id)
+    assert discarded.visibility == "discarded"
+    assert [m.snapshot_id for m in models.list()] == [sid]
+
+
+def test_oversized_draft_is_refused(stack: FakeStack) -> None:
+    from plume.application.models.sessions import ModelDraftRefusedError  # noqa: PLC0415
+
+    models = stack.models()
+    session = models.start(APIS, "Order", "user")
+    with pytest.raises(ModelDraftRefusedError) as exc:
+        models.submit(session.session_id, {"name": "x" * 1_100_000})
+    assert exc.value.issues[0].code == "INVALID_FORMAT"

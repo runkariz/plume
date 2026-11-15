@@ -19,6 +19,7 @@ from plume.application.knowledge.list_builds import ListApis, ListBuilds
 from plume.application.knowledge.seal_build import SealBuild
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.models.concepts import SuggestConcepts
+from plume.application.models.generate import GenerateModels
 from plume.application.models.sessions import ModelSessions
 from plume.application.ports.embedder import Embedder
 from plume.application.ports.job_events import JobEvents
@@ -43,7 +44,7 @@ from plume.infrastructure.db.repos.asset_repo import PostgresAssetRepo
 from plume.infrastructure.db.repos.build_repo import PostgresBuildRepo
 from plume.infrastructure.db.repos.document_repo import PostgresDocumentRepo
 from plume.infrastructure.db.repos.eval_repo import PostgresEvalRepo
-from plume.infrastructure.db.repos.model_repo import PostgresModelRepo
+from plume.infrastructure.db.repos.model_repo import PostgresModelJobRepo, PostgresModelRepo
 from plume.infrastructure.db.repos.tag_repo import PostgresTagRepo
 from plume.infrastructure.dumps.local_fs import LocalDumpStore
 from plume.infrastructure.embeddings.gemini import GeminiEmbedder
@@ -52,6 +53,7 @@ from plume.infrastructure.events.log_events import LoggingJobEvents
 from plume.infrastructure.jobs.package_storage import LocalPackageStorage
 from plume.infrastructure.jobs.postgres_jobs import PostgresJobEventLog, PostgresJobRepo
 from plume.infrastructure.jobs.thread_runner import ThreadJobRunner
+from plume.infrastructure.llm.vertex_gemini import VertexGeminiWriter
 from plume.infrastructure.search.pgvector_index import PgVectorIndex
 from plume.infrastructure.search.postgres_fact_index import PostgresFactIndex
 from plume.infrastructure.search.postgres_search import PostgresFactQuery, PostgresSearchIndex
@@ -165,6 +167,29 @@ class Container:
             self.documents,
             self.models_repo,
             self.clock,
+        )
+
+    @cached_property
+    def model_jobs(self) -> PostgresModelJobRepo:
+        return PostgresModelJobRepo(self.engine)
+
+    @cached_property
+    def model_writer(self) -> VertexGeminiWriter:
+        return VertexGeminiWriter(self.settings.vertex_key_file, self.settings.model_llm)
+
+    @cached_property
+    def model_job_runner(self) -> ThreadJobRunner:
+        return ThreadJobRunner(workers=2)
+
+    def generate(self) -> GenerateModels:
+        return GenerateModels(
+            self.models(),
+            self.model_writer,
+            self.model_jobs,
+            self.job_events,
+            self.model_job_runner,
+            self.clock,
+            self.settings.model_max_rounds,
         )
 
     @cached_property

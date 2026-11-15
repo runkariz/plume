@@ -31,6 +31,7 @@ from plume.application.reader.use_cases import (
 from plume.domain.knowledge.api import ApiId
 from plume.domain.shared.errors import DomainError
 from plume.interfaces import payloads
+from plume.interfaces.mcp.model_tools import register_model_tools
 
 INSTRUCTIONS = """\
 Plume serves API documentation as immutable, versioned builds. For ANY question about an API
@@ -51,6 +52,11 @@ Rules:
    to the "latest" tag; pass a build id to pin one.
 6. Canonical models (get_model, list_models): if stale=true, the model was built on older
    builds; say so and regenerate it (or ask) before relying on it.
+7. To make a model for the user: start_model_session(apis, concept) -> get_model_context ->
+   get_model_evidence per API -> submit_model_draft. It is stored unlisted: give the user its
+   share link, and save owner_key + snapshot_id locally (it is shown once) so list_my_models
+   can find it later. To change a model: revise_model(id), then submit_model_draft(...,
+   based_on=id) makes a new version.
 """
 
 READ_ONLY = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=False)
@@ -68,6 +74,7 @@ class McpReaderDependencies:
     resolver: Callable[[], BuildResolver]
     models: Callable[[], ModelSessions] | None = None
     sections: Callable[[], PackageSections] | None = None
+    web_public_url: str | None = None
 
 
 async def _run(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
@@ -312,38 +319,6 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
             return await _run(run)
 
     if deps.models is not None:
-        models = deps.models
-
-        @server.tool(annotations=READ_ONLY, structured_output=True)
-        async def get_model(snapshot_id: str) -> dict[str, Any]:
-            """A stored canonical model (generated, unverified; every citation was checked)."""
-
-            def run() -> dict[str, Any]:
-                snap = models().snapshot(snapshot_id)
-                names = {}
-                for i in snap.inputs:
-                    try:
-                        names[i.api] = deps.resolver().resolve(i.api).api.name
-                    except ApplicationError:
-                        names[i.api] = i.api
-                return payloads.snapshot_payload(snap, names, models().stale_inputs(snap))
-
-            return await _run(run)
-
-        @server.tool(annotations=READ_ONLY, structured_output=True)
-        async def list_models(api: str | None = None) -> dict[str, Any]:
-            """Stored canonical models, newest first (reuse one instead of regenerating)."""
-
-            def run() -> dict[str, Any]:
-                service = models()
-                return {
-                    "models": [
-                        payloads.model_list_item(m, service.stale_inputs(m))
-                        for m in service.list(api)
-                    ],
-                    "note": payloads.STALE_HINT,
-                }
-
-            return await _run(run)
+        register_model_tools(server, deps.models, deps.resolver, _run, False, deps.web_public_url)
 
     return server

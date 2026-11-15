@@ -406,6 +406,54 @@ class SuggestResponse(Schema):
 class GenerateRequest(Schema):
     apis: list[str] = Field(min_length=2, max_length=6)
     concept: str = Field(min_length=1, max_length=100)
+    engine: Literal["claude", "server"] | None = Field(
+        default=None,
+        description="claude = a session your Claude fills (default without the token); server = "
+        "Plume generates it with its LLM (maintainer token; default with it).",
+    )
+    force: bool = Field(
+        default=False, description="server engine: generate even if a model already exists."
+    )
+
+
+class ModelJobOut(Schema):
+    job_id: str
+    status: Literal["queued", "running", "succeeded", "failed"]
+    apis: list[str]
+    concept: str
+    session_id: str | None
+    round: int
+    max_rounds: int
+    snapshot_id: str | None
+    error: str | None
+    generator: str
+    created_at: str
+    updated_at: str
+    events_url: str
+
+
+class SessionStatus(Schema):
+    session_id: str
+    status: Literal["open", "submitted"]
+    snapshot_id: str | None
+    visibility: str | None
+    apis: list[str]
+    concept: str
+    based_on: str | None
+
+
+class RevisedSession(Schema):
+    session_id: str
+    based_on: str
+    concept: str
+    inputs: list["PinnedInput"]
+    starting_draft: dict[str, Any]
+    claude_prompt: str
+    context_url: str
+
+
+class MineRequest(Schema):
+    owner_keys: list[str] = Field(min_length=1, max_length=200)
 
 
 class PinnedInput(Schema):
@@ -452,6 +500,11 @@ class ModelListItem(Schema):
     generated_at: str
     stale: bool = Field(description="A pinned build is no longer the API's latest.")
     stale_inputs: list[StaleInput] = Field(default_factory=list)
+    visibility: Literal["official", "unreleased", "unlisted", "discarded"] = "official"
+    official: bool = True
+    version: int = 1
+    versions: int = 1
+    lineage_id: str = ""
 
 
 class ModelList(Schema):

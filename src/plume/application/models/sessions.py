@@ -1,7 +1,10 @@
 """Model sessions: pin builds, hand Claude the evidence pack, validate and store its draft."""
 
+import hashlib
 import json
+import secrets
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -20,7 +23,14 @@ from plume.domain.knowledge.call_check import path_matches
 from plume.domain.knowledge.document import DocumentKind, FieldLocation
 from plume.domain.knowledge.fact import FactKind
 from plume.domain.models.canonical_model import DraftFormatError, parse_draft
-from plume.domain.models.snapshot import ModelSnapshot, PinnedInput, snapshot_id_for
+from plume.domain.models.snapshot import (
+    ModelSnapshot,
+    Origin,
+    PinnedInput,
+    Visibility,
+    draft_json,
+    snapshot_id_for,
+)
 from plume.domain.models.validation import Issue, Oracle, validate
 from plume.domain.shared.clock import Clock
 from plume.domain.shared.ids import BuildId
@@ -28,6 +38,9 @@ from plume.domain.shared.ids import BuildId
 MAX_DOCS_PER_API = 20
 EVIDENCE_BUDGET_CHARS = 20_000
 MAX_DESCRIPTION = 300
+MAX_DRAFT_CHARS = 1_000_000
+MAX_OWNER_KEYS = 200
+_SAVE_ATTEMPTS = 5
 _DATA_LOCATIONS = (FieldLocation.MODEL, FieldLocation.RESPONSE, FieldLocation.BODY)
 
 DRAFT_FORMAT: dict[str, Any] = {
@@ -79,6 +92,48 @@ def normalize_concept(concept: str) -> str:
     return text[:1].upper() + text[1:] if text == text.lower() else text
 
 
+class ModelStateError(ApplicationError):
+    code = "invalid_state"
+
+
+def owner_key_hash(key: str) -> str:
+    return hashlib.sha256(key.strip().encode()).hexdigest()
+
+
+def new_owner_key() -> str:
+    return "pk_" + secrets.token_urlsafe(24)
+
+
+def new_unlisted_id() -> str:
+    """128 random bits: an unlisted model is readable by anyone who has its id (the link)."""
+    return "u-" + secrets.token_urlsafe(16)
+
+
+def claude_prompt(session: "ModelSession", maintainer: bool) -> str:
+    server = "Plume maintainer MCP" if maintainer else "Plume MCP"
+    based = f', based_on="{session.based_on}"' if session.based_on else ""
+    start = (
+        f"revise the canonical {session.concept} model {session.based_on} (its current draft is "
+        "the starting point)"
+        if session.based_on
+        else f"write the canonical {session.concept} model for "
+        + ", ".join(i.api for i in session.inputs)
+    )
+    return (
+        f'Use the {server}: get_model_context("{session.session_id}"), {start}, then '
+        f'submit_model_draft("{session.session_id}", draft{based}).'
+    )
+
+
+def revise_prompt(snapshot_id: str) -> str:
+    return (
+        f'Use the Plume MCP: revise_model("{snapshot_id}") opens a session on the current docs '
+        "with this model as the starting draft. Make the changes I ask for, keep every citation "
+        "verbatim, then submit_model_draft(session_id, draft, "
+        f'based_on="{snapshot_id}") to save a new version.'
+    )
+
+
 class ModelDraftRefusedError(ApplicationError):
     code = "draft_refused"
 
@@ -92,6 +147,7 @@ class ModelDraftRefusedError(ApplicationError):
 class SubmitResult:
     snapshot: ModelSnapshot
     created: bool
+    owner_key: str | None = None  # shown once, when a user's submit starts a new lineage
 
 
 class ModelSessions:
@@ -113,7 +169,13 @@ class ModelSessions:
 
     # -- sessions --------------------------------------------------------------------------------
 
-    def start(self, apis: list[str], concept: str) -> ModelSession:
+    def start(
+        self,
+        apis: list[str],
+        concept: str,
+        origin: str = Origin.MAINTAINER,
+        based_on: str | None = None,
+    ) -> ModelSession:
         if not concept_key(concept):
             raise ModelInputError("concept is empty")
         resolved = resolve_apis(self._resolver, apis)
@@ -122,19 +184,41 @@ class ModelSessions:
             concept=normalize_concept(concept),
             inputs=tuple(PinnedInput(r.api.api_id.value, r.build.build_id.value) for r in resolved),
             created_at=self._clock.now(),
+            origin=origin,
+            based_on=based_on,
         )
         self._models.save_session(session)
         return session
 
-    def existing(self, apis: list[str], concept: str) -> ModelSnapshot | None:
-        """A stored snapshot for the same concept on the APIs' current builds, if any."""
+    def existing(
+        self, apis: list[str], concept: str, maintainer: bool = False
+    ) -> ModelSnapshot | None:
+        """A model the caller may see (official; unreleased too for a maintainer) for the same
+        concept on the APIs' current builds, if any. Never someone's unlisted model."""
         resolved = resolve_apis(self._resolver, apis)
         pins = {(r.api.api_id.value, r.build.build_id.value) for r in resolved}
         key = concept_key(concept)
-        for snap in self._models.list_snapshots(resolved[0].api.api_id.value, 200):
+        visible = _visible(maintainer)
+        allowed = tuple(v for v in visible if v != Visibility.UNLISTED)
+        for snap in self._models.list_snapshots(resolved[0].api.api_id.value, 200, allowed):
             if concept_key(snap.concept) == key and {(i.api, i.build) for i in snap.inputs} == pins:
                 return snap
         return None
+
+    def session_status(self, session_id: str) -> dict[str, Any]:
+        """For pollers: the latest model accepted in this session, if any."""
+        session = self.get(session_id)
+        done = [s for s in self._models.by_session(session_id) if s.visibility in Visibility.ALL]
+        latest = done[0] if done else None
+        return {
+            "session_id": session.session_id,
+            "status": "submitted" if latest else "open",
+            "snapshot_id": latest.snapshot_id if latest else None,
+            "visibility": latest.visibility if latest else None,
+            "apis": [i.api for i in session.inputs],
+            "concept": session.concept,
+            "based_on": session.based_on,
+        }
 
     def get(self, session_id: str) -> ModelSession:
         s = self._models.get_session(session_id)
@@ -292,8 +376,23 @@ class ModelSessions:
 
         return Oracle(doc_text, field_exists, endpoint_exists)
 
-    def submit(self, session_id: str, raw: Any) -> SubmitResult:
+    def submit(
+        self,
+        session_id: str,
+        raw: Any,
+        based_on: str | None = None,
+        maintainer: bool = False,
+        generator: str = "claude",
+    ) -> SubmitResult:
+        """Validate and store a draft. A maintainer's model is stored unreleased (official only
+        after ``release``); a user's is unlisted (readable by anyone with its id). ``based_on``
+        (or the session's) makes it the next version of that model's lineage when the caller may
+        add to it; otherwise a new lineage that records where it came from."""
         session = self.get(session_id)
+        if len(json.dumps(raw, default=str)) > MAX_DRAFT_CHARS:
+            raise ModelDraftRefusedError(
+                [Issue("INVALID_FORMAT", "", None, f"draft over {MAX_DRAFT_CHARS} characters")]
+            )
         try:
             draft = parse_draft(raw)
         except DraftFormatError as exc:
@@ -303,18 +402,59 @@ class ModelSessions:
         if issues:
             raise ModelDraftRefusedError(issues)
         checked = sum(len(s.evidence) for f in draft.fields for _, s in f.sources)
-        snapshot = ModelSnapshot(
-            snapshot_id=snapshot_id_for(session.inputs, session.concept, draft),
-            session_id=session.session_id,
-            concept=session.concept,
-            inputs=session.inputs,
-            draft=draft,
-            created_at=self._clock.now(),
-            citations_checked=checked,
+        content_key = snapshot_id_for(session.inputs, session.concept, draft)
+        base_id = based_on or session.based_on
+        base = self.visible_snapshot(base_id, maintainer) if base_id else None
+        if base is not None and base.visibility == Visibility.DISCARDED:
+            raise ModelStateError(f"model {base.snapshot_id} was discarded")
+        same_lineage = base is not None and (
+            base.visibility in (Visibility.OFFICIAL, Visibility.UNRELEASED)
+            if maintainer
+            else base.visibility == Visibility.UNLISTED
         )
-        created = self._models.save_snapshot(snapshot)
-        stored = self._models.get_snapshot(snapshot.snapshot_id)
-        return SubmitResult(stored or snapshot, created)
+        if (
+            base is not None
+            and same_lineage
+            and concept_key(base.concept) != concept_key(session.concept)
+        ):
+            raise ModelStateError(
+                f"model {base.snapshot_id} is a {base.concept} model; this session is for "
+                f"{session.concept}"
+            )
+        if not maintainer:  # a retry of the same draft returns the stored model
+            for prior in self._models.by_session(session.session_id):
+                if prior.key == content_key and prior.visibility != Visibility.DISCARDED:
+                    return SubmitResult(prior, False)
+        visibility = Visibility.UNRELEASED if maintainer else Visibility.UNLISTED
+        origin = Origin.MAINTAINER if maintainer else Origin.USER
+        owner_key = None if maintainer or same_lineage else new_owner_key()
+        for _ in range(_SAVE_ATTEMPTS):
+            lineage = self._models.lineage(base.lineage) if base and same_lineage else []
+            snapshot = ModelSnapshot(
+                snapshot_id=content_key if maintainer else new_unlisted_id(),
+                session_id=session.session_id,
+                concept=session.concept,
+                inputs=session.inputs,
+                draft=draft,
+                created_at=self._clock.now(),
+                citations_checked=checked,
+                visibility=visibility,
+                origin=origin,
+                generator=generator,
+                lineage_id=lineage[0].lineage if lineage else "",
+                version=(max(s.version for s in lineage) + 1) if lineage else 1,
+                based_on=base.snapshot_id if base else None,
+                content_key="" if maintainer else content_key,
+            )
+            created = self._models.save_snapshot(
+                snapshot, owner_key_hash(owner_key) if owner_key else None
+            )
+            if created:
+                return SubmitResult(snapshot, True, owner_key)
+            stored = self._models.get_snapshot(snapshot.snapshot_id)
+            if stored is not None:  # same content already stored (maintainer ids are hashes)
+                return SubmitResult(stored, False)
+        raise ModelStateError("the model was changed concurrently; submit again")
 
     # -- snapshots -------------------------------------------------------------------------------
 
@@ -323,6 +463,89 @@ class ModelSessions:
         if s is None:
             raise NotFoundError(f"model {snapshot_id} not found")
         return s
+
+    def visible_snapshot(self, snapshot_id: str, maintainer: bool = False) -> ModelSnapshot:
+        """Official and unlisted models for anyone with the id; unreleased and discarded ones
+        only for a maintainer (404 otherwise, so their existence is not revealed)."""
+        s = self._models.get_snapshot(snapshot_id)
+        if s is None or s.visibility not in _visible(maintainer):
+            raise NotFoundError(f"model {snapshot_id} not found")
+        return s
+
+    def lineage_info(self, snap: ModelSnapshot, maintainer: bool = False) -> dict[str, Any]:
+        visible = _visible(maintainer)
+        versions = [s for s in self._models.lineage(snap.lineage) if s.visibility in visible]
+        if not any(s.snapshot_id == snap.snapshot_id for s in versions):
+            versions.append(snap)
+            versions.sort(key=lambda s: s.version)
+        latest = versions[-1]
+        return {
+            "id": snap.lineage,
+            "version": snap.version,
+            "versions": len(versions),
+            "based_on": snap.based_on,
+            "latest_id": latest.snapshot_id,
+            "history": [
+                {
+                    "id": s.snapshot_id,
+                    "version": s.version,
+                    "created_at": s.created_at.isoformat(),
+                    "visibility": s.visibility,
+                }
+                for s in versions
+            ],
+        }
+
+    def revise(self, snapshot_id: str, maintainer: bool = False) -> dict[str, Any]:
+        """A new session on the CURRENT builds of the model's APIs, with the model as the
+        starting draft; submitting it with based_on makes the next version."""
+        base = self.visible_snapshot(snapshot_id, maintainer)
+        if base.visibility == Visibility.DISCARDED:
+            raise ModelStateError(f"model {snapshot_id} was discarded")
+        session = self.start(
+            [i.api for i in base.inputs],
+            base.concept,
+            Origin.MAINTAINER if maintainer else Origin.USER,
+            based_on=base.snapshot_id,
+        )
+        return {
+            "session_id": session.session_id,
+            "based_on": base.snapshot_id,
+            "concept": session.concept,
+            "inputs": [{"api": i.api, "build": i.build} for i in session.inputs],
+            "starting_draft": draft_json(base.draft),
+            "claude_prompt": claude_prompt(session, maintainer),
+            "next": "Call get_model_context(session_id), edit starting_draft, then "
+            f'submit_model_draft(session_id, draft, based_on="{base.snapshot_id}").',
+        }
+
+    def release(self, snapshot_id: str) -> ModelSnapshot:
+        s = self.snapshot(snapshot_id)
+        if s.visibility != Visibility.UNRELEASED:
+            raise ModelStateError(f"model {snapshot_id} is {s.visibility}, not unreleased")
+        self._models.set_visibility(snapshot_id, Visibility.OFFICIAL, self._clock.now())
+        return self.snapshot(snapshot_id)
+
+    def discard(self, snapshot_id: str) -> ModelSnapshot:
+        s = self.snapshot(snapshot_id)
+        if s.visibility != Visibility.UNRELEASED:
+            raise ModelStateError(f"model {snapshot_id} is {s.visibility}, not unreleased")
+        self._models.set_visibility(snapshot_id, Visibility.DISCARDED, None)
+        return self.snapshot(snapshot_id)
+
+    def mine(self, owner_keys: Sequence[str]) -> list[ModelSnapshot]:
+        """The latest version of every lineage started with one of these owner keys."""
+        keys = [k for k in dict.fromkeys(owner_keys) if isinstance(k, str) and k.strip()]
+        if len(keys) > MAX_OWNER_KEYS:
+            raise ModelInputError(f"at most {MAX_OWNER_KEYS} owner keys")
+        out: list[ModelSnapshot] = []
+        for lineage_id in self._models.lineages_for_owner([owner_key_hash(k) for k in keys]):
+            versions = [
+                s for s in self._models.lineage(lineage_id) if s.visibility != Visibility.DISCARDED
+            ]
+            if versions:
+                out.append(versions[-1])
+        return sorted(out, key=lambda s: s.created_at, reverse=True)
 
     def stale_inputs(self, snapshot: ModelSnapshot) -> list[dict[str, str | None]]:
         """Pinned builds that are no longer their API's ``latest`` (empty = current)."""
@@ -336,5 +559,26 @@ class ModelSessions:
                 out.append({"api": pin.api, "pinned": pin.build, "current": current})
         return out
 
-    def list(self, api: str | None = None, limit: int = 50) -> list[ModelSnapshot]:
-        return self._models.list_snapshots(api, max(1, min(limit, 200)))
+    def list(
+        self,
+        api: str | None = None,
+        limit: int = 50,
+        visibilities: Sequence[str] = (Visibility.OFFICIAL,),
+    ) -> list[ModelSnapshot]:
+        """Newest first. Public lists show official models only, one per lineage (its latest
+        official version)."""
+        limit = max(1, min(limit, 200))
+        items = self._models.list_snapshots(api, limit * 4, tuple(visibilities))
+        if tuple(visibilities) == (Visibility.OFFICIAL,):
+            seen: set[str] = set()
+            latest = []
+            for s in sorted(items, key=lambda s: (s.lineage, -s.version)):
+                if s.lineage not in seen:
+                    seen.add(s.lineage)
+                    latest.append(s)
+            items = sorted(latest, key=lambda s: (-s.created_at.timestamp(), s.snapshot_id))
+        return items[:limit]
+
+
+def _visible(maintainer: bool) -> tuple[str, ...]:
+    return Visibility.ALL if maintainer else Visibility.PUBLIC

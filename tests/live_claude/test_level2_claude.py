@@ -120,7 +120,7 @@ def test_canonical_model(stack: Stack, case: str, apis: list[str], prompt: str) 
     if stack.token_file is None:
         pytest.skip("PLUME_L2_TOKEN_FILE is needed for the maintainer MCP")
     with stack_client(stack) as http:
-        listed = request_json(http, "GET", "/v1/models", params={"limit": 200})
+        listed = request_json(http, "GET", "/v1/models", params={"limit": 200, "visibility": "all"})
         before = {m["id"] for m in listed["items"]}
     run = run_claude(stack, prompt, _budget())
     min_cov = float(os.environ.get("PLUME_L2_MIN_COVERAGE", "0.3"))
