@@ -92,6 +92,9 @@ def test_icon_and_logo(client: TestClient) -> None:
     assert r.content[:8] == b"\x89PNG\r\n\x1a\n"
     assert r.headers["x-content-type-options"] == "nosniff"
     assert "default-src 'none'" in r.headers["content-security-policy"]
+    assert r.headers["cross-origin-resource-policy"] == "cross-origin"
+    other = client.get("/v1/apis")
+    assert other.headers["cross-origin-resource-policy"] == "same-site"  # only the icon differs
     again = client.get("/v1/apis/woocommerce/icon", headers={"If-None-Match": r.headers["etag"]})
     assert again.status_code == 304
     assert client.get("/v1/apis/test-catalog-api/icon").status_code == 404
