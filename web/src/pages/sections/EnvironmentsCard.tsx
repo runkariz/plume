@@ -16,6 +16,8 @@ export function EnvironmentsCard({ apiId }: { apiId: string }) {
   const { state } = useAsync(load);
   if (state.status !== 'ready') return null;
   const { present, environments, versioning } = state.data;
+  // the current version is usually also in the list of versions: say it once
+  const others = (versioning?.versions ?? []).filter((v) => v !== versioning?.current);
   if (!present || (environments.length === 0 && !versioning)) return null;
   return (
     <Card className="pad" role="region" aria-label="Environments">
@@ -39,10 +41,10 @@ export function EnvironmentsCard({ apiId }: { apiId: string }) {
               current <span className="mono">{versioning.current}</span>
             </>
           ) : null}
-          {versioning.versions?.length ? (
+          {others.length ? (
             <>
-              {versioning.current ? ' · ' : ''}
-              <span className="mono">{versioning.versions.join(', ')}</span>
+              {versioning.current ? ' · also ' : ''}
+              <span className="mono">{others.join(', ')}</span>
             </>
           ) : null}
         </p>
