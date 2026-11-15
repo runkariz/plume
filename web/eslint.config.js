@@ -16,6 +16,7 @@ export default tseslint.config(
     languageOptions: { globals: { ...globals.browser } },
     rules: { '@typescript-eslint/consistent-type-imports': 'error' },
   },
+  { files: ['e2e/**/*.ts'], rules: { 'react-hooks/rules-of-hooks': 'off' } },
   { files: ['*.config.{js,ts}'], languageOptions: { globals: { ...globals.node } } },
   prettier,
 );

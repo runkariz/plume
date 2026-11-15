@@ -1,0 +1,452 @@
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useParams } from 'react-router-dom';
+import { useApiClient } from '@/api/context';
+import { useAsync } from '@/api/useAsync';
+import {
+  ApiError,
+  type AskResponse,
+  type CheckCallResponse,
+  type HttpMethod,
+  type KindFilter,
+  type SearchMode,
+  type SearchResponse,
+  type TraceStep,
+} from '@/api/types';
+import { useIsMaintainer } from '@/app/authStore';
+import {
+  Button,
+  Card,
+  Chip,
+  Crumbs,
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  MethodBadge,
+  ScoreBar,
+  Segmented,
+  type Crumb,
+} from '@/components';
+
+type Tool = 'search' | 'ask' | 'check';
+
+const TOOLS = [
+  { value: 'search', label: 'Search' },
+  { value: 'ask', label: 'Ask' },
+  { value: 'check', label: 'Check call' },
+] as const;
+const MODES: { value: SearchMode; label: string }[] = [
+  { value: 'hybrid', label: 'Hybrid' },
+  { value: 'dense', label: 'Dense only' },
+  { value: 'text', label: 'Text only' },
+];
+const KINDS: { value: KindFilter; label: string }[] = [
+  { value: 'all', label: 'All kinds' },
+  { value: 'endpoint', label: 'Endpoints' },
+  { value: 'model', label: 'Models' },
+  { value: 'guide', label: 'Guides' },
+];
+const METHODS: HttpMethod[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+const TOP_K = 5;
+
+const SOURCE_LABEL: Record<TraceStep['source'], string> = {
+  gemini: 'Gemini',
+  postgres: 'Postgres',
+  plume: 'Plume',
+};
+
+export function QueryTrace({ trace, totalMs }: { trace: TraceStep[]; totalMs: number }) {
+  return (
+    <Card className="pad">
+      <h2 className="h2-sm">Query trace</h2>
+      <ul className="trace">
+        {trace.map((t, i) => (
+          <li key={i} className="trace-row">
+            <span className={`log-src ${t.source}`}>{SOURCE_LABEL[t.source]}</span>
+            <span>{t.label}</span>
+            <span className="ms mono">{t.ms} ms</span>
+          </li>
+        ))}
+        <li className="trace-row total">
+          <b>Total</b>
+          <span className="ms mono">{totalMs} ms</span>
+        </li>
+      </ul>
+    </Card>
+  );
+}
+
+type Run<T> =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'error'; message: string }
+  | { status: 'ready'; data: T };
+
+/** Runs one call at a time; a newer run aborts the older one. */
+function useRun<T>() {
+  const [run, setRun] = useState<Run<T>>({ status: 'idle' });
+  const ctrl = useRef<AbortController | null>(null);
+  useEffect(() => () => ctrl.current?.abort(), []);
+  const start = useCallback((fn: (signal: AbortSignal) => Promise<T>) => {
+    ctrl.current?.abort();
+    const c = new AbortController();
+    ctrl.current = c;
+    setRun({ status: 'loading' });
+    fn(c.signal).then(
+      (data) => {
+        if (!c.signal.aborted) setRun({ status: 'ready', data });
+      },
+      (e: unknown) => {
+        if (!c.signal.aborted)
+          setRun({ status: 'error', message: e instanceof Error ? e.message : String(e) });
+      },
+    );
+  }, []);
+  const reset = useCallback(() => {
+    ctrl.current?.abort();
+    setRun({ status: 'idle' });
+  }, []);
+  return { run, start, reset };
+}
+
+function RunState<T>({
+  run,
+  idle,
+  children,
+}: {
+  run: Run<T>;
+  idle: string;
+  children: (data: T) => React.ReactNode;
+}) {
+  if (run.status === 'idle') return <EmptyState title="Nothing run yet">{idle}</EmptyState>;
+  if (run.status === 'loading') return <LoadingState label="Running" />;
+  if (run.status === 'error') return <ErrorState title="The call failed" message={run.message} />;
+  return <>{children(run.data)}</>;
+}
+
+function SearchTool({ apiId }: { apiId: string }) {
+  const client = useApiClient();
+  const [query, setQuery] = useState('How do I paginate through orders?');
+  const [mode, setMode] = useState<SearchMode>('hybrid');
+  const [kind, setKind] = useState<KindFilter>('all');
+  const { run, start } = useRun<SearchResponse>();
+
+  function submit(e?: FormEvent) {
+    e?.preventDefault();
+    if (!query.trim()) return;
+    start((signal) =>
+      client.search(apiId, { query: query.trim(), mode, kind, topK: TOP_K }, signal),
+    );
+  }
+
+  return (
+    <>
+      <form className="card qbox" onSubmit={submit} role="search">
+        <label htmlFor="try-query" className="sr-only">
+          Question or search text
+        </label>
+        <input
+          id="try-query"
+          className="q"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Ask about this API"
+        />
+        <Button variant="primary" type="submit" size="lg">
+          Run
+        </Button>
+      </form>
+      <div className="opts">
+        <Segmented
+          variant="pills"
+          label="Search mode"
+          options={MODES}
+          value={mode}
+          onChange={setMode}
+        />
+        <Segmented variant="pills" label="Kind" options={KINDS} value={kind} onChange={setKind} />
+        <span className="faint" style={{ marginLeft: 'auto' }}>
+          Top {TOP_K}
+        </span>
+      </div>
+      <div className="try-cols">
+        <div className="stack" aria-live="polite">
+          <RunState run={run} idle="Run a search to see ranked results and the query trace.">
+            {(d) =>
+              d.results.length === 0 ? (
+                <EmptyState title="No results">Try other words or a different kind.</EmptyState>
+              ) : (
+                <ol className="results">
+                  {d.results.map((h, i) => (
+                    <li key={h.id}>
+                      <Card className={`res${i === 0 ? ' first' : ''}`}>
+                        <span className="rank" aria-label={`Rank ${i + 1}`}>
+                          {i + 1}
+                        </span>
+                        <div className="res-body">
+                          <div className="res-title">
+                            <h3>{h.title}</h3>
+                            <Chip>{h.kind}</Chip>
+                          </div>
+                          <div className="mono muted">{h.subtitle}</div>
+                          <p className="muted">{h.snippet}</p>
+                          <div className="sc">
+                            <span>dense {h.denseRank ? `#${h.denseRank}` : '–'}</span>
+                            <ScoreBar value={h.denseScore} label="dense" />
+                            <span>text {h.textRank ? `#${h.textRank}` : '–'}</span>
+                            <ScoreBar value={h.textScore} label="text" />
+                            <span>
+                              fused <b>{h.fused.toFixed(4)}</b>
+                            </span>
+                          </div>
+                        </div>
+                      </Card>
+                    </li>
+                  ))}
+                </ol>
+              )
+            }
+          </RunState>
+        </div>
+        <div className="stack">
+          {run.status === 'ready' ? (
+            <>
+              <QueryTrace trace={run.data.trace} totalMs={run.data.totalMs} />
+              <Card className="pad">
+                <h2 className="h2-sm">What Claude receives</h2>
+                <pre className="code">{run.data.claudePayload}</pre>
+              </Card>
+            </>
+          ) : null}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function AskTool({ apiId }: { apiId: string }) {
+  const client = useApiClient();
+  const [question, setQuestion] = useState('Can I cancel a fulfilled order?');
+  const { run, start } = useRun<AskResponse>();
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!question.trim()) return;
+    start((signal) => client.ask(apiId, question.trim(), signal));
+  }
+
+  return (
+    <>
+      <form className="card qbox" onSubmit={submit} role="search">
+        <label htmlFor="ask-q" className="sr-only">
+          Your question
+        </label>
+        <input
+          id="ask-q"
+          className="q"
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+        />
+        <Button variant="primary" type="submit" size="lg">
+          Ask
+        </Button>
+      </form>
+      <p className="faint small" style={{ margin: '12px 0 18px' }}>
+        Plume retrieves; Claude writes the answer. These are the passages it would receive.
+      </p>
+      <div className="try-cols">
+        <div className="stack" aria-live="polite">
+          <RunState run={run} idle="Ask a question to see the passages Claude would answer from.">
+            {(d) =>
+              d.passages.length === 0 ? (
+                <EmptyState title="Not documented in this build">
+                  No passage matched. Plume never answers from a guess.
+                </EmptyState>
+              ) : (
+                <ol className="results">
+                  {d.passages.map((p, i) => (
+                    <li key={p.id}>
+                      <Card className={`res${i === 0 ? ' first' : ''}`}>
+                        <span className="rank">{i + 1}</span>
+                        <div className="res-body">
+                          <h3>{p.title}</h3>
+                          <blockquote className="quote">{p.quote}</blockquote>
+                          <a className="small" href={p.sourceUrl} rel="noreferrer" target="_blank">
+                            Source
+                          </a>
+                        </div>
+                      </Card>
+                    </li>
+                  ))}
+                </ol>
+              )
+            }
+          </RunState>
+        </div>
+        <div className="stack">
+          {run.status === 'ready' ? (
+            <QueryTrace trace={run.data.trace} totalMs={run.data.totalMs} />
+          ) : null}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function CheckTool({ apiId }: { apiId: string }) {
+  const client = useApiClient();
+  const [method, setMethod] = useState<HttpMethod>('GET');
+  const [path, setPath] = useState('/admin/api/latest/orders.json');
+  const [params, setParams] = useState('limit, page_info');
+  const { run, start } = useRun<CheckCallResponse>();
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    if (!path.trim()) return;
+    start((signal) =>
+      client.checkCall(
+        apiId,
+        {
+          method,
+          path: path.trim(),
+          params: params
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean),
+        },
+        signal,
+      ),
+    );
+  }
+
+  return (
+    <>
+      <form className="card qbox" onSubmit={submit}>
+        <label htmlFor="chk-method" className="sr-only">
+          HTTP method
+        </label>
+        <select
+          id="chk-method"
+          className="input method-select"
+          value={method}
+          onChange={(e) => setMethod(e.target.value as HttpMethod)}
+        >
+          {METHODS.map((m) => (
+            <option key={m}>{m}</option>
+          ))}
+        </select>
+        <label htmlFor="chk-path" className="sr-only">
+          Path
+        </label>
+        <input
+          id="chk-path"
+          className="q mono"
+          value={path}
+          onChange={(e) => setPath(e.target.value)}
+        />
+        <label htmlFor="chk-params" className="sr-only">
+          Parameters, comma separated
+        </label>
+        <input
+          id="chk-params"
+          className="q mono params-input"
+          value={params}
+          onChange={(e) => setParams(e.target.value)}
+          placeholder="params, comma separated"
+        />
+        <Button variant="primary" type="submit" size="lg">
+          Check
+        </Button>
+      </form>
+      <div className="try-cols" style={{ marginTop: 22 }}>
+        <div className="stack" aria-live="polite">
+          <RunState run={run} idle="Check whether a call (method, path, parameters) is documented.">
+            {(d) => (
+              <Card className="pad">
+                <div className="row" style={{ marginBottom: 12 }}>
+                  <Chip tone={d.verdict === 'documented' ? 'ok' : 'warn'} dot>
+                    {d.verdict === 'documented'
+                      ? 'Documented'
+                      : `Not documented in build ${d.build}`}
+                  </Chip>
+                  {!d.complete ? <Chip tone="warn">Schema partial: absence not proven</Chip> : null}
+                </div>
+                {d.matched ? (
+                  <div className="row" style={{ marginBottom: 10 }}>
+                    <MethodBadge method={d.matched.method} />
+                    <span className="mono">{d.matched.path}</span>
+                  </div>
+                ) : null}
+                <ul className="checks">
+                  {d.paramChecks.map((p) => (
+                    <li key={p.name}>
+                      <Chip tone={p.found ? 'ok' : 'bad'}>{p.found ? 'found' : 'missing'}</Chip>
+                      <span className="mono">{p.name}</span>
+                      {p.where ? <span className="faint small">in {p.where}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+                <p className="faint small" style={{ marginTop: 12 }}>
+                  Checked {d.checked.endpoints} endpoints and {d.checked.models} models. Wording
+                  rule: "not documented in build {d.build}", never "does not exist".
+                </p>
+              </Card>
+            )}
+          </RunState>
+        </div>
+      </div>
+    </>
+  );
+}
+
+export function TryItPage() {
+  const { apiId = '' } = useParams();
+  const client = useApiClient();
+  const maintainer = useIsMaintainer();
+  const [tool, setTool] = useState<Tool>('search');
+  const load = useCallback((signal: AbortSignal) => client.getApi(apiId, signal), [client, apiId]);
+  const { state, retry } = useAsync(load);
+
+  const name = state.status === 'ready' ? state.data.name.replace(/ API$/, '') : 'API';
+  const crumbs: Crumb[] = [
+    maintainer ? { label: 'Maintainer', to: '/maintainer' } : { label: 'APIs', to: '/' },
+    { label: name, to: `/apis/${apiId}` },
+    { label: 'Try it' },
+  ];
+
+  if (state.status === 'error') {
+    return (
+      <>
+        <Crumbs items={crumbs} />
+        <ErrorState
+          title={
+            state.error instanceof ApiError && state.error.status === 404
+              ? 'API not found'
+              : 'Could not load this API'
+          }
+          message={state.error.message}
+          onRetry={retry}
+        />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Crumbs items={crumbs} />
+      <div className="titlerow">
+        <h1 className="h1-sm">Try it</h1>
+        <div className="row">
+          {state.status === 'ready' ? (
+            <span className="chip build-chip">
+              Build {state.data.index.build} · {state.data.isLive ? 'live' : 'updating'}
+            </span>
+          ) : null}
+          <Segmented label="Tool" options={[...TOOLS]} value={tool} onChange={setTool} />
+        </div>
+      </div>
+      {tool === 'search' ? <SearchTool apiId={apiId} /> : null}
+      {tool === 'ask' ? <AskTool apiId={apiId} /> : null}
+      {tool === 'check' ? <CheckTool apiId={apiId} /> : null}
+    </>
+  );
+}
