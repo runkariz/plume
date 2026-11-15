@@ -300,15 +300,17 @@ def test_user_models_are_unlisted_with_a_random_id_and_owner_key(stack: FakeStac
     assert result.owner_key
     assert result.owner_key.startswith("pk_")
     retry = models.submit(session.session_id, _draft("good"))  # same draft again: same model
-    assert (retry.created, retry.snapshot.snapshot_id, retry.owner_key) == (
-        False,
-        snap.snapshot_id,
-        None,
-    )
+    assert (retry.created, retry.snapshot.snapshot_id) == (False, snap.snapshot_id)
+    # The first response may have been lost (a bridge timeout): the retry gets a new key, the
+    # old one stops working.
+    assert retry.owner_key
+    assert retry.owner_key != result.owner_key
+    assert [m.snapshot_id for m in models.mine([retry.owner_key])] == [snap.snapshot_id]
+    assert models.mine([result.owner_key]) == []
     assert models.visible_snapshot(snap.snapshot_id) == snap  # the link works for anyone
     assert models.list() == []
     assert models.existing(APIS, "Order") is None
-    assert [m.snapshot_id for m in models.mine([result.owner_key])] == [snap.snapshot_id]
+    assert [m.snapshot_id for m in models.mine([retry.owner_key])] == [snap.snapshot_id]
     assert models.mine(["pk_wrong"]) == []
     assert models.session_status(session.session_id)["snapshot_id"] == snap.snapshot_id
     other = models.submit(models.start(APIS, "Order", "user").session_id, _draft("good"))
@@ -434,3 +436,25 @@ def test_nested_fields_are_validated_against_the_builds(stack: FakeStack) -> Non
     with pytest.raises(ModelDraftRefusedError) as exc:
         models.submit(session.session_id, bad, maintainer=True)
     assert [(i.code, i.field) for i in exc.value.issues] == [("FIELD_NOT_FOUND", "items[].price")]
+
+
+def test_official_models_group_by_concept_case_insensitively(stack: FakeStack) -> None:
+    """An old "order" model and a newer "Order" one (before spelling was normalised) list once;
+    both stay readable and each names the other."""
+    from dataclasses import replace  # noqa: PLC0415
+    from datetime import timedelta  # noqa: PLC0415
+
+    models = stack.models()
+    new = models.release(
+        models.submit(
+            models.start(APIS, "Order").session_id, _draft("good"), maintainer=True
+        ).snapshot.snapshot_id
+    )
+    old = replace(new, snapshot_id="m-old-lowercase", concept="order", lineage_id="",
+                  created_at=new.created_at - timedelta(days=1))  # fmt: skip
+    stack.models_repo.save_snapshot(old)
+    listed = models.list("test-catalog-api")
+    assert [m.snapshot_id for m in listed] == [new.snapshot_id]
+    assert models.same_concept(new) == ("m-old-lowercase",)
+    assert models.same_concept(old) == (new.snapshot_id,)
+    assert models.snapshot("m-old-lowercase").concept == "order"  # untouched

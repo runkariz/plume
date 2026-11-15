@@ -236,7 +236,12 @@ class ModelSets:
                     ],
                 }
             )
-        candidates, aliases, labels = self._related.candidates(self._pinned(s.inputs))
+        renames = {  # accepted aliases: that API's name counts as the set's concept
+            (api, concept_key(name)): concept_key(concept)
+            for concept, names in s.aliases
+            for api, name in names
+        }
+        candidates, aliases, labels = self._related.candidates(self._pinned(s.inputs), renames)
         relevant = [c for c in candidates if c.parent in keys and c.child in keys]
         alias_list = [a for a in aliases if a.parent in keys]
         return {

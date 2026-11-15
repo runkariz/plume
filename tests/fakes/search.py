@@ -143,6 +143,11 @@ class InMemoryFactQuery:
     def for_owner(self, build_id: BuildId, owner_id: str) -> list[Fact]:
         return [f for f in self._facts.list_facts(build_id) if f.owner_id == owner_id]
 
+    def field_names(self, build_id: BuildId) -> list[str]:
+        return sorted(
+            {f.name for f in self._facts.list_facts(build_id) if f.kind is FactKind.FIELD}
+        )
+
     def endpoints(self, build_id: BuildId) -> list[Fact]:
         return sorted(
             (f for f in self._facts.list_facts(build_id) if f.kind is FactKind.ENDPOINT),

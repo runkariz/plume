@@ -87,6 +87,10 @@ class FactQuery(Protocol):
         """All endpoint facts of the build."""
         ...
 
+    def field_names(self, build_id: BuildId) -> list[str]:
+        """Every distinct field fact name of the build (one query, for bulk existence checks)."""
+        ...
+
     def incomplete_owners(
         self, build_id: BuildId, *, owner_id: str | None = None, resource: str | None = None
     ) -> list[str]:

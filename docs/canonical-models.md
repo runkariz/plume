@@ -163,10 +163,14 @@ design is in [design/model-relations.md](design/model-relations.md).
 | `discarded` | an unreleased model a maintainer threw away | maintainers only | maintainer lists |
 
 - **Users** (no auth, rate limited): any number of models over any 2..6 APIs. Each submit that
-  starts a new model returns an `ownerKey` once (`pk_…`, stored only as a SHA-256). The Claude
-  plugin keeps the keys and ids in `~/.plume/models.json`; `list_my_models(owner_keys)` /
-  `POST /v1/models/mine` returns the latest version of each. A lost key loses nothing but the
-  listing: links keep working. Unlisted ids are `u-` + 128 random bits (not a content hash: a
+  starts a new model returns an `ownerKey` once (`pk_…`, stored only as a SHA-256). Over MCP
+  it is in the result's structured content (the model view shows it with Copy); the text
+  prints it only for hosts without the view. The Claude Code plugin keeps the keys and ids in
+  `~/.plume/models.json`; elsewhere the user keeps it (the web's "Your models" accepts a pasted
+  key). `list_my_models(owner_keys)` / `POST /v1/models/mine` returns the latest version of
+  each. Resubmitting the same draft in the same session returns the stored model with a NEW key
+  (the first response may have been lost to a timeout); the old key stops listing it. A lost key
+  loses nothing but the listing: links keep working. Unlisted ids are `u-` + 128 random bits (not a content hash: a
   hash can be computed from the content, and two users with the same draft would share it).
 - **Maintainers** (bearer token): drafts are stored `unreleased`; `release` makes one official,
   `discard` throws it away (both 409 `invalid_state` unless the model is unreleased). Nothing

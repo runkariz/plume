@@ -2706,6 +2706,14 @@
             "title": "Official",
             "type": "boolean"
           },
+          "sameConcept": {
+            "description": "Other official models of the same concept over the same APIs (readable by id); the list shows the newest.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Sameconcept",
+            "type": "array"
+          },
           "stale": {
             "description": "A pinned build is no longer the API's latest.",
             "title": "Stale",

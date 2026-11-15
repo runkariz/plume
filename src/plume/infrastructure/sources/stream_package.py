@@ -449,8 +449,9 @@ class StreamPackageSource:
             request = folder / "request.json"
             if request.is_file():
                 add(self._endpoint(folder, _read_json(request), versions), folder.name)
+        returned_by = _response_titles(connector, versions)
         for model in self._models(connector):
-            add(model, model.doc_id)
+            add(_with_operations(model, returned_by), model.doc_id)
         for doc, origin in self._guides_and_auth(connector, warnings):
             add(doc, origin)
         for path in sorted((connector / "triggers" / "events").glob("*.json")):
@@ -755,6 +756,60 @@ class StreamPackageSource:
             source_url=source_url,
             source_id=rel,
         )
+
+
+def _title_key(title: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", title.lower())
+
+
+def _titles(node: Any, out: set[str]) -> None:
+    if isinstance(node, dict):
+        if isinstance(node.get("title"), str):
+            out.add(_title_key(node["title"]))
+        for v in node.values():
+            _titles(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            _titles(v, out)
+
+
+def _response_titles(connector: Path, versions: tuple[str, ...]) -> dict[str, list[str]]:
+    """Schema title -> the endpoints whose 2xx response schema names it (a bundled Mirakl
+    "P11_Response_200_Products" is what GET /api/products/offers returns)."""
+    out: dict[str, list[str]] = {}
+    for folder in sorted((connector / "endpoints").glob("*/")):
+        req = _opt_json(folder / "request.json")
+        if not req or not _str(req.get("method")) or not _str(req.get("url")):
+            continue
+        doc_id = endpoint_doc_id(
+            str(req["method"]).upper(),
+            normalize_endpoint_path(_url_path(str(req["url"])), versions),
+        )
+        found: set[str] = set()
+        for response in req.get("responses") or []:
+            if not isinstance(response, dict):
+                continue
+            status, ref = response.get("statusCode"), _str(response.get("contentContractRef"))
+            if ref and isinstance(status, int) and 200 <= status < 300:
+                _titles(_opt_json(folder / ref), found)
+        for t in found:
+            out.setdefault(t, []).append(doc_id)
+    return out
+
+
+MAX_RETURNED_BY = 5  # a title in more responses than this says nothing
+
+
+def _with_operations(model: Document, returned_by: dict[str, list[str]]) -> Document:
+    """Record the operations that return a model, when the package says so by title."""
+    title = model.source_id or model.title
+    if parse_bundled_title(title) is None:  # only bundled names (P11_Response_200_…) say which
+        return model
+    ops = returned_by.get(_title_key(title), [])
+    if not ops or len(ops) > MAX_RETURNED_BY or not isinstance(model.raw, dict):
+        return model
+    ops = sorted(ops, key=lambda d: (not d.startswith("endpoint:GET~"), d))
+    return replace(model, raw={**model.raw, "x-plume-returned-by": ops})
 
 
 def _renamed(model: Document, name: str) -> Document:

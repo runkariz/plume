@@ -129,6 +129,17 @@ class PostgresModelRepo:
                 )
         return created
 
+    def replace_owner_key(self, lineage_id: str, owner_key_hash: str) -> bool:
+        with self._engine.begin() as conn:
+            result = conn.execute(
+                text(
+                    "UPDATE model_lineages SET owner_key_hash = :h "
+                    "WHERE lineage_id = :l AND owner_key_hash IS NOT NULL"
+                ),
+                {"l": lineage_id, "h": owner_key_hash},
+            )
+        return bool(result.rowcount)
+
     def get_snapshot(self, snapshot_id: str) -> ModelSnapshot | None:
         with self._engine.connect() as conn:
             r = conn.execute(
