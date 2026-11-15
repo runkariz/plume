@@ -6,8 +6,11 @@ export interface Beat {
   seconds: number;
   at: number;
   round?: number;
+  of?: number;
   phase?: string;
   detail?: string;
+  /** The set member being written. */
+  concept?: string;
 }
 
 const PHASES: Record<string, string> = {
@@ -45,8 +48,11 @@ export function BeatLine({ beat, maxRounds }: { beat: Beat | null; maxRounds?: n
   if (!beat) return null;
   return (
     <p role="status" className="small muted job-beat">
-      {beatText(beat)}, {formatElapsed(beat.seconds)}
-      {beat.round && maxRounds ? ` (round ${beat.round} of ${maxRounds})` : ''}
+      {beatText(beat)}
+      {beat.concept ? ` (${beat.concept})` : ''}, {formatElapsed(beat.seconds)}
+      {beat.round && (beat.of ?? maxRounds)
+        ? ` (round ${beat.round} of ${beat.of ?? maxRounds})`
+        : ''}
     </p>
   );
 }

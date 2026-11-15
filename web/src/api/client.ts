@@ -108,6 +108,8 @@ export interface PlumeApi {
     signal?: AbortSignal,
     opts?: { supersedes?: string[] },
   ): Promise<ModelSnapshot>;
+  /** Maintainer token: retires older official models of the same concept after the fact (409: not official / not a candidate). */
+  supersedeModels(id: string, supersedes: string[], signal?: AbortSignal): Promise<ModelSnapshot>;
   /** Maintainer token: the official models of the same concept this one could supersede (none on an older server). */
   listSupersedable(id: string, signal?: AbortSignal): Promise<Supersedable[]>;
   discardModel(id: string, signal?: AbortSignal): Promise<ModelSnapshot>;
@@ -446,6 +448,12 @@ export function createApiClient(
       }),
     getModelSession: (sessionId, signal) =>
       call<ModelSessionStatus>(`/v1/models/sessions/${enc(sessionId)}`, { signal }),
+    supersedeModels: (id, supersedes, signal) =>
+      call<ModelSnapshot>(`/v1/models/${enc(id)}/supersede`, {
+        method: 'POST',
+        body: { supersedes },
+        signal,
+      }),
     listSupersedable: async (id, signal) => {
       try {
         const r = await call<{ items: Supersedable[] }>(`/v1/models/${enc(id)}/supersedable`, {

@@ -30,6 +30,7 @@ import {
 } from './modelView';
 import {
   LineageHistory,
+  RetirePanel,
   SameConceptLine,
   SupersededBanner,
   SupersedesLine,
@@ -153,7 +154,6 @@ export function ModelView() {
           <h1 className="h1-sm">{snap.name}</h1>
           <div className="row" style={{ gap: 8, marginTop: 6 }}>
             <VisibilityChip visibility={snap.visibility} />
-            {snap.supersededBy ? <Chip tone="warn">Superseded</Chip> : null}
             <Chip tone="warn">Generated, unverified</Chip>
             {snap.stale ? <StaleChip inputs={snap.staleInputs} /> : null}
             <Chip>{snap.inputs.length} APIs</Chip>
@@ -197,9 +197,10 @@ export function ModelView() {
         </div>
       ) : null}
       <div className="access-banner">
-        <ReviewBanner snap={snap} onChanged={retry} />
+        <ReviewBanner snap={snap} onChanged={() => retry()} />
         <LineageHistory snap={snap} />
         <SupersededBanner snap={snap} />
+        <RetirePanel snap={snap} onChanged={() => retry()} />
         <SupersedesLine snap={snap} />
         <SameConceptLine snap={snap} />
         <ModelWarnings snap={snap} />

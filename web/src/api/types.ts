@@ -397,7 +397,7 @@ export interface StaleInput {
 }
 
 /** Who can see a model: official = released by a maintainer (public lists); unlisted = anyone with the link. */
-export type ModelVisibility = 'official' | 'unreleased' | 'unlisted' | 'discarded';
+export type ModelVisibility = 'official' | 'unreleased' | 'unlisted' | 'discarded' | 'superseded';
 
 export interface ModelLineage {
   id: string;
@@ -421,7 +421,9 @@ export interface ModelWarning {
 /** An official model the one being released could replace (same concept), as the release dialog lists it. */
 export interface Supersedable {
   id: string;
-  name: string;
+  /** The model's name (several share it): the dialog adds version, date and id. */
+  name?: string;
+  createdAt?: string;
   concept?: string;
   /** The API ids it covers. */
   apis: string[];
@@ -452,8 +454,9 @@ export interface ModelSnapshot {
   warnings?: ModelWarning[];
   /** The official models this one replaced when it was released. */
   supersedes?: string[];
-  /** Set once a newer model replaced this one: it stays readable by id but leaves the lists. */
+  /** Set once a newer model replaced this one (visibility "superseded"): readable by id, out of the lists. */
   supersededBy?: string | null;
+  supersededAt?: string | null;
   /** True when a pinned API has a newer build: the model is built on older docs. */
   stale?: boolean;
   staleInputs?: StaleInput[];
@@ -537,11 +540,17 @@ export type ModelJobEvent =
   | {
       type: 'heartbeat';
       id?: string;
+      /** Seconds since the job was created. */
       elapsed: number;
       round?: number;
+      of?: number;
       phase?: string;
       detail?: string;
+      /** For a set job: the member being written. */
+      concept?: string;
     }
+  /** A draft was accepted with warnings and sent back once for repair. */
+  | { type: 'warnings'; id?: string; round: number; warnings: ModelWarning[] }
   /** A model set job: one member model was written and accepted (its own rounds ran before). */
   | { type: 'member'; id?: string; concept: string; snapshotId: string; round?: number }
   /** A model set job: the relations proposed from the documented candidates (all undecided). */

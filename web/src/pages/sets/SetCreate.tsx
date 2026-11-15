@@ -281,8 +281,10 @@ export function reduceSetJob(p: SetProgress, e: ModelJobEvent): SetProgress {
           seconds: e.elapsed,
           at: Date.now(),
           round: e.round,
+          of: e.of,
           phase: e.phase,
           detail: e.detail,
+          concept: e.concept,
         },
       };
     case 'failed':

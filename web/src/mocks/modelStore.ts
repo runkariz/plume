@@ -25,6 +25,7 @@ export interface StoredModel {
   createdAt: string;
   /** Set when a newer model replaced this one on release. */
   supersededBy?: string;
+  supersededAt?: string;
   supersedes?: string[];
 }
 
@@ -125,6 +126,8 @@ export function seedModels(): StoredModel[] {
         id: UNRELEASED_ORDER,
         name: 'Order',
         generatedAt: '2026-11-16T07:00:00Z',
+        // over two APIs, like its stored API set
+        inputs: order40Snapshot.inputs.filter((i) => ['shopify', 'woocommerce'].includes(i.id)),
       },
       'Order',
       {
@@ -215,8 +218,14 @@ export function decorate(all: StoredModel[], m: StoredModel): ModelSnapshot {
     shareUrl: null,
     revisePrompt: REVISE(m),
     sameConcept: sameConceptOf(all, m),
-    ...(m.supersedes?.length ? { supersedes: m.supersedes } : {}),
+    // the models whose supersededBy is this one, newest first; always present
+    supersedes: all
+      .filter((x) => x.supersededBy === m.model.id)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .map((x) => x.model.id),
     supersededBy: m.supersededBy ?? null,
+    supersededAt: m.supersededAt ?? null,
+    warnings: m.model.warnings ?? [],
   };
 }
 
@@ -242,9 +251,8 @@ export function supersedable(all: StoredModel[], m: StoredModel): Supersedable[]
   return all
     .filter(
       (x) =>
-        x !== m &&
+        x.lineageId !== m.lineageId &&
         x.visibility === 'official' &&
-        !x.supersededBy &&
         x.concept.toLowerCase() === m.concept.toLowerCase(),
     )
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -256,6 +264,7 @@ export function supersedable(all: StoredModel[], m: StoredModel): Supersedable[]
       stale: x.model.stale ?? false,
       version: lineageOf(all, x).version,
       covered: x.apis.every((a) => m.apis.includes(a)),
+      createdAt: x.createdAt,
     }));
 }
 

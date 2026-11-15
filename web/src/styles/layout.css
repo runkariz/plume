@@ -2422,3 +2422,67 @@ ul.plain {
 .related-alias .mono {
   overflow-wrap: anywhere;
 }
+
+/* ---- release choice (supersedes), warnings, retire ---- */
+.release-choice {
+  margin: 12px 0 0;
+  padding: 14px 16px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--ink);
+}
+.release-choice legend {
+  padding: 0 6px;
+}
+.release-candidates {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 12px;
+}
+.release-candidates li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 2px 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line2);
+  border-radius: 10px;
+}
+.release-candidates li.on {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.release-candidates .check {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-strong);
+}
+.release-candidates label {
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.release-meta {
+  grid-column: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+.retire-panel {
+  margin-top: 12px;
+}
+.model-warnings,
+.review-warnings {
+  margin-top: 12px;
+}
+.warning-group + .warning-group {
+  margin-top: 10px;
+}
+.warning-group li {
+  overflow-wrap: anywhere;
+}
+.job-beat {
+  margin-top: 8px;
+}

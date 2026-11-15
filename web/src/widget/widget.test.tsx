@@ -526,6 +526,32 @@ describe('the view', () => {
     expect(within(detail).queryByRole('link')).not.toBeInTheDocument();
   });
 
+  it('shows the server warnings as text with the fields they are about (no links: no router here)', async () => {
+    await shown({
+      ...inventorySnapshot,
+      visibility: 'unreleased',
+      warnings: [
+        { code: 'WRITE_ONLY_SOURCE', field: 'number', api: 'shopify', message: 'only a write' },
+        {
+          code: 'WRITE_ONLY_SOURCE',
+          field: 'items.sku',
+          api: 'woocommerce',
+          message: 'only a write',
+        },
+      ],
+    });
+    expect(await screen.findByText(/2 mappings cite only a request body:/)).toHaveTextContent(
+      'number, items.sku',
+    );
+    expect(screen.queryByRole('link', { name: 'number' })).not.toBeInTheDocument();
+  });
+
+  it('shows no warning line for a model without warnings, or from a server that sends none', async () => {
+    await shown({ ...inventorySnapshot, visibility: 'official', warnings: [] });
+    await screen.findByRole('heading', { name: 'Inventory' });
+    expect(screen.queryByText(/cite only a request body/)).not.toBeInTheDocument();
+  });
+
   it('follows the host theme and its changes', async () => {
     const h = await shown(inventorySnapshot);
     await screen.findByRole('heading', { name: 'Inventory' });

@@ -18,6 +18,7 @@ const EMPTY = {
   failure: null,
   finished: false,
   beat: null,
+  repairs: [],
 };
 
 /** A job stream that stays open: the events as the server sends them while a model call is in flight. */

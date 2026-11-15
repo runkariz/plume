@@ -116,11 +116,15 @@ describe('model lists carry the stale mark', () => {
       within(list)
         .getAllByRole('listitem')
         .map((li) => li.querySelector('b')?.textContent),
-    ).toEqual(expect.arrayContaining(['Inventory', 'Order', 'Product']));
-    expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+    ).toEqual(
+      expect.arrayContaining(['Inventory', 'Order', 'Product', 'Order (Shopify + WooCommerce)']),
+    );
+    // one official model per concept and API set: the Order over all three APIs, and the one over two
+    expect(within(list).getAllByRole('listitem')).toHaveLength(4);
     expect(within(list).queryByText('Return')).not.toBeInTheDocument();
     expect(within(list).queryByText('Inventory, with a returns count')).not.toBeInTheDocument();
-    expect(within(list).getByText('Stale')).toBeInTheDocument();
+    // the stale Order and the stale Order over Shopify + WooCommerce
+    expect(within(list).getAllByText('Stale')).toHaveLength(2);
   });
 
   it('shows no list when there are no models, and no error when the list cannot be loaded', async () => {
