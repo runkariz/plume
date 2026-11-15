@@ -195,7 +195,12 @@ class Container:
 
     @cached_property
     def model_writer(self) -> VertexGeminiWriter:
-        return VertexGeminiWriter(self.settings.vertex_key_file, self.settings.model_llm)
+        return VertexGeminiWriter(
+            self.settings.vertex_key_file,
+            self.settings.model_llm,
+            project=self.settings.vertex_project,
+            location=self.settings.vertex_location,
+        )
 
     @cached_property
     def model_job_runner(self) -> ThreadJobRunner:

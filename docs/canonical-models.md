@@ -201,6 +201,11 @@ with `generator: "gemini:<model>"`.
 - LLM: Gemini on Vertex AI express mode (`generateContent`), behind the `ModelWriter` port (a
   scripted fake in tests). Model `PLUME_MODEL_LLM` (default `gemini-4-argon`, the owner's choice; not yet confirmed against the Vertex express
   endpoint: the first live run must, and reports a missing model as an error, never falling back).
+- **Location (checked live 2026-11-16).** `gemini-4-argon` answers only at location `global`.
+  That needs the project path (`…/v1/projects/<project>/locations/global/…`), so set
+  `PLUME_VERTEX_PROJECT`. The location-less express URL routes the project to a regional
+  location (europe-west1 or us-central1), where the model returns 404 NOT_FOUND.
+  `gemini-2.5-pro` answers everywhere. `PLUME_VERTEX_LOCATION` defaults to `global`.
 - Key: `PLUME_VERTEX_KEY_FILE`, a file read on every call and sent only in the
   `x-goog-api-key` header; never logged, never in an error. Unset or unreadable: generation
   answers 503 `llm_unavailable` and the web offers the Claude flow instead.

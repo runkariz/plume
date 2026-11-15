@@ -20,6 +20,12 @@ from plume.application.ports.model_writer import (
 VERTEX_GENERATE_URL = (
     "https://aiplatform.googleapis.com/v1/publishers/google/models/{model}:generateContent"
 )
+# With a project: an explicit location. Newer models (e.g. gemini-4-argon) answer only at
+# location "global", which the location-less express URL above does not reach.
+VERTEX_LOCATION_URL = (
+    "https://{host}/v1/projects/{project}/locations/{location}/publishers/google/models/"
+    "{model}:generateContent"
+)
 _RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 
 
@@ -33,8 +39,12 @@ class VertexGeminiWriter:
         max_output_tokens: int = 32_768,
         client: httpx.Client | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        project: str | None = None,
+        location: str = "global",
     ) -> None:
         self._key_file = key_file
+        self._project = project
+        self._location = location
         self._model = model
         self._retries = max_retries
         self._max_tokens = max_output_tokens
@@ -44,6 +54,19 @@ class VertexGeminiWriter:
     @property
     def name(self) -> str:
         return f"gemini:{self._model}"
+
+    @property
+    def url(self) -> str:
+        if not self._project:
+            return VERTEX_GENERATE_URL.format(model=self._model)
+        host = (
+            "aiplatform.googleapis.com"
+            if self._location == "global"
+            else f"{self._location}-aiplatform.googleapis.com"
+        )
+        return VERTEX_LOCATION_URL.format(
+            host=host, project=self._project, location=self._location, model=self._model
+        )
 
     def available(self) -> bool:
         return self._key_file is not None and self._key_file.is_file()
@@ -69,7 +92,7 @@ class VertexGeminiWriter:
                 "maxOutputTokens": self._max_tokens,
             },
         }
-        url = VERTEX_GENERATE_URL.format(model=self._model)
+        url = self.url
         delay = 2.0
         for attempt in range(self._retries + 1):
             try:

@@ -51,6 +51,13 @@ class Settings(BaseSettings):
         default="gemini-4-argon", description="Gemini model for server-side model generation."
     )
     model_max_rounds: int = Field(default=3, ge=1, le=10)
+    vertex_project: str | None = Field(
+        default=None,
+        description="Google Cloud project (id or number) for server-side generation: with it Plume "
+        "calls the model at PLUME_VERTEX_LOCATION (some models, e.g. gemini-4-argon, answer only "
+        "at 'global'); without it the location-less express URL.",
+    )
+    vertex_location: str = Field(default="global", pattern=r"^[a-z0-9-]{2,40}$")
     mcp_app_html: Path | None = Field(
         default=None,
         description="The MCP App bundle (model view, one self-contained HTML file). Unset = the "
