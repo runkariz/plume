@@ -15,7 +15,8 @@ from plume.domain.shared.hashing import ContentHash, content_hash
 
 # Bump when chunking OR the package reader changes what documents contain (it is part of
 # the build id, so a reload builds anew; unchanged chunks reuse cached vectors).
-CHUNKER_VERSION = "4"
+# 5: documents with unresolved include tags are flagged (incomplete + note) at load.
+CHUNKER_VERSION = "5"
 DEFAULT_MAX_CHARS = 6000
 _HEADING = re.compile(r"^#{1,3} ", re.MULTILINE)
 
