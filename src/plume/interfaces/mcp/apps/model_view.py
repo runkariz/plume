@@ -18,11 +18,21 @@ from mcp.server.apps import APP_MIME_TYPE, Apps
 from mcp_types import CallToolResult, TextContent
 
 MODEL_VIEW_URI = "ui://plume/model-view"
-UI_META: dict[str, Any] = {"ui": {"resourceUri": MODEL_VIEW_URI}}
+# The flat "ui/resourceUri" key is deprecated in the spec but still set by the official ext-apps
+# server helper (registerAppTool) "for backward compatibility"; hosts that read only it would
+# otherwise show no view. Both keys, like the reference implementation.
+LEGACY_RESOURCE_URI_KEY = "ui/resourceUri"
+UI_META: dict[str, Any] = {
+    "ui": {"resourceUri": MODEL_VIEW_URI},
+    LEGACY_RESOURCE_URI_KEY: MODEL_VIEW_URI,
+}
 # Tools the view must never call (writes): hosts reject app-originated calls to tools whose
 # visibility lacks "app". Read-only tools keep the default (model + app).
 MODEL_ONLY_META: dict[str, Any] = {"ui": {"visibility": ["model"]}}
-UI_WRITE_META: dict[str, Any] = {"ui": {"resourceUri": MODEL_VIEW_URI, "visibility": ["model"]}}
+UI_WRITE_META: dict[str, Any] = {
+    "ui": {"resourceUri": MODEL_VIEW_URI, "visibility": ["model"]},
+    LEGACY_RESOURCE_URI_KEY: MODEL_VIEW_URI,
+}
 
 __all__ = ["APP_MIME_TYPE", "MODEL_VIEW_URI", "model_view_apps", "model_view_html"]
 
@@ -48,9 +58,22 @@ def model_view_apps(html: str) -> Apps:
     return apps
 
 
+VIEW_HINT = (
+    "If your host shows this result as an interactive view (MCP App), the user already sees "
+    "it: refer to it instead of redrawing it as a chart or table."
+)
+
+
 def ui_result(structured: dict[str, Any], text: str) -> CallToolResult:
     """A result for UI-bound tools: ``text`` for the model and text-only hosts, the data for
     the view in ``structuredContent``."""
+    lines = text.split("\n")
+    at = next(
+        (i for i, line in enumerate(lines) if line.startswith(("Model JSON: ", "Set JSON: "))),
+        len(lines),
+    )  # the hint goes before a trailing JSON dump, so the JSON stays the last line
+    lines.insert(at, VIEW_HINT)
     return CallToolResult(
-        content=[TextContent(type="text", text=text)], structured_content=structured
+        content=[TextContent(type="text", text="\n".join(lines))],
+        structured_content=structured,
     )
