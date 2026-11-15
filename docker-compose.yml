@@ -1,0 +1,23 @@
+# Local stack. Plume's port block is 18400-18499 (Postgres 18432, API 18480, MCP 18481, web 18473).
+name: plume
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: plume
+      POSTGRES_PASSWORD: plume
+      POSTGRES_DB: plume
+    ports:
+      - "127.0.0.1:18432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U plume -d plume"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+volumes:
+  pgdata:
