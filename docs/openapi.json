@@ -1410,6 +1410,13 @@
             "title": "Found",
             "type": "boolean"
           },
+          "incompleteReasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Incompletereasons",
+            "type": "array"
+          },
           "incompleteSources": {
             "items": {
               "type": "string"
@@ -4188,7 +4195,7 @@
     },
     "/v1/models/sessions/{session_id}/context": {
       "get": {
-        "description": "The evidence pack for the session (what Claude reads).",
+        "description": "Index of the session's evidence (documents per API with field counts).",
         "operationId": "context_v1_models_sessions__session_id__context_get",
         "parameters": [
           {
@@ -4344,6 +4351,110 @@
           }
         },
         "summary": "Submit",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models/sessions/{session_id}/evidence": {
+      "get": {
+        "description": "Fields of the concept's documents in one API (or of `doc` ids), paged by size.",
+        "operationId": "evidence_v1_models_sessions__session_id__evidence_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "api",
+            "required": true,
+            "schema": {
+              "title": "Api",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "doc",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Doc"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Cursor",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Evidence V1 Models Sessions  Session Id  Evidence Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Evidence",
         "tags": [
           "models"
         ]

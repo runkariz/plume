@@ -108,6 +108,7 @@ def find_fact_payload(r: FindFactResult) -> Json:
             for m in r.matches
         ],
         "incomplete_sources": list(r.incomplete_sources),
+        "incomplete_reasons": list(r.reasons),
         "text_mentions": [hit_payload(h) for h in r.text_mentions],
         "wording": r.wording,
     }

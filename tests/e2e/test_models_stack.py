@@ -69,6 +69,9 @@ async def test_canonical_model_over_maintainer_mcp(token: str) -> None:
         sid = session["session_id"]
         ctx = await call(client, "get_model_context", session_id=sid)
         assert {a["api"] for a in ctx["apis"]} == set(APIS)
+        ev = await call(client, "get_model_evidence", session_id=sid, api=APIS[0])
+        assert any(f["path"] == "total" for d in ev["documents"] for f in d["fields"])
+        assert ev["next_cursor"] is None
         for name in BAD:
             raw = _draft(f"bad-{name}")
             refused = await call(client, "submit_model_draft", session_id=sid, draft=raw)

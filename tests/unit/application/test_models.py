@@ -62,7 +62,7 @@ def test_suggest_validation(stack: FakeStack) -> None:
         stack.suggest().execute(["shopify", "nope"])
 
 
-def test_session_and_context(stack: FakeStack) -> None:
+def test_session_context_index_and_paged_evidence(stack: FakeStack) -> None:
     session = stack.models().start(APIS, "Order")
     assert [i.api for i in session.inputs] == APIS
     ctx = stack.models().context(session.session_id)
@@ -70,12 +70,41 @@ def test_session_and_context(stack: FakeStack) -> None:
     apis = {a["api"]: a for a in ctx["apis"]}
     docs = apis["test-catalog-api"]["documents"]
     assert docs[0]["doc_id"] == "model:order"  # models first
-    paths = {f["path"] for d in docs for f in d["fields"]}
-    assert {"total", "orders[].total"} <= paths
-    assert "submit_model_draft" in ctx["instructions"]
+    assert docs[0]["fields"] == 6  # a count, not the fields
+    assert "get_model_evidence" in ctx["instructions"]
     assert ctx["draft_format"]["fields"][0]["sources"]
+
+    ev = stack.models().evidence(session.session_id, "test-catalog-api")
+    paths = {f["path"] for d in ev["documents"] for f in d["fields"]}
+    assert {"total", "orders[].total"} <= paths
+    assert ev["next_cursor"] is None
+    assert ev["returned"] == ev["total_fields"]
+    one = stack.models().evidence(session.session_id, "test-catalog-api", ["model:order", "x:y"])
+    assert [d["doc_id"] for d in one["documents"]] == ["model:order"]
+    assert one["missing_doc_ids"] == ["x:y"]
     with pytest.raises(NotFoundError):
         stack.models().context("s-nope")
+    with pytest.raises(ModelInputError):
+        stack.models().evidence(session.session_id, "shopify")
+
+
+def test_evidence_pages_stay_under_budget(stack: FakeStack) -> None:
+    session = stack.models().start(["shopify", "test-catalog-api"], "Product")
+    ctx = stack.models().context(session.session_id)
+    assert len(json.dumps(ctx)) < 25_000
+    seen: list[str] = []
+    cursor: int | None = 0
+    pages = 0
+    while cursor is not None:
+        page = stack.models().evidence(
+            session.session_id, "shopify", cursor=cursor, budget_chars=2_000
+        )
+        assert len(json.dumps(page, ensure_ascii=False)) < 2_000 + 1_500
+        seen += [f["path"] for d in page["documents"] for f in d["fields"]]
+        cursor = page["next_cursor"]
+        pages += 1
+    assert pages > 1
+    assert len(seen) == page["total_fields"]  # every field exactly once across pages
 
 
 def test_good_draft_becomes_an_immutable_snapshot(stack: FakeStack) -> None:

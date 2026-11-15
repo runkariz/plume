@@ -27,20 +27,22 @@ from plume.domain.shared.errors import DomainError
 from plume.interfaces import payloads
 
 INSTRUCTIONS = """\
-Plume serves API documentation as immutable, versioned builds. Use it to answer technical
-questions about an API with citations. Plume retrieves; you write the answer.
+Plume serves API documentation as immutable, versioned builds. For ANY question about an API
+that Plume indexes (call list_apis if unsure which), use Plume before answering and answer
+ONLY from what Plume returns. Plume retrieves; you write the answer.
 
-How to answer:
-1. list_apis to see what is available (ids like "shopify").
-2. search_docs(api, query) to find endpoints, models and guides; then get_document(api, doc_id)
-   to read the ones you will rely on. Quote and cite source_url.
-3. For "does X exist / is field Y documented / which scope" use find_fact(api, name). It checks
-   an exact index of endpoints, fields and scopes. Only say something is "not documented" when
-   find_fact returns found=false AND complete=true, and say "not documented in build <id>",
-   never "does not exist". If complete=false, absence is NOT proven: say so.
-4. To validate a call you plan to make, use check_call(api, method, path, params).
-5. Every result carries build and docs_as_of; mention them when precision matters.
-   version defaults to the "latest" tag; pass a build id to pin one.
+Rules:
+1. Call search_docs(api, query) first, then get_document(api, doc_id) for the documents you
+   rely on. Quote the relevant lines and cite source_url (or the doc_id).
+2. Every endpoint, field, parameter, scope or limit you name must come from a Plume result in
+   this conversation. Do not add general-knowledge paragraphs or asides about the API, even
+   labelled ones; if Plume has nothing, say so.
+3. Existence questions ("is there a field X?", "which scope?") go to find_fact(api, name). Say
+   "not documented in build <id>" only when found=false AND complete=true; never "does not
+   exist". With complete=false, absence is NOT proven: give the incomplete_reasons.
+4. Before writing code that calls the API, check it with check_call(api, method, path, params).
+5. Results carry build and docs_as_of; mention them when precision matters. version defaults
+   to the "latest" tag; pass a build id to pin one.
 """
 
 READ_ONLY = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=False)
@@ -89,8 +91,9 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
         top_k: int = 8,
         version: str | None = None,
     ) -> dict[str, Any]:
-        """Hybrid (semantic + full-text) search of one API's docs. Returns ranked documents
-        with snippets; read the ones you use with get_document."""
+        """Search one API's documentation (hybrid semantic + full text). Use it FIRST for any
+        question about an API Plume indexes; then read the hits you use with get_document and
+        answer only from them."""
         return await _run(
             lambda: payloads.search_payload(
                 deps.search().execute(api, query, "hybrid", kind, top_k, version)

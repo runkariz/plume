@@ -345,6 +345,17 @@ class FindFact:
             self._facts.incomplete_owners(build_id, owner_id=owner, resource=resource)
         )
         complete = not incomplete
+        reasons: list[str] = [f"{o} is flagged incomplete by its source" for o in incomplete]
+        field_like = fact_kind in (None, FactKind.FIELD) and loc not in (
+            FieldLocation.PATH,
+            FieldLocation.QUERY,
+            FieldLocation.HEADER,
+        )
+        if not found and field_like and counts.get("model", 0) == 0:
+            # Without model schemas, response/model fields are only known where an endpoint
+            # documents its response; absence of a data field is not proven.
+            complete = False
+            reasons.append(f"no model schemas are indexed for {api}")
         mentions: tuple[SearchHit, ...] = ()
         if not found:
             hits = self._index.text(build_id, name.replace(".", " ").replace("_", " "), 5, ())
@@ -375,8 +386,8 @@ class FindFact:
             )
         else:
             wording = (
-                f"Not found in build {build}, but {len(incomplete)} checked source(s) are flagged "
-                "incomplete, so absence is NOT proven. Say it is not documented here and may exist."
+                f"Not found in build {build}, but absence is NOT proven ({'; '.join(reasons)}). "
+                "Say it is not documented here and may exist."
             )
         if not found and mentions:
             wording += " The name appears in prose; read text_mentions before concluding."
@@ -390,6 +401,7 @@ class FindFact:
             text_mentions=mentions,
             wording=wording,
             incomplete_sources=incomplete,
+            reasons=tuple(reasons),
         )
 
 

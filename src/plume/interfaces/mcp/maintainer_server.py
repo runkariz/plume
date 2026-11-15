@@ -26,8 +26,10 @@ INSTRUCTIONS = """\
 Plume maintainer tools. Canonical models across 2..N APIs:
 1. suggest_concepts(apis) to see which concepts the APIs share (coverage per API).
 2. start_model_session(apis, concept) pins the latest build of each API.
-3. get_model_context(session_id) returns the evidence: per API the concept's documents and
-   their fields, plus the draft format and the rules.
+3. get_model_context(session_id) returns a compact index (per API the concept's documents
+   with field counts), the draft format and the rules. Then get_model_evidence(session_id,
+   api) per API returns the fields with descriptions, page by page (follow next_cursor; pass
+   doc_ids to read other documents of the pinned build).
 4. Write the model, then submit_model_draft(session_id, draft). Plume checks every citation
    (document exists, quote is in it, field and endpoint exist). A refusal lists issue codes;
    fix and resubmit. An accepted draft becomes an immutable snapshot (status
@@ -91,9 +93,18 @@ def create_maintainer_server(deps: McpMaintainerDependencies) -> MCPServer:
 
     @server.tool(annotations=READ, structured_output=True)
     async def get_model_context(session_id: str) -> dict[str, Any]:
-        """The evidence pack: per API the concept's documents with their fields, the draft
-        format and the citation rules. Base every mapping on it."""
+        """Index of the evidence: per API the concept's documents with field counts, plus the
+        draft format and the citation rules. Read the fields with get_model_evidence."""
         return await _run(lambda: deps.models().context(session_id))
+
+    @server.tool(annotations=READ, structured_output=True)
+    async def get_model_evidence(
+        session_id: str, api: str, doc_ids: list[str] | None = None, cursor: int = 0
+    ) -> dict[str, Any]:
+        """Fields (path, type, location, required, description) of the concept's documents in
+        one API of the session, at most ~20k characters per call. Follow next_cursor until null.
+        Copy paths exactly into the draft and quote descriptions verbatim as evidence."""
+        return await _run(lambda: deps.models().evidence(session_id, api, doc_ids, cursor))
 
     @server.tool(annotations=WRITE, structured_output=True)
     async def submit_model_draft(session_id: str, draft: dict[str, Any]) -> dict[str, Any]:

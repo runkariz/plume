@@ -86,8 +86,18 @@ def models_router(
 
     @router.get("/v1/models/sessions/{session_id}/context", responses=errors)
     def context(session_id: str) -> dict[str, Any]:
-        """The evidence pack for the session (what Claude reads)."""
+        """Index of the session's evidence (documents per API with field counts)."""
         return models().context(session_id)
+
+    @router.get("/v1/models/sessions/{session_id}/evidence", responses=errors)
+    def evidence(
+        session_id: str,
+        api: Annotated[str, Query()],
+        doc: Annotated[list[str] | None, Query()] = None,
+        cursor: Annotated[int, Query(ge=0)] = 0,
+    ) -> dict[str, Any]:
+        """Fields of the concept's documents in one API (or of `doc` ids), paged by size."""
+        return models().evidence(session_id, api, doc, cursor)
 
     @router.post(
         "/v1/models/sessions/{session_id}/draft",

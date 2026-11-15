@@ -243,6 +243,7 @@ class FindFactResponse(Schema):
     checked: Checked
     matches: list[FactMatch]
     incomplete_sources: list[str]
+    incomplete_reasons: list[str] = Field(default_factory=list)
     text_mentions: list[SearchHit]
     wording: str
 
