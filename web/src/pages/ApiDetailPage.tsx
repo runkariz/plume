@@ -25,7 +25,7 @@ import {
 } from '@/components';
 import { SearchIcon } from '@/icons';
 import { breakable } from '@/lib/breakable';
-import { categoryLabel, formatDate, formatScore } from '@/lib/format';
+import { categoryLabel, formatDate, formatScore, modelCount } from '@/lib/format';
 
 type Tab = 'all' | ItemKind;
 const TABS: { value: Tab; label: string }[] = [
@@ -58,15 +58,6 @@ function Browse({ api }: { api: ApiSummary }) {
     [client, api.id, tab, debounced, limit],
   );
   const { state, retry } = useAsync(load);
-
-  const totalOfKind =
-    tab === 'endpoint'
-      ? api.endpoints
-      : tab === 'model'
-        ? api.models
-        : tab === 'guide'
-          ? api.guides
-          : api.endpoints + api.models + api.guides;
 
   return (
     <Card className="pad browse">
@@ -114,7 +105,7 @@ function Browse({ api }: { api: ApiSummary }) {
           {!showAll && state.data.total > state.data.items.length ? (
             <div className="show-all">
               <button type="button" className="linkbtn" onClick={() => setShowAll(true)}>
-                Show all {debounced ? state.data.total : totalOfKind}{' '}
+                Show all {state.data.total}{' '}
                 {tab === 'all' ? 'items' : TABS.find((t) => t.value === tab)?.label.toLowerCase()}
               </button>
             </div>
@@ -173,7 +164,15 @@ function Detail({ api }: { api: ApiDetail }) {
       </div>
       <div className="tiles">
         <Tile value={api.endpoints} label="Endpoints" />
-        <Tile value={api.models} label="Models" />
+        <Tile
+          value={modelCount(api)}
+          label="Models"
+          hint={
+            api.modelNames !== undefined && api.models !== api.modelNames
+              ? `${api.models} model files${api.modelShapes ? ` · ${api.modelShapes} structures` : ''}`
+              : undefined
+          }
+        />
         <Tile value={api.guides} label="Guides" />
         <Tile value={api.chunks} label="Searchable chunks" />
       </div>

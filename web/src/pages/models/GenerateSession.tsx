@@ -89,6 +89,7 @@ export function GenerateSession({
   const maintainer = useIsMaintainer();
   const ref = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedLine, setCopiedLine] = useState(false);
   const [showPack, setShowPack] = useState(false);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
@@ -129,6 +130,22 @@ export function GenerateSession({
       setTimeout(() => setCopied(false), 2500);
     } catch {
       setError('Copy failed: select the prompt and copy it by hand.');
+    }
+  }
+
+  // A copy-ready connect line. The token is a placeholder: the web app never writes a real token into text.
+  const connectLine = session.maintainerMcpUrl
+    ? `claude mcp add --transport http plume-maintainer ${session.maintainerMcpUrl} --header "Authorization: Bearer <your maintainer token>"`
+    : null;
+
+  async function copyLine() {
+    if (!connectLine) return;
+    try {
+      await navigator.clipboard.writeText(connectLine);
+      setCopiedLine(true);
+      setTimeout(() => setCopiedLine(false), 2500);
+    } catch {
+      setError('Copy failed: select the command and copy it by hand.');
     }
   }
 
@@ -173,7 +190,23 @@ export function GenerateSession({
         </p>
         <ol className="session-steps">
           <li>
-            <b>Give Claude this prompt</b> (with the Plume maintainer connector added).
+            <b>Add the Plume maintainer connector to Claude</b> (once). It needs a maintainer token.
+            {connectLine ? (
+              <>
+                <pre className="code prompt" aria-label="Command to add the maintainer connector">
+                  {connectLine}
+                </pre>
+                <div className="row">
+                  <Button onClick={() => void copyLine()}>Copy command</Button>
+                  <span role="status" className="faint small">
+                    {copiedLine ? 'Command copied: put your token in place of the placeholder' : ''}
+                  </span>
+                </div>
+              </>
+            ) : null}
+          </li>
+          <li>
+            <b>Give Claude this prompt.</b>
             <pre className="code prompt" aria-label="Prompt for Claude">
               {session.claudePrompt}
             </pre>

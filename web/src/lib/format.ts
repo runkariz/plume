@@ -42,6 +42,11 @@ export function shortBuild(id: string): string {
   return /^b-[0-9a-f]{20,}$/i.test(id) ? id.slice(0, 14) : id;
 }
 
+/** The model count to show: distinct names when the server sends them, else the number of model documents. */
+export function modelCount(api: { models: number; modelNames?: number }): number {
+  return api.modelNames ?? api.models;
+}
+
 export function formatScore(n: number, digits = 2): string {
   return n.toFixed(digits);
 }

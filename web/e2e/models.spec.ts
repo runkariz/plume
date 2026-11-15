@@ -71,6 +71,9 @@ for (const theme of THEMES) {
         panel.getByRole('heading', { name: 'Waiting for a draft: Order' }),
       ).toBeVisible();
       await expect(panel.getByLabel('Prompt for Claude')).toContainText('get_model_context(');
+      await expect(panel.getByLabel('Command to add the maintainer connector')).toContainText(
+        '/maintainer/mcp',
+      );
       await panel.getByRole('button', { name: 'See what Plume gives Claude' }).click();
       await expect(panel.getByLabel('Evidence pack')).toContainText('session_id');
 

@@ -50,6 +50,23 @@ describe('API detail', () => {
     expect(screen.queryByText(/null/)).not.toBeInTheDocument();
   });
 
+  it('explains a large model count: names as the number, files and structures as the hint', async () => {
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/:id`, async () => {
+        const { shopifyDetail } = await import('@/mocks/data');
+        return HttpResponse.json({
+          ...shopifyDetail,
+          models: 1343,
+          modelNames: 319,
+          modelShapes: 717,
+        });
+      }),
+    );
+    renderApp('/apis/shopify');
+    expect(await screen.findByText('319')).toBeInTheDocument();
+    expect(screen.getByText('1343 model files · 717 structures')).toBeInTheDocument();
+  });
+
   it('breadcrumb links back to the list', async () => {
     renderApp('/apis/shopify');
     await screen.findByRole('heading', { level: 1 });

@@ -101,12 +101,12 @@ Where to change what:
 
 ## Troubleshooting
 
-- *The page is blank / "VITE_API_BASE_URL is not set"*: create `.env.local` from `.env.example`.
-- *Port 18473 is busy*: the dev server uses a fixed port on purpose (`strictPort`); stop the other process.
-- *CORS errors against the real API*: the API allows `http://127.0.0.1:18473` and `http://localhost:18473`; open
+- _The page is blank / "VITE_API_BASE_URL is not set"_: create `.env.local` from `.env.example`.
+- _Port 18473 is busy_: the dev server uses a fixed port on purpose (`strictPort`); stop the other process.
+- _CORS errors against the real API_: the API allows `http://127.0.0.1:18473` and `http://localhost:18473`; open
   the app on one of those, not on another host name.
-- *Maintainer calls answer 401/503*: the stack needs `PLUME_MAINTAINER_TOKENS` (16+ characters) and you must sign
+- _Maintainer calls answer 401/503_: the stack needs `PLUME_MAINTAINER_TOKENS` (16+ characters) and you must sign
   in with one of them.
-- *E2E fails on the very first page after a clean checkout*: the first run compiles the app on a cold dev server;
+- _E2E fails on the very first page after a clean checkout_: the first run compiles the app on a cold dev server;
   run it again (assertions already wait up to 10 s).
-- *npm audit warnings*: they are for dev dependencies; the app ships only the built bundle.
+- _npm audit warnings_: they are for dev dependencies; the app ships only the built bundle.

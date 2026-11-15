@@ -107,6 +107,7 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
         contextUrl: `/v1/models/sessions/${sessionId}/context`,
         claudePrompt: `Use the Plume maintainer MCP: get_model_context("${sessionId}"), write the canonical ${body.concept} model for ${body.apis.join(', ')}, then submit_model_draft("${sessionId}", draft).`,
         mcpUrl: 'http://127.0.0.1:18481/mcp',
+        maintainerMcpUrl: 'http://127.0.0.1:18481/maintainer/mcp',
       });
     }),
     http.get(`${base}/v1/models/sessions/:id/context`, ({ params }) => {
