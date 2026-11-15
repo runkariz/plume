@@ -15,6 +15,9 @@ Warning codes (stored with the model, never a refusal):
 - ``WRITE_ONLY_SOURCE``: a mapping cites only write operations (a request body, or what a
   POST/PUT/PATCH/DELETE echoes); a model or a GET response says what the API returns. When the
   docs have no read source, it is the only evidence and stays.
+- ``NO_COVERAGE``: an input API is not mapped by any field. Server generation sends it back
+  for repair on every round and stores the model with the warning only after the last one; a
+  Claude or pasted draft is stored with the warning.
 """
 
 import re
@@ -103,6 +106,17 @@ def validate(draft: ModelDraft, apis: frozenset[str], oracle: Oracle) -> list[Is
 def warnings(draft: ModelDraft, apis: frozenset[str], oracle: Oracle) -> list[Issue]:
     """Mappings that hold but are weak (see the warning codes above)."""
     out: list[Issue] = []
+    mapped = {api for _, f in draft.walk() for api, _ in f.sources}
+    for api in sorted(apis - mapped):
+        out.append(
+            Issue(
+                "NO_COVERAGE",
+                "",
+                api,
+                f"no field maps {api}: map its documented fields (or say in open_questions why "
+                "it has none)",
+            )
+        )
     for path, f in draft.walk():
         for api, src in f.sources:
             if api not in apis or not src.evidence:

@@ -55,6 +55,30 @@ WARNINGS_PROMPT = (
 )
 
 
+def _depth(path: str) -> int:
+    return path.count(".") + path.count("[]")
+
+
+def _fill(items: list[tuple[dict[str, Any], dict[str, Any]]], chosen: set[int], limit: int) -> int:
+    """Add fields (shallow first, then evidence order) until ``limit`` characters; returns the
+    characters added. A document's header counts once, with its first chosen field."""
+    seen_docs = {str(items[k][0]["doc_id"]) for k in chosen}
+    added = 0
+    for k in sorted(range(len(items)), key=lambda k: (_depth(str(items[k][1]["path"])), k)):
+        if k in chosen:
+            continue
+        header, field_row = items[k]
+        cost = len(json.dumps(field_row, ensure_ascii=False)) + 2
+        if str(header["doc_id"]) not in seen_docs:
+            cost += len(json.dumps(header, ensure_ascii=False)) + 20
+        if added + cost > limit:
+            continue  # a smaller (shallower or shorter) field may still fit
+        chosen.add(k)
+        seen_docs.add(str(header["doc_id"]))
+        added += cost
+    return added
+
+
 def _issues(issues: list[Issue]) -> list[dict[str, Any]]:
     return [{"code": i.code, "field": i.field, "api": i.api, "message": i.message} for i in issues]
 
@@ -252,33 +276,73 @@ class GenerateModels:
         self._jobs.save(job)
         return job
 
-    def _evidence_pack(self, session_id: str) -> tuple[dict[str, Any], int, int]:
+    def _evidence_pack(
+        self, session_id: str
+    ) -> tuple[dict[str, Any], int, int, dict[str, dict[str, int]]]:
+        """The evidence the LLM reads, within one budget shared FAIRLY by the APIs: each gets an
+        equal share first (top-level and shallow nested fields before deep ones), then what an
+        API leaves unused goes to those that were cut. A huge model in one API (Shopify's Order,
+        607 fields) used to fill the whole budget and leave the others with nothing."""
         context = self._sessions.context(session_id)
+        rows: dict[str, list[tuple[dict[str, Any], dict[str, Any]]]] = {}
+        for api in context["apis"]:
+            rows[api["api"]] = self._all_rows(session_id, api["api"])
+        chosen: dict[str, set[int]] = {a: set() for a in rows}
+        used: dict[str, int] = dict.fromkeys(rows, 0)
+        share = self._budget // max(1, len(rows))
+        for a, items in rows.items():
+            used[a] = _fill(items, chosen[a], share)
+        spare = self._budget - sum(used.values())
+        for a, items in rows.items():  # second pass: the unused share to the APIs that were cut
+            if spare <= 0:
+                break
+            if len(chosen[a]) < len(items):
+                more = _fill(items, chosen[a], spare)
+                used[a] += more
+                spare -= more
         pack: dict[str, Any] = {
             "session_id": session_id,
             "concept": context["concept"],
             "draft_format": DRAFT_FORMAT,
             "apis": [],
         }
-        used = documents = fields = 0
-        for api in context["apis"]:
-            docs: list[dict[str, Any]] = []
-            cursor: int | None = 0
-            while cursor is not None and used < self._budget:
-                page = self._sessions.evidence(session_id, api["api"], None, cursor)
-                docs.extend(page["documents"])
-                used += len(json.dumps(page["documents"], ensure_ascii=False))
-                fields += int(page["returned"])
-                cursor = page["next_cursor"]
-            documents += len(docs)
+        sizes: dict[str, dict[str, int]] = {}
+        for a, items in rows.items():
+            docs: dict[str, dict[str, Any]] = {}
+            for k, (header, field_row) in enumerate(items):
+                if k in chosen[a]:
+                    docs.setdefault(str(header["doc_id"]), {**header, "fields": []})[
+                        "fields"
+                    ].append(field_row)
+            dropped = len(items) - len(chosen[a])
             pack["apis"].append(
-                {
-                    "api": api["api"],
-                    "documents": docs,
-                    "truncated": cursor is not None,
-                }
+                {"api": a, "documents": list(docs.values()), "truncated": dropped > 0}
             )
-        return pack, documents, fields
+            sizes[a] = {
+                "documents": len(docs),
+                "fields": len(chosen[a]),
+                "dropped": dropped,
+                "chars": used[a],
+            }
+        logger.info("evidence pack for %s: %s", session_id, sizes)
+        documents = sum(v["documents"] for v in sizes.values())
+        fields = sum(v["fields"] for v in sizes.values())
+        return pack, documents, fields, sizes
+
+    def _all_rows(self, session_id: str, api: str) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+        """Every (document header, field) of the concept in one API, in evidence order (capped
+        at a few budgets, so a huge API cannot exhaust memory)."""
+        out: list[tuple[dict[str, Any], dict[str, Any]]] = []
+        cursor: int | None = 0
+        raw = 0
+        while cursor is not None and raw < 4 * self._budget:
+            page = self._sessions.evidence(session_id, api, None, cursor)
+            for doc in page["documents"]:
+                header = {k: v for k, v in doc.items() if k != "fields"}
+                out.extend((header, f) for f in doc["fields"])
+            raw += len(json.dumps(page["documents"], ensure_ascii=False))
+            cursor = page["next_cursor"]
+        return out
 
     def _write_model(
         self, job: ModelJob, session_id: str, concept: str | None = None
@@ -286,8 +350,8 @@ class GenerateModels:
         """The LLM writes one model in a session (same validation, refusals fed back). Returns
         the stored snapshot id, or None after the last refused round."""
         tag = {"concept": concept} if concept else {}
-        pack, documents, fields = self._evidence_pack(session_id)
-        self._emit(job.job_id, "context", documents=documents, fields=fields, **tag)
+        pack, documents, fields, sizes = self._evidence_pack(session_id)
+        self._emit(job.job_id, "context", documents=documents, fields=fields, perApi=sizes, **tag)
         turns = [
             Turn(
                 "user",
@@ -310,6 +374,12 @@ class GenerateModels:
             try:
                 draft = parse_reply(reply)
                 warned = self._sessions.check(session_id, draft)
+                uncovered = [w for w in warned if w.code == "NO_COVERAGE"]
+                if uncovered and n < self._max_rounds:
+                    # An API with no mapping goes back for repair on every round; after the
+                    # last one the model is stored with the NO_COVERAGE warning (the
+                    # maintainer sees it and does not release it).
+                    raise ModelDraftRefusedError(uncovered)
                 if warned and fallback is None and n < self._max_rounds:
                     # Once: a mapping that cites only a write (request body) may have a read
                     # source in the pack. The draft is kept in case the next round fails.
