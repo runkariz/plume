@@ -1,6 +1,5 @@
 """The HTTP API. Reader routes are public (rate limited); they call the same use cases as MCP."""
 
-import hashlib
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -102,10 +101,7 @@ def _generation_flag(
 
 
 def _logo(api_id: str, name: str, icon_url: str | None) -> s.Logo:
-    words = [w for w in name.replace("-", " ").split() if w]
-    text = "".join(w[0] for w in words[:2]).upper() or api_id[:2].upper()
-    color = _PALETTE[int(hashlib.sha256(api_id.encode()).hexdigest(), 16) % len(_PALETTE)]
-    return s.Logo(text=text, color=color, url=icon_url)
+    return s.Logo(**payloads.letter_logo(api_id, name, icon_url))
 
 
 def _summary(o: ApiOverview) -> s.ApiSummary:
