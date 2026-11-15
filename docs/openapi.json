@@ -2482,13 +2482,19 @@
       },
       "Me": {
         "properties": {
+          "generation": {
+            "description": "Server-side model generation is configured (a model key is readable): POST /v1/models/generate with engine server will not answer 503 llm_unavailable.",
+            "title": "Generation",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
           }
         },
         "required": [
-          "name"
+          "name",
+          "generation"
         ],
         "title": "Me",
         "type": "object"
@@ -3297,6 +3303,44 @@
           "single"
         ],
         "title": "SuggestCounts",
+        "type": "object"
+      },
+      "SuggestRelatedRequest": {
+        "properties": {
+          "apis": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 2,
+            "title": "Apis",
+            "type": "array"
+          },
+          "concept": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Concept",
+            "type": "string"
+          },
+          "limit": {
+            "default": 24,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "apis",
+          "concept"
+        ],
+        "title": "SuggestRelatedRequest",
         "type": "object"
       },
       "SuggestRequest": {
@@ -6985,6 +7029,80 @@
           }
         },
         "summary": "Suggest Concepts",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models/suggest-related": {
+      "post": {
+        "description": "Concepts related to one concept in these APIs, with relation candidates taken\nonly from documented evidence (nested arrays, sub-resources, id fields whose\ndescription names the target, model references), each cited per API, and the\ndesigns that evidence supports. Different names (variant / variation) appear only as\n`aliases` for the user to accept. Deterministic: no LLM.",
+        "operationId": "suggest_related_concepts_v1_models_suggest_related_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestRelatedRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Suggest Related Concepts V1 Models Suggest Related Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Suggest Related Concepts",
         "tags": [
           "models"
         ]

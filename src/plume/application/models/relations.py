@@ -1,0 +1,447 @@
+"""Relation candidates between concepts, from documented evidence only (no LLM, nothing invented).
+
+See docs/design/model-relations.md §2. Per API, four kinds of evidence:
+
+- ``nested``: a model/response field path nests another concept (``products[].variants[].id``:
+  Product contains Variant).
+- ``sub_resource``: an endpoint path ``/{parent}/{parent_id}/{child}`` (``/products/{product_id}/
+  variants.json``).
+- ``id_field``: a field ``<x>_id`` / ``<x>_ids`` / ``parent_id`` whose DESCRIPTION names the
+  target concept ("The ID of the order the refund is associated with.").
+- ``model_ref``: a field whose documented type names another concept's model.
+
+A candidate is directional, parent → child (the side that contains, or is referenced by, the
+other). Its ``options`` are only the designs the evidence supports, each with what it needs. Names
+that differ across APIs are never merged; an ``alias`` candidate is offered only with structural
+evidence in BOTH APIs (each a child of the same, exactly matching parent), for the user to accept.
+"""
+
+import re
+from collections import defaultdict
+from dataclasses import dataclass, field
+from difflib import SequenceMatcher
+
+from plume.application.models.concepts import (
+    NOISE,
+    ModelInputError,
+    concept_docs,
+    concept_key,
+    concept_label,
+    resolve_apis,
+)
+from plume.application.ports.document_repo import DocumentRepo
+from plume.application.ports.fact_index import FactIndex
+from plume.application.ports.search_index import DocumentSummary, SearchIndex
+from plume.application.reader.resolve import BuildResolver, ResolvedBuild
+from plume.domain.knowledge.document import DocumentKind, FieldLocation
+from plume.domain.knowledge.fact import FactKind
+
+_BODY = (None, FieldLocation.MODEL, FieldLocation.RESPONSE, FieldLocation.BODY)
+_ID = re.compile(r"^(?P<stem>[a-z0-9_]+?)_(?P<plural>id|ids)$")
+_PARAM = re.compile(r"^\{[^}]+\}$")
+MAX_EVIDENCE_PER_KIND = 3
+KINDS = ("nested", "sub_resource", "id_field", "model_ref")
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateEvidence:
+    kind: str  # nested | sub_resource | id_field | model_ref
+    doc_id: str
+    quote: str  # copied from the document (a field description or the document title)
+    paths: tuple[str, ...] = ()  # documented field paths (the container, the id field)
+    fetch: str | None = None  # "GET /products/{product_id}/variants.json" (sub_resource)
+    many: bool = False  # an array / collection / *_ids: the child side is "many"
+
+
+@dataclass(frozen=True, slots=True)
+class RelationOption:
+    kind: str  # embedded | reference
+    cardinality: str  # 1:1 | 1:n | n:1 | n:m
+    needs: str  # what the design requires, in words
+
+
+@dataclass
+class RelationCandidate:
+    parent: str  # concept key
+    child: str
+    sources: dict[str, list[CandidateEvidence]] = field(default_factory=dict)  # api -> evidence
+
+    @property
+    def id(self) -> str:
+        return f"{self.parent}>{self.child}"
+
+    def kinds(self, api: str) -> list[str]:
+        return sorted({e.kind for e in self.sources.get(api, [])}, key=KINDS.index)
+
+    def options(self, labels: dict[str, str]) -> list[RelationOption]:
+        ev = [e for es in self.sources.values() for e in es]
+        parent, child = labels[self.parent], labels[self.child]
+        many = any(e.many for e in ev)
+        out: list[RelationOption] = []
+        if any(e.kind in ("nested", "sub_resource", "model_ref") for e in ev):
+            out.append(
+                RelationOption(
+                    "embedded",
+                    "1:n" if many else "1:1",
+                    f"a field of {parent} holding {child}"
+                    + (" items (an array)" if many else " (an object)"),
+                )
+            )
+        ids = [e for e in ev if e.kind in ("id_field", "sub_resource")]
+        if ids:
+            plural = any(e.kind == "id_field" and e.many for e in ids)
+            out.append(
+                RelationOption(
+                    "reference",
+                    "n:m" if plural else "n:1",
+                    f"{child} maps an id field of {parent} (e.g. {self.parent}_id)",
+                )
+            )
+        return out
+
+
+@dataclass(frozen=True, slots=True)
+class AliasCandidate:
+    """Two differently named concepts in two APIs at the same documented position."""
+
+    parent: str
+    names: dict[str, str]  # api -> child concept key in that API
+    evidence: dict[str, CandidateEvidence]  # api -> the structural evidence
+
+
+@dataclass(frozen=True, slots=True)
+class RelatedConcept:
+    key: str
+    name: str
+    candidates: tuple[RelationCandidate, ...]
+    kinds: dict[str, tuple[str, ...]]  # api -> evidence kinds
+    evidence: int
+
+
+@dataclass(frozen=True, slots=True)
+class RelatedConcepts:
+    apis: tuple[ResolvedBuild, ...]
+    concept: str
+    name: str
+    related: tuple[RelatedConcept, ...]
+    total: int
+    aliases: tuple[AliasCandidate, ...]
+    labels: dict[str, str]
+    limit: int = 24
+    offset: int = 0
+
+
+@dataclass
+class _Api:
+    groups: dict[str, list[DocumentSummary]]
+    names: dict[str, str]
+    owner: dict[str, str]  # doc id -> concept key
+
+
+ALIAS_SIMILARITY = 0.75
+# Action endpoints (/orders/{id}/cancel.json) are operations, not child collections.
+_ACTIONS = frozenset(
+    {
+        "cancel", "close", "open", "reopen", "complete", "approve", "accept", "refuse",
+        "reject", "send", "calculate", "adjust", "set", "connect", "activate", "deactivate",
+        "archive", "unarchive", "fulfill", "hold", "release", "move", "reschedule",
+        "validate", "export", "import", "duplicate", "publish", "unpublish", "action",
+        "cancelation", "cancellation", "refresh", "retry", "resend", "sync", "test",
+    }
+)  # fmt: skip
+
+
+def _similar(a: str, b: str) -> float:
+    return SequenceMatcher(None, a, b).ratio()
+
+
+def _segment_key(seg: str) -> str:
+    return concept_key(seg.replace("[]", "").split(".", 1)[0])
+
+
+def _names_concept(text: str, key: str, label: str) -> bool:
+    words = {label.lower(), key, key + "s", label.lower() + "s"}
+    if key.endswith("y"):
+        words.add(key[:-1] + "ies")
+    low = text.lower()
+    return any(re.search(rf"\b{re.escape(w)}\b", low) for w in words if w)
+
+
+class SuggestRelated:
+    def __init__(
+        self,
+        resolver: BuildResolver,
+        index: SearchIndex,
+        facts: FactIndex,
+        documents: DocumentRepo,
+    ) -> None:
+        self._resolver = resolver
+        self._index = index
+        self._facts = facts
+        self._documents = documents
+
+    def _scan(self, r: ResolvedBuild) -> _Api:
+        summaries, _ = self._index.browse(r.build.build_id, (), None, 100_000, 0)
+        groups = concept_docs(summaries)
+        names: dict[str, str] = {}
+        for key, docs in groups.items():
+            for d in docs:
+                own = ((d.resource if d.kind is DocumentKind.ENDPOINT else d.title) or "").split(
+                    " / "
+                )[-1]
+                if concept_key(own) == key:
+                    names[key] = concept_label(own)
+                    break
+            names.setdefault(key, concept_label(key))
+        owner = {d.doc_id: k for k, docs in groups.items() for d in docs}
+        return _Api(groups, names, owner)
+
+    def candidates(
+        self, resolved: tuple[ResolvedBuild, ...]
+    ) -> tuple[list[RelationCandidate], list[AliasCandidate], dict[str, str]]:
+        """Every candidate between concepts of these APIs, with the concept labels."""
+        found: dict[tuple[str, str], RelationCandidate] = {}
+        labels: dict[str, str] = {}
+        structural: dict[str, dict[str, dict[str, CandidateEvidence]]] = defaultdict(dict)
+        for r in resolved:
+            api = r.api.api_id.value
+            scan = self._scan(r)
+            evidence = self._evidence(r, scan)  # may add labels (containers, path literals)
+            for k, v in scan.names.items():
+                labels.setdefault(k, v)
+            for parent, child, ev in evidence:
+                cand = found.setdefault((parent, child), RelationCandidate(parent, child))
+                bucket = cand.sources.setdefault(api, [])
+                if sum(e.kind == ev.kind for e in bucket) < MAX_EVIDENCE_PER_KIND:
+                    bucket.append(ev)
+                if ev.kind in ("nested", "sub_resource"):
+                    known = structural[parent].setdefault(api, {})
+                    prior = known.get(child)
+                    if prior is None or (
+                        not (prior.fetch or "").startswith("GET ")
+                        and (ev.fetch or "").startswith("GET ")
+                    ):  # prefer the listing endpoint as the cited evidence
+                        known[child] = ev
+        aliases = self._aliases(resolved, structural, found)
+        return sorted(found.values(), key=lambda c: c.id), aliases, labels
+
+    def _aliases(
+        self,
+        resolved: tuple[ResolvedBuild, ...],
+        structural: dict[str, dict[str, dict[str, CandidateEvidence]]],
+        found: dict[tuple[str, str], RelationCandidate],
+    ) -> list[AliasCandidate]:
+        """D2: children of the same parent in two APIs, each absent from the other API, both
+        documented as collections (an array or a sub-resource). Close names only (a filter that
+        narrows the list; it never links anything by itself): the user accepts or not."""
+        present: dict[str, set[str]] = defaultdict(set)  # api -> concepts with any evidence
+        for (p, c), cand in found.items():
+            for api in cand.sources:
+                present[api].update((p, c))
+        apis = [r.api.api_id.value for r in resolved]
+        out: list[AliasCandidate] = []
+        for parent, per_api in sorted(structural.items()):
+            for i, a1 in enumerate(apis):
+                for a2 in apis[i + 1 :]:
+                    for c1, e1 in sorted(per_api.get(a1, {}).items()):
+                        for c2, e2 in sorted(per_api.get(a2, {}).items()):
+                            if c1 == c2 or c1 in present[a2] or c2 in present[a1]:
+                                continue
+                            if not (e1.many and e2.many) or _similar(c1, c2) < ALIAS_SIMILARITY:
+                                continue
+                            out.append(AliasCandidate(parent, {a1: c1, a2: c2}, {a1: e1, a2: e2}))
+        return out
+
+    def _evidence(self, r: ResolvedBuild, scan: _Api) -> list[tuple[str, str, CandidateEvidence]]:
+        concepts = set(scan.groups)
+        out = self._sub_resources(scan, concepts)
+        out += self._field_evidence(r, scan, concepts, self._field_hits(r, scan, concepts))
+        return out
+
+    def _sub_resources(
+        self, scan: _Api, concepts: set[str]
+    ) -> list[tuple[str, str, CandidateEvidence]]:
+        """``/{parent}/{parent_id}/{child}`` endpoint paths."""
+        out: list[tuple[str, str, CandidateEvidence]] = []
+        # sub-resources: /{parent}/{parent_id}/{child}
+        for docs in scan.groups.values():
+            for d in docs:
+                if d.kind is not DocumentKind.ENDPOINT or not d.path:
+                    continue
+                segs = [s.split(".", 1)[0] for s in d.path.strip("/").split("/")]
+                for i in range(len(segs) - 2):
+                    if _PARAM.match(segs[i]) or not _PARAM.match(segs[i + 1]):
+                        continue
+                    if _PARAM.match(segs[i + 2]):
+                        continue
+                    parent, child = concept_key(segs[i]), concept_key(segs[i + 2])
+                    # The child may be a collection that is no concept of its own in this API
+                    # (WooCommerce tags /products/{id}/variations with resource "Product").
+                    if (
+                        parent in concepts
+                        and child
+                        and child != parent
+                        and child not in NOISE
+                        and child not in _ACTIONS
+                    ):
+                        scan.names.setdefault(child, concept_label(segs[i + 2]))
+                        out.append(
+                            (
+                                parent,
+                                child,
+                                CandidateEvidence(
+                                    "sub_resource",
+                                    d.doc_id,
+                                    d.title,
+                                    paths=(segs[i + 1].strip("{}"),),
+                                    fetch=f"{d.method} {d.path}",
+                                    many=True,
+                                ),
+                            )
+                        )
+                        break
+        return out
+
+    def _field_hits(
+        self, r: ResolvedBuild, scan: _Api, concepts: set[str]
+    ) -> dict[str, list[tuple[str, str, str, str, bool, str]]]:
+        """Field facts that may be evidence: nested containers, id fields, model refs."""
+        build = r.build.build_id
+        wanted: dict[str, list[tuple[str, str, str, str, bool, str]]] = defaultdict(list)
+        for f in self._facts.list_facts(build):
+            if f.kind is not FactKind.FIELD or f.location not in _BODY:
+                continue
+            owner = scan.owner.get(f.owner_id)
+            if owner is None:
+                continue
+            segs = f.name.split(".")
+            current = owner  # the innermost enclosing concept (holder of nested concepts)
+            inner = owner  # the innermost enclosing container (holder of an id field)
+            for depth, seg in enumerate(segs[:-1]):
+                key = _segment_key(seg)
+                if not key or key in NOISE:
+                    continue
+                if key != inner:
+                    inner = key
+                    scan.names.setdefault(key, concept_label(seg.replace("[]", "")))
+                if key in concepts and key != current:
+                    path = ".".join(segs[: depth + 1])
+                    wanted[f.owner_id].append(
+                        ("nested", current, key, path, seg.endswith("[]"), f.name)
+                    )
+                    current = key
+            leaf = segs[-1].replace("[]", "")
+            m = _ID.match(leaf)
+            if m or leaf == "parent_id":
+                stem = concept_key(m.group("stem")) if m else ""
+                plural = bool(m and m.group("plural") == "ids")
+                wanted[f.owner_id].append(("id_field", inner, stem, f.name, plural, f.name))
+            ftype = concept_key((f.type or "").replace("array", "").strip("<>[] "))
+            if ftype in concepts and ftype != current:
+                wanted[f.owner_id].append(
+                    (
+                        "model_ref",
+                        current,
+                        ftype,
+                        f.name,
+                        "[]" in f.name or "array" in (f.type or ""),
+                        f.name,
+                    )
+                )
+        return wanted
+
+    def _field_evidence(
+        self,
+        r: ResolvedBuild,
+        scan: _Api,
+        concepts: set[str],
+        wanted: dict[str, list[tuple[str, str, str, str, bool, str]]],
+    ) -> list[tuple[str, str, CandidateEvidence]]:
+        """Read the descriptions; keep id fields only when the description names the target."""
+        build = r.build.build_id
+        out: list[tuple[str, str, CandidateEvidence]] = []
+        seen: set[tuple[str, str, str, str]] = set()
+        for doc_id, items in wanted.items():
+            doc = self._documents.get_document(build, doc_id)
+            if doc is None:
+                continue
+            specs = {s.name: s for s in doc.fields}
+            for kind, holder, target, path, many, fname in items:
+                spec = specs.get(fname)
+                desc = (spec.description or "").strip() if spec else ""
+                if kind == "id_field":
+                    # The description must NAME the target (the field name alone proves nothing).
+                    targets = [target] if target in concepts else []
+                    if not targets and fname.endswith("parent_id"):  # any concept the text names
+                        targets = [c for c in concepts if desc and _names_concept(
+                            desc, c, scan.names[c])]  # fmt: skip
+                    for t in targets:
+                        if t == holder or not desc or not _names_concept(desc, t, scan.names[t]):
+                            continue
+                        if (kind, t, holder, path) in seen:
+                            continue
+                        seen.add((kind, t, holder, path))
+                        out.append(
+                            (t, holder, CandidateEvidence(kind, doc_id, desc, (path,), many=many))
+                        )
+                    continue
+                container = specs.get(path)
+                quote = (
+                    ((container.description or "").strip() if container else "")
+                    or desc
+                    or doc.title
+                )
+                if (kind, holder, target, path) in seen:
+                    continue
+                seen.add((kind, holder, target, path))
+                out.append(
+                    (holder, target, CandidateEvidence(kind, doc_id, quote, (path,), many=many))
+                )
+        return out
+
+    def execute(
+        self, apis: list[str], concept: str, limit: int = 24, offset: int = 0
+    ) -> RelatedConcepts:
+        resolved = resolve_apis(self._resolver, apis)
+        key = concept_key(concept)
+        if not key:
+            raise ModelInputError("concept is empty")
+        cands, aliases, labels = self.candidates(resolved)
+        by_other: dict[str, list[RelationCandidate]] = defaultdict(list)
+        for c in cands:
+            if c.parent == key:
+                by_other[c.child].append(c)
+            elif c.child == key:
+                by_other[c.parent].append(c)
+        related = []
+        for other, cs in by_other.items():
+            kinds = {
+                r.api.api_id.value: tuple(
+                    sorted({k for c in cs for k in c.kinds(r.api.api_id.value)}, key=KINDS.index)
+                )
+                for r in resolved
+            }
+            related.append(
+                RelatedConcept(
+                    key=other,
+                    name=labels.get(other, concept_label(other)),
+                    candidates=tuple(cs),
+                    kinds=kinds,
+                    evidence=sum(len(es) for c in cs for es in c.sources.values()),
+                )
+            )
+        related.sort(key=lambda r: (-sum(bool(v) for v in r.kinds.values()), -r.evidence, r.key))
+        limit = max(1, min(limit, 100))
+        offset = max(0, offset)
+        mine = tuple(a for a in aliases if a.parent == key or key in a.names.values())
+        return RelatedConcepts(
+            apis=resolved,
+            concept=key,
+            name=labels.get(key, concept_label(key)),
+            related=tuple(related[offset : offset + limit]),
+            total=len(related),
+            aliases=mine,
+            labels=labels,
+            limit=limit,
+            offset=offset,
+        )

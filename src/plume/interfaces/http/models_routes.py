@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from plume.application.models.concepts import SuggestFilter
 from plume.application.models.generate import ENDED, GenerateModels
+from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import (
     ModelDraftRefusedError,
     ModelSessions,
@@ -88,6 +89,7 @@ def models_router(  # noqa: PLR0915
     claude_mcp_url: str,
     generate_models: Callable[[], GenerateModels] | None = None,
     web_public_url: str | None = None,
+    suggest_related: Callable[[], SuggestRelated] | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["models"])
     auth = make_auth(tokens)
@@ -167,6 +169,22 @@ def models_router(  # noqa: PLR0915
         out = payloads.suggestions_payload(suggest().execute(body.apis, f))
         out["apis"] = [_logo_for(logo, a) for a in out["apis"]]
         return out
+
+    if suggest_related is not None:
+        related = suggest_related
+
+        @router.post("/v1/models/suggest-related", responses=errors)
+        def suggest_related_concepts(body: s.SuggestRelatedRequest) -> dict[str, Any]:
+            """Concepts related to one concept in these APIs, with relation candidates taken
+            only from documented evidence (nested arrays, sub-resources, id fields whose
+            description names the target, model references), each cited per API, and the
+            designs that evidence supports. Different names (variant / variation) appear only as
+            `aliases` for the user to accept. Deterministic: no LLM."""
+            out = payloads.related_payload(
+                related().execute(body.apis, body.concept, body.limit, body.offset)
+            )
+            out["apis"] = [_logo_for(logo, a) for a in out["apis"]]
+            return out
 
     @router.post(
         "/v1/models/generate",

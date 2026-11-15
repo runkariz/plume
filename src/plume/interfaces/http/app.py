@@ -22,6 +22,7 @@ from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
 from plume.application.models.concepts import ModelInputError, SuggestConcepts
 from plume.application.models.generate import GenerateModels
+from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import ModelSessions
 from plume.application.ports.model_writer import ModelWriterError, ModelWriterUnavailableError
 from plume.application.reader.dto import ApiOverview
@@ -76,6 +77,7 @@ class HttpDependencies:
     maintainer_tokens: tuple[str, ...] = ()
     max_upload_bytes: int = 200 * 1024 * 1024
     generate_models: Callable[[], GenerateModels] | None = None
+    suggest_related: Callable[[], SuggestRelated] | None = None
     web_public_url: str | None = None
 
 
@@ -85,6 +87,15 @@ MAX_RAW_BYTES = 256 * 1024
 def _list_of_dicts(raw: Any, key: str) -> list[dict[str, Any]]:
     value = raw.get(key) if isinstance(raw, dict) else None
     return [x for x in value if isinstance(x, dict)] if isinstance(value, list) else []
+
+
+def _generation_flag(
+    generate: Callable[[], GenerateModels] | None,
+) -> Callable[[], bool] | None:
+    """Whether server-side generation is configured (for GET /v1/maintainer/me)."""
+    if generate is None:
+        return None
+    return lambda: generate().available()
 
 
 def _logo(api_id: str, name: str, icon_url: str | None) -> s.Logo:
@@ -542,10 +553,16 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 deps.mcp_url,
                 deps.generate_models,
                 deps.web_public_url,
+                deps.suggest_related,
             )
         )
     if deps.maintainer is not None:
         app.include_router(
-            maintainer_router(deps.maintainer, deps.maintainer_tokens, deps.max_upload_bytes)
+            maintainer_router(
+                deps.maintainer,
+                deps.maintainer_tokens,
+                deps.max_upload_bytes,
+                _generation_flag(deps.generate_models),
+            )
         )
     return app

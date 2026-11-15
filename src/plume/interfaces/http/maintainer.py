@@ -42,7 +42,10 @@ def _sse(seq: int, payload: dict[str, Any]) -> str:
 
 
 def maintainer_router(
-    jobs: Callable[[], MaintainerJobs], tokens: tuple[str, ...], max_upload_bytes: int
+    jobs: Callable[[], MaintainerJobs],
+    tokens: tuple[str, ...],
+    max_upload_bytes: int,
+    generation: Callable[[], bool] | None = None,
 ) -> APIRouter:
     auth = make_auth(tokens)
     router = APIRouter(dependencies=[Depends(auth)], tags=["maintainer"])
@@ -54,7 +57,7 @@ def maintainer_router(
 
     @router.get("/v1/maintainer/me", response_model=s.Me, responses=errors)
     def me() -> s.Me:
-        return s.Me(name="maintainer")
+        return s.Me(name="maintainer", generation=bool(generation and generation()))
 
     @router.post("/v1/packages", response_model=s.JobOut, status_code=201, responses=errors)
     async def upload(file: Annotated[UploadFile, File()]) -> dict[str, Any]:

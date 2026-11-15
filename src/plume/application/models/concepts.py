@@ -27,9 +27,12 @@ _NOISE = frozenset(
         "information", "meta", "metadata", "result", "response", "request", "list", "property",
         "field", "parameter", "param", "option", "setting", "label", "period", "count", "total",
         "status", "type", "key", "id", "name", "object", "body", "payload", "record", "item",
-        "filter", "query", "search", "batch", "bulk",
+        "filter", "query", "search", "batch", "bulk", "boolean", "string", "integer", "number",
+        "float", "double", "decimal", "array", "null", "any", "map", "admin", "v1", "v2", "v3",
+        "create", "update", "delete", "remove", "add",
     }
 )  # fmt: skip
+NOISE = _NOISE
 _WRITE = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 _OPERATION = {
     "GET": "read",

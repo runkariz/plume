@@ -13,6 +13,7 @@ from plume import __version__
 from plume.application.errors import ApplicationError
 from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
+from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import ModelSessions
 from plume.application.reader.resolve import BuildResolver
 from plume.application.reader.sections import (
@@ -79,6 +80,7 @@ class McpReaderDependencies:
     models: Callable[[], ModelSessions] | None = None
     sections: Callable[[], PackageSections] | None = None
     web_public_url: str | None = None
+    suggest_related: Callable[[], SuggestRelated] | None = None
     mcp_app_html: str | None = None  # the model view bundle; None = the packaged file
 
 
@@ -325,6 +327,14 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
             return await _run(run)
 
     if deps.models is not None:
-        register_model_tools(server, deps.models, deps.resolver, _run, False, deps.web_public_url)
+        register_model_tools(
+            server,
+            deps.models,
+            deps.resolver,
+            _run,
+            False,
+            deps.web_public_url,
+            related=deps.suggest_related,
+        )
 
     return server

@@ -7,7 +7,7 @@ Authenticated part of the HTTP API (`docs/openapi.json`, tag `maintainer`). Ever
 
 | Route | Does |
 |---|---|
-| `GET /v1/maintainer/me` | token check → `{"name": "maintainer"}` (401 on a bad token) |
+| `GET /v1/maintainer/me` | token check → `{"name": "maintainer", "generation": true or false}` (401 on a bad token). `generation`: server-side model generation is configured (a readable model key), so `POST /v1/models/generate` with engine server will not answer 503 |
 | `POST /v1/packages` (multipart `file`, `.zip`) | stores and safely extracts the package, validates it → Job `uploaded` (201; 415 not a zip; 413 too large; 400 unreadable zip) |
 | `GET /v1/jobs/{id}` | the Job |
 | `POST /v1/jobs/{id}/review` `{apiId, displayName, tag}` | diff against the build `tag` points at, embedding plan (chunks not in the vector cache) → `reviewed` |

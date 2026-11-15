@@ -4,6 +4,11 @@ the same JSON as ``claudePayload`` so the web can display what Claude receives."
 from typing import Any
 
 from plume.application.models.concepts import Suggestions
+from plume.application.models.relations import (
+    CandidateEvidence,
+    RelatedConcepts,
+    RelationCandidate,
+)
 from plume.application.models.sessions import revise_prompt
 from plume.application.reader.dto import (
     ApiOverview,
@@ -192,6 +197,69 @@ def suggestions_payload(s: Suggestions) -> Json:
             "count": s.not_modeled,
             "summary": ", ".join(s.not_modeled_examples) or "none",
         },
+    }
+
+
+def _candidate_evidence(e: CandidateEvidence) -> Json:
+    return {
+        "kind": e.kind,
+        "docId": e.doc_id,
+        "quote": e.quote,
+        "paths": list(e.paths),
+        "fetch": e.fetch,
+        "many": e.many,
+    }
+
+
+def related_payload(r: RelatedConcepts) -> Json:
+    """Concepts related to one concept, with the relation candidates and their evidence."""
+    label = r.labels.get
+
+    def candidate(c: RelationCandidate) -> Json:
+        return {
+            "id": c.id,
+            "parent": {"id": c.parent, "name": label(c.parent, c.parent)},
+            "child": {"id": c.child, "name": label(c.child, c.child)},
+            "options": [
+                {"kind": o.kind, "cardinality": o.cardinality, "needs": o.needs}
+                for o in c.options(r.labels)
+            ],
+            "sources": {
+                api: [_candidate_evidence(e) for e in es] for api, es in sorted(c.sources.items())
+            },
+        }
+
+    shown = len(r.related)
+    return {
+        "apis": [
+            api_ref(x.api.api_id.value, x.api.name) | {"build": x.build.build_id.value}
+            for x in r.apis
+        ],
+        "concept": {"id": r.concept, "name": r.name},
+        "related": [
+            {
+                "id": rel.key,
+                "name": rel.name,
+                "kinds": {api: list(k) for api, k in rel.kinds.items()},
+                "evidence": rel.evidence,
+                "candidates": [candidate(c) for c in rel.candidates],
+            }
+            for rel in r.related
+        ],
+        "total": r.total,
+        "limit": r.limit,
+        "offset": r.offset,
+        "nextOffset": r.offset + shown if r.offset + shown < r.total else None,
+        "aliases": [
+            {
+                "parent": {"id": a.parent, "name": label(a.parent, a.parent)},
+                "names": {api: {"id": k, "name": label(k, k)} for api, k in a.names.items()},
+                "evidence": {api: _candidate_evidence(e) for api, e in a.evidence.items()},
+                "note": "Different names at the same documented position. The docs do not say "
+                "they are the same thing: offer it to the user; never merge on your own.",
+            }
+            for a in r.aliases
+        ],
     }
 
 
