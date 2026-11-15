@@ -2,7 +2,10 @@ import { apiBaseUrl } from './config';
 import { createSseParser } from './sse';
 import {
   ApiError,
+  type GenerateRequest,
   type Job,
+  type ModelSnapshot,
+  type SuggestResponse,
   type JobEvent,
   type MaintainerIdentity,
   type ReviewRequest,
@@ -28,6 +31,11 @@ export interface PlumeApi {
   search(id: string, req: SearchRequest, signal?: AbortSignal): Promise<SearchResponse>;
   ask(id: string, question: string, signal?: AbortSignal): Promise<AskResponse>;
   checkCall(id: string, req: CheckCallRequest, signal?: AbortSignal): Promise<CheckCallResponse>;
+  // canonical models
+  listModelCandidates(signal?: AbortSignal): Promise<ApiList>;
+  suggestModels(apis: string[], signal?: AbortSignal): Promise<SuggestResponse>;
+  generateModel(req: GenerateRequest, signal?: AbortSignal): Promise<{ snapshotId: string }>;
+  getSnapshot(id: string, signal?: AbortSignal): Promise<ModelSnapshot>;
   // maintainer (the key is sent as a bearer token)
   verifyMaintainer(key: string, signal?: AbortSignal): Promise<MaintainerIdentity>;
   uploadPackage(file: File, signal?: AbortSignal): Promise<Job>;
@@ -159,6 +167,12 @@ export function createApiClient(
       call<AskResponse>(`/v1/apis/${enc(id)}/ask`, { method: 'POST', body: { question }, signal }),
     checkCall: (id, body, signal) =>
       call<CheckCallResponse>(`/v1/apis/${enc(id)}/check-call`, { method: 'POST', body, signal }),
+    listModelCandidates: (signal) => call<ApiList>('/v1/models/candidates', { signal }),
+    suggestModels: (apis, signal) =>
+      call<SuggestResponse>('/v1/models/suggest', { method: 'POST', body: { apis }, signal }),
+    generateModel: (body, signal) =>
+      call<{ snapshotId: string }>('/v1/models/generate', { method: 'POST', body, signal }),
+    getSnapshot: (id, signal) => call<ModelSnapshot>(`/v1/models/${enc(id)}`, { signal }),
     verifyMaintainer: (key, signal) =>
       call<MaintainerIdentity>('/v1/maintainer/me', { key, signal }),
     uploadPackage: (file, signal) => {
