@@ -1,14 +1,19 @@
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Link, Outlet, useNavigate } from 'react-router-dom';
 import { GitHubIcon, MoonIcon, PlumeMark, SunIcon } from '@/icons';
-import { Button } from '@/components';
+import { authStore, useIsMaintainer } from './authStore';
 import { useTheme } from './theme';
 
 export const GITHUB_URL = 'https://github.com/';
 
 export function Layout() {
   const { theme, toggle } = useTheme();
+  const maintainer = useIsMaintainer();
+  const navigate = useNavigate();
   return (
     <>
+      <a className="skip-link" href="#main">
+        Skip to content
+      </a>
       <header className="site-header">
         <div className="wrap">
           <Link to="/" className="brand" aria-label="Plume home">
@@ -26,13 +31,35 @@ export function Layout() {
             <a className="nav-link" href={GITHUB_URL} rel="noreferrer">
               <GitHubIcon /> GitHub
             </a>
-            <NavLink to="/maintainer" tabIndex={-1}>
-              <Button>Maintainer</Button>
-            </NavLink>
+            {maintainer ? (
+              <>
+                <span className="chip acc">Maintainer</span>
+                <span className="user">
+                  <span className="avatar" aria-hidden>
+                    M
+                  </span>
+                  maintainer
+                </span>
+                <button
+                  type="button"
+                  className="nav-link strong"
+                  onClick={() => {
+                    authStore.signOut();
+                    navigate('/');
+                  }}
+                >
+                  Sign out
+                </button>
+              </>
+            ) : (
+              <Link className="btn" to="/maintainer">
+                Maintainer
+              </Link>
+            )}
           </nav>
         </div>
       </header>
-      <main className="wrap">
+      <main id="main" tabIndex={-1} className="wrap">
         <Outlet />
       </main>
     </>

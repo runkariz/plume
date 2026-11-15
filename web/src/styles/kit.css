@@ -15,8 +15,8 @@
   cursor: not-allowed;
 }
 .btn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
   color: var(--on-accent);
 }
 .btn.ghost {
@@ -175,5 +175,184 @@ pre.code {
   padding: 14px 16px;
   font: 12.5px/1.6 var(--font-mono);
   white-space: pre-wrap;
-  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+.method {
+  display: inline-block;
+  font: 700 11px var(--font-mono);
+  padding: 4px 0;
+  width: 58px;
+  text-align: center;
+  border-radius: 7px;
+  letter-spacing: 0.02em;
+  flex: none;
+}
+.method.GET {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.method.POST {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.method.PUT,
+.method.PATCH {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.method.DELETE {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+.crumbs ol {
+  list-style: none;
+  display: flex;
+  gap: 8px;
+  padding: 26px 0 8px;
+  color: var(--faint);
+  font-size: 14px;
+}
+.crumbs li {
+  display: flex;
+  gap: 8px;
+}
+.crumbs b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.crumbs a:hover {
+  text-decoration: underline;
+}
+.seg {
+  display: inline-flex;
+  background: var(--line2);
+  border-radius: 10px;
+  padding: 3px;
+}
+.seg label span {
+  display: block;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 13.5px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.seg label.on span {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(28, 27, 26, 0.12);
+}
+.seg label:has(input:focus-visible) span,
+.pills label:has(input:focus-visible) span {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.pills {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pills label span {
+  display: block;
+  padding: 5px 12px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+}
+.pills label.on span {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+.metric {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 11px 0;
+  border-top: 1px solid var(--line2);
+}
+.metric b {
+  font: 600 20px var(--font-serif);
+}
+.metric b.ok {
+  color: var(--ok);
+}
+.kv {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  font-size: 14px;
+  border-top: 1px solid var(--line2);
+}
+.logo {
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  font: 700 18px var(--font-sans);
+  color: #fff;
+  flex: none;
+}
+.scorebar {
+  display: inline-block;
+  width: 90px;
+  height: 6px;
+  border-radius: 99px;
+  background: var(--line2);
+  overflow: hidden;
+}
+.scorebar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.searchbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 12px;
+  color: var(--faint);
+}
+.searchbar svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.searchbar input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: 15px var(--font-sans);
+  padding: 13px 0;
+  outline: none;
+}
+.searchbar:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.log-src {
+  display: inline-block;
+  padding: 1px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.log-src.gemini {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.log-src.postgres {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.log-src.plume {
+  background: var(--line2);
+  color: var(--muted);
 }
