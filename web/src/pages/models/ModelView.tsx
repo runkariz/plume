@@ -30,6 +30,7 @@ import {
 } from './modelView';
 import {
   LineageHistory,
+  SameConceptLine,
   LineageLine,
   OwnerKeyNotice,
   ReviewBanner,
@@ -194,6 +195,7 @@ export function ModelView() {
       <div className="access-banner">
         <ReviewBanner snap={snap} onChanged={retry} />
         <LineageHistory snap={snap} />
+        <SameConceptLine snap={snap} />
       </div>
       {snap.stale ? (
         <div className="stale-banner">

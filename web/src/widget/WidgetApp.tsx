@@ -7,6 +7,7 @@ import { ModelWorkbench } from '@/pages/models/ModelWorkbench';
 import { defaultSelection, type Selection } from '@/pages/models/graph';
 import { toggleApi } from '@/pages/models/modelView';
 import { extractModel, type Shown } from './model';
+import { OwnerKeyNotice } from './OwnerKeyNotice';
 import { SetPanel } from './SetPanel';
 import type { CallToolResult, HostConnection, HostContext } from './protocol';
 
@@ -164,7 +165,13 @@ function Body({ phase, connection }: { phase: Phase; connection: HostConnection 
       return <p className="muted widget-note">This result has no model to show.</p>;
     case 'set':
       return (
-        <SetPanel key={phase.set.id} set={phase.set} link={phase.link} connection={connection} />
+        <SetPanel
+          key={phase.set.id}
+          set={phase.set}
+          link={phase.link}
+          ownerKey={phase.ownerKey}
+          connection={connection}
+        />
       );
     case 'model':
       return (
@@ -172,6 +179,7 @@ function Body({ phase, connection }: { phase: Phase; connection: HostConnection 
           key={phase.model.id}
           model={phase.model}
           link={phase.link}
+          ownerKey={phase.ownerKey}
           connection={connection}
         />
       );
@@ -181,10 +189,12 @@ function Body({ phase, connection }: { phase: Phase; connection: HostConnection 
 function ModelPanel({
   model,
   link,
+  ownerKey,
   connection,
 }: {
   model: ModelSnapshot;
   link: string | null;
+  ownerKey: string | null;
   connection: HostConnection | null;
 }) {
   const big = countLeaves(model) > BIG;
@@ -240,6 +250,7 @@ function ModelPanel({
           ) : null}
         </div>
       </div>
+      {ownerKey ? <OwnerKeyNotice key={ownerKey} ownerKey={ownerKey} what="model" /> : null}
       {big ? (
         <div className="widget-scope">
           <Segmented

@@ -4,6 +4,7 @@ import { ApiAvatar, Button, Chip } from '@/components';
 import { SetDetail } from '@/pages/sets/SetDetail';
 import { SetWorkbench } from '@/pages/sets/SetWorkbench';
 import { findMember, relationLabel, SUPPORT_TEXT, toggleShow } from '@/pages/sets/setGraph';
+import { OwnerKeyNotice } from './OwnerKeyNotice';
 import type { HostConnection } from './protocol';
 
 const VISIBILITY: Record<string, { label: string; tone: 'ok' | 'info' | 'warn' | 'bad' }> = {
@@ -21,10 +22,12 @@ const VISIBILITY: Record<string, { label: string; tone: 'ok' | 'info' | 'warn' |
 export function SetPanel({
   set,
   link,
+  ownerKey,
   connection,
 }: {
   set: ModelSet;
   link: string | null;
+  ownerKey: string | null;
   connection: HostConnection | null;
 }) {
   const [selection, setSelection] = useState<string | null>(null);
@@ -83,6 +86,7 @@ export function SetPanel({
           ) : null}
         </div>
       </div>
+      {ownerKey ? <OwnerKeyNotice key={ownerKey} ownerKey={ownerKey} what="model set" /> : null}
       {set.description ? <p className="muted">{set.description}</p> : null}
       {set.members.length > 0 ? (
         <SetWorkbench

@@ -8,6 +8,7 @@ import { CheckIcon } from '@/icons';
 import { categoryLabel, modelCount } from '@/lib/format';
 import { MySets, OfficialSets, UnreleasedSets } from '@/pages/sets/SetLists';
 import { ModelList, MyModels, UnreleasedModels } from './ModelList';
+import { OwnerKeyPaste } from './OwnerKeyPaste';
 
 function PickCard({
   api,
@@ -58,6 +59,8 @@ export function PickApps() {
     (params.get('apis') ?? '').split(',').filter(Boolean),
   );
   const [category, setCategory] = useState<string | null>(null);
+  // a key added in this page: the lists of "yours" load again with it
+  const [keysVersion, setKeysVersion] = useState(0);
 
   const items = state.status === 'ready' ? state.data.items : null;
   const categories = useMemo(() => {
@@ -132,10 +135,11 @@ export function PickApps() {
       </section>
       <section className="existing-models">
         <UnreleasedModels />
-        <MyModels />
+        <OwnerKeyPaste onAdded={() => setKeysVersion((n) => n + 1)} />
+        <MyModels key={`models-${keysVersion}`} />
         <ModelList />
         <UnreleasedSets />
-        <MySets />
+        <MySets key={`sets-${keysVersion}`} />
         <OfficialSets />
       </section>
       {selected.length > 0 ? (

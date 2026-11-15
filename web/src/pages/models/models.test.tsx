@@ -394,3 +394,32 @@ describe('Model view', () => {
     expect(await screen.findByText('Could not load this model')).toBeInTheDocument();
   });
 });
+
+describe('Other versions of this concept (sameConcept)', () => {
+  const OLDER = 'm-order0lder0a1b2c3d4e5f60718293a4b5c';
+  const official = async () => {
+    const r = await fetch(`${TEST_API_BASE}/v1/models`);
+    return ((await r.json()) as { items: { id: string; concept: string }[] }).items;
+  };
+
+  it('the official list has one model per concept and API set: the newest', async () => {
+    const items = await official();
+    const orders = items.filter((i) => i.concept.toLowerCase() === 'order');
+    expect(orders).toHaveLength(1);
+    expect(orders[0]?.id).not.toBe(OLDER);
+  });
+
+  it('names the other official models of the same concept, both ways, and links to them', async () => {
+    const newest = (await official()).find((i) => i.concept.toLowerCase() === 'order')?.id ?? '';
+    renderApp(`/models/${newest}`);
+    expect(await screen.findByText(/Other official models of this concept/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: OLDER })).toHaveAttribute('href', `/models/${OLDER}`);
+  });
+
+  it('says nothing when there is no other one', async () => {
+    const product = (await official()).find((i) => i.concept === 'product')?.id ?? '';
+    renderApp(`/models/${product}`);
+    await screen.findByRole('heading', { level: 1 });
+    expect(screen.queryByText(/Other official models of this concept/)).not.toBeInTheDocument();
+  });
+});

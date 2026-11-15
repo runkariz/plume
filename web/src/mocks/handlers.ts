@@ -459,9 +459,17 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
       // the public list is the latest official version of each lineage; the token can ask for the others
       const vis = maintainer && want ? want : 'official';
       let rows = all.filter((m) => vis === 'all' || m.visibility === vis);
+      // one official model per concept and API set: the newest (the server's rule; a lineage shares both)
       if (vis === 'official')
         rows = rows.filter(
-          (m) => !rows.some((o) => o.lineageId === m.lineageId && o.createdAt > m.createdAt),
+          (m) =>
+            !rows.some(
+              (o) =>
+                o !== m &&
+                o.createdAt > m.createdAt &&
+                o.concept.toLowerCase() === m.concept.toLowerCase() &&
+                sameSet(o.apis, m.apis),
+            ),
         );
       rows = rows
         .filter((m) => !api || m.apis.includes(api))

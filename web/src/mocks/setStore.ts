@@ -176,7 +176,7 @@ function build(
     ],
     sharePath: `/model-sets/${id}`,
     shareUrl: null,
-    revisePrompt: `Use the Plume connector. Call revise_model_set with id "${id}", change what you need, then submit_model_set_draft(session_id, draft, based_on="${id}").`,
+    revisePrompt: `Use the Plume connector. Call revise_model_set with id "${id}", change what you need, then submit_model_set_draft(set_session, draft, based_on="${id}").`,
     ...extra,
   };
 }
