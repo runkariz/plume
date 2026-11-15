@@ -32,7 +32,7 @@ export function ApiAvatar({
 }) {
   const [failed, setFailed] = useState(false);
   const base = useApiBaseUrl();
-  const src = iconSrc(url, base ?? undefined);
+  const src = iconSrc(url, base);
   const label = name ? (kind === 'direct' ? name : `${name} (${LABEL[kind]})`) : undefined;
   const common = {
     role: label ? ('img' as const) : undefined,
