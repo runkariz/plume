@@ -1,0 +1,30 @@
+{
+  "schema": "plume.knowledge-export.v1",
+  "source": "https://developer.woocommerce.com/docs/apis/rest-api/v3/",
+  "app": "woocommerce",
+  "packageManifestSha256": "2f5bbc46f0788089c7b51bd49817d9afe434390e697317c99f46c7db0d66d972",
+  "createdAt": "2026-11-15T01:43:18.1243237+00:00",
+  "llm": true,
+  "complete": true,
+  "pages": [
+    {
+      "url": "https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons/",
+      "file": "pages/developer-woocommerce-com-docs-apis-rest-api-v3-coupons-0f4fee.md",
+      "items": 6,
+      "anchorsLocated": 4
+    }
+  ],
+  "failedPages": [],
+  "counts": {
+    "pages": 32,
+    "failedPages": 0,
+    "rules": 98,
+    "questions": 75,
+    "droppedUnverified": 0,
+    "droppedInvalid": 4
+  },
+  "usage": {
+    "llmCalls": 71,
+    "costUsd": 0.2509956
+  }
+}

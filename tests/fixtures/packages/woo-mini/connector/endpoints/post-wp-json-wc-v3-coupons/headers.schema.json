@@ -1,0 +1,32 @@
+{
+  "title": "Headers",
+  "type": "object",
+  "properties": {
+    "Content-Type": {
+      "type": "string",
+      "description": "Media type of the request payload",
+      "enum": [
+        "application/json"
+      ],
+      "default": "application/json",
+      "examples": [
+        "application/json"
+      ],
+      "title": "Content Type"
+    },
+    "Authorization": {
+      "type": "string",
+      "description": "Credentials of the connected authorization: API key or Basic (username:password)",
+      "default": "{{ auth?.apikey?.access_token ? auth.apikey.access_token : auth?.basic?.token }}",
+      "examples": [
+        "{{ auth?.apikey?.access_token ? auth.apikey.access_token : auth?.basic?.token }}"
+      ],
+      "title": "Authorization"
+    }
+  },
+  "required": [
+    "Content-Type",
+    "Authorization"
+  ],
+  "description": "Request headers required for authentication and specifying the payload content type."
+}

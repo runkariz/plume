@@ -1,0 +1,13 @@
+{
+  "id": "authentication",
+  "kind": "auth-setup",
+  "order": 0,
+  "provenance": {
+    "extractedAt": "2026-11-15T00:53:37Z",
+    "extractorVersion": "1.0.0.0",
+    "rulesVersion": "kariz-connector.v2@7c5342b8da8a",
+    "sourceUrl": "https://developer.woocommerce.com/docs/apis/rest-api/v3/"
+  },
+  "sourceUrl": "https://developer.woocommerce.com/docs/apis/rest-api/v3/",
+  "title": "Authentication"
+}

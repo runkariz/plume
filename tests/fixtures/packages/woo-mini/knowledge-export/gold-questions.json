@@ -1,0 +1,60 @@
+{
+  "schema": "plume.gold-questions.v1",
+  "source": "https://developer.woocommerce.com/docs/apis/rest-api/v3/",
+  "questions": [
+    {
+      "id": "q-4af1ec0909",
+      "question": "How can I take a discount off an existing order without actually deleting the coupon record from the store?",
+      "expectedItemIds": [
+        "delete-wp-json-wc-v3-coupons-id"
+      ],
+      "expectedAnchors": [
+        "#delete-a-coupon"
+      ],
+      "sourceUrl": "https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons/",
+      "quote": "To remove an applied coupon from an order without deleting the coupon itself, update the order's coupon lines."
+    },
+    {
+      "id": "q-6bc05342d7",
+      "question": "How can I search for a discount code using an exact match on its code string?",
+      "expectedItemIds": [
+        "get-wp-json-wc-v3-coupons"
+      ],
+      "expectedAnchors": [
+        "#list-all-coupons"
+      ],
+      "sourceUrl": "https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons/",
+      "quote": "Limit result set to resources with a specific code."
+    },
+    {
+      "id": "q-1f43b4463c",
+      "question": "What is the maximum number of coupon records that can be processed at once in a bulk operation?",
+      "expectedItemIds": [
+        "post-wp-json-wc-v3-coupons-batch",
+        "post-wp-json-wc-v3-customers-batch",
+        "post-wp-json-wc-v3-orders-batch",
+        "post-wp-json-wc-v3-products-attributes-attribute-id-terms-batch",
+        "post-wp-json-wc-v3-products-batch",
+        "post-wp-json-wc-v3-products-product-id-variations-batch",
+        "post-wp-json-wc-v3-products-reviews-batch",
+        "post-wp-json-wc-v3-settings-id-batch",
+        "post-wp-json-wc-v3-taxes-batch",
+        "post-wp-json-wc-v3-webhooks-batch"
+      ],
+      "expectedAnchors": [
+        "#batch-update-coupons",
+        "#batch-update-customers",
+        "#batch-update-orders",
+        "#batch-update-attribute-terms",
+        "#batch-update-product-reviews",
+        "#batch-update-product-variations",
+        "#batch-update-products",
+        "#batch-update-setting-options",
+        "#batch-update-tax-rates",
+        "#batch-update-webhooks"
+      ],
+      "sourceUrl": "https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons/",
+      "quote": "By default it's limited to up to 100 objects to be created, updated or deleted."
+    }
+  ]
+}

@@ -24,6 +24,11 @@ def build_app(container: Container | None = None) -> typer.Typer:
 
         run(c(), host, port)
 
+    def import_gold(package: str, out: str) -> tuple[int, list[str]]:
+        from plume.infrastructure.sources.gold_import import import_gold as run  # noqa: PLC0415
+
+        return run(package, out)
+
     def openapi() -> str:
         from plume.bootstrap.servers import openapi_document  # noqa: PLC0415
 
@@ -46,6 +51,7 @@ def build_app(container: Container | None = None) -> typer.Typer:
             gold=lambda: c().gold,
             export_dump=lambda: c().export_dump(),
             restore_dump=lambda: c().restore_dump(),
+            import_gold=import_gold,
         )
     )
 

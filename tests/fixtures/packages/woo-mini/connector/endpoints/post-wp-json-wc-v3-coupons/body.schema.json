@@ -1,0 +1,42 @@
+{
+  "type": "object",
+  "properties": {
+    "code": {
+      "type": "string",
+      "description": "Coupon code",
+      "title": "Coupon Code"
+    },
+    "discount_type": {
+      "type": "string",
+      "description": "Determines the type of discount that will be applied",
+      "title": "Discount Type"
+    },
+    "amount": {
+      "type": "string",
+      "description": "The amount of discount",
+      "title": "Discount Amount"
+    },
+    "individual_use": {
+      "type": "boolean",
+      "description": "If true, the coupon can only be used on its own",
+      "title": "Individual Use Only",
+      "x-ui-advanced": "Restrictions"
+    },
+    "exclude_sale_items": {
+      "type": "boolean",
+      "description": "If true, this coupon will not be applied to items that have sale prices",
+      "title": "Exclude Sale Items",
+      "x-ui-advanced": "Restrictions"
+    },
+    "minimum_amount": {
+      "type": "string",
+      "description": "Minimum spend allowed to use the coupon",
+      "title": "Minimum Spend Amount",
+      "x-ui-advanced": "Restrictions"
+    }
+  },
+  "required": [
+    "code"
+  ],
+  "description": "Configuration details and restriction rules for creating a new coupon."
+}

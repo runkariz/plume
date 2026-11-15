@@ -1,0 +1,165 @@
+{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "integer",
+        "description": "Unique identifier for the coupon."
+      },
+      "code": {
+        "type": "string",
+        "description": "Coupon code used at checkout to apply the discount."
+      },
+      "amount": {
+        "type": "string",
+        "description": "Discount value as a fixed amount or percentage depending on discount type."
+      },
+      "date_created": {
+        "type": "string",
+        "description": "Date and time the coupon was created, in the site's local timezone."
+      },
+      "date_created_gmt": {
+        "type": "string",
+        "description": "Date and time the coupon was created, in GMT."
+      },
+      "date_modified": {
+        "type": "string",
+        "description": "Date and time the coupon was last modified, in the site's local timezone."
+      },
+      "date_modified_gmt": {
+        "type": "string",
+        "description": "Date and time the coupon was last modified, in GMT."
+      },
+      "discount_type": {
+        "type": "string",
+        "description": "Type of discount, such as percent, fixed_cart, or fixed_product."
+      },
+      "description": {
+        "type": "string",
+        "description": "Optional description providing internal details or notes about the coupon."
+      },
+      "date_expires": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Expiration date and time for the coupon in the site's local timezone, or null if it does not expire."
+      },
+      "date_expires_gmt": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "description": "Expiration date and time for the coupon in GMT, or null if it does not expire."
+      },
+      "usage_count": {
+        "type": "integer",
+        "description": "Total number of times the coupon has been used."
+      },
+      "individual_use": {
+        "type": "boolean",
+        "description": "Whether the coupon cannot be used in conjunction with other coupons."
+      },
+      "product_ids": {
+        "type": "array",
+        "items": {
+          "type": "integer",
+          "description": "Product ID eligible for the discount."
+        },
+        "description": "List of product IDs that the coupon applies to."
+      },
+      "excluded_product_ids": {
+        "type": "array",
+        "items": {
+          "type": "integer",
+          "description": "Product ID ineligible for the discount."
+        },
+        "description": "List of product IDs that cannot receive the coupon discount."
+      },
+      "usage_limit": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "description": "Maximum number of times the coupon can be used across all customers, or null for unlimited."
+      },
+      "usage_limit_per_user": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "description": "Maximum number of times a single customer can use the coupon, or null for unlimited."
+      },
+      "limit_usage_to_x_items": {
+        "type": [
+          "integer",
+          "null"
+        ],
+        "description": "Maximum number of qualifying items the coupon discount can apply to in an order, or null for unlimited."
+      },
+      "free_shipping": {
+        "type": "boolean",
+        "description": "Whether applying the coupon grants free shipping."
+      },
+      "product_categories": {
+        "type": "array",
+        "items": {
+          "type": "integer",
+          "description": "Category ID eligible for the coupon discount."
+        },
+        "description": "List of product category IDs that the coupon applies to."
+      },
+      "excluded_product_categories": {
+        "type": "array",
+        "items": {
+          "type": "integer",
+          "description": "Category ID ineligible for the coupon discount."
+        },
+        "description": "List of product category IDs excluded from receiving the coupon discount."
+      },
+      "exclude_sale_items": {
+        "type": "boolean",
+        "description": "Whether items already on sale are excluded from the coupon discount."
+      },
+      "minimum_amount": {
+        "type": "string",
+        "description": "Minimum subtotal required in the cart to apply the coupon."
+      },
+      "maximum_amount": {
+        "type": "string",
+        "description": "Maximum allowed subtotal in the cart for the coupon to be valid."
+      },
+      "email_restrictions": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "description": "Email address authorized to redeem the coupon."
+        },
+        "description": "List of customer billing email addresses permitted to use the coupon."
+      },
+      "used_by": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "description": "Identifier or email of a customer who redeemed the coupon."
+        },
+        "description": "List of user IDs or email addresses of customers who have used the coupon."
+      },
+      "meta_data": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "description": "A single metadata entry with an ID, key, and value."
+        },
+        "description": "Custom metadata key-value pairs associated with the coupon."
+      },
+      "_links": {
+        "type": "object",
+        "description": "HATEOAS navigational links related to the coupon resource."
+      }
+    },
+    "description": "A coupon entity containing discount rules and usage conditions."
+  },
+  "description": "List of coupons matching the request parameters."
+}

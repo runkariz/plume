@@ -1,0 +1,184 @@
+{
+  "apiVersioning": {
+    "current": "v3",
+    "scheme": "path"
+  },
+  "authIds": [
+    "basic-authorization",
+    "api-key-authorization",
+    "api-key-authorization-2"
+  ],
+  "baseUrls": [
+    "https://{host}"
+  ],
+  "category": {
+    "confidence": 1,
+    "key": "e-commerce",
+    "reason": "WooCommerce is an online store platform whose API manages products, orders, coupons, customers, and store settings."
+  },
+  "conventions": {
+    "casing": "snake"
+  },
+  "defaultAuthId": "basic-authorization",
+  "description": "",
+  "docLink": "https://developer.woocommerce.com/docs/apis/rest-api/v3/",
+  "environments": [
+    {
+      "baseUrl": "https://{host}",
+      "isDefault": true,
+      "key": "production",
+      "kind": "production",
+      "name": "production",
+      "provenance": {
+        "source": "derived"
+      },
+      "servers": {
+        "api": "https://{host}"
+      }
+    }
+  ],
+  "errorFormat": {
+    "statusCodes": [
+      {
+        "meaning": "Invalid email template or parameter error.",
+        "retryable": false,
+        "status": 400
+      },
+      {
+        "meaning": "Not Found. The order ID does not exist (woocommerce_rest_order_invalid_id).",
+        "retryable": false,
+        "status": 404
+      },
+      {
+        "meaning": "Invalid request, such as when the preview exceeds the remaining refundable amount.",
+        "retryable": false,
+        "status": 422
+      }
+    ]
+  },
+  "iconUrl": "https://developer.woocommerce.com/docs/wp-content/plugins/docu-loader/docs-build/img/favicon.ico",
+  "knowledgeIds": [
+    "authentication"
+  ],
+  "name": "woocommerce",
+  "provenance": {
+    "extractedAt": "2026-11-15T00:53:37Z",
+    "extractorVersion": "1.0.0.0",
+    "rulesVersion": "kariz-connector.v2@7c5342b8da8a",
+    "sourceUrl": "https://developer.woocommerce.com/docs/apis/rest-api/v3/"
+  },
+  "resources": [
+    {
+      "name": "Action",
+      "parent": "Order"
+    },
+    {
+      "children": [
+        "Term"
+      ],
+      "name": "Attribute"
+    },
+    {
+      "name": "Coupon"
+    },
+    {
+      "children": [
+        "Download"
+      ],
+      "name": "Customer"
+    },
+    {
+      "name": "Data"
+    },
+    {
+      "name": "Download",
+      "parent": "Customer"
+    },
+    {
+      "children": [
+        "Metadata"
+      ],
+      "name": "Fulfillment",
+      "parent": "Order"
+    },
+    {
+      "name": "Location",
+      "parent": "Zone"
+    },
+    {
+      "name": "Metadata",
+      "parent": "Fulfillment"
+    },
+    {
+      "name": "Method",
+      "parent": "Zone"
+    },
+    {
+      "name": "Note",
+      "parent": "Order"
+    },
+    {
+      "children": [
+        "Action",
+        "Fulfillment",
+        "Note",
+        "Refund"
+      ],
+      "name": "Order"
+    },
+    {
+      "name": "PaymentGateway"
+    },
+    {
+      "children": [
+        "Variation"
+      ],
+      "name": "Product"
+    },
+    {
+      "name": "Refund",
+      "parent": "Order"
+    },
+    {
+      "name": "Report"
+    },
+    {
+      "name": "Setting"
+    },
+    {
+      "name": "Shipping"
+    },
+    {
+      "name": "ShippingMethod"
+    },
+    {
+      "name": "SystemStatus"
+    },
+    {
+      "name": "Tax"
+    },
+    {
+      "name": "Term",
+      "parent": "Attribute"
+    },
+    {
+      "name": "Variation",
+      "parent": "Product"
+    },
+    {
+      "name": "Webhook"
+    },
+    {
+      "name": "WpJson"
+    },
+    {
+      "children": [
+        "Location",
+        "Method"
+      ],
+      "name": "Zone"
+    }
+  ],
+  "summary": "Manage WooCommerce store resources including coupons, customers, orders, refunds, products, attributes, categories, reviews, shipping zones, payment gateways, tax rates, webhooks, and settings.",
+  "systemName": "woocommerce"
+}

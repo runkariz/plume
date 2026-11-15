@@ -1,0 +1,3 @@
+{
+  "Authorization": "{{ auth?.apikey?.access_token ? auth.apikey.access_token : auth?.basic?.token }}"
+}

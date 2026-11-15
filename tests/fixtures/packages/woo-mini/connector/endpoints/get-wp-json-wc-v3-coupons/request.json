@@ -1,0 +1,64 @@
+{
+  "actionName": "Coupon",
+  "apiVersion": "v3",
+  "authorizationType": "BASIC",
+  "bodyType": "NONE",
+  "defaultCompositionKey": "id",
+  "description": "This API helps you to list all the coupons that have been created.",
+  "docLink": "https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons/",
+  "endpointId": "get-wp-json-wc-v3-coupons",
+  "headersContractRef": "headers.schema.json",
+  "idempotency": {
+    "safeToRetry": true
+  },
+  "isAdvanced": false,
+  "isDataSource": true,
+  "isDeprecated": false,
+  "isPreRelease": false,
+  "method": "GET",
+  "name": "List coupons",
+  "nextPageTokenExpression": "const items = context?.output || []; const page = parseInt(context?.execution?.request?.query_params?.page || '1', 10); return items.length ? String(page + 1) : null;",
+  "operationKind": "list",
+  "pagination": {
+    "pageParam": "page",
+    "pageSizeParam": "per_page",
+    "style": "offset"
+  },
+  "paramsContractRef": "params.schema.json",
+  "permissionNote": "Basic Authentication using consumer_key and consumer_secret",
+  "presets": [
+    "presets/bootstrap.json",
+    "presets/incremental.json"
+  ],
+  "provenance": {
+    "docAnchor": "#list-all-coupons",
+    "extractedAt": "2026-11-15T00:53:37Z",
+    "sourceUrl": "https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons/"
+  },
+  "resource": "Coupon",
+  "responses": [
+    {
+      "contentContractRef": "responses/200.schema.json",
+      "contentType": "application/json",
+      "statusCode": 200
+    }
+  ],
+  "sideEffects": [
+    "none"
+  ],
+  "summary": "This API helps you to list all the coupons that have been created.",
+  "tags": [
+    {
+      "colorSetId": 43,
+      "kind": "version",
+      "name": "v3"
+    },
+    {
+      "colorSetId": 30,
+      "kind": "category",
+      "name": "coupons"
+    }
+  ],
+  "url": "https://{{req_vars.host}}/wp-json/wc/v3/coupons",
+  "variablesContractRef": "variables.schema.json"
+}

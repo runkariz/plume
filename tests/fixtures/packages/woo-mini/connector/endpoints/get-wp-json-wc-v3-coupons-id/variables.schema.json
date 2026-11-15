@@ -1,0 +1,25 @@
+{
+  "title": "Variables",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier of the WooCommerce coupon to retrieve.",
+      "title": "Coupon ID"
+    },
+    "host": {
+      "type": "string",
+      "description": "API host name only, without https:// and without a trailing slash (e.g. example.com)",
+      "default": "{{ auth?.apikey?.host }}",
+      "examples": [
+        "example.com"
+      ],
+      "title": "Host"
+    }
+  },
+  "required": [
+    "id",
+    "host"
+  ],
+  "description": "URI and environment variables required to identify the target resource and host."
+}

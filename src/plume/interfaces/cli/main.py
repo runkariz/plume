@@ -43,6 +43,7 @@ class CliDependencies:
     gold: Callable[[], GoldSource] | None = None
     export_dump: Callable[[], ExportDump] | None = None
     restore_dump: Callable[[], RestoreDump] | None = None
+    import_gold: Callable[[str, str], tuple[int, list[str]]] | None = None
 
 
 def _need[T](factory: Callable[[], T] | None, name: str) -> T:
@@ -238,6 +239,20 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         typer.echo(json.dumps(out, indent=None if as_json else 2))
         if not run.decision.passed:
             raise typer.Exit(code=2)
+
+    @app.command("gold-import")
+    def gold_import(
+        package: Annotated[str, typer.Argument(help="Package with knowledge-export/")],
+        out: Annotated[str, typer.Option(help="Gold set file to write (<api>.json)")],
+    ) -> None:
+        """Convert the package's knowledge-export/gold-questions.json into a Plume gold set."""
+        if deps.import_gold is None:
+            raise typer.BadParameter("gold-import is not available in this build")
+        try:
+            count, skipped = deps.import_gold(package, out)
+        except (ApplicationError, DomainError) as exc:
+            raise fail(exc) from exc
+        typer.echo(f"wrote {out}: {count} question(s); skipped {len(skipped)}")
 
     @app.command("export")
     def export_cmd(

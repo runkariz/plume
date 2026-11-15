@@ -1,0 +1,19 @@
+{
+  "title": "Variables",
+  "type": "object",
+  "properties": {
+    "host": {
+      "type": "string",
+      "description": "API host name only, without https:// and without a trailing slash (e.g. example.com)",
+      "default": "{{ auth?.apikey?.host }}",
+      "examples": [
+        "example.com"
+      ],
+      "title": "API Host"
+    }
+  },
+  "required": [
+    "host"
+  ],
+  "description": "URL path variables for configuring the target API host."
+}

@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "properties": {
+    "amount": {
+      "type": "string",
+      "description": "The amount of discount. Should be formatted as a numeric string.",
+      "title": "Discount Amount"
+    }
+  },
+  "description": "Coupon details to update."
+}
