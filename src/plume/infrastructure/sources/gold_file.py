@@ -10,7 +10,7 @@ Format::
 
 import hashlib
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from plume.application.errors import SourcePackageError
@@ -52,7 +52,10 @@ class JsonGoldSource:
 
 
 def convert_stream_gold(
-    gold_path: Path, api: str, endpoint_ids: dict[str, str]
+    gold_path: Path,
+    api: str,
+    endpoint_ids: dict[str, str],
+    normalize: Callable[[str], str] = lambda endpoint_id: endpoint_id,
 ) -> tuple[dict[str, object], list[str]]:
     """Stream's ``gold-questions.json`` -> a Plume gold set (search questions).
 
@@ -63,7 +66,8 @@ def convert_stream_gold(
     questions: list[dict[str, object]] = []
     skipped: list[str] = []
     for q in raw:
-        expected = [endpoint_ids[i] for i in q.get("expectedItemIds", []) if i in endpoint_ids]
+        keys = [normalize(i) for i in q.get("expectedItemIds", [])]
+        expected = [endpoint_ids[k] for k in keys if k in endpoint_ids]
         if not expected or not q.get("question"):
             skipped.append(str(q.get("id")))
             continue
