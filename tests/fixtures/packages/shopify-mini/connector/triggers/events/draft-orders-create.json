@@ -1,9 +1,9 @@
 {
   "delivery": "webhook",
-  "key": "orders/create",
+  "key": "draft_orders/create",
   "provenance": {
     "evidenceUrl": "https://shopify.dev/docs/api/admin-rest/latest/resources/webhook",
     "source": "docs"
   },
-  "title": "orders/create"
+  "title": "draft_orders/create"
 }

@@ -2328,6 +2328,50 @@
         "title": "MatchedEndpoint",
         "type": "object"
       },
+      "McpOut": {
+        "properties": {
+          "api": {
+            "title": "Api",
+            "type": "string"
+          },
+          "build": {
+            "title": "Build",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "present": {
+            "title": "Present",
+            "type": "boolean"
+          },
+          "servers": {
+            "description": "connector/mcp/: per server {id, server (servers/<id>.json), tools: [{tool, inputSchema, outputSchema}]}, verbatim. Docs-only APIs have none.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Servers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "api",
+          "build",
+          "present",
+          "note"
+        ],
+        "title": "McpOut",
+        "type": "object"
+      },
       "Me": {
         "properties": {
           "name": {
@@ -2991,6 +3035,17 @@
             ],
             "title": "Sourceurl"
           },
+          "syncEndpointId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Syncendpointid"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -3046,6 +3101,15 @@
           "total": {
             "title": "Total",
             "type": "integer"
+          },
+          "webhooks": {
+            "description": "connector/triggers/webhooks/*.json (subscribe/unsubscribe/list endpoints, handshake, verification), verbatim; [] when the package has none.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Webhooks",
+            "type": "array"
           }
         },
         "required": [
@@ -3108,6 +3172,17 @@
               }
             ],
             "title": "Resource"
+          },
+          "syncEndpointId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Syncendpointid"
           },
           "title": {
             "title": "Title",
@@ -4312,6 +4387,77 @@
           }
         },
         "summary": "Browse",
+        "tags": [
+          "reader"
+        ]
+      }
+    },
+    "/v1/apis/{api}/mcp": {
+      "get": {
+        "description": "The vendor's MCP server(s) and tools, when the package has a connector/mcp/ section.",
+        "operationId": "mcp_v1_apis__api__mcp_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "api",
+            "required": true,
+            "schema": {
+              "title": "Api",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tag or build id; default latest",
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tag or build id; default latest",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mcp",
         "tags": [
           "reader"
         ]

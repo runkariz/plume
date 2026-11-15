@@ -250,6 +250,18 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
             return await _run(run)
 
         @server.tool(annotations=READ_ONLY, structured_output=True)
+        async def get_vendor_mcp(api: str, version: str | None = None) -> dict[str, Any]:
+            """The API vendor's own MCP server(s) and tools, when the package lists them
+            (present=false for docs-only APIs)."""
+
+            def run() -> dict[str, Any]:
+                ref, section = sections().mcp(api, version)
+                servers = section.get("servers", []) if section else []
+                return {**payloads.ref_payload(ref), "present": bool(servers), "servers": servers}
+
+            return await _run(run)
+
+        @server.tool(annotations=READ_ONLY, structured_output=True)
         async def get_environments(api: str, version: str | None = None) -> dict[str, Any]:
             """Environments (servers, host variables) and API versioning, verbatim from the
             package (null when it does not state them)."""
@@ -269,10 +281,12 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
             def run() -> dict[str, Any]:
                 ref, docs = sections().triggers(api, version)
                 views = [trigger_view(d) for d in docs]
+                hooks = sections().webhooks(api, version)
                 return {
                     **payloads.ref_payload(ref),
-                    "present": bool(views),
+                    "present": bool(views or hooks),
                     "triggers": [{k: v for k, v in x.items() if k != "event"} for x in views],
+                    "webhooks": hooks,
                 }
 
             return await _run(run)

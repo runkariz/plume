@@ -1,9 +1,9 @@
 {
   "delivery": "webhook",
-  "key": "app/uninstalled",
+  "key": "carts/create",
   "provenance": {
     "evidenceUrl": "https://shopify.dev/docs/api/admin-rest/latest/resources/webhook",
     "source": "docs"
   },
-  "title": "app/uninstalled"
+  "title": "carts/create"
 }

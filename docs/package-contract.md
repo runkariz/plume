@@ -20,6 +20,8 @@ using it: `PLUME_CONTRACT_PACKAGES=/path/to/pkg uv run pytest tests/contract/tes
 | `connector/auth/<id>.json` (+ `<id>.variables.schema.json` via `variableContractRef`) | the whole file and its variables schema, verbatim (`GET /v1/apis/{api}/auth[/{id}]`); read for display: `authorizationType`, `grantType`, `headerName`, `codeQueryParamName`, `scopes[]`, `setupSteps`, `tokenLifetime`, `testUrl` |
 | `connector/triggers/events/*.json` (optional) | each event verbatim (`key`, `title`, `description`, `resource`, `delivery`, `provenance`) → `GET /v1/apis/{api}/triggers[/{key}]`; no folder = "not in this package" |
 | `connector/icon.(png\|svg\|jpg\|webp)`, else `_icon/icon.*` | the package's own icon, stored with the build and served at `GET /v1/apis/{api}/icon` (never a remote URL) |
+| `connector/triggers/webhooks/*.json` (optional, 1.2) | the delivery mechanism verbatim (`mode`, `eventsAvailable`, `subscribe`/`unsubscribe`/`list` endpoints, `handshake`, `verification`) → `webhooks` in `GET /v1/apis/{api}/triggers` |
+| `connector/mcp/servers/<id>.json` + `mcp/tools/<server>/<tool>/{tool,input.schema,output.schema}.json` (optional, 1.2; only when the vendor runs an MCP server) | verbatim → `GET /v1/apis/{api}/mcp`; absent for docs-only APIs |
 | `connector/environment.variables.schema.json` (optional) | verbatim, with `app.json` `environments` and `apiVersioning` → `GET /v1/apis/{api}/environments` |
 | `knowledge-export/` v1 (optional; `index.json` `schema: plume.knowledge-export.v1`) | `index.json` `pages[].file`, `complete`; `pages/*.md` front matter `source` and `items[] {id, anchor}` + the page text; `rules.json` `rules[] {id, scope (endpoint id or "resource"), type, text, quote, anchor, sourceUrl, confidence}`; `gold-questions.json` (for `plume gold-import`) |
 | `knowledge-export/**/*.md` (optional, without `index.json`) | page text; front matter `source_url`; first `# ` heading is the title |
@@ -37,6 +39,11 @@ summary uses (`woocommerce` → "WooCommerce").
 The endpoint document id is `endpoint:METHOD~<path>`, built from `url` with `{{req_vars.x}}` →
 `{x}`, the server prefix removed and the version segment replaced by `{version}`. `endpointId`
 is kept as `source_id` only, because it changes when the vendor version rolls.
+
+Schema 1.1 and 1.2 both load (major version 1). In 1.2 the producer's `endpointId` carries the API
+version; Plume's document ids are built from the method and the version-stripped path, so they do
+not change between a 1.1 and a 1.2 render of the same API (checked on Shopify: 292 of 292 endpoint
+ids identical).
 
 ## Ignored
 

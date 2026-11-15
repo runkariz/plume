@@ -71,6 +71,21 @@ class PackageSections:
         r = self._resolver.resolve(api, version)
         return _ref(r), self._docs(r, DocumentKind.TRIGGER)
 
+    def _app_raw(self, r: ResolvedBuild) -> dict[str, Any]:
+        apps = self._docs(r, DocumentKind.APP)
+        return dict(apps[0].raw or {}) if apps else {}
+
+    def webhooks(self, api: str, version: str | None = None) -> list[dict[str, Any]]:
+        """connector/triggers/webhooks/*.json (the delivery mechanism), verbatim."""
+        r = self._resolver.resolve(api, version)
+        hooks = self._app_raw(r).get("webhooks")
+        return [h for h in hooks if isinstance(h, dict)] if isinstance(hooks, list) else []
+
+    def mcp(self, api: str, version: str | None = None) -> tuple[BuildRef, dict[str, Any] | None]:
+        """connector/mcp/ verbatim (None for docs-only APIs: no MCP server, by design)."""
+        r = self._resolver.resolve(api, version)
+        return _ref(r), _obj(self._app_raw(r).get("mcp"))
+
     def trigger(self, api: str, key: str, version: str | None = None) -> tuple[BuildRef, Document]:
         r = self._resolver.resolve(api, version)
         if key.startswith("trigger:"):
@@ -86,8 +101,7 @@ class PackageSections:
         """app.json environments + apiVersioning and the environment variables schema, verbatim
         (None when the package does not state them)."""
         r = self._resolver.resolve(api, version)
-        apps = self._docs(r, DocumentKind.APP)
-        raw = dict(apps[0].raw or {}) if apps else {}
+        raw = self._app_raw(r)
         app: dict[str, Any] = _obj(raw.get("app")) or {}
         envs = app.get("environments")
         return _ref(r), {
@@ -153,6 +167,7 @@ def trigger_view(d: Document) -> dict[str, Any]:
         "description": raw.get("description"),
         "resource": raw.get("resource"),
         "delivery": raw.get("delivery"),
+        "sync_endpoint_id": raw.get("syncEndpointId"),
         "source_url": d.source_url,
         "event": raw,
     }

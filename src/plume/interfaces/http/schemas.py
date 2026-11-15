@@ -519,6 +519,7 @@ class TriggerSummary(Schema):
     description: str | None
     resource: str | None
     delivery: str | None
+    sync_endpoint_id: str | None = None
 
 
 class TriggerList(Schema):
@@ -528,6 +529,11 @@ class TriggerList(Schema):
     note: str | None
     total: int
     items: list[TriggerSummary]
+    webhooks: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="connector/triggers/webhooks/*.json (subscribe/unsubscribe/list endpoints, "
+        "handshake, verification), verbatim; [] when the package has none.",
+    )
 
 
 class TriggerDetail(TriggerSummary):
@@ -549,4 +555,16 @@ class EnvironmentsOut(Schema):
     base_urls: list[str] | None
     variables_schema: dict[str, Any] | None = Field(
         description="connector/environment.variables.schema.json, verbatim."
+    )
+
+
+class McpOut(Schema):
+    api: str
+    build: str
+    present: bool
+    note: str | None
+    servers: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="connector/mcp/: per server {id, server (servers/<id>.json), tools: [{tool, "
+        "inputSchema, outputSchema}]}, verbatim. Docs-only APIs have none.",
     )

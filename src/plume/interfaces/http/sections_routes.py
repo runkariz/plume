@@ -34,6 +34,7 @@ def _trigger_summary(v: dict[str, Any]) -> s.TriggerSummary:
         description=v["description"],
         resource=v["resource"],
         delivery=v["delivery"],
+        sync_endpoint_id=v["sync_endpoint_id"],
     )
 
 
@@ -110,13 +111,28 @@ def sections_router(sections: Callable[[], PackageSections]) -> APIRouter:
         the package has none."""
         ref, docs = sections().triggers(api, version)
         views = [trigger_view(d) for d in docs]
+        hooks = sections().webhooks(api, version)
         return s.TriggerList(
             api=ref.api,
             build=ref.build,
-            present=bool(views),
-            note=None if views else NOT_IN_PACKAGE,
+            present=bool(views or hooks),
+            note=None if views or hooks else NOT_IN_PACKAGE,
             total=len(views),
             items=[_trigger_summary(v) for v in views[offset : offset + limit]],
+            webhooks=hooks,
+        )
+
+    @router.get("/v1/apis/{api}/mcp", response_model=s.McpOut, responses=errors)
+    def mcp(api: str, version: version_q = None) -> s.McpOut:
+        """The vendor's MCP server(s) and tools, when the package has a connector/mcp/ section."""
+        ref, section = sections().mcp(api, version)
+        servers = section.get("servers", []) if section else []
+        return s.McpOut(
+            api=ref.api,
+            build=ref.build,
+            present=bool(servers),
+            note=None if servers else NOT_IN_PACKAGE,
+            servers=servers,
         )
 
     @router.get(

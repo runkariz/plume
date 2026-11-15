@@ -16,6 +16,7 @@ DNS-rebinding protection (allowed hosts from `PLUME_MCP_ALLOWED_HOSTS`). Every r
 | `list_auth_schemes` / `get_auth_scheme` | `api[, scheme_id], version?` | auth schemes as the package states them; detail = the auth JSON + variables schema verbatim |
 | `list_triggers` / `get_trigger` | `api[, key], version?` | trigger events / webhook topics; `present: false` when the package has none |
 | `get_environments` | `api, version?` | environments, base URLs, versioning and the variables schema, verbatim |
+| `get_vendor_mcp` | `api, version?` | the vendor's own MCP server(s) and tools when the package lists them; `present: false` otherwise |
 | `get_model` | `snapshot_id` | a stored canonical model |
 | `list_models` | `api?` | stored canonical models, newest first |
 

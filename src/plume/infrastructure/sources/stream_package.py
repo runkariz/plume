@@ -169,6 +169,35 @@ def _obj(value: object) -> JsonObj:
     return value if isinstance(value, dict) else {}
 
 
+def _json_files(folder: Path) -> list[JsonObj]:
+    """Every *.json in a folder, verbatim, in name order ([] when the folder is absent)."""
+    return [_read_json(p) for p in sorted(folder.glob("*.json"))] if folder.is_dir() else []
+
+
+def _mcp_section(folder: Path) -> JsonObj | None:
+    """connector/mcp/ (package 1.2, only when the vendor runs an MCP server), verbatim:
+    servers/<id>.json, tools/<server>/<tool>/tool.json + input/output schemas."""
+    servers_dir = folder / "servers"
+    if not servers_dir.is_dir():
+        return None
+    servers = []
+    for path in sorted(servers_dir.glob("*.json")):
+        tools = []
+        for tool_dir in sorted((folder / "tools" / path.stem).glob("*/")):
+            tool = _opt_json(tool_dir / "tool.json")
+            if tool is None:
+                continue
+            tools.append(
+                {
+                    "tool": tool,
+                    "input_schema": _opt_json(tool_dir / "input.schema.json"),
+                    "output_schema": _opt_json(tool_dir / "output.schema.json"),
+                }
+            )
+        servers.append({"id": path.stem, "server": _read_json(path), "tools": tools})
+    return {"servers": servers}
+
+
 def _tags(req: JsonObj) -> tuple[str, ...]:
     """request.json tags[].name, verbatim and in order."""
     names = [t.get("name") for t in req.get("tags") or [] if isinstance(t, dict)]
@@ -293,7 +322,15 @@ class StreamPackageSource:
 
         app_doc = self._app_document(info, app)
         env_schema = _opt_json(connector / "environment.variables.schema.json")
-        app_doc = replace(app_doc, raw={"app": app, "environment_variables_schema": env_schema})
+        app_doc = replace(
+            app_doc,
+            raw={
+                "app": app,
+                "environment_variables_schema": env_schema,
+                "webhooks": _json_files(connector / "triggers" / "webhooks"),
+                "mcp": _mcp_section(connector / "mcp"),
+            },
+        )
         documents: list[Document] = [app_doc]
         seen: set[str] = {documents[0].doc_id}
 

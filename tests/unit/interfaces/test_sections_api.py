@@ -70,8 +70,8 @@ def test_triggers_present_and_absent(client: TestClient) -> None:
     assert shop["present"] is True
     assert shop["total"] == 3
     keys = {t["key"]: t for t in shop["items"]}
-    assert keys["orders/create"]["delivery"] == "webhook"
-    assert keys["orders/create"]["description"] is None  # absent in the package: null
+    assert set(keys) == {"app/scopes_update", "carts/create", "draft_orders/create"}
+    assert keys["carts/create"]["delivery"] == "webhook"
     one = client.get("/v1/apis/shopify/triggers/app/scopes_update").json()
     assert one["event"]["key"] == "app/scopes_update"
     assert one["description"].startswith("Occurs whenever the access scopes")
@@ -157,7 +157,7 @@ async def test_mcp_section_tools(stack: FakeStack) -> None:
         assert one["scheme"]["headerName"] == "X-Shopify-Access-Token"
         none = await call(client, "list_triggers", api="woocommerce")
         assert none["present"] is False
-        trig = await call(client, "get_trigger", api="shopify", key="orders/create")
+        trig = await call(client, "get_trigger", api="shopify", key="carts/create")
         assert trig["event"]["delivery"] == "webhook"
 
 
@@ -168,3 +168,56 @@ def test_environments_are_verbatim(client: TestClient) -> None:
     assert env["versioning"] is not None
     shop = client.get("/v1/apis/test-catalog-api/environments").json()
     assert shop["environments"][0]["servers"]["api"] == "http://127.0.0.1:18091"
+
+
+def test_webhook_mechanism_is_verbatim(client: TestClient) -> None:
+    shop = client.get("/v1/apis/shopify/triggers").json()
+    assert len(shop["webhooks"]) == 1
+    hook = shop["webhooks"][0]
+    assert "carts/create" in hook["eventsAvailable"]
+    assert hook["subscribe"]["endpointId"]
+    woo = client.get("/v1/apis/woocommerce/triggers").json()
+    assert woo["webhooks"] == []
+    env = client.get("/v1/apis/shopify/environments").json()
+    assert env["variablesSchema"]["properties"]["host"]["type"] == "string"
+
+
+def test_vendor_mcp_section(packages: Path, tmp_path: Path) -> None:
+    import json  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+
+    pkg = tmp_path / "with-mcp"
+    shutil.copytree(packages / "test-catalog", pkg)
+    mcp = pkg / "connector" / "mcp"
+    (mcp / "servers").mkdir(parents=True)
+    (mcp / "servers" / "srv.json").write_text(json.dumps({"id": "srv", "url": "https://x/mcp"}))
+    tool = mcp / "tools" / "srv" / "search"
+    tool.mkdir(parents=True)
+    (tool / "tool.json").write_text(json.dumps({"name": "search", "description": "Search"}))
+    (tool / "input.schema.json").write_text(json.dumps({"type": "object"}))
+    stack = FakeStack(embedder=WordEmbedder())
+    stack.load(str(pkg))
+    _, section = stack.sections().mcp("test-catalog-api")
+    assert section == {
+        "servers": [
+            {
+                "id": "srv",
+                "server": {"id": "srv", "url": "https://x/mcp"},
+                "tools": [
+                    {
+                        "tool": {"name": "search", "description": "Search"},
+                        "input_schema": {"type": "object"},
+                        "output_schema": None,
+                    }
+                ],
+            }
+        ]
+    }
+    plain = FakeStack(embedder=WordEmbedder())
+    plain.load(str(packages / "test-catalog"))
+    assert plain.sections().mcp("test-catalog-api")[1] is None
+
+
+def test_mcp_route_absent(client: TestClient) -> None:
+    r = client.get("/v1/apis/woocommerce/mcp").json()
+    assert (r["present"], r["note"], r["servers"]) == (False, "not in this package", [])

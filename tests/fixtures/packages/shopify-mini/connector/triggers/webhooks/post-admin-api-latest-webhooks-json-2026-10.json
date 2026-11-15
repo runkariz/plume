@@ -1,0 +1,102 @@
+{
+  "eventsAvailable": [
+    "app/scopes_update",
+    "app/uninstalled",
+    "app_subscriptions/update",
+    "bulk_operations/finish",
+    "carts/create",
+    "carts/update",
+    "channels/delete",
+    "checkouts/create",
+    "checkouts/delete",
+    "checkouts/update",
+    "collection_listings/add",
+    "collection_listings/remove",
+    "collection_listings/update",
+    "collection_publications/create",
+    "collection_publications/delete",
+    "collection_publications/update",
+    "collections/create",
+    "collections/delete",
+    "collections/update",
+    "companies/create",
+    "companies/delete",
+    "companies/update",
+    "company_contact_roles/assign",
+    "company_contact_roles/revoke",
+    "company_contacts/create",
+    "company_contacts/delete",
+    "company_contacts/update",
+    "company_locations/create",
+    "company_locations/delete",
+    "company_locations/update",
+    "customer_groups/create",
+    "customer_groups/delete",
+    "customer_groups/update",
+    "customer_payment_methods/create",
+    "customer_payment_methods/revoke",
+    "customer_payment_methods/update",
+    "customers/create",
+    "customers/delete",
+    "customers/disable",
+    "customers/enable",
+    "customers/merge",
+    "customers/update",
+    "customers_email_marketing_consent/update",
+    "customers_marketing_consent/update",
+    "discounts/create",
+    "discounts/delete",
+    "discounts/redeemcode_added",
+    "discounts/redeemcode_removed",
+    "discounts/update",
+    "disputes/create",
+    "disputes/update",
+    "domains/create",
+    "domains/destroy",
+    "domains/update",
+    "draft_orders/create",
+    "draft_orders/delete",
+    "draft_orders/update",
+    "finance_app_staff_member/delete",
+    "finance_app_staff_member/grant",
+    "finance_app_staff_member/revoke",
+    "finance_app_staff_member/update",
+    "finance_kyc_information/update",
+    "fulfillment_events/create"
+  ],
+  "handshake": {
+    "kind": "none"
+  },
+  "id": "post-admin-api-latest-webhooks-json-2026-10",
+  "list": {
+    "endpointId": "get-admin-api-latest-webhooks-json"
+  },
+  "mode": "api",
+  "provenance": {
+    "evidence": [
+      "Create a new webhook subscription by specifying both an address and a topic.",
+      "Destination URI to which the webhook subscription should send the POST request when an event occurs.",
+      "Event that triggers the webhook. You can retrieve data in either JSON or XML.",
+      "Delete an existing webhook from a shop",
+      "Retrieves a list of webhooks."
+    ],
+    "evidenceUrl": "https://shopify.dev/docs/api/admin-rest/latest/resources/webhook",
+    "source": "docs"
+  },
+  "subscribe": {
+    "callbackUrl": {
+      "in": "body",
+      "pointer": "/webhook/address"
+    },
+    "endpointId": "post-admin-api-latest-webhooks-json-2026-10",
+    "events": {
+      "in": "body",
+      "pointer": "/webhook/topic",
+      "shape": "array"
+    }
+  },
+  "unsubscribe": {
+    "endpointId": "delete-admin-api-latest-webhooks-webhook-id-json-2026-10",
+    "idVar": "webhook_id"
+  }
+}
