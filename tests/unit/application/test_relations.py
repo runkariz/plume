@@ -142,3 +142,22 @@ def test_real_find_fact_owner_as_method_and_path(real_stack: FakeStack) -> None:
         "mirakl", "offset", kind="field", location="query", owner="GET /api/products"
     )
     assert not r.found
+
+
+@real
+def test_real_models_follow_item_model_refs(real_stack: FakeStack) -> None:
+    """WooCommerce Order.line_items -> orderlineitem; Shopify Product.variants -> productvariant."""
+    from plume.domain.shared.ids import BuildId  # noqa: PLC0415
+
+    for api, doc_id, path, source in (
+        ("woocommerce", "model:order", "line_items[].sku", "orderlineitem.schema.json#"),
+        ("shopify", "model:product", "variants[].sku", "productvariant.schema.json#"),
+    ):
+        build = BuildId(real_stack.resolver().resolve(api).build.build_id.value)
+        doc = real_stack.documents.get_document(build, doc_id)
+        assert doc is not None
+        spec = next((f for f in doc.fields if f.name == path), None)
+        assert spec is not None, (api, path)
+        assert spec.description
+        assert (spec.pointer or "").startswith(source)
+        assert real_stack.fact_query.find(build, path), (api, path)  # it is a fact too

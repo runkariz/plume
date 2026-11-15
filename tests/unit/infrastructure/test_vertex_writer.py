@@ -70,3 +70,27 @@ def test_no_key_file_is_unavailable(tmp_path: Path) -> None:
     with pytest.raises(ModelWriterUnavailableError):
         writer.write("s", [])
     assert not VertexGeminiWriter(None).available()
+
+
+def test_project_and_location_select_the_url(tmp_path: Path) -> None:
+    seen: list[str] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(str(request.url))
+        reply = {"candidates": [{"content": {"parts": [{"text": "{}"}]}}]}
+        return httpx.Response(200, json=reply)
+
+    key = tmp_path / "key"
+    key.write_text(SECRET)
+    for project, location in ((None, "global"), ("123", "global"), ("123", "us-central1")):
+        VertexGeminiWriter(
+            key, "gemini-4-argon", client=httpx.Client(transport=httpx.MockTransport(handle)),
+            project=project, location=location,
+        ).write("s", [Turn("user", "x")])  # fmt: skip
+    assert seen == [
+        "https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-4-argon:generateContent",
+        "https://aiplatform.googleapis.com/v1/projects/123/locations/global/publishers/google/"
+        "models/gemini-4-argon:generateContent",
+        "https://us-central1-aiplatform.googleapis.com/v1/projects/123/locations/us-central1/"
+        "publishers/google/models/gemini-4-argon:generateContent",
+    ]

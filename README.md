@@ -180,6 +180,7 @@ Reader routes are public and rate limited; maintainer routes need `Authorization
 | `PLUME_DATA_DIR` | `.plume` (`/data` in Docker) | uploads and dumps |
 | `PLUME_MAX_UPLOAD_BYTES` | 200 MiB | package uploads |
 | `PLUME_VERTEX_KEY_FILE` | – | file with the Vertex key for server-side model generation (maintainers); read per call, never logged; unset = 503 |
+| `PLUME_VERTEX_PROJECT` / `PLUME_VERTEX_LOCATION` | – / `global` | with a project, generation calls the model at that location (gemini-4-argon answers only at `global`); without one, the location-less express URL |
 | `PLUME_MODEL_LLM` / `PLUME_MODEL_MAX_ROUNDS` | `gemini-4-argon` / `3` | the generation model and its repair rounds |
 | `PLUME_MCP_APP_HTML` | the packaged file | the MCP App bundle (model view) served as `ui://plume/model-view`; see [docs/mcp-apps.md](docs/mcp-apps.md) |
 | `PLUME_WEB_PUBLIC_URL` | – | the web UI's base URL; model share links are `<this>/models/{id}` |
