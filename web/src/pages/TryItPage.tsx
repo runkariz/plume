@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
+import { operationOf } from '@/lib/docHref';
 import { formatMs } from '@/lib/format';
 import {
   ApiError,
@@ -387,7 +388,24 @@ function CheckTool({ apiId }: { apiId: string }) {
                   <div className="row" style={{ marginBottom: 10 }}>
                     <MethodBadge method={d.matched.method} />
                     <span className="mono">{d.matched.path}</span>
+                    {operationOf(d.matched.id, d.matched.method, d.matched.path) ? (
+                      <span className="faint small mono">
+                        · {operationOf(d.matched.id, d.matched.method, d.matched.path)}
+                      </span>
+                    ) : null}
                   </div>
+                ) : null}
+                {d.alternatives && d.alternatives.length > 0 ? (
+                  <p className="small muted" style={{ marginBottom: 10 }}>
+                    Other operations at the same method and path:{' '}
+                    {d.alternatives.map((a, i) => (
+                      <span key={a}>
+                        {i > 0 ? ', ' : ''}
+                        <span className="mono">{a}</span>
+                      </span>
+                    ))}
+                    . The check matched the one shown above.
+                  </p>
                 ) : null}
                 <ul className="checks">
                   {d.paramChecks.map((p) => (

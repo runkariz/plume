@@ -25,6 +25,7 @@ import {
 } from '@/components';
 import { SearchIcon } from '@/icons';
 import { breakable } from '@/lib/breakable';
+import { operationOf } from '@/lib/docHref';
 import { docHref } from './models/MappingTable';
 import { ModelList } from './models/ModelList';
 import { AuthPanel } from './sections/AuthPanel';
@@ -104,6 +105,12 @@ function Browse({ api }: { api: ApiSummary }) {
                     <Link className="ep-link" to={docHref(api.id, it.id)}>
                       {it.path ? breakable(it.path) : it.title}
                     </Link>
+                    {operationOf(it.id, it.method, it.path) ? (
+                      <span className="faint small ep-op">
+                        {' '}
+                        · {operationOf(it.id, it.method, it.path)}
+                      </span>
+                    ) : null}
                   </div>
                   {it.path ? <div className="muted small">{it.title}</div> : null}
                 </div>

@@ -5,6 +5,7 @@ import { useAsync } from '@/api/useAsync';
 import { ApiError, type DocumentOut, type HttpMethod } from '@/api/types';
 import { Card, Chip, Crumbs, ErrorState, LoadingState, MethodBadge, RawJson } from '@/components';
 import { breakable } from '@/lib/breakable';
+import { operationOf } from '@/lib/docHref';
 import { formatDate, shortBuild } from '@/lib/format';
 import { apiTitle } from '@/lib/names';
 
@@ -130,6 +131,9 @@ export function DocumentPage() {
               <MethodBadge method={d.method as HttpMethod} />
             ) : null}
             {d.path ? <span className="mono doc-path">{breakable(d.path)}</span> : null}
+            {operationOf(d.id, d.method, d.path) ? (
+              <span className="faint small mono">· {operationOf(d.id, d.method, d.path)}</span>
+            ) : null}
             {d.resource ? <Chip>{d.resource}</Chip> : null}
             {d.deprecated ? <Chip tone="warn">deprecated</Chip> : null}
             {!d.complete ? <Chip tone="warn">partial schema</Chip> : null}

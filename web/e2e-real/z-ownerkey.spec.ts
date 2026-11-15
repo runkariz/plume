@@ -61,3 +61,24 @@ for (const theme of THEMES) {
     });
   });
 }
+
+test.describe('a blocked API (the browser refuses every request: net::ERR_BLOCKED_BY_CLIENT)', () => {
+  test('the key check says so and the panel stays open with what was typed', async ({
+    page,
+    context,
+  }) => {
+    await context.route('**/v1/**', (route) => route.abort('blockedbyclient'));
+    await page.goto('/models');
+    await expect(page.getByText('Could not load APIs')).toBeVisible();
+    const region = page.getByRole('region', { name: 'Add an owner key' });
+    await region.getByText(/Have an owner key/).click();
+    await region.getByLabel('Owner key').fill('ok-some-key');
+    await region.getByRole('button', { name: 'Add key' }).click();
+    await expect(region.getByRole('alert')).toContainText('Could not reach the Plume API');
+    // still open, still holding the key, nothing stored
+    await expect(region.getByLabel('Owner key')).toBeVisible();
+    await expect(region.getByLabel('Owner key')).toHaveValue('ok-some-key');
+    expect(await region.locator('details').getAttribute('open')).not.toBeNull();
+    expect(await page.evaluate(() => localStorage.getItem('plume-owner-keys'))).toBeNull();
+  });
+});

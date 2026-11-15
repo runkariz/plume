@@ -6,6 +6,11 @@ import { expectNoSeriousA11y, settle, shot, test, THEMES } from '../e2e/helpers'
  * shopify-mini, test-catalog and second-catalog (`plume load tests/fixtures/packages/<name>`).
  */
 const API = process.env.PLUME_E2E_API_URL ?? 'http://127.0.0.1:18480';
+/** Where the browser's API calls must go: the API's address, or (PLUME_E2E_SAME_ORIGIN=true) the web's own origin. */
+const CALLS_GO_TO =
+  process.env.PLUME_E2E_SAME_ORIGIN === 'true'
+    ? (process.env.PLUME_E2E_BASE_URL ?? 'http://127.0.0.1:18473')
+    : API;
 
 async function firstEndpoint(request: APIRequestContext, api: string) {
   const res = await request.get(`${API}/v1/apis/${api}/items?kind=endpoint&limit=5`);
@@ -166,6 +171,6 @@ test('the browser never calls a mock: requests go to the real API', async ({ pag
   await page.goto('/');
   await expect(page.locator('article.api-card').first()).toBeVisible();
   expect(calls.length).toBeGreaterThan(0);
-  expect(calls.every((u) => u.startsWith(API))).toBe(true);
+  expect(calls.every((u) => u.startsWith(`${CALLS_GO_TO}/v1/`))).toBe(true);
   expect(await page.evaluate(() => navigator.serviceWorker?.controller ?? null)).toBeNull();
 });

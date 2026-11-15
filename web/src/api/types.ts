@@ -182,6 +182,8 @@ export interface CheckCallResponse {
   } | null;
   paramChecks: { name: string; found: boolean; where: string | null }[];
   checked: { endpoints: number; models: number };
+  /** The other operation ids at the same METHOD + path (e.g. a package with three GET /{file_path} downloads). */
+  alternatives?: string[];
 }
 
 // ---- maintainer: packages, jobs, build events (W3) ----
