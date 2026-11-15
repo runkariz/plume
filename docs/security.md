@@ -1,48 +1,48 @@
 # Security notes
 
 Self-review of the public surface (2026-11-15). Plume is meant to run as a **public read-only
-reader** plus an **authenticated maintainer** part. Findings marked _fixed_ were changed in
+reader** plus an **authenticated maintainer** part. Findings marked *fixed* were changed in
 this review and have tests in `tests/unit/interfaces/test_hardening.py`.
 
 ## Surface
 
-| Surface                                                                                                                                    | Auth            | Writes                                                        |
-| ------------------------------------------------------------------------------------------------------------------------------------------ | --------------- | ------------------------------------------------------------- |
-| HTTP reader `/v1/apis/**`, `/health`, `/docs`, `/openapi.json`                                                                             | none            | none                                                          |
-| HTTP models: `candidates`, `suggest`, `generate` (engine claude), `sessions/**`, `GET /v1/models`, `GET /v1/models/{id}`, `revise`, `mine` | none            | sessions; `draft` stores an **unlisted** snapshot (validated) |
-| HTTP models: `generate` (engine server), `release`, `discard`, `jobs/**`, unreleased lists and models                                      | bearer          | jobs, unreleased snapshots, visibility                        |
-| HTTP maintainer `/v1/maintainer/me`, `/v1/packages`, `/v1/jobs/**`                                                                         | bearer          | jobs, builds, tags                                            |
-| MCP reader `/mcp`                                                                                                                          | none            | model sessions and unlisted snapshots only                    |
-| MCP maintainer `/maintainer/mcp`                                                                                                           | bearer          | sessions, snapshots, tags                                     |
-| CLI (`plume load/tag/export/restore/migrate`)                                                                                              | database access | everything                                                    |
+| Surface | Auth | Writes |
+|---|---|---|
+| HTTP reader `/v1/apis/**`, `/health`, `/docs`, `/openapi.json` | none | none |
+| HTTP models: `candidates`, `suggest`, `generate` (engine claude), `sessions/**`, `GET /v1/models`, `GET /v1/models/{id}`, `revise`, `mine` | none | sessions; `draft` stores an **unlisted** snapshot (validated) |
+| HTTP models: `generate` (engine server), `release`, `discard`, `jobs/**`, unreleased lists and models | bearer | jobs, unreleased snapshots, visibility |
+| HTTP maintainer `/v1/maintainer/me`, `/v1/packages`, `/v1/jobs/**` | bearer | jobs, builds, tags |
+| MCP reader `/mcp` | none | model sessions and unlisted snapshots only |
+| MCP maintainer `/maintainer/mcp` | bearer | sessions, snapshots, tags |
+| CLI (`plume load/tag/export/restore/migrate`) | database access | everything |
 
 ## Controls
 
 - **Authentication**: maintainer bearer tokens from `PLUME_MAINTAINER_TOKENS` (JSON list,
   `SecretStr`), compared with `hmac.compare_digest`, never logged or rendered (`repr` shows
-  `**********`). No tokens configured → maintainer routes answer 503. _Fixed_: tokens shorter
+  `**********`). No tokens configured → maintainer routes answer 503. *Fixed*: tokens shorter
   than 16 characters or with surrounding spaces are refused at startup.
 - **Rate limits**: per client address, sliding minute window
   (`PLUME_READER_RATE_LIMIT_PER_MINUTE`, default 120) on every HTTP route except `/health`.
-  _Fixed_: the MCP endpoints (reader and maintainer) are rate limited the same way (they had
+  *Fixed*: the MCP endpoints (reader and maintainer) are rate limited the same way (they had
   none). Limitation: the limiter keys on the TCP peer. Behind Docker's port publishing or a
   reverse proxy every client may appear as one address, so the limit becomes global; put a
   proxy that enforces per-client limits in front for a public deployment (Plume does not trust
   `X-Forwarded-For`).
-- **Body size**: _fixed_: requests that declare a body over 1 MiB (over
+- **Body size**: *fixed*: requests that declare a body over 1 MiB (over
   `PLUME_MAX_UPLOAD_BYTES`, default 200 MiB, for `POST /v1/packages`) are refused with 413
   before the body is read; previously an upload was spooled in full before the size check.
   Request schemas cap query (2000 chars), names (300), params (100) and `top_k` (50).
 - **Uploads**: only `.zip`; at most 20,000 files, 1 GiB expanded, expansion ratio 200;
   absolute paths, `..` and symlinks refused; extraction under `<data_dir>/jobs/<job id>/`.
-  _Fixed_: the client's filename is stored as `upload.zip` (it was joined into a path; `..` or an
+  *Fixed*: the client's filename is stored as `upload.zip` (it was joined into a path; `..` or an
   empty name caused a 500). The original name is only echoed back as data.
 - **Error bodies**: application errors return `{error, message, detail}` with a stable code;
   validation errors are FastAPI's 422; anything unexpected is a bare `500 Internal Server
-Error` with no traceback. _Fixed_: a failed maintainer build stored `str(exception)` in the job
+  Error` with no traceback. *Fixed*: a failed maintainer build stored `str(exception)` in the job
   (visible to maintainers), which for database errors can include SQL and parameters; now only
   application errors are shown and other failures say `internal error (<type>); see the server
-log`. Embedding errors include at most 300 characters of the provider's response, never the
+  log`. Embedding errors include at most 300 characters of the provider's response, never the
   key (it travels in a header, not the URL).
 - **CORS**: explicit origins (`PLUME_CORS_ORIGINS`, default the web dev server on 18473),
   methods GET/POST, headers Authorization/Content-Type/Last-Event-ID/Accept, no credentials
@@ -52,7 +52,7 @@ log`. Embedding errors include at most 300 characters of the provider's response
 - **MCP host check**: DNS-rebinding protection on both MCP endpoints with
   `PLUME_MCP_ALLOWED_HOSTS` (default loopback names); a foreign `Host` is refused (tested in
   e2e).
-- **Headers**: _fixed_: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+- **Headers**: *fixed*: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
   `Referrer-Policy: no-referrer`, `Cross-Origin-Resource-Policy: same-site` on every HTTP
   response.
 - **SQL**: every query is parameterised; the only interpolated fragments are constants and one
