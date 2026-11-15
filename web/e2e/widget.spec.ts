@@ -168,6 +168,109 @@ for (const theme of THEMES) {
       await expect(frame.locator('html')).toHaveAttribute('data-theme', other);
     });
 
+    test('a model set: the diagram and the text, no console errors, axe clean', async ({
+      page,
+    }) => {
+      const apis = [
+        { id: 'shopify', name: 'Shopify', shortName: 'Shopify', build: 'b-1' },
+        { id: 'woocommerce', name: 'WooCommerce', shortName: 'WooCommerce', build: 'b-2' },
+      ];
+      const cov = (a: number, b: number, t: number) => ({
+        shopify: { mapped: a, total: t },
+        woocommerce: { mapped: b, total: t },
+      });
+      const set = {
+        kind: 'model_set',
+        id: 'set_x',
+        name: 'Shop',
+        visibility: 'official',
+        official: true,
+        generatedAt: '2026-11-16T10:00:00Z',
+        inputs: apis,
+        members: [
+          {
+            concept: 'Order',
+            modelId: 'm-order',
+            name: 'Order',
+            fieldCount: 12,
+            coverage: cov(9, 11, 12),
+            visibility: 'official',
+            version: 1,
+          },
+          {
+            concept: 'Product',
+            modelId: 'm-product',
+            name: 'Product',
+            fieldCount: 14,
+            coverage: cov(14, 13, 14),
+            visibility: 'official',
+            version: 1,
+          },
+          { concept: 'Variant', modelId: 'm-variant', missing: true },
+        ],
+        relations: [
+          {
+            id: 'order-items',
+            from: 'Order',
+            to: 'Product',
+            kind: 'embedded',
+            cardinality: '1:n',
+            embed: { field: 'items' },
+            ref: null,
+            confirmed: true,
+            support: { shopify: 'nested', woocommerce: 'nested' },
+            sources: {},
+          },
+          {
+            id: 'product-variants',
+            from: 'Product',
+            to: 'Variant',
+            kind: 'reference',
+            cardinality: 'n:1',
+            embed: null,
+            ref: null,
+            confirmed: false,
+            support: { shopify: 'sub_resource', woocommerce: null },
+            sources: {},
+          },
+        ],
+        undecided: ['product-variants'],
+        openQuestions: [],
+        sharePath: '/model-sets/set_x',
+      };
+      const { frame, problems } = await open(
+        page,
+        theme,
+        asResult({ accepted: true, share_url: 'https://plume.example/model-sets/set_x', set }),
+        { openLinks: true },
+      );
+      await expect(frame.getByRole('heading', { name: 'Shop', level: 1 })).toBeVisible();
+      await expect(frame.locator('.react-flow__node-member')).toHaveCount(3);
+      await expect(
+        frame.getByRole('region', { name: 'Relations' }).getByText('Order → Product'),
+      ).toBeVisible();
+      await expect(frame.getByText('1 to decide').first()).toBeVisible();
+      await frame.getByRole('button', { name: 'Open in Plume' }).click();
+      await expect
+        .poll(() => page.evaluate(() => (window as unknown as { __opened: string[] }).__opened))
+        .toEqual(['https://plume.example/model-sets/set_x']);
+      const overflow = await frame
+        .locator('html')
+        .evaluate((el) => el.scrollWidth - el.clientWidth);
+      expect(overflow).toBeLessThanOrEqual(0);
+      expect(problems).toEqual([]);
+      const { violations } = await new AxeBuilder({ page }).analyze();
+      expect(
+        violations
+          .filter((v) => v.impact === 'serious' || v.impact === 'critical')
+          .map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`),
+      ).toEqual([]);
+      if (SHOTS) {
+        mkdirSync(SHOTS, { recursive: true });
+        await page.screenshot({ path: join(SHOTS, `w17-widget-set-${theme}.png`), fullPage: true });
+      }
+    });
+
     test('a refused draft: the issues, nothing stored', async ({ page }) => {
       const { frame, problems } = await open(
         page,
