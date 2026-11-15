@@ -1,0 +1,126 @@
+{
+  "title": "Parameters",
+  "type": "object",
+  "properties": {
+    "order_ids": {
+      "type": "string",
+      "description": "A comma-separated list of order's identifiers",
+      "title": "Order IDs"
+    },
+    "order_references_for_customer": {
+      "type": "string",
+      "description": "A comma-separated list of order references for customer",
+      "title": "Customer Order References",
+      "x-ui-advanced": "Advanced"
+    },
+    "order_references_for_seller": {
+      "type": "string",
+      "description": "A comma-separated list of order references for seller",
+      "title": "Seller Order References",
+      "x-ui-advanced": "Advanced"
+    },
+    "order_state_codes": {
+      "type": "string",
+      "description": "A comma-separated list of order state's codes",
+      "enum": [
+        "STAGING",
+        "WAITING_ACCEPTANCE",
+        "WAITING_DEBIT",
+        "WAITING_DEBIT_PAYMENT",
+        "SHIPPING",
+        "SHIPPED",
+        "TO_COLLECT",
+        "RECEIVED",
+        "CLOSED",
+        "REFUSED",
+        "CANCELED"
+      ],
+      "title": "Order State Codes"
+    },
+    "channel_codes": {
+      "type": "string",
+      "description": "A comma-separated list of channel codes",
+      "title": "Channel Codes"
+    },
+    "only_null_channel": {
+      "type": "boolean",
+      "description": "Return only orders without channel. If <code>true</code>, ignore the <code>channel_codes</code>",
+      "default": false,
+      "title": "Only Null Channel",
+      "x-ui-advanced": "Advanced"
+    },
+    "start_date": {
+      "type": "string",
+      "description": "Start creation date for filtering",
+      "x-ui-advanced": "Filter by Date",
+      "title": "Start Creation Date"
+    },
+    "end_date": {
+      "type": "string",
+      "description": "End creation date for filtering",
+      "x-ui-advanced": "Filter by Date",
+      "title": "End Creation Date"
+    },
+    "start_update_date": {
+      "type": "string",
+      "description": "Start update date for filtering. Mirakl will subtract a time delta to ensure no orders are missed due to network and/or software latency.",
+      "x-ui-advanced": "Advanced",
+      "title": "Start Update Date"
+    },
+    "end_update_date": {
+      "type": "string",
+      "description": "End update date for filtering",
+      "x-ui-advanced": "Advanced",
+      "title": "End Update Date"
+    },
+    "customer_debited": {
+      "type": "boolean",
+      "description": "Order paid by customer",
+      "title": "Customer Debited",
+      "x-ui-advanced": "Advanced"
+    },
+    "payment_workflow": {
+      "type": "string",
+      "description": "Payment workflow of an order",
+      "enum": [
+        "PAY_ON_ACCEPTANCE",
+        "PAY_ON_DELIVERY",
+        "PAY_ON_DUE_DATE",
+        "PAY_ON_SHIPMENT",
+        "NO_CUSTOMER_PAYMENT_CONFIRMATION"
+      ],
+      "title": "Payment Workflow",
+      "x-ui-advanced": "Advanced"
+    },
+    "has_incident": {
+      "type": "boolean",
+      "description": "If <code>true</code> returns only orders with incidents in progress, if <code>false</code> returns orders without incidents in progress. If not provided, all orders with or without incident will be returned",
+      "title": "Has Incident",
+      "x-ui-advanced": "Advanced"
+    },
+    "fulfillment_center_code": {
+      "type": "array",
+      "description": "Code of the fulfillment center",
+      "title": "Fulfillment Center Codes",
+      "x-ui-advanced": "Advanced"
+    },
+    "order_tax_mode": {
+      "type": "string",
+      "description": "Please note: If the taxes are not specified, the prices with mode TAX_EXCLUDED and with mode TAX_INCLUDED will return the same amounts.<br>Possible values:<ul><li><code>TAX_EXCLUDED</code>: the price fields (price, unit price, shipping price, cancellation amount, refund amount and order total prices) do not include taxes.</li><li><code>TAX_INCLUDED</code>: the price fields include the tax amount. </li></ul><li>If this query parameter is not specified, the default order tax mode of the platform is used.</li>",
+      "enum": [
+        "TAX_INCLUDED",
+        "TAX_EXCLUDED"
+      ],
+      "title": "Order Tax Mode",
+      "x-ui-advanced": "Advanced"
+    },
+    "shop_id": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Use this parameter when your user has access to several shops. If not specified, the shop_id from your default shop will be used.",
+      "default": "{{ auth?.apikey?.shop_id }}",
+      "title": "Shop ID"
+    }
+  },
+  "description": "Query parameters for filtering, searching, and paginating orders."
+}

@@ -1,0 +1,34 @@
+{
+  "title": "A01_Response_200_Shippings_AdditionalFields_Boolean",
+  "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+  "x-complete": true,
+  "type": "object",
+  "properties": {
+    "value": {
+      "type": "string",
+      "description": "Custom field's value"
+    },
+    "type": {
+      "type": "string",
+      "const": "BOOLEAN",
+      "description": "Data type of the custom shipping field, fixed to boolean."
+    },
+    "code": {
+      "type": "string",
+      "description": "Custom field's code"
+    }
+  },
+  "required": [
+    "value",
+    "type",
+    "code"
+  ],
+  "examples": [
+    {
+      "code": "condition",
+      "type": "BOOLEAN",
+      "value": "true"
+    }
+  ],
+  "description": "Boolean custom shipping field entry."
+}

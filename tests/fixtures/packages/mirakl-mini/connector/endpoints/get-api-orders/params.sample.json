@@ -1,0 +1,18 @@
+{
+  "channel_codes": "<channel_codes>",
+  "customer_debited": false,
+  "end_date": "<end_date>",
+  "end_update_date": "<end_update_date>",
+  "fulfillment_center_code": [],
+  "has_incident": false,
+  "only_null_channel": false,
+  "order_ids": "<order_ids>",
+  "order_references_for_customer": "<order_references_for_customer>",
+  "order_references_for_seller": "<order_references_for_seller>",
+  "order_state_codes": "STAGING",
+  "order_tax_mode": "TAX_INCLUDED",
+  "payment_workflow": "PAY_ON_ACCEPTANCE",
+  "shop_id": 0,
+  "start_date": "<start_date>",
+  "start_update_date": "<start_update_date>"
+}

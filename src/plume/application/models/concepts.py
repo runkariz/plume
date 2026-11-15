@@ -16,7 +16,9 @@ from plume.application.reader.resolve import BuildResolver, ResolvedBuild
 from plume.domain.knowledge.document import DocumentKind
 from plume.domain.knowledge.fact import FactKind
 
-_NOISE = frozenset({"general", "default", "misc", "other", "error", "errors", "api", "app"})
+_NOISE = frozenset(
+    {"general", "default", "misc", "other", "error", "errors", "api", "app", "data", "datum"}
+)
 _WRITE = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 MAX_APIS = 6
 MAX_CONCEPTS = 24
@@ -86,7 +88,9 @@ def concept_docs(
             if (not key or key in _NOISE) and s.path:
                 key = concept_key(_last_literal(s.path))
         elif s.kind is DocumentKind.MODEL:
-            key = concept_key(s.title)
+            if s.resource is None:
+                continue  # a bundle root ("A01 response 200") is not a concept
+            key = concept_key(s.title.split(" / ")[-1])
         else:
             continue
         if key and key not in _NOISE:

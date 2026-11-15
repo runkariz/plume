@@ -1,0 +1,63 @@
+{
+  "actionName": "Offer",
+  "authorizationType": "API_KEY",
+  "bodyType": "NONE",
+  "dataSourceExtractionCode": "return response.offers || [];",
+  "defaultCompositionKey": "offer_id",
+  "description": "<div class=\"api-description-extension\"> <div class=\"extension-title\">Call Frequency</div>",
+  "docLink": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+  "endpointId": "get-api-offers",
+  "headersContractRef": "headers.schema.json",
+  "idempotency": {
+    "safeToRetry": true
+  },
+  "isAdvanced": false,
+  "isDataSource": true,
+  "isDeprecated": false,
+  "isPreRelease": false,
+  "method": "GET",
+  "name": "List offers",
+  "operationKind": "list",
+  "paramsContractRef": "params.schema.json",
+  "presets": [
+    "presets/bootstrap.json"
+  ],
+  "provenance": {
+    "evidence": [
+      "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml"
+    ],
+    "extractedAt": "2026-11-05T02:17:38Z",
+    "sourceUrl": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml"
+  },
+  "relations": [
+    {
+      "kind": "child",
+      "targetEndpointId": "get-api-offers-offer-quantity",
+      "via": {
+        "field": "id",
+        "param": "offer"
+      }
+    }
+  ],
+  "resource": "Offer",
+  "responses": [
+    {
+      "contentContractRef": "responses/200.schema.json",
+      "contentType": "application/json",
+      "statusCode": 200
+    }
+  ],
+  "sideEffects": [
+    "none"
+  ],
+  "specOperationId": "OF21",
+  "summary": "<div class=\"api-description-extension\"> <div class=\"extension-title\">Call Frequency</div> <div class=\"recommended-call-frequency\">Recommended usage: On each shop's offers page view</div> <div class=\"max-call-frequency\">Maximum usage: On each shop's offers page view</div> <div class=\"extension-title\">Read More</div> <ul><li><a href=\"https://help.mirakl.com/bundle/sellers/page/topics/Mirakl/mmp/Seller/sellers_doc/integrate_price_approval_api.htm\">If the \"Price approval\" option is activated, read …",
+  "tags": [
+    {
+      "colorSetId": 30,
+      "kind": "category",
+      "name": "Offers"
+    }
+  ],
+  "url": "https://{instance_name}/api/offers"
+}

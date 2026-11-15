@@ -1,0 +1,50 @@
+{
+  "actionName": "Order",
+  "authorizationType": "API_KEY",
+  "bodyContentType": "application/json",
+  "bodyContractRef": "body.schema.json",
+  "bodyType": "RAW",
+  "description": "<div class=\"extension-title\">Description</div>",
+  "docLink": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+  "endpointId": "put-api-orders-order-id-accept",
+  "headersContractRef": "headers.schema.json",
+  "idempotency": {
+    "safeToRetry": true
+  },
+  "isAdvanced": false,
+  "isDataSource": false,
+  "isDeprecated": false,
+  "isPreRelease": false,
+  "method": "PUT",
+  "name": "Replace accept",
+  "operationKind": "update",
+  "paramsContractRef": "params.schema.json",
+  "provenance": {
+    "evidence": [
+      "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml"
+    ],
+    "extractedAt": "2026-11-05T02:17:38Z",
+    "sourceUrl": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml"
+  },
+  "rawBodyType": "JSON",
+  "resource": "Order",
+  "responses": [
+    {
+      "statusCode": 204
+    }
+  ],
+  "sideEffects": [
+    "updates"
+  ],
+  "specOperationId": "OR21",
+  "summary": "<div class=\"extension-title\">Description</div> Accept or refuse order lines in the <code>WAITING_ACCEPTANCE</code> status <details> <summary>Error Codes</summary> | Code | Description | |------|-------------| | <code>ORDER_FULFILLED_UNAUTHORIZED</code> | An unauthorized action has been requested on a fulfilled order | | <code>ORDER_INVALID_STATE</code> | Order is not in the expected state for this operation | | <code>ORDER_LINE_ACCEPTANCE_DECISION_MISSING</code> | Some order lines are missing f…",
+  "tags": [
+    {
+      "colorSetId": 30,
+      "kind": "category",
+      "name": "Orders"
+    }
+  ],
+  "url": "https://{instance_name}/api/orders/{{req_vars.order_id}}/accept",
+  "variablesContractRef": "variables.schema.json"
+}

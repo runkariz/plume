@@ -9,7 +9,7 @@ from plume.infrastructure.db.repos._codec import document_from_row, fields_to_js
 
 _DOC_COLUMNS = (
     "doc_id, kind, title, text, source_url, anchor, resource, method, path, deprecated, "
-    "complete, fields, scopes, source_id"
+    "complete, fields, scopes, source_id, shape"
 )
 
 
@@ -72,6 +72,7 @@ def insert_documents(conn: Connection, build_id: BuildId, documents: Sequence[Do
             "fields": fields_to_json(d.fields),
             "scopes": list(d.scopes),
             "source_id": d.source_id,
+            "shape": d.shape,
             "content_hash": d.content_hash.value,
         }
         for d in documents
@@ -82,7 +83,7 @@ def insert_documents(conn: Connection, build_id: BuildId, documents: Sequence[Do
             INSERT INTO documents (build_id, {_DOC_COLUMNS}, content_hash)
             VALUES (:b, :doc_id, :kind, :title, :text, :source_url, :anchor, :resource,
                     :method, :path, :deprecated, :complete, CAST(:fields AS jsonb),
-                    :scopes, :source_id, :content_hash)
+                    :scopes, :source_id, :shape, :content_hash)
             ON CONFLICT (build_id, doc_id) DO UPDATE SET
                 kind = EXCLUDED.kind, title = EXCLUDED.title, text = EXCLUDED.text,
                 source_url = EXCLUDED.source_url, anchor = EXCLUDED.anchor,
@@ -90,6 +91,7 @@ def insert_documents(conn: Connection, build_id: BuildId, documents: Sequence[Do
                 path = EXCLUDED.path, deprecated = EXCLUDED.deprecated,
                 complete = EXCLUDED.complete, fields = EXCLUDED.fields,
                 scopes = EXCLUDED.scopes, source_id = EXCLUDED.source_id,
+                shape = EXCLUDED.shape,
                 content_hash = EXCLUDED.content_hash
             """  # noqa: S608 - constant column list
         ),
