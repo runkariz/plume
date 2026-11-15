@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 
+from plume.application.ports.eval_repo import EvalRecord
 from plume.domain.knowledge.api import ApiInfo
 from plume.domain.knowledge.citation import Citation
 from plume.domain.knowledge.document import Document, DocumentKind, FieldLocation
@@ -31,6 +32,7 @@ class ApiOverview:
     tags: tuple[str, ...]
     embed_model: str | None
     dims: int | None
+    eval: EvalRecord | None = None
 
 
 @dataclass(frozen=True, slots=True)

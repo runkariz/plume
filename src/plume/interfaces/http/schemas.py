@@ -67,8 +67,14 @@ class Connect(Schema):
 class Quality(Schema):
     recall_at5: float
     mrr: float
-    invented_endpoints: int
+    citation_hit_rate: float
+    fact_accuracy: float
+    invented_endpoints: int | None = Field(
+        default=None, description="Not measured yet (Level 2 with Claude); always null."
+    )
+    missing_expected: int
     gold_questions: int
+    gate_passed: bool
     evaluated_at: str
 
 

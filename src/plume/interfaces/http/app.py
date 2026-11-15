@@ -86,7 +86,10 @@ def _summary(o: ApiOverview) -> s.ApiSummary:
         models=o.counts.get("model", 0),
         guides=o.counts.get("guide", 0),
         docs_as_of=o.ref.docs_as_of if o.ref else None,
-        status=s.ApiStatus(kind="ready" if o.ref else "unpublished"),
+        status=s.ApiStatus(
+            kind="ready" if o.ref else "unpublished",
+            recall_at5=o.eval.metrics.recall_at_k if o.eval else None,
+        ),
         logo=_logo(info.api_id.value, info.name, info.icon_url),
     )
 
@@ -185,6 +188,20 @@ def create_app(deps: HttpDependencies) -> FastAPI:
             tags=list(o.tags),
             versions=list(o.info.versions),
             doc_link=o.info.doc_link,
+            quality=(
+                s.Quality(
+                    recall_at5=o.eval.metrics.recall_at_k,
+                    mrr=o.eval.metrics.mrr,
+                    citation_hit_rate=o.eval.metrics.citation_hit_rate,
+                    fact_accuracy=o.eval.metrics.fact_accuracy,
+                    missing_expected=o.eval.metrics.missing_expected,
+                    gold_questions=o.eval.metrics.questions,
+                    gate_passed=o.eval.passed,
+                    evaluated_at=o.eval.evaluated_at.isoformat(),
+                )
+                if o.eval
+                else None
+            ),
             index=s.IndexInfo(
                 embedding=o.embed_model,
                 dimensions=o.dims,
