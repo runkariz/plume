@@ -239,13 +239,14 @@ def test_server_generated_set_proposes_undecided_relations(packages: Path, tmp_p
     s = FakeStack(embedder=WordEmbedder(), data_dir=tmp_path)
     for p in ("shopify-mini", "woo-mini"):
         s.load(str(packages / p))
-    s.writer.replies = [
-        _shop_draft(s, "Product", {"id": "products[].id"}),
-        _shop_draft(
-            s, "Variant",
-            {"id": "products[].variants[].id", "product_id": "products[].variants[].product_id"},
-        ),
-    ]  # fmt: skip
+    product = _shop_draft(s, "Product", {"id": "products[].id"})
+    variant = _shop_draft(
+        s, "Variant",
+        {"id": "products[].variants[].id", "product_id": "products[].variants[].product_id"},
+    )  # fmt: skip
+    # woo-mini documents no products: each member maps only Shopify, goes back for repair
+    # (NO_COVERAGE) and is stored with the warning after the last round.
+    s.writer.replies = [product] * 3 + [variant] * 3
     client = TestClient(
         create_app(
             HttpDependencies(
@@ -266,6 +267,8 @@ def test_server_generated_set_proposes_undecided_relations(packages: Path, tmp_p
     assert (done["status"], done["kind"]) == ("succeeded", "model_set")
     x = client.get(f"/v1/model-sets/{done['setId']}", headers=AUTH).json()
     assert x["visibility"] == "unreleased"
+    member = client.get(f"/v1/models/{x['members'][0]['modelId']}", headers=AUTH).json()
+    assert [(w["code"], w["api"]) for w in member["warnings"]] == [("NO_COVERAGE", "woocommerce")]
     (rel,) = x["relations"]
     assert (rel["from"], rel["to"], rel["kind"], rel["confirmed"]) == (
         "Variant", "Product", "reference", False,
