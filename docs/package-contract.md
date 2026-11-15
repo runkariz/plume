@@ -24,8 +24,10 @@ using it: `PLUME_CONTRACT_PACKAGES=/path/to/pkg uv run pytest tests/contract/tes
 
 With a v1 knowledge export, each endpoint document gets the section of its page that its
 anchor points at (code examples and JSON payloads stripped) and the rules scoped to it, each
-with its verified quote; each page's remaining text (intro, property tables) and its
-resource-level rules become one guide (`guide:page-<url>`). The API's display name is
+with its verified quote; each page's remaining text (intro, property tables, capped at 6,000
+characters) and its resource-level rules become one guide (`guide:page-<url>`). A page that
+cannot be cut into its endpoints' sections (fewer than half located) keeps only its rules and an
+endpoint index, so its full text does not duplicate and outrank the endpoints. The API's display name is
 `app.json` `name`, or, when that is an all-lowercase id, the spelling the package's own
 summary uses (`woocommerce` → "WooCommerce").
 

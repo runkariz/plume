@@ -592,28 +592,43 @@ def _apply_export(
             )
             used_rules.update(r.rule_id for r in pending)
     for page in export.pages:
+        url = page.source_url.rstrip("/")
         page_rules = [
             r
             for r in export.rules
-            if r.rule_id not in used_rules
-            and (r.source_url or "").rstrip("/") == page.source_url.rstrip("/")
+            if r.rule_id not in used_rules and (r.source_url or "").rstrip("/") == url
         ]
         used_rules.update(r.rule_id for r in page_rules)
-        parts = [f"# {page.title} (documentation page)", page.intro]
-        if page_rules:
-            parts.append("## Rules\n" + "\n".join(r.line() for r in page_rules))
-        slug = _slug(page.source_url.rstrip("/").split("://", 1)[-1].replace("/", "-"))
-        out.append(
-            Document(
-                doc_id=slug_doc_id(DocumentKind.GUIDE, f"page-{slug}"[:200]),
-                kind=DocumentKind.GUIDE,
-                title=page.title,
-                text="\n\n".join(p for p in parts if p),
-                source_url=page.source_url or None,
-                source_id=page.file,
-            )
-        )
+        guide = _page_guide(page, page_rules)
+        if guide is not None:
+            out.append(guide)
     leftover = [r for r in export.rules if r.rule_id not in used_rules]
     if leftover:
         warnings.append(f"knowledge-export: {len(leftover)} rule(s) matched no endpoint or page")
     return out
+
+
+def _page_guide(
+    page: "knowledge_export.ExportPage", rules: "list[knowledge_export.Rule]"
+) -> Document | None:
+    """The page's guide. A page that could not be cut into endpoint sections keeps only its
+    rules and an endpoint index: its whole text would duplicate every endpoint on it and
+    outrank them."""
+    if page.split:
+        parts = [f"# {page.title} (documentation page)", page.intro]
+    elif rules:
+        listing = "\n".join(f"- {label}" for _, label in page.items)
+        parts = [f"# {page.title} (documentation page: rules)", f"## Endpoints\n{listing}"]
+    else:
+        return None
+    if rules:
+        parts.append("## Rules\n" + "\n".join(r.line() for r in rules))
+    slug = _slug(page.source_url.rstrip("/").split("://", 1)[-1].replace("/", "-"))
+    return Document(
+        doc_id=slug_doc_id(DocumentKind.GUIDE, f"page-{slug}"[:200]),
+        kind=DocumentKind.GUIDE,
+        title=page.title,
+        text="\n\n".join(p for p in parts if p),
+        source_url=page.source_url or None,
+        source_id=page.file,
+    )

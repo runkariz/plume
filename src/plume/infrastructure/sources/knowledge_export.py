@@ -21,6 +21,10 @@ import yaml
 SCHEMA_V1 = "plume.knowledge-export.v1"
 ZWSP = "\u200b"
 MAX_SECTION_CHARS = 6000
+# A page guide is a navigation aid (intro, property overview, resource rules), not a second copy
+# of every endpoint on the page: pages whose endpoint sections could not be located would
+# otherwise hold the whole page and outrank the endpoints themselves.
+MAX_INTRO_CHARS = 6000
 _COMMENT = re.compile(r"<!--.*?-->", re.S)
 
 
@@ -48,6 +52,12 @@ class ExportPage:
     title: str
     intro: str
     sections: dict[str, tuple[str, str]] = field(default_factory=dict)  # item id -> (anchor, text)
+    items: list[tuple[str, str]] = field(default_factory=list)  # (item id, "METHOD name")
+
+    @property
+    def split(self) -> bool:
+        """True when the page could be cut into its endpoints' sections (or lists none)."""
+        return not self.items or len(self.sections) * 2 >= len(self.items)
 
 
 @dataclass
@@ -118,6 +128,10 @@ def strip_code(text: str) -> str:
     return " ".join(out)
 
 
+def _cap(text: str, limit: int = MAX_INTRO_CHARS) -> str:
+    return text if len(text) <= limit else text[:limit].rstrip() + " …"
+
+
 def _title_from_url(url: str) -> str:
     slug = url.rstrip("/").rsplit("/", 1)[-1]
     return " ".join(w.capitalize() for w in re.split(r"[-_]", slug) if w) or url
@@ -139,8 +153,15 @@ def parse_page(path: Path) -> ExportPage:
         file=path.name,
         source_url=source,
         title=_title_from_url(source),
-        intro=strip_code((body[: starts[0][0]] if starts else body).replace(ZWSP, "").strip()),
+        intro=_cap(
+            strip_code((body[: starts[0][0]] if starts else body).replace(ZWSP, "").strip())
+        ),
     )
+    page.items = [
+        (str(i["id"]), f"{i.get('method', '')} {i.get('name', '')}".strip())
+        for i in meta.get("items") or []
+        if isinstance(i, dict) and i.get("id")
+    ]
     for i, (start, _, item_id, anchor) in enumerate(starts):
         end = starts[i + 1][0] if i + 1 < len(starts) else len(body)
         text = strip_code(body[start:end].replace(ZWSP, "").strip())

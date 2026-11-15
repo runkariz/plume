@@ -135,3 +135,34 @@ def test_eval_shows_in_overviews(packages: Path, tmp_path: Path) -> None:
     plain = FakeStack(embedder=WordEmbedder())
     plain.load(str(packages / "test-catalog"))
     assert plain.overviews().one("test-catalog-api").eval is None
+
+
+def test_expected_alternatives_are_missing_only_when_none_exists(
+    packages: Path, tmp_path: Path
+) -> None:
+    gold = tmp_path / "test-catalog-api.json"
+    gold.write_text(
+        json.dumps(
+            {
+                "api": "test-catalog-api",
+                "questions": [
+                    {
+                        "id": "a",
+                        "kind": "search",
+                        "question": "list orders",
+                        "expect": ["endpoint:GET~/api/{version}/orders", "guide:not-in-this-build"],
+                    },
+                    {
+                        "id": "b",
+                        "kind": "search",
+                        "question": "list orders",
+                        "expect": ["guide:gone-1", "guide:gone-2"],
+                    },
+                ],
+            }
+        )
+    )
+    stack = _stack(tmp_path / "s")
+    r = stack.pipeline().execute("j", str(packages / "test-catalog"), gold_ref=str(gold))
+    assert r.gate is not None
+    assert r.gate.metrics["missing_expected"] == 2  # only question b (both alternatives absent)

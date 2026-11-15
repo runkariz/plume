@@ -86,3 +86,47 @@ def test_display_name() -> None:
     pkg = source.load(str(Path(__file__).resolve().parents[2] / "fixtures/packages/test-catalog"))
     assert pkg.api.name == "Test Catalog API"
     assert DocumentKind.APP in {d.kind for d in pkg.documents}
+
+
+def _unsplit_package(packages: Path, tmp_path: Path, with_rule: bool) -> Path:
+    """woo-mini whose page has no locatable sections (headings without markers)."""
+    dst = tmp_path / "unsplit"
+    shutil.copytree(packages / "woo-mini", dst)
+    page = next((dst / "knowledge-export" / "pages").glob("*.md"))
+    page.write_text(page.read_text(encoding="utf-8").replace("\u200b", ""), encoding="utf-8")
+    rules_file = dst / "knowledge-export" / "rules.json"
+    rules = json.loads(rules_file.read_text())
+    url = "https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons/"
+    rules["rules"] = (
+        [
+            {
+                "id": "r-x",
+                "scope": "resource",
+                "type": "constraint",
+                "text": "Codes are unique.",
+                "quote": "Coupon code.",
+                "sourceUrl": url,
+                "confidence": 0.9,
+            }
+        ]
+        if with_rule
+        else []
+    )
+    rules_file.write_text(json.dumps(rules))
+    return dst
+
+
+def test_unsplit_page_keeps_only_rules_and_an_index(packages: Path, tmp_path: Path) -> None:
+    pkg = source.load(str(_unsplit_package(packages, tmp_path, with_rule=True)))
+    guide = next(d for d in pkg.documents if d.doc_id.startswith("guide:page-"))
+    assert "(documentation page: rules)" in guide.text
+    assert "## Endpoints" in guide.text
+    assert "Codes are unique." in guide.text
+    assert "Coupon properties" not in guide.text  # the page text is not indexed
+    delete = next(d for d in pkg.documents if d.source_id == "delete-wp-json-wc-v3-coupons-id")
+    assert "## From the documentation page" not in delete.text
+
+
+def test_unsplit_page_without_rules_adds_no_guide(packages: Path, tmp_path: Path) -> None:
+    pkg = source.load(str(_unsplit_package(packages, tmp_path / "b", with_rule=False)))
+    assert not any(d.doc_id.startswith("guide:page-") for d in pkg.documents)
