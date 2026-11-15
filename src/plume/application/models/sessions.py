@@ -72,6 +72,13 @@ ENDPOINT_NOT_FOUND, DOC_NOT_FOUND, API_NOT_IN_SESSION); fix those mappings and s
 """
 
 
+def normalize_concept(concept: str) -> str:
+    """One spelling per concept: trimmed, single spaces, first letter upper case when the user
+    typed it all lower case ("order" -> "Order"; "Product/Offer" and "SKU" stay as typed)."""
+    text = " ".join(concept.split())
+    return text[:1].upper() + text[1:] if text == text.lower() else text
+
+
 class ModelDraftRefusedError(ApplicationError):
     code = "draft_refused"
 
@@ -112,7 +119,7 @@ class ModelSessions:
         resolved = resolve_apis(self._resolver, apis)
         session = ModelSession(
             session_id=f"s-{uuid.uuid4().hex[:16]}",
-            concept=concept.strip(),
+            concept=normalize_concept(concept),
             inputs=tuple(PinnedInput(r.api.api_id.value, r.build.build_id.value) for r in resolved),
             created_at=self._clock.now(),
         )

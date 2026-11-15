@@ -184,3 +184,13 @@ def test_snapshots_go_stale_when_a_pinned_build_moves(stack: FakeStack, tmp_path
         {"api": "test-catalog-api", "pinned": snap.inputs[0].build, "current": new_build}
     ]
     assert models.existing(APIS, "Order") is None  # generate opens a new session instead
+
+
+def test_concept_spelling_is_normalised(stack: FakeStack) -> None:
+    from plume.application.models.sessions import normalize_concept  # noqa: PLC0415
+
+    assert normalize_concept("  order ") == "Order"
+    assert normalize_concept("product  offer") == "Product offer"
+    assert normalize_concept("Product/Offer") == "Product/Offer"
+    assert normalize_concept("SKU") == "SKU"
+    assert stack.models().start(APIS, "order").concept == "Order"
