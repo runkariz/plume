@@ -26,7 +26,7 @@ describe('Maintainer sign-in', () => {
     expect(authStore.getKey()).toBeNull();
   });
 
-  it('signs in with a valid token, shows the maintainer header, and keeps the key out of storage', async () => {
+  it('signs in with a valid token, shows the maintainer header, and keeps the key out of localStorage', async () => {
     renderApp('/maintainer');
     await userEvent.type(screen.getByLabelText('Email'), 'ada@example.com');
     await userEvent.type(screen.getByLabelText('Access token'), 'pl_secret123');
@@ -36,7 +36,8 @@ describe('Maintainer sign-in', () => {
     expect(await screen.findByText('Shopify Admin REST')).toBeInTheDocument();
     expect(authStore.getKey()).toBe('pl_secret123');
     expect(JSON.stringify({ ...localStorage })).not.toContain('pl_secret123');
-    expect(JSON.stringify({ ...sessionStorage })).not.toContain('pl_secret123');
+    // sessionStorage (this tab only) holds it under one key, so a refresh does not sign the person out
+    expect(Object.keys(sessionStorage)).toEqual(['plume-maintainer-session']);
   });
 
   it('sign out clears the key and returns to the public home', async () => {

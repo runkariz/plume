@@ -168,6 +168,8 @@ export function createApiClient(
   opts: {
     maintainerKey?: () => string | null;
     fetchImpl?: typeof fetch;
+    /** Called when the API answers 401 to the maintainer key this client sent (not to a key being verified). */
+    onUnauthorized?: () => void;
     /** Delay before reconnect attempt n (1-based) of the event stream; tests pass () => 0. */
     retryDelayMs?: (attempt: number) => number;
   } = {},
@@ -227,6 +229,9 @@ export function createApiClient(
       body: init.form ?? (init.body === undefined ? undefined : JSON.stringify(init.body)),
       signal: init.signal,
     });
+    // the session's own key was refused (a key being verified at sign-in is not the session's): it is no longer valid
+    if (res.status === 401 && init.key === undefined && opts.maintainerKey?.())
+      opts.onUnauthorized?.();
     if (!res.ok) await fail(res);
     return res;
   }

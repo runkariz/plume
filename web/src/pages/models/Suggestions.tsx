@@ -107,7 +107,7 @@ function ConceptRow({
               busy
                 ? `Generating ${concept.name}`
                 : claudeOnly
-                  ? `Generate ${concept.name} with Claude`
+                  ? `Generate with Claude: ${concept.name}`
                   : `Generate ${concept.name}`
             }
           >

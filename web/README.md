@@ -91,12 +91,13 @@ Where to change what:
 ## Rules this app follows
 
 - **No hard-coded API URL.** `VITE_API_BASE_URL` is required (`src/api/config.ts` throws without it).
-- **No secrets in the app.** The maintainer token is typed at sign-in and kept in memory only
-  (`src/app/authStore.ts`): a reload signs out on purpose. Never put it in local or session storage. E2E specs
-  therefore navigate inside the app after signing in (a `page.goto` reload would sign out).
-  The one thing kept in `localStorage` is the list of **owner keys** (`plume-owner-keys`, `src/lib/ownerKeys.ts`): the
-  server hands one out once when someone without a token creates a model, and it only lists "Your models" (it
-  cannot change or release anything; a model's link works without it).
+- **The maintainer token is not stored for good.** It is typed at sign-in and kept in memory and in
+  `sessionStorage` (`src/app/authStore.ts`): a refresh keeps the session, closing the tab, Sign out or a 401 from
+  the API ends it. Never put it in the URL, `localStorage` or a log. Blocked storage falls back to memory. See
+  docs/security.md (Web UI session) for the trade-off and the cookie follow-up. The one other thing kept in
+  `localStorage` is the list of **owner keys** (`plume-owner-keys`, `src/lib/ownerKeys.ts`): the server hands one
+  out once when someone without a token creates a model, and it only lists "Your models" (it cannot change or
+  release anything; a model's link works without it).
 - **No third-party requests.** Fonts are self-hosted (`@fontsource-variable/*`); an API's icon is loaded only
   from a relative `/v1/...` path on the API (`src/lib/icon.ts`), never from an external URL, with the letter logo
   as the fallback. Do not add analytics or CDNs.
