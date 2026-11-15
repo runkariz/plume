@@ -1,0 +1,74 @@
+{
+  "actionName": "Assigned fulfillment order",
+  "authorizationType": "OAUTH2",
+  "bodyType": "NONE",
+  "dataSourceExtractionCode": "return response.fulfillment_orders || [];",
+  "defaultCompositionKey": "id",
+  "description": "Retrieves a list of fulfillment orders assigned to the shop locations that are owned by the app.",
+  "docLink": "https://shopify.dev/docs/api/admin-rest/latest/resources/assignedfulfillmentorder",
+  "endpointId": "get-admin-api-latest-assigned-fulfillment-orders-json",
+  "examples": [
+    {
+      "request": {
+        "headers": {
+          "X-Shopify-Access-Token": "{token}"
+        },
+        "params": {
+          "assignment_status": "cancellation_requested",
+          "location_ids[]": "24826418"
+        }
+      },
+      "source": "https://shopify.dev/docs/api/admin-rest/latest/resources/assignedfulfillmentorder",
+      "title": "Example 1"
+    }
+  ],
+  "headersContractRef": "headers.schema.json",
+  "idempotency": {
+    "safeToRetry": true
+  },
+  "isAdvanced": true,
+  "isDataSource": true,
+  "isDeprecated": false,
+  "isPreRelease": false,
+  "method": "GET",
+  "name": "List assigned fulfillment orders",
+  "operationKind": "list",
+  "paramsContractRef": "params.schema.json",
+  "permissionNote": "read_assigned_fulfillment_orders access scope; Header: X-Shopify-Access-Token: {access_token}",
+  "presets": [
+    "presets/bootstrap.json"
+  ],
+  "provenance": {
+    "docAnchor": "#get-assigned-fulfillment-orders?assignment-status=cancellation-requested&location-ids[]=24826418",
+    "extractedAt": "2026-11-12T14:30:12Z",
+    "sourceUrl": "https://shopify.dev/docs/api/admin-rest/latest/resources/assignedfulfillmentorder"
+  },
+  "requiredScopes": [
+    {
+      "authId": "oauth2-authorization-code",
+      "scopes": [
+        "read_assigned_fulfillment_orders"
+      ]
+    }
+  ],
+  "resource": "AssignedFulfillmentOrder",
+  "responses": [
+    {
+      "contentContractRef": "responses/200.schema.json",
+      "contentType": "application/json",
+      "statusCode": 200
+    }
+  ],
+  "sideEffects": [
+    "none"
+  ],
+  "summary": "Retrieves a list of fulfillment orders assigned to the shop locations that are owned by the app.",
+  "tags": [
+    {
+      "colorSetId": 30,
+      "kind": "category",
+      "name": "assigned_fulfillment_orders"
+    }
+  ],
+  "url": "{{app_env.servers.api}}/admin/api/latest/assigned_fulfillment_orders.json"
+}

@@ -1,0 +1,92 @@
+{
+  "actionName": "General",
+  "apiVersion": "v1",
+  "authorizationType": "API_KEY",
+  "bodyType": "NONE",
+  "dataSourceExtractionCode": "return response.orders || [];",
+  "defaultCompositionKey": "id",
+  "description": "List or search the shop's orders",
+  "endpointId": "get-api-v1-orders",
+  "errors": [
+    {
+      "meaning": "Bad page size, or a page token that is invalid or belongs to a different search.",
+      "retryable": false,
+      "status": 400
+    },
+    {
+      "meaning": "Missing or unknown API key.",
+      "retryable": false,
+      "status": 401
+    },
+    {
+      "meaning": "The page token has expired.",
+      "retryable": false,
+      "status": 410
+    }
+  ],
+  "headersContractRef": "headers.schema.json",
+  "idempotency": {
+    "safeToRetry": true
+  },
+  "isAdvanced": false,
+  "isDataSource": true,
+  "isDeprecated": false,
+  "isPreRelease": false,
+  "method": "GET",
+  "name": "List orders",
+  "nextPageTokenExpression": "return context?.execution?.response?.links?.find(l => l.rel === 'next')?.query_params?.pageToken ?? null;",
+  "operationKind": "list",
+  "paramsContractRef": "params.schema.json",
+  "presets": [
+    "presets/bootstrap.json"
+  ],
+  "provenance": {
+    "evidence": [
+      "file:///uploaded/4c3034da5bd5/catalog-b.openapi.json"
+    ],
+    "extractedAt": "2026-10-30T21:38:39Z",
+    "sourceUrl": "file:///uploaded/4c3034da5bd5/catalog-b.openapi.json"
+  },
+  "resource": "General",
+  "responses": [
+    {
+      "contentContractRef": "responses/200.schema.json",
+      "contentType": "application/json",
+      "statusCode": 200
+    },
+    {
+      "contentContractRef": "responses/400.schema.json",
+      "contentType": "application/json",
+      "retryable": false,
+      "statusCode": 400
+    },
+    {
+      "retryable": false,
+      "statusCode": 401
+    },
+    {
+      "contentContractRef": "responses/410.schema.json",
+      "contentType": "application/json",
+      "retryable": false,
+      "statusCode": 410
+    }
+  ],
+  "sideEffects": [
+    "none"
+  ],
+  "specOperationId": "listOrders",
+  "summary": "List or search the shop's orders",
+  "tags": [
+    {
+      "colorSetId": 43,
+      "kind": "version",
+      "name": "v1"
+    },
+    {
+      "colorSetId": 30,
+      "kind": "category",
+      "name": "general"
+    }
+  ],
+  "url": "{{app_env.servers.api}}/api/v1/orders"
+}

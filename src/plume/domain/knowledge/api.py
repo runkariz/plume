@@ -1,4 +1,4 @@
-"""API identity."""
+"""API identity and descriptive info."""
 
 import re
 from dataclasses import dataclass
@@ -18,5 +18,32 @@ class ApiId:
         if not _API_ID.fullmatch(self.value):
             raise InvalidIdentifierError(f"invalid api id: {self.value!r}")
 
+    @classmethod
+    def from_name(cls, name: str) -> "ApiId":
+        """Slug a display name: ``Google Ads`` -> ``google-ads``."""
+        slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:64].strip("-")
+        return cls(slug)
+
     def __str__(self) -> str:
         return self.value
+
+
+@dataclass(frozen=True, slots=True)
+class Category:
+    """Category assigned by the package producer; Plume never decides it."""
+
+    key: str
+    reason: str | None = None
+    confidence: float | None = None
+    bundle_version: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ApiInfo:
+    api_id: ApiId
+    name: str
+    summary: str = ""
+    doc_link: str | None = None
+    icon_url: str | None = None
+    category: Category | None = None
+    versions: tuple[str, ...] = ()

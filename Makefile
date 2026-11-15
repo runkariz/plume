@@ -2,7 +2,7 @@
 UV ?= uv
 COMPOSE ?= docker compose
 
-.PHONY: help install lint format test test-int e2e eval up down clean
+.PHONY: help install lint format test test-int e2e e2e-live eval up down clean
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-10s %s\n", $$1, $$2}'
@@ -20,15 +20,18 @@ format: ## Apply ruff fixes and formatting
 	$(UV) run ruff check --fix .
 	$(UV) run ruff format .
 
-test: ## Architecture + unit tests (fast, no Docker)
-	$(UV) run pytest tests/architecture tests/unit -q
+test: ## Architecture + unit + contract (fakes) tests (fast, no Docker)
+	$(UV) run pytest tests/architecture tests/unit tests/contract -q -m "not integration and not live"
 
-test-int: ## Integration tests (testcontainers Postgres + pgvector; needs Docker)
-	$(UV) run pytest tests/integration -q -m integration
+test-int: ## Contract (Postgres) + integration tests (testcontainers pgvector; needs Docker)
+	$(UV) run pytest tests/contract tests/integration -q -m "integration and not live"
 
 e2e: ## End-to-end against the docker compose stack
 	$(COMPOSE) up -d --wait
 	$(UV) run pytest tests/e2e -q -m e2e; status=$$?; $(COMPOSE) down; exit $$status
+
+e2e-live: ## Live tests (real embeddings; needs PLUME_VERTEX_API_KEY or PLUME_GEMINI_API_KEY)
+	$(UV) run pytest tests/integration tests/e2e -q -m live
 
 eval: ## Release eval gate (gold questions); arrives with slice 4
 	@if [ -d tests/eval ]; then $(UV) run pytest tests/eval -q -m eval; \

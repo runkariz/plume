@@ -1,0 +1,293 @@
+{
+  "authorizationType": "OAUTH2",
+  "grantType": "authorization_code",
+  "headerName": "X-Shopify-Access-Token",
+  "id": "oauth2-authorization-code",
+  "name": "OAuth2 authorization code",
+  "scope": "read_analytics read_assigned_fulfillment_orders write_assigned_fulfillment_orders read_customer_merge write_customer_merge read_customers write_customers read_discounts write_discounts read_draft_orders write_draft_orders read_files write_files read_fulfillments write_fulfillments read_gdpr_data_request read_gift_cards write_gift_cards read_inventory write_inventory read_legal_policies write_legal_policies read_locations read_marketing_events write_marketing_events read_merchant_managed_fulfillment_orders write_merchant_managed_fulfillment_orders read_metaobject_definitions write_metaobject_definitions read_metaobjects write_metaobjects read_online_store_navigation read_online_store_pages write_online_store_pages read_order_edits write_order_edits read_orders write_orders read_all_orders read_price_rules write_price_rules read_products write_products read_product_listings write_product_listings read_reports write_reports read_resource_feedbacks write_resource_feedbacks read_script_tags write_script_tags read_shipping write_shipping read_shopify_payments_accounts read_shopify_payments_bank_accounts read_shopify_payments_disputes read_shopify_payments_payouts read_content write_content read_themes write_themes read_third_party_fulfillment_orders write_third_party_fulfillment_orders read_translations write_translations",
+  "scopes": [
+    {
+      "description": "View store metrics",
+      "scope": "read_analytics"
+    },
+    {
+      "description": "View or manage fulfillment orders",
+      "scope": "read_assigned_fulfillment_orders"
+    },
+    {
+      "description": "View or manage fulfillment orders",
+      "scope": "write_assigned_fulfillment_orders"
+    },
+    {
+      "description": "View or manage customer profile merges",
+      "scope": "read_customer_merge"
+    },
+    {
+      "description": "View or manage customer profile merges",
+      "scope": "write_customer_merge"
+    },
+    {
+      "description": "View or manage customers, customer addresses, order history, and customer groups",
+      "scope": "read_customers"
+    },
+    {
+      "description": "View or manage customers, customer addresses, order history, and customer groups",
+      "scope": "write_customers"
+    },
+    {
+      "description": "View or manage automatic discounts and discount codes",
+      "scope": "read_discounts"
+    },
+    {
+      "description": "View or manage automatic discounts and discount codes",
+      "scope": "write_discounts"
+    },
+    {
+      "description": "View or manage orders created by app users on behalf of customers",
+      "scope": "read_draft_orders"
+    },
+    {
+      "description": "View or manage orders created by app users on behalf of customers",
+      "scope": "write_draft_orders"
+    },
+    {
+      "description": "View or manage files",
+      "scope": "read_files"
+    },
+    {
+      "description": "View or manage files",
+      "scope": "write_files"
+    },
+    {
+      "description": "View or manage fulfillment services",
+      "scope": "read_fulfillments"
+    },
+    {
+      "description": "View or manage fulfillment services",
+      "scope": "write_fulfillments"
+    },
+    {
+      "description": "View GDPR data requests",
+      "scope": "read_gdpr_data_request"
+    },
+    {
+      "description": "View or manage gift cards (Shopify Plus only)",
+      "scope": "read_gift_cards"
+    },
+    {
+      "description": "View or manage gift cards (Shopify Plus only)",
+      "scope": "write_gift_cards"
+    },
+    {
+      "description": "View or manage inventory across multiple locations",
+      "scope": "read_inventory"
+    },
+    {
+      "description": "View or manage inventory across multiple locations",
+      "scope": "write_inventory"
+    },
+    {
+      "description": "View or manage a shop's legal policies",
+      "scope": "read_legal_policies"
+    },
+    {
+      "description": "View or manage a shop's legal policies",
+      "scope": "write_legal_policies"
+    },
+    {
+      "description": "View the geographic location of stores, headquarters, and warehouses",
+      "scope": "read_locations"
+    },
+    {
+      "description": "View or manage marketing events and engagement data",
+      "scope": "read_marketing_events"
+    },
+    {
+      "description": "View or manage marketing events and engagement data",
+      "scope": "write_marketing_events"
+    },
+    {
+      "description": "View or manage fulfillment orders assigned to merchant-managed locations",
+      "scope": "read_merchant_managed_fulfillment_orders"
+    },
+    {
+      "description": "View or manage fulfillment orders assigned to merchant-managed locations",
+      "scope": "write_merchant_managed_fulfillment_orders"
+    },
+    {
+      "description": "View or manage metaobject definitions",
+      "scope": "read_metaobject_definitions"
+    },
+    {
+      "description": "View or manage metaobject definitions",
+      "scope": "write_metaobject_definitions"
+    },
+    {
+      "description": "View or manage metaobject entries",
+      "scope": "read_metaobjects"
+    },
+    {
+      "description": "View or manage metaobject entries",
+      "scope": "write_metaobjects"
+    },
+    {
+      "description": "View menus for display on the storefront",
+      "scope": "read_online_store_navigation"
+    },
+    {
+      "description": "View or manage Online Store pages",
+      "scope": "read_online_store_pages"
+    },
+    {
+      "description": "View or manage Online Store pages",
+      "scope": "write_online_store_pages"
+    },
+    {
+      "description": "View or manage edits to orders",
+      "scope": "read_order_edits"
+    },
+    {
+      "description": "View or manage edits to orders",
+      "scope": "write_order_edits"
+    },
+    {
+      "description": "View or manage orders, transactions, fulfillments, and abandoned checkouts from the last 60 days, or view all past and future orders",
+      "scope": "read_orders"
+    },
+    {
+      "description": "View or manage orders, transactions, fulfillments, and abandoned checkouts from the last 60 days, or view all past and future orders",
+      "scope": "write_orders"
+    },
+    {
+      "description": "View or manage orders, transactions, fulfillments, and abandoned checkouts from the last 60 days, or view all past and future orders",
+      "scope": "read_all_orders"
+    },
+    {
+      "description": "View or manage conditional discounts",
+      "scope": "read_price_rules"
+    },
+    {
+      "description": "View or manage conditional discounts",
+      "scope": "write_price_rules"
+    },
+    {
+      "description": "View or manage products, variants, and collections",
+      "scope": "read_products"
+    },
+    {
+      "description": "View or manage products, variants, and collections",
+      "scope": "write_products"
+    },
+    {
+      "description": "View or manage product or collection listings",
+      "scope": "read_product_listings"
+    },
+    {
+      "description": "View or manage product or collection listings",
+      "scope": "write_product_listings"
+    },
+    {
+      "description": "View or manage reports on the Reports page in the Shopify admin",
+      "scope": "read_reports"
+    },
+    {
+      "description": "View or manage reports on the Reports page in the Shopify admin",
+      "scope": "write_reports"
+    },
+    {
+      "description": "View or manage the status of shops and resources",
+      "scope": "read_resource_feedbacks"
+    },
+    {
+      "description": "View or manage the status of shops and resources",
+      "scope": "write_resource_feedbacks"
+    },
+    {
+      "description": "View or manage JavaScript code in storefront or order status pages",
+      "scope": "read_script_tags"
+    },
+    {
+      "description": "View or manage JavaScript code in storefront or order status pages",
+      "scope": "write_script_tags"
+    },
+    {
+      "description": "View or manage shipping carriers, countries, and provinces",
+      "scope": "read_shipping"
+    },
+    {
+      "description": "View or manage shipping carriers, countries, and provinces",
+      "scope": "write_shipping"
+    },
+    {
+      "description": "View Shopify Payments accounts",
+      "scope": "read_shopify_payments_accounts"
+    },
+    {
+      "description": "View bank accounts that can receive Shopify Payments payouts",
+      "scope": "read_shopify_payments_bank_accounts"
+    },
+    {
+      "description": "View Shopify Payments disputes raised by buyers",
+      "scope": "read_shopify_payments_disputes"
+    },
+    {
+      "description": "View Shopify Payments payouts and the account's current balance",
+      "scope": "read_shopify_payments_payouts"
+    },
+    {
+      "description": "View or manage articles, blogs, comments, pages, and redirects",
+      "scope": "read_content"
+    },
+    {
+      "description": "View or manage articles, blogs, comments, pages, and redirects",
+      "scope": "write_content"
+    },
+    {
+      "description": "View or manage theme templates and assets",
+      "scope": "read_themes"
+    },
+    {
+      "description": "View or manage theme templates and assets",
+      "scope": "write_themes"
+    },
+    {
+      "description": "View or manage fulfillment orders assigned to a location managed by any fulfillment service",
+      "scope": "read_third_party_fulfillment_orders"
+    },
+    {
+      "description": "View or manage fulfillment orders assigned to a location managed by any fulfillment service",
+      "scope": "write_third_party_fulfillment_orders"
+    },
+    {
+      "description": "View or manage content that can be translated",
+      "scope": "read_translations"
+    },
+    {
+      "description": "View or manage content that can be translated",
+      "scope": "write_translations"
+    }
+  ],
+  "setupSteps": [
+    {
+      "order": 1,
+      "text": "Redirect the merchant to Shopify's authorization page to approve requested access scopes."
+    },
+    {
+      "order": 2,
+      "text": "Validate the callback query parameters sent to your redirect URI."
+    },
+    {
+      "order": 3,
+      "text": "Exchange the authorization code for an access token by sending a POST request to Shopify's token endpoint."
+    },
+    {
+      "order": 4,
+      "text": "Include the access token in the X-Shopify-Access-Token header on Admin API requests."
+    }
+  ],
+  "tokenLifetime": {
+    "notes": "Expiring offline access tokens come with a refresh_token used to obtain a new access token.",
+    "refreshBehavior": "refresh-token"
+  },
+  "variableContractRef": "auth/oauth2-authorization-code.variables.schema.json"
+}

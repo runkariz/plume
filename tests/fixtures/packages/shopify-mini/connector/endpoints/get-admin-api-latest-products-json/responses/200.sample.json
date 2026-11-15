@@ -1,0 +1,100 @@
+{
+  "products": [
+    {
+      "admin_graphql_api_id": "<admin_graphql_api_id>",
+      "body_html": "<body_html>",
+      "created_at": "<created_at>",
+      "handle": "<handle>",
+      "id": 0,
+      "image": {
+        "admin_graphql_api_id": "<admin_graphql_api_id>",
+        "alt": "<alt>",
+        "created_at": "<created_at>",
+        "height": 0,
+        "id": 0,
+        "position": 0,
+        "product_id": 0,
+        "src": "<src>",
+        "updated_at": "<updated_at>",
+        "variant_ids": [0
+        ],
+        "width": 0
+      },
+      "images": [
+        {
+          "admin_graphql_api_id": "<admin_graphql_api_id>",
+          "alt": "<alt>",
+          "created_at": "<created_at>",
+          "height": 0,
+          "id": 0,
+          "position": 0,
+          "product_id": 0,
+          "src": "<src>",
+          "updated_at": "<updated_at>",
+          "variant_ids": [0
+          ],
+          "width": 0
+        }
+      ],
+      "options": [
+        {
+          "id": 0,
+          "name": "<name>",
+          "position": 0,
+          "product_id": 0,
+          "values": [
+            "<string>"
+          ]
+        }
+      ],
+      "product_type": "<product_type>",
+      "published_at": "<published_at>",
+      "published_scope": "<published_scope>",
+      "status": "<status>",
+      "tags": "<tags>",
+      "template_suffix": "<template_suffix>",
+      "title": "<title>",
+      "updated_at": "<updated_at>",
+      "variants": [
+        {
+          "admin_graphql_api_id": "<admin_graphql_api_id>",
+          "barcode": "<barcode>",
+          "compare_at_price": "<compare_at_price>",
+          "created_at": "<created_at>",
+          "fulfillment_service": "<fulfillment_service>",
+          "grams": 0,
+          "id": 0,
+          "image_id": 0,
+          "inventory_item_id": 0,
+          "inventory_management": "<inventory_management>",
+          "inventory_policy": "<inventory_policy>",
+          "inventory_quantity": 0,
+          "old_inventory_quantity": 0,
+          "option1": "<option1>",
+          "option2": "<option2>",
+          "option3": "<option3>",
+          "position": 0,
+          "presentment_prices": [
+            {
+              "compare_at_price": {},
+              "price": {
+                "amount": "<amount>",
+                "currency_code": "<currency_code>"
+              }
+            }
+          ],
+          "price": "<price>",
+          "product_id": 0,
+          "requires_shipping": false,
+          "sku": "<sku>",
+          "taxable": false,
+          "title": "<title>",
+          "updated_at": "<updated_at>",
+          "weight": 0,
+          "weight_unit": "<weight_unit>"
+        }
+      ],
+      "vendor": "<vendor>"
+    }
+  ]
+}

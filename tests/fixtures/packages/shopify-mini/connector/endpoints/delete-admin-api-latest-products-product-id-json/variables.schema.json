@@ -1,0 +1,18 @@
+{
+  "title": "Variables",
+  "type": "object",
+  "properties": {
+    "product_id": {
+      "type": "string",
+      "description": "The ID of the product to delete.",
+      "examples": [
+        "632910392"
+      ],
+      "title": "Product ID"
+    }
+  },
+  "required": [
+    "product_id"
+  ],
+  "description": "URL path parameters identifying the product to delete."
+}

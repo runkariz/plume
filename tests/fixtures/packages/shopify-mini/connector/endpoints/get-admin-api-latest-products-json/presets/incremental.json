@@ -1,0 +1,13 @@
+{
+  "configJson": {
+    "ConfigType": 1,
+    "CursorPaginationEnabled": false,
+    "GetAllPages": false,
+    "HeaderContractData": "{\"X-Shopify-Access-Token\":\"{{ auth?.oauth?.token }}\"}",
+    "InheritsAuth": false,
+    "ParamsContractData": "{\"limit\":50,\"created_at_min\":\"{{$date.addDays(sync_job.last_run_at,-1)}}\"}"
+  },
+  "description": "Adds the records created since the last sync (by created_at_min; changes to older records are not fetched)",
+  "isPublicEntity": true,
+  "name": "Incremental"
+}

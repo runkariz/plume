@@ -1,0 +1,195 @@
+{
+  "type": "object",
+  "required": [
+    "product"
+  ],
+  "properties": {
+    "product": {
+      "type": "object",
+      "required": [
+        "title"
+      ],
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "The name of the product.",
+          "title": "Title"
+        },
+        "body_html": {
+          "type": "string",
+          "description": "A description of the product. Supports HTML formatting.",
+          "title": "Description HTML",
+          "x-ui-multiline": 5
+        },
+        "vendor": {
+          "type": "string",
+          "description": "The name of the product's vendor.",
+          "title": "Vendor"
+        },
+        "product_type": {
+          "type": "string",
+          "description": "A categorization for the product used for filtering and searching products.",
+          "title": "Product Type"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "archived",
+            "draft"
+          ],
+          "description": "The status of the product.",
+          "title": "Status"
+        },
+        "published": {
+          "type": "boolean",
+          "description": "Whether the product is published.",
+          "title": "Published"
+        },
+        "tags": {
+          "description": "Tags used for filtering and search.",
+          "type": [
+            "string",
+            "array"
+          ],
+          "title": "Tags"
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "option1": {
+                "type": "string",
+                "description": "The value for the first custom product option.",
+                "title": "Option 1"
+              },
+              "option2": {
+                "type": "string",
+                "description": "The value for the second custom product option.",
+                "title": "Option 2"
+              },
+              "option3": {
+                "type": "string",
+                "description": "The value for the third custom product option.",
+                "title": "Option 3"
+              },
+              "price": {
+                "type": "string",
+                "description": "The retail price of the variant.",
+                "title": "Price"
+              },
+              "sku": {
+                "type": "string",
+                "description": "A unique identifier for the variant inventory.",
+                "title": "SKU"
+              }
+            },
+            "description": "A specific variant configuration for the product."
+          },
+          "description": "An array of product variants.",
+          "title": "Variants",
+          "x-ui-tab": "Variants"
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The name of the product option.",
+                "title": "Option Name"
+              },
+              "values": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "description": "A selectable value for the option."
+                },
+                "description": "The list of available values for this option.",
+                "title": "Option Values"
+              }
+            },
+            "description": "A customizable attribute definition such as size or color."
+          },
+          "description": "Custom product properties.",
+          "title": "Options",
+          "x-ui-tab": "Options"
+        },
+        "images": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "src": {
+                "type": "string",
+                "description": "The remote URL where the product image is hosted.",
+                "title": "Image URL"
+              },
+              "attachment": {
+                "type": "string",
+                "description": "A base64-encoded string representing the image file data.",
+                "title": "Image Attachment Base64",
+                "x-ui-advanced": "Advanced"
+              }
+            },
+            "description": "An image resource associated with the product."
+          },
+          "description": "A list of product image objects.",
+          "title": "Images",
+          "x-ui-tab": "Media"
+        },
+        "metafields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "description": "The unique identifier name for the metafield.",
+                "title": "Metafield Key"
+              },
+              "value": {
+                "type": "string",
+                "description": "The data stored within the metafield.",
+                "title": "Metafield Value"
+              },
+              "type": {
+                "type": "string",
+                "description": "The data type classification of the metafield value.",
+                "title": "Metafield Type"
+              },
+              "namespace": {
+                "type": "string",
+                "description": "A container category used to group related metafields.",
+                "title": "Metafield Namespace"
+              }
+            },
+            "description": "An additional custom field attached to the product."
+          },
+          "description": "Metafields attached to the product.",
+          "title": "Metafields",
+          "x-ui-advanced": "Metafields",
+          "x-ui-tab": "Metafields"
+        },
+        "metafields_global_title_tag": {
+          "type": "string",
+          "description": "Product SEO Title.",
+          "title": "SEO Title",
+          "x-ui-advanced": "Search Engine Optimization"
+        },
+        "metafields_global_description_tag": {
+          "type": "string",
+          "description": "Product SEO Description.",
+          "title": "SEO Description",
+          "x-ui-advanced": "Search Engine Optimization",
+          "x-ui-multiline": 3
+        }
+      },
+      "description": "The product details to be created.",
+      "title": "Product"
+    }
+  },
+  "description": "Payload containing the product information to create."
+}

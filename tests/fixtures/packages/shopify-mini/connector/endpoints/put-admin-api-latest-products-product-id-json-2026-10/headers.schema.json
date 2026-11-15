@@ -1,0 +1,32 @@
+{
+  "title": "Headers",
+  "type": "object",
+  "properties": {
+    "Content-Type": {
+      "type": "string",
+      "description": "The MIME type of the request body.",
+      "enum": [
+        "application/json"
+      ],
+      "default": "application/json",
+      "examples": [
+        "application/json"
+      ],
+      "title": "Content Type"
+    },
+    "X-Shopify-Access-Token": {
+      "type": "string",
+      "description": "Authentication token",
+      "default": "{{ auth?.oauth?.token }}",
+      "examples": [
+        "{{ auth?.oauth?.token }}"
+      ],
+      "title": "Shopify Access Token"
+    }
+  },
+  "required": [
+    "Content-Type",
+    "X-Shopify-Access-Token"
+  ],
+  "description": "HTTP request headers required for updating a product."
+}

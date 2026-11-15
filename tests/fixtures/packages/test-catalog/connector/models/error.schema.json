@@ -1,0 +1,17 @@
+{
+  "title": "Error",
+  "x-source-url": "file:///uploaded/0162daf229a5/catalog.openapi.json",
+  "x-complete": true,
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "string",
+      "description": "Brief code or type identifying the error."
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable explanation of the error."
+    }
+  },
+  "description": "Information about an error encountered while processing the request."
+}

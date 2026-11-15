@@ -1,0 +1,405 @@
+{
+  "type": "object",
+  "properties": {
+    "products": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Unique identifier for the product."
+          },
+          "title": {
+            "type": "string",
+            "description": "Name of the product."
+          },
+          "body_html": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Description of the product, formatted in HTML."
+          },
+          "vendor": {
+            "type": "string",
+            "description": "Name of the manufacturer, wholesaler, or other vendor of the product."
+          },
+          "product_type": {
+            "type": "string",
+            "description": "Categorization that a merchant uses for the product."
+          },
+          "created_at": {
+            "type": "string",
+            "description": "Date and time when the product was created."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Unique, human-readable string used in the product URL."
+          },
+          "updated_at": {
+            "type": "string",
+            "description": "Date and time when the product was last modified."
+          },
+          "published_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Date and time when the product was published to the shop."
+          },
+          "template_suffix": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Suffix of the Liquid template used to render the product."
+          },
+          "published_scope": {
+            "type": "string",
+            "description": "Sales channels where the product is visible and published."
+          },
+          "tags": {
+            "type": "string",
+            "description": "Comma-separated list of searchable keywords associated with the product."
+          },
+          "status": {
+            "type": "string",
+            "description": "Current lifecycle status of the product."
+          },
+          "admin_graphql_api_id": {
+            "type": "string",
+            "description": "Global GraphQL ID for the product."
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "description": "Unique identifier for the product variant."
+                },
+                "product_id": {
+                  "type": "integer",
+                  "description": "Identifier of the parent product to which this variant belongs."
+                },
+                "title": {
+                  "type": "string",
+                  "description": "Title of the product variant."
+                },
+                "price": {
+                  "type": "string",
+                  "description": "Price of the variant expressed as a decimal string."
+                },
+                "position": {
+                  "type": "integer",
+                  "description": "Display order of the variant within the product's variant list."
+                },
+                "inventory_policy": {
+                  "type": "string",
+                  "description": "Policy governing whether customers can purchase the variant when out of stock."
+                },
+                "compare_at_price": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Original retail price before markdown or discount."
+                },
+                "option1": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Value for the first configurable option of this variant."
+                },
+                "option2": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Value for the second configurable option of this variant."
+                },
+                "option3": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Value for the third configurable option of this variant."
+                },
+                "created_at": {
+                  "type": "string",
+                  "description": "Date and time when the variant was created."
+                },
+                "updated_at": {
+                  "type": "string",
+                  "description": "Date and time when the variant was last modified."
+                },
+                "taxable": {
+                  "type": "boolean",
+                  "description": "Indicates whether sales tax applies to purchases of this variant."
+                },
+                "barcode": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Barcode, UPC, or ISBN number for the variant."
+                },
+                "fulfillment_service": {
+                  "type": "string",
+                  "description": "Service responsible for fulfilling orders of this variant."
+                },
+                "grams": {
+                  "type": "integer",
+                  "description": "Weight of the variant expressed in grams."
+                },
+                "inventory_management": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "System or service managing stock levels for this variant."
+                },
+                "requires_shipping": {
+                  "type": "boolean",
+                  "description": "Indicates whether the variant must be physically shipped to the customer."
+                },
+                "sku": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Stock keeping unit identifier for the variant."
+                },
+                "weight": {
+                  "type": "number",
+                  "description": "Weight value of the variant."
+                },
+                "weight_unit": {
+                  "type": "string",
+                  "description": "Unit of measurement applied to the variant's weight."
+                },
+                "inventory_item_id": {
+                  "type": "integer",
+                  "description": "Identifier of the inventory item associated with this variant."
+                },
+                "inventory_quantity": {
+                  "type": "integer",
+                  "description": "Total available stock quantity across all locations."
+                },
+                "old_inventory_quantity": {
+                  "type": "integer",
+                  "description": "Previous stock quantity recorded prior to recent adjustments."
+                },
+                "presentment_prices": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "price": {
+                        "type": "object",
+                        "properties": {
+                          "amount": {
+                            "type": "string",
+                            "description": "Numerical value of the presentment price."
+                          },
+                          "currency_code": {
+                            "type": "string",
+                            "description": "Three-letter ISO 4217 code identifying the currency."
+                          }
+                        },
+                        "description": "Monetary amount and currency of the presentment price."
+                      },
+                      "compare_at_price": {
+                        "type": [
+                          "object",
+                          "null"
+                        ],
+                        "description": "Original comparison price in the presentment currency before discounts."
+                      }
+                    },
+                    "description": "Price details for a specific presentment currency."
+                  },
+                  "description": "List of prices for this variant formatted in different currencies."
+                },
+                "admin_graphql_api_id": {
+                  "type": "string",
+                  "description": "Global GraphQL ID for the product variant."
+                },
+                "image_id": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "description": "Identifier of the image linked to this variant."
+                }
+              },
+              "description": "Details of a specific variation of the product."
+            },
+            "description": "List of product variants available for this product."
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "description": "Unique identifier for the product option."
+                },
+                "product_id": {
+                  "type": "integer",
+                  "description": "Identifier of the product associated with this option."
+                },
+                "name": {
+                  "type": "string",
+                  "description": "Name of the option presented to customers."
+                },
+                "position": {
+                  "type": "integer",
+                  "description": "Display order of the option on the product page."
+                },
+                "values": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "description": "Specific value available for the option."
+                  },
+                  "description": "List of available choices or values for this option."
+                }
+              },
+              "description": "Configuration details for a specific product option."
+            },
+            "description": "List of custom product attributes such as size or color."
+          },
+          "images": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "integer",
+                  "description": "Unique identifier for the image."
+                },
+                "alt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Alternative text describing the image for accessibility."
+                },
+                "position": {
+                  "type": "integer",
+                  "description": "Display order of the image in the product gallery."
+                },
+                "product_id": {
+                  "type": "integer",
+                  "description": "Identifier of the product the image belongs to."
+                },
+                "created_at": {
+                  "type": "string",
+                  "description": "Date and time when the image was uploaded."
+                },
+                "updated_at": {
+                  "type": "string",
+                  "description": "Date and time when the image was last modified."
+                },
+                "admin_graphql_api_id": {
+                  "type": "string",
+                  "description": "Global GraphQL ID for the image."
+                },
+                "width": {
+                  "type": "integer",
+                  "description": "Width of the image in pixels."
+                },
+                "height": {
+                  "type": "integer",
+                  "description": "Height of the image in pixels."
+                },
+                "src": {
+                  "type": "string",
+                  "description": "Public URL where the image file is hosted."
+                },
+                "variant_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "description": "Identifier of an associated variant."
+                  },
+                  "description": "Identifiers of variants associated with this image."
+                }
+              },
+              "description": "Details of a product image."
+            },
+            "description": "List of media images attached to the product."
+          },
+          "image": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "integer",
+                "description": "Unique identifier for the featured image."
+              },
+              "alt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Alternative text describing the featured image."
+              },
+              "position": {
+                "type": "integer",
+                "description": "Display order position of the featured image."
+              },
+              "product_id": {
+                "type": "integer",
+                "description": "Identifier of the product associated with this featured image."
+              },
+              "created_at": {
+                "type": "string",
+                "description": "Date and time when the featured image was uploaded."
+              },
+              "updated_at": {
+                "type": "string",
+                "description": "Date and time when the featured image was last modified."
+              },
+              "admin_graphql_api_id": {
+                "type": "string",
+                "description": "Global GraphQL ID for the featured image."
+              },
+              "width": {
+                "type": "integer",
+                "description": "Width of the featured image in pixels."
+              },
+              "height": {
+                "type": "integer",
+                "description": "Height of the featured image in pixels."
+              },
+              "src": {
+                "type": "string",
+                "description": "Public URL pointing to the featured image."
+              },
+              "variant_ids": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "description": "Identifier of a variant linked to the featured image."
+                },
+                "description": "Identifiers of product variants associated with this featured image."
+              }
+            },
+            "description": "Featured primary image representing the product."
+          }
+        },
+        "description": "Details of an individual product."
+      },
+      "description": "List of products matching the request criteria."
+    }
+  },
+  "description": "Response payload containing the requested list of products."
+}

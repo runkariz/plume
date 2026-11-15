@@ -1,0 +1,5 @@
+{
+  "type": "object",
+  "properties": {},
+  "description": "Confirmation response returned upon successful deletion of the product."
+}

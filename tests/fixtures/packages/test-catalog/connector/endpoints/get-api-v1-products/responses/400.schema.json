@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "string",
+      "description": "Short error code or name classifying the bad request."
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable explanation of why the request parameters were rejected."
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Error",
+  "description": "Error response returned when request parameters are invalid."
+}

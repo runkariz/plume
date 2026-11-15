@@ -1,0 +1,13 @@
+{
+  "id": "context",
+  "kind": "guide",
+  "order": 0,
+  "provenance": {
+    "extractedAt": "2026-10-30T21:38:39Z",
+    "extractorVersion": "1.0.0.0",
+    "rulesVersion": "kariz-connector.v2@7c5342b8da8a",
+    "sourceUrl": "file:///uploaded/4c3034da5bd5/catalog-b.openapi.json"
+  },
+  "sourceUrl": "file:///uploaded/4c3034da5bd5/catalog-b.openapi.json",
+  "title": "API spec context"
+}

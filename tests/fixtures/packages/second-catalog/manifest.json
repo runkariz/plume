@@ -1,0 +1,91 @@
+{
+  "schemaVersion": "2.0",
+  "packageVersion": 2,
+  "streamVersion": "1.0.0.0",
+  "rulesId": "kariz-connector.v2",
+  "rulesHash": "7c5342b8da8ad764805e3ed1dd0f1ec78981bff77ec1db65e25b4fcf0c9752df",
+  "rules": {
+    "source": "core",
+    "bundleVersion": 26,
+    "hash": "37b5a5863033d8af0c0a20bb6a8e65933dcf0908e5e85dd1d1fe7384691a8568",
+    "fallbackKeys": []
+  },
+  "runId": "r_777090e50e8fcf89629af573bf",
+  "source": {
+    "url": "file:///uploaded/4c3034da5bd5/catalog-b.openapi.json",
+    "ref": null,
+    "commit": null
+  },
+  "reader": "spec",
+  "counts": {
+    "endpoints": 2,
+    "models": 0,
+    "auths": 0,
+    "units": 2,
+    "warnings": 0
+  },
+  "index": {
+    "get-api-v1-orders": [
+      "connector/endpoints/get-api-v1-orders/headers.sample.json",
+      "connector/endpoints/get-api-v1-orders/headers.schema.json",
+      "connector/endpoints/get-api-v1-orders/params.sample.json",
+      "connector/endpoints/get-api-v1-orders/params.schema.json",
+      "connector/endpoints/get-api-v1-orders/presets/bootstrap.json",
+      "connector/endpoints/get-api-v1-orders/request.json",
+      "connector/endpoints/get-api-v1-orders/responses/200.sample.json",
+      "connector/endpoints/get-api-v1-orders/responses/200.schema.json",
+      "connector/endpoints/get-api-v1-orders/responses/400.sample.json",
+      "connector/endpoints/get-api-v1-orders/responses/400.schema.json",
+      "connector/endpoints/get-api-v1-orders/responses/410.sample.json",
+      "connector/endpoints/get-api-v1-orders/responses/410.schema.json"
+    ],
+    "get-api-v1-products": [
+      "connector/endpoints/get-api-v1-products/headers.sample.json",
+      "connector/endpoints/get-api-v1-products/headers.schema.json",
+      "connector/endpoints/get-api-v1-products/params.sample.json",
+      "connector/endpoints/get-api-v1-products/params.schema.json",
+      "connector/endpoints/get-api-v1-products/presets/bootstrap.json",
+      "connector/endpoints/get-api-v1-products/request.json",
+      "connector/endpoints/get-api-v1-products/responses/200.sample.json",
+      "connector/endpoints/get-api-v1-products/responses/200.schema.json",
+      "connector/endpoints/get-api-v1-products/responses/400.sample.json",
+      "connector/endpoints/get-api-v1-products/responses/400.schema.json",
+      "connector/endpoints/get-api-v1-products/responses/410.sample.json",
+      "connector/endpoints/get-api-v1-products/responses/410.schema.json"
+    ]
+  },
+  "sourceUrl": "file:///uploaded/4c3034da5bd5/catalog-b.openapi.json",
+  "sources": [],
+  "servers": [],
+  "changelogUrls": [],
+  "extractedAt": "2026-10-30T21:38:39.6189059+00:00",
+  "units": [
+    {
+      "id": "get-api-v1-orders",
+      "kind": "Endpoint",
+      "path": "endpoints/general/get-api-v1-orders.md",
+      "method": "GET",
+      "httpPath": "/api/v1/orders",
+      "resource": "general",
+      "title": "GET /api/v1/orders",
+      "sourceUrl": "file:///uploaded/4c3034da5bd5/catalog-b.openapi.json",
+      "contentHash": "a82d3d9823478768fd0cd9e710bed334daaadabe02a5c856e09048a478f824a0",
+      "warnings": [],
+      "origin": "merged"
+    },
+    {
+      "id": "get-api-v1-products",
+      "kind": "Endpoint",
+      "path": "endpoints/general/get-api-v1-products.md",
+      "method": "GET",
+      "httpPath": "/api/v1/products",
+      "resource": "general",
+      "title": "GET /api/v1/products",
+      "sourceUrl": "file:///uploaded/4c3034da5bd5/catalog-b.openapi.json",
+      "contentHash": "bee8af1761f9f2ab43de3a301135676b947edb6b9e9c3e3a4aa0c3fd3c45a5a4",
+      "warnings": [],
+      "origin": "merged"
+    }
+  ],
+  "warnings": []
+}

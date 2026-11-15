@@ -1,0 +1,69 @@
+{
+  "type": "object",
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "title": "Product",
+        "x-source-url": "file:///uploaded/0162daf229a5/catalog.openapi.json",
+        "x-complete": true,
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier of the product."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the product."
+          },
+          "price": {
+            "type": "string",
+            "description": "Unit price of the product."
+          },
+          "currency": {
+            "type": "string",
+            "description": "Three-letter currency code for the product price."
+          },
+          "shop": {
+            "type": "string",
+            "description": "Identifier or name of the shop offering the product."
+          }
+        },
+        "description": "Product details and catalog attributes."
+      },
+      "description": "Array of products returned for the current page."
+    },
+    "count": {
+      "type": "integer",
+      "description": "Number of product items included in this response page."
+    },
+    "pageSize": {
+      "type": "integer",
+      "description": "Rows per page actually used."
+    },
+    "maxPageSize": {
+      "type": "integer",
+      "description": "The most rows one page can hold."
+    },
+    "pageSizeCapped": {
+      "type": "boolean",
+      "description": "Indicates whether the requested page size exceeded the maximum allowed limit and was capped."
+    },
+    "query": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Search term applied to filter the product results, or null if no filter was provided."
+    },
+    "nextPageToken": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Opaque cursor token to fetch the subsequent page of products, or null if there are no more pages."
+    }
+  },
+  "description": "Paginated list of products matching the query criteria."
+}

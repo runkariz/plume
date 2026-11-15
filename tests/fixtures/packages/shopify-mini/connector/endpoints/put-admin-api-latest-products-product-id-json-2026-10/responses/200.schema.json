@@ -1,0 +1,106 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "product": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "description": "The unique numerical identifier of the product."
+        },
+        "title": {
+          "type": "string",
+          "description": "The title or display name of the product."
+        },
+        "body_html": {
+          "type": "string",
+          "description": "The HTML description and details for the product."
+        },
+        "vendor": {
+          "type": "string",
+          "description": "The manufacturer or supplier associated with the product."
+        },
+        "product_type": {
+          "type": "string",
+          "description": "The category or merchandise type assigned to the product."
+        },
+        "created_at": {
+          "type": "string",
+          "description": "The ISO 8601 timestamp when the product was originally created."
+        },
+        "handle": {
+          "type": "string",
+          "description": "The unique URL-friendly slug derived from the product title."
+        },
+        "updated_at": {
+          "type": "string",
+          "description": "The ISO 8601 timestamp indicating when the product was last modified."
+        },
+        "published_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The ISO 8601 timestamp when the product was made visible, or null if unpublished."
+        },
+        "template_suffix": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The custom Liquid template name used to render the product page, or null for the default."
+        },
+        "published_scope": {
+          "type": "string",
+          "description": "The channels or sales scope across which the product is published."
+        },
+        "tags": {
+          "type": "string",
+          "description": "A comma-separated string of search and classification tags attached to the product."
+        },
+        "status": {
+          "type": "string",
+          "description": "The current lifecycle status of the product, such as active, draft, or archived."
+        },
+        "admin_graphql_api_id": {
+          "type": "string",
+          "description": "The globally unique identifier used to reference this product in the GraphQL Admin API."
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "A single product variant including pricing, inventory, and option combinations."
+          },
+          "description": "The list of variants available for this product."
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "A specific option definition such as size or color."
+          },
+          "description": "The customizable option names and available values defined for the product."
+        },
+        "images": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "An image resource detailing source URL, dimensions, and display position."
+          },
+          "description": "The collection of media images associated with the product."
+        },
+        "image": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "The featured or primary image for the product, or null if none exists."
+        }
+      },
+      "description": "The product object after being updated."
+    }
+  },
+  "description": "Response body containing the updated product details."
+}

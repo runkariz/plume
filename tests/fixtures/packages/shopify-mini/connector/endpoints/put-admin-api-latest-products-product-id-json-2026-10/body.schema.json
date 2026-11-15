@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "product": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "description": "The unique numerical identifier of the product to update.",
+          "title": "Product ID"
+        },
+        "title": {
+          "type": "string",
+          "description": "The updated title or name of the product.",
+          "title": "Title"
+        },
+        "body_html": {
+          "type": "string",
+          "description": "The updated HTML description of the product.",
+          "title": "Description HTML",
+          "x-ui-multiline": 5
+        },
+        "vendor": {
+          "type": "string",
+          "description": "The name of the manufacturer or supplier of the product.",
+          "title": "Vendor"
+        },
+        "product_type": {
+          "type": "string",
+          "description": "The category or classification of the product.",
+          "title": "Product Type"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "archived",
+            "draft"
+          ],
+          "description": "The updated publication status of the product, such as active, draft, or archived.",
+          "title": "Status"
+        },
+        "published": {
+          "type": "boolean",
+          "description": "Whether the product is published and visible on the online store.",
+          "title": "Published"
+        },
+        "tags": {
+          "type": "string",
+          "description": "A comma-separated list of keywords associated with the product for filtering and search.",
+          "title": "Tags"
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "Details of an individual product variant, such as SKU, price, and options."
+          },
+          "description": "A list of product variant configurations to create or modify.",
+          "title": "Variants",
+          "x-ui-tab": "Variants"
+        },
+        "images": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "Properties for an individual product image."
+          },
+          "description": "A list of image objects representing product media to add or update.",
+          "title": "Images",
+          "x-ui-tab": "Images"
+        },
+        "metafields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "A specific metafield containing custom key-value data for the product.\n\nKey/value pairs (any keys). Example: {\"key\": \"value\"}",
+            "properties": {}
+          },
+          "description": "A list of custom metadata fields to attach to the product.",
+          "title": "Metafields",
+          "x-ui-advanced": "Advanced",
+          "x-ui-tab": "Metafields"
+        },
+        "metafields_global_title_tag": {
+          "type": "string",
+          "description": "The SEO title tag displayed in search engine results for the product page.",
+          "title": "SEO Title Tag",
+          "x-ui-advanced": "SEO"
+        },
+        "metafields_global_description_tag": {
+          "type": "string",
+          "description": "The SEO meta description displayed in search engine results for the product page.",
+          "title": "SEO Meta Description",
+          "x-ui-advanced": "SEO",
+          "x-ui-multiline": 3
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "description": "The product properties to update.",
+      "title": "Product"
+    }
+  },
+  "required": [
+    "product"
+  ],
+  "description": "Request body payload containing updated product information."
+}

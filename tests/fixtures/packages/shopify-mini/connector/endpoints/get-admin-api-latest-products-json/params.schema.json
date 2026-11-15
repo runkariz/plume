@@ -1,0 +1,123 @@
+{
+  "title": "Parameters",
+  "type": "object",
+  "properties": {
+    "collection_id": {
+      "type": "string",
+      "description": "Return products by product collection ID.",
+      "examples": [
+        "841564295"
+      ],
+      "x-on-pagination": "keep",
+      "title": "Collection ID"
+    },
+    "created_at_max": {
+      "type": "string",
+      "description": "Return products created before a specified date. (format: 2014-04-25T16:15:47-04:00)",
+      "examples": [
+        "2014-04-25T16:15:47-04:00"
+      ],
+      "x-on-pagination": "keep",
+      "x-ui-advanced": "Filter by Date",
+      "title": "Created Before"
+    },
+    "created_at_min": {
+      "type": "string",
+      "description": "Return products created after a specified date. (format: 2014-04-25T16:15:47-04:00)",
+      "examples": [
+        "2014-04-25T16:15:47-04:00"
+      ],
+      "x-on-pagination": "keep",
+      "x-ui-advanced": "Filter by Date",
+      "title": "Created After"
+    },
+    "fields": {
+      "type": "string",
+      "description": "Return fields by a comma-separated list of field names.",
+      "examples": [
+        "id,images,title"
+      ],
+      "x-on-pagination": "keep",
+      "title": "Fields",
+      "x-ui-advanced": "Advanced"
+    },
+    "handle": {
+      "type": "string",
+      "description": "Return only products specified by a comma-separated list of product handles.",
+      "examples": [
+        "ipod-nano"
+      ],
+      "x-on-pagination": "keep",
+      "title": "Product Handles"
+    },
+    "ids": {
+      "type": "string",
+      "description": "Return only products specified by a comma-separated list of product IDs.",
+      "examples": [
+        "632910392,921728736"
+      ],
+      "x-on-pagination": "keep",
+      "title": "Product IDs"
+    },
+    "limit": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Return up to this many results per page.",
+      "default": 50,
+      "examples": [50
+      ],
+      "x-on-pagination": "keep",
+      "title": "Results Limit"
+    },
+    "presentment_currencies": {
+      "type": "string",
+      "description": "Return presentment prices in only certain currencies, specified by a comma-separated list of ISO 4217 currency codes.",
+      "examples": [
+        "USD"
+      ],
+      "x-on-pagination": "keep",
+      "title": "Presentment Currencies",
+      "x-ui-advanced": "Advanced"
+    },
+    "product_type": {
+      "type": "string",
+      "description": "Return products by product type.",
+      "examples": [
+        "Cult Products"
+      ],
+      "x-on-pagination": "keep",
+      "title": "Product Type"
+    },
+    "published_at_max": {
+      "type": "string",
+      "description": "Return products published before a specified date. (format: 2014-04-25T16:15:47-04:00)",
+      "examples": [
+        "2014-04-25T16:15:47-04:00"
+      ],
+      "x-on-pagination": "keep",
+      "x-ui-advanced": "Filter by Date",
+      "title": "Published Before"
+    },
+    "published_at_min": {
+      "type": "string",
+      "description": "Return products published after a specified date. (format: 2014-04-25T16:15:47-04:00)",
+      "examples": [
+        "2014-04-25T16:15:47-04:00"
+      ],
+      "x-on-pagination": "keep",
+      "x-ui-advanced": "Filter by Date",
+      "title": "Published After"
+    },
+    "since_id": {
+      "type": "string",
+      "description": "Return only products after the specified ID.",
+      "examples": [
+        "632910392"
+      ],
+      "x-on-pagination": "keep",
+      "title": "Since ID",
+      "x-ui-advanced": "Advanced"
+    }
+  },
+  "description": "Query parameters used to filter, sort, and paginate the list of products."
+}

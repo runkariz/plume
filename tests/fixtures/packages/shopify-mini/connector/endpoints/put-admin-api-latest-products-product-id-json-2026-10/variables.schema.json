@@ -1,0 +1,18 @@
+{
+  "title": "Variables",
+  "type": "object",
+  "properties": {
+    "product_id": {
+      "type": "string",
+      "description": "The unique identifier of the product.",
+      "examples": [
+        "632910392"
+      ],
+      "title": "Product ID"
+    }
+  },
+  "required": [
+    "product_id"
+  ],
+  "description": "URL path variables for specifying the target product."
+}

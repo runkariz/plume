@@ -11,8 +11,8 @@ Claude (and any MCP client) so answers about the API come with citations.
   exact index of endpoints, fields and scopes so "is this documented?" has evidence behind it.
 - **MCP.** A read-only reader server for questions, a maintainer server for builds and tags.
 
-Status: early. Slice 1 (the skeleton) is in place: layers, settings, the build/tag domain, the
-database migrations and the CLI. Ingest, search, MCP and the web UI follow.
+Status: early. In place: the skeleton (slice 1) and ingest (slice 2): read a connector package,
+chunk, embed, extract exact facts, seal, tag. Search, MCP and the web UI follow.
 
 ## Quick start
 
@@ -23,12 +23,37 @@ make install          # uv sync
 make up               # Postgres 16 + pgvector on 127.0.0.1:18432
 uv run plume --help
 uv run plume migrate  # bring the schema to head
+uv run plume load tests/fixtures/packages/test-catalog   # build -> seal -> tag latest
+uv run plume builds test-catalog-api
 make test             # architecture + unit tests
-make test-int         # integration tests (testcontainers)
+make test-int         # contract (Postgres) + integration tests (testcontainers)
+make e2e              # against docker compose
+make e2e-live         # live embeddings (needs PLUME_VERTEX_API_KEY or PLUME_GEMINI_API_KEY)
 make lint             # ruff, mypy --strict, import-linter
 ```
 
 Configuration comes from `PLUME_*` environment variables or a `.env` file; see `.env.example`.
+
+## Ingest
+
+`plume load <package>` reads a connector package (`connector/` with `app.json`, `endpoints/`,
+`models/`, `knowledge/`, `auth/`, plus an optional `knowledge-export/` of cleaned page text) and
+runs import -> chunk -> embed -> facts -> seal -> tag.
+
+- **Build ids are derived from the input**: package hash, chunker version, embedding model and
+  dimensions. Loading the same package again finds the sealed build and only moves the tag.
+- **Document ids** are stable across vendor versions: endpoints are `endpoint:METHOD~/path` with
+  the version segment replaced by `{version}`; models, guides and auth schemes are
+  `model:<name>`, `guide:<id>`, `auth:<id>`.
+- **Embeddings**: `PLUME_EMBEDDER=auto|hash|vertex|gemini`. `auto` uses Vertex AI express when
+  `PLUME_VERTEX_API_KEY` is set, the Gemini API when `PLUME_GEMINI_API_KEY` is set, and otherwise
+  an offline hashing embedder (not semantic; for development and CI). Vectors are 768-dim
+  `halfvec`; unchanged chunks reuse cached vectors.
+- **Facts**: every endpoint, documented field (path/query/header/body/response/model) and
+  required scope, with the document and JSON pointer that state it, and `complete=false` when
+  the source flags the schema as partial.
+- `plume diff <old> <new>` lists added/changed/removed chunk ids; `plume tag <build> latest`
+  publishes or rolls back.
 
 ## Layout
 

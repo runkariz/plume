@@ -1,0 +1,79 @@
+{
+  "actionName": "Product",
+  "authorizationType": "OAUTH2",
+  "bodyContentType": "application/json",
+  "bodyContractRef": "body.schema.json",
+  "bodyType": "RAW",
+  "description": "Create a new product.",
+  "docLink": "https://shopify.dev/docs/api/admin-rest/latest/resources/product",
+  "endpointId": "post-admin-api-latest-products-json",
+  "errors": [
+    {
+      "meaning": "Unprocessable Entity",
+      "retryable": false,
+      "status": 422
+    }
+  ],
+  "examples": [
+    {
+      "request": {
+        "body": {
+          "product": {
+            "body_html": "<strong>Good snowboard!</strong>",
+            "product_type": "Snowboard",
+            "status": "draft",
+            "title": "Burton Custom Freestyle 151",
+            "vendor": "Burton"
+          }
+        },
+        "headers": {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": "{token}"
+        }
+      },
+      "source": "https://shopify.dev/docs/api/admin-rest/latest/resources/product",
+      "title": "Example 1"
+    }
+  ],
+  "headersContractRef": "headers.schema.json",
+  "isAdvanced": true,
+  "isDataSource": false,
+  "isDeprecated": false,
+  "isPreRelease": false,
+  "method": "POST",
+  "name": "Create product",
+  "operationKind": "create",
+  "permissionNote": "X-Shopify-Access-Token: {access_token}",
+  "provenance": {
+    "docAnchor": "#post-products",
+    "extractedAt": "2026-11-12T14:30:12Z",
+    "sourceUrl": "https://shopify.dev/docs/api/admin-rest/latest/resources/product"
+  },
+  "rawBodyType": "JSON",
+  "resource": "Product",
+  "responses": [
+    {
+      "contentContractRef": "responses/201.schema.json",
+      "contentType": "application/json",
+      "statusCode": 201
+    },
+    {
+      "contentContractRef": "responses/422.schema.json",
+      "contentType": "application/json",
+      "retryable": false,
+      "statusCode": 422
+    }
+  ],
+  "sideEffects": [
+    "creates"
+  ],
+  "summary": "Create a new product.",
+  "tags": [
+    {
+      "colorSetId": 30,
+      "kind": "category",
+      "name": "products"
+    }
+  ],
+  "url": "{{app_env.servers.api}}/admin/api/latest/products.json"
+}

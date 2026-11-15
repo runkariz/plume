@@ -111,7 +111,7 @@ def test_sealed_before_created_is_refused(draft: Build) -> None:
         draft.seal(datetime(2026, 11, 14, tzinfo=UTC))
 
 
-@pytest.mark.parametrize("bad", ["", " x", "a b", "-lead", "x" * 256])
+@pytest.mark.parametrize("bad", ["", " x", "a b", "-lead", "x" * 513])
 def test_item_ids_are_validated(draft: Build, bad: str) -> None:
     with pytest.raises(InvalidIdentifierError):
         draft.with_item(bad, content_hash("x"))

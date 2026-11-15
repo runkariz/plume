@@ -1,0 +1,13 @@
+{
+  "id": "rate-limit-admin-rest-rest-admin-api-request-rate-limits",
+  "kind": "business-rules",
+  "order": 3,
+  "provenance": {
+    "extractedAt": "2026-11-12T14:30:12Z",
+    "extractorVersion": "1.0.0.0",
+    "rulesVersion": "kariz-connector.v2@7c5342b8da8a",
+    "sourceUrl": "https://shopify.dev/docs/api/admin-rest"
+  },
+  "sourceUrl": "https://shopify.dev/docs/api/admin-rest",
+  "title": "REST Admin API Request Rate Limits"
+}

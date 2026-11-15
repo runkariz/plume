@@ -1,0 +1,29 @@
+{
+  "title": "Product",
+  "x-source-url": "file:///uploaded/4c3034da5bd5/catalog-b.openapi.json",
+  "x-complete": true,
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier of the product."
+    },
+    "name": {
+      "type": "string",
+      "description": "Display name of the product."
+    },
+    "price": {
+      "type": "string",
+      "description": "Price value of the product."
+    },
+    "currency": {
+      "type": "string",
+      "description": "Currency code in which the price is specified."
+    },
+    "shop": {
+      "type": "string",
+      "description": "Identifier or name of the shop offering the product."
+    }
+  },
+  "description": "Catalog item available for purchase."
+}

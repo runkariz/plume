@@ -1,0 +1,62 @@
+{
+  "type": "object",
+  "properties": {
+    "orders": {
+      "type": "array",
+      "items": {
+        "title": "Order",
+        "x-source-url": "file:///uploaded/4c3034da5bd5/catalog-b.openapi.json",
+        "x-complete": true,
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier of the order."
+          },
+          "number": {
+            "type": "string",
+            "description": "Human-readable order reference number."
+          },
+          "customer": {
+            "type": "string",
+            "description": "Name or identifier of the customer who placed the order."
+          },
+          "total": {
+            "type": "string",
+            "description": "Total purchase amount for the order."
+          },
+          "currency": {
+            "type": "string",
+            "description": "Currency code used for the order total."
+          },
+          "shop": {
+            "type": "string",
+            "description": "Identifier or name of the shop where the order was placed."
+          }
+        },
+        "description": "Order entity containing purchase and customer details."
+      },
+      "description": "List of orders returned for the current page."
+    },
+    "pageSize": {
+      "type": "integer",
+      "description": "Actual number of order records returned in this page."
+    },
+    "maxPageSize": {
+      "type": "integer",
+      "description": "Upper limit on the number of order records that can be requested per page."
+    },
+    "pageSizeCapped": {
+      "type": "boolean",
+      "description": "Indicates whether the requested page size was reduced to maxPageSize."
+    },
+    "query": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Search term applied to filter the orders, or null if no query was provided."
+    }
+  },
+  "description": "Paginated list of orders matching the request criteria."
+}

@@ -1,0 +1,4 @@
+{
+  "Content-Type": "application/json",
+  "X-Shopify-Access-Token": "{{ auth?.oauth?.token }}"
+}

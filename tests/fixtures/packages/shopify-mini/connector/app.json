@@ -1,0 +1,247 @@
+{
+  "apiVersioning": {
+    "current": "2026-10",
+    "format": "date",
+    "scheme": "path",
+    "versions": [
+      "2026-10"
+    ]
+  },
+  "authIds": [
+    "oauth2-authorization-code"
+  ],
+  "baseUrls": [
+    "https://{{app_env.vars.host}}"
+  ],
+  "category": {
+    "bundleVersion": 38,
+    "confidence": 1,
+    "key": "e-commerce",
+    "reason": "Shopify is a dedicated online store platform providing APIs for managing products, collections, inventory, and storefront settings."
+  },
+  "conventions": {
+    "casing": "snake"
+  },
+  "defaultAuthId": "oauth2-authorization-code",
+  "description": "",
+  "docLink": "https://shopify.dev/docs/api/admin-rest",
+  "environmentVariablesRef": "environment.variables.schema.json",
+  "environments": [
+    {
+      "baseUrl": "https://{{app_env.vars.host}}",
+      "isDefault": true,
+      "key": "production",
+      "kind": "production",
+      "name": "production",
+      "provenance": {
+        "source": "derived"
+      },
+      "servers": {
+        "api": "https://{{app_env.vars.host}}"
+      }
+    }
+  ],
+  "errorFormat": {
+    "statusCodes": [
+      {
+        "meaning": "Forbidden",
+        "retryable": false,
+        "status": 403
+      },
+      {
+        "meaning": "Conflict",
+        "retryable": false,
+        "status": 409
+      },
+      {
+        "meaning": "Unprocessable Entity",
+        "retryable": false,
+        "status": 422
+      }
+    ]
+  },
+  "iconUrl": "https://shopify.dev/favicon.ico",
+  "knowledgeIds": [
+    "authentication",
+    "versioning",
+    "rate-limit-admin-rest-rest-admin-api-request-rate-limits"
+  ],
+  "name": "shopify",
+  "provenance": {
+    "extractedAt": "2026-11-12T14:30:12Z",
+    "extractorVersion": "1.0.0.0",
+    "rulesBundleVersion": 38,
+    "rulesVersion": "kariz-connector.v2@7c5342b8da8a",
+    "sourceUrl": "https://shopify.dev/docs/api/admin-rest"
+  },
+  "resources": [
+    {
+      "name": "Admin"
+    },
+    {
+      "name": "ApplicationCharge"
+    },
+    {
+      "name": "ApplicationCredit"
+    },
+    {
+      "name": "Article",
+      "parent": "Blog"
+    },
+    {
+      "name": "Asset",
+      "parent": "Theme"
+    },
+    {
+      "name": "AssignedFulfillmentOrder"
+    },
+    {
+      "children": [
+        "Article",
+        "Metafield"
+      ],
+      "name": "Blog"
+    },
+    {
+      "name": "CarrierService"
+    },
+    {
+      "children": [
+        "Product"
+      ],
+      "name": "Collection"
+    },
+    {
+      "children": [
+        "ProductId"
+      ],
+      "name": "CollectionListing"
+    },
+    {
+      "children": [
+        "Province"
+      ],
+      "name": "Country"
+    },
+    {
+      "name": "Currency"
+    },
+    {
+      "name": "CustomCollection"
+    },
+    {
+      "children": [
+        "DisputeEvidence"
+      ],
+      "name": "Dispute"
+    },
+    {
+      "name": "DisputeEvidence",
+      "parent": "Dispute"
+    },
+    {
+      "name": "Event",
+      "parent": "Fulfillment"
+    },
+    {
+      "children": [
+        "Event"
+      ],
+      "name": "Fulfillment",
+      "parent": "FulfillmentOrder"
+    },
+    {
+      "children": [
+        "Fulfillment",
+        "LocationsForMove"
+      ],
+      "name": "FulfillmentOrder",
+      "parent": "Order"
+    },
+    {
+      "name": "FulfillmentService"
+    },
+    {
+      "name": "Image",
+      "parent": "Product"
+    },
+    {
+      "name": "InventoryLevel",
+      "parent": "Location"
+    },
+    {
+      "children": [
+        "InventoryLevel"
+      ],
+      "name": "Location"
+    },
+    {
+      "name": "LocationsForMove",
+      "parent": "FulfillmentOrder"
+    },
+    {
+      "name": "Metafield",
+      "parent": "Blog"
+    },
+    {
+      "name": "Oauth"
+    },
+    {
+      "children": [
+        "Fulfillment",
+        "FulfillmentOrder",
+        "Transaction"
+      ],
+      "name": "Order"
+    },
+    {
+      "name": "Policy"
+    },
+    {
+      "children": [
+        "Image",
+        "ResourceFeedback",
+        "Variant"
+      ],
+      "name": "Product",
+      "parent": "Collection"
+    },
+    {
+      "name": "ProductId",
+      "parent": "CollectionListing"
+    },
+    {
+      "name": "ProductListing"
+    },
+    {
+      "name": "Province",
+      "parent": "Country"
+    },
+    {
+      "name": "RecurringApplicationCharge"
+    },
+    {
+      "name": "ResourceFeedback",
+      "parent": "Product"
+    },
+    {
+      "name": "ShopifyPayment"
+    },
+    {
+      "children": [
+        "Asset"
+      ],
+      "name": "Theme"
+    },
+    {
+      "name": "Transaction",
+      "parent": "Order"
+    },
+    {
+      "name": "Variant",
+      "parent": "Product"
+    }
+  ],
+  "summary": "Manage Shopify store resources including blogs, articles, storefront access tokens, mobile platform applications, charges, carrier services, collections, countries, fulfillment orders, and locations.",
+  "systemName": "shopify"
+}
