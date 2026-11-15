@@ -45,8 +45,11 @@ export function PublishStep() {
       a.href = url;
       a.download =
         filename ?? job?.eval?.release.knowledgeFile ?? `${job?.apiId ?? 'plume'}.dump.gz`;
+      document.body.appendChild(a);
       a.click();
-      URL.revokeObjectURL(url);
+      a.remove();
+      // revoking right away can cancel the download before the browser has started it
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not download the dump.');
     } finally {

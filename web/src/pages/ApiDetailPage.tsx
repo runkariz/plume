@@ -183,11 +183,25 @@ function Detail({ api }: { api: ApiDetail }) {
               <>
                 <Metric label="Recall@5" value={formatScore(api.quality.recallAt5)} />
                 <Metric label="MRR" value={formatScore(api.quality.mrr)} />
-                <Metric
-                  label="Invented endpoints"
-                  value={`${api.quality.inventedEndpoints} / ${api.quality.goldQuestions}`}
-                  tone={api.quality.inventedEndpoints === 0 ? 'ok' : undefined}
-                />
+                {api.quality.inventedEndpoints !== null ? (
+                  <Metric
+                    label="Invented endpoints"
+                    value={`${api.quality.inventedEndpoints} / ${api.quality.goldQuestions}`}
+                    tone={api.quality.inventedEndpoints === 0 ? 'ok' : undefined}
+                  />
+                ) : null}
+                {api.quality.citationHitRate !== undefined ? (
+                  <Metric
+                    label="Citation hit rate"
+                    value={formatScore(api.quality.citationHitRate)}
+                  />
+                ) : null}
+                {api.quality.factAccuracy !== undefined ? (
+                  <Metric label="Fact accuracy" value={formatScore(api.quality.factAccuracy)} />
+                ) : null}
+                {api.quality.missingExpected ? (
+                  <Metric label="Expected docs missing" value={api.quality.missingExpected} />
+                ) : null}
                 <p className="faint small" style={{ marginTop: 10 }}>
                   Gold set of {api.quality.goldQuestions} questions · evaluated{' '}
                   {formatDate(api.quality.evaluatedAt)}

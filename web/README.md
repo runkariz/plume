@@ -24,8 +24,8 @@ Against the real API (compose stack from the repo root: `make up`, then load the
 
 ```bash
 # stack with a maintainer token (the wizard spec needs one); gold sets come from tests/fixtures/gold
-PLUME_MAINTAINER_TOKENS='["pl_dev_local"]' make up
-PLUME_E2E_API_URL=http://127.0.0.1:18480 PLUME_E2E_TOKEN=pl_dev_local npm run e2e:real:docker
+PLUME_MAINTAINER_TOKENS='["pl_dev_local_web_e2e"]' make up   # tokens must be at least 16 characters
+PLUME_E2E_API_URL=http://127.0.0.1:18480 PLUME_E2E_TOKEN=pl_dev_local_web_e2e npm run e2e:real:docker
 ```
 
 The real-API specs (`e2e-real/`) cover the reader pages and the maintainer wizard end to end (upload a zipped

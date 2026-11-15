@@ -78,7 +78,12 @@ for (const theme of THEMES) {
         name: string;
         endpoints: number;
         chunks: number;
-        quality: { recallAt5: number; goldQuestions: number } | null;
+        quality: {
+          recallAt5: number;
+          goldQuestions: number;
+          inventedEndpoints: number | null;
+          citationHitRate?: number;
+        } | null;
       };
       await page.goto('/apis/shopify');
       await expect(page.getByRole('heading', { level: 1, name: detail.name })).toBeVisible();
@@ -90,6 +95,11 @@ for (const theme of THEMES) {
         await expect(
           page.getByText(detail.quality.recallAt5.toFixed(2), { exact: true }).first(),
         ).toBeVisible();
+        await expect(page.getByText('null')).toHaveCount(0);
+        if (detail.quality.inventedEndpoints === null)
+          await expect(page.getByText('Invented endpoints')).toHaveCount(0);
+        if (detail.quality.citationHitRate !== undefined)
+          await expect(page.getByText('Citation hit rate')).toBeVisible();
       } else {
         await expect(page.getByText('Not evaluated yet.')).toBeVisible();
       }

@@ -66,9 +66,15 @@ export interface ApiDetail extends ApiSummary {
   quality: {
     recallAt5: number;
     mrr: number;
-    inventedEndpoints: number;
+    /** null: not measured by the server yet (needs a Claude-driven run). */
+    inventedEndpoints: number | null;
     goldQuestions: number;
     evaluatedAt: string; // ISO date
+    citationHitRate?: number;
+    factAccuracy?: number;
+    /** Gold questions whose expected document was not found. */
+    missingExpected?: number;
+    gatePassed?: boolean;
   } | null;
   index: {
     embedding: string | null;

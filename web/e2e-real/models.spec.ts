@@ -13,7 +13,7 @@ import { expectNoSeriousA11y, settle, shot, test, THEMES } from '../e2e/helpers'
  * The recorded drafts come from the repo (tests/fixtures/drafts). Serial: one session creates the snapshot.
  */
 const API = process.env.PLUME_E2E_API_URL ?? 'http://127.0.0.1:18480';
-const TOKEN = process.env.PLUME_E2E_TOKEN ?? 'pl_dev_local';
+const TOKEN = process.env.PLUME_E2E_TOKEN ?? 'pl_dev_local_web_e2e';
 const DRAFTS = resolve(fileURLToPath(new URL('.', import.meta.url)), '../../tests/fixtures/drafts');
 const APIS = ['test-catalog-api', 'second-catalog-api'];
 

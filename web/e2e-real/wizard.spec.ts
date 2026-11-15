@@ -16,7 +16,7 @@ import { expectNoSeriousA11y, settle, shot, test, THEMES } from '../e2e/helpers'
  * The specs run one after the other (they publish and change the live build of the same API).
  */
 const API = process.env.PLUME_E2E_API_URL ?? 'http://127.0.0.1:18480';
-const TOKEN = process.env.PLUME_E2E_TOKEN ?? 'pl_dev_local';
+const TOKEN = process.env.PLUME_E2E_TOKEN ?? 'pl_dev_local_web_e2e';
 const PACKAGES = resolve(
   fileURLToPath(new URL('.', import.meta.url)),
   '../../tests/fixtures/packages',
@@ -143,8 +143,10 @@ for (const theme of THEMES) {
       await expectNoSeriousA11y(page);
       await shot(page, 'w6-real-publish', theme);
 
-      const download = page.waitForEvent('download');
+      const download = page.waitForEvent('download', { timeout: 15_000 });
       await page.getByRole('button', { name: 'Download dump' }).click();
+      // an on-page error (e.g. a failed request) would show up here with its text
+      await expect(page.getByRole('alert')).toHaveCount(0);
       expect((await download).suggestedFilename()).toMatch(/\.gz$/);
 
       await page.getByRole('button', { name: /^Publish / }).click();
