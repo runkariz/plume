@@ -193,10 +193,16 @@ Claude drew its own chart. Findings:
   no view, look for `resources/read ui://plume/model-view` after `tools/call get_model`: no
   read means the host never tried to render. The troubleshooting page also suggests connecting
   the same server as a remote custom connector, but that needs a public HTTPS URL.
-- **Model-facing hint.** View-bound tool results end with: "If your host shows this result as
-  an interactive view (MCP App), the user already sees it: refer to it instead of redrawing it
-  as a chart or table." `content` is the model's text by spec. The wording stays true on hosts
-  without the view.
+- **Result (2026-11-16):** with the flat key (≥ 1e50981) the view renders in Claude Desktop
+  through `mcp-remote`. The flat key was the cause.
+- **The debug log goes to stderr** (its own handler; under uvicorn a plain module logger printed
+  nothing), and `tools/call` lines list the argument NAMES (`args=[snapshot_id]`), never values.
+- **Model-facing hint.** After the summary, view-bound results say: "The user sees this result
+  as an interactive view: refer to it instead of redrawing it as a chart or table." That's sent
+  only when the client declared MCP Apps (SDK `client_supports_apps`). Otherwise they say "If an
+  interactive view of this result is shown, the user already sees it: …". On Plume's stateless
+  HTTP transport the declaration is usually not visible per request, so expect the conditional
+  wording.
 
 - Claude web (claude.ai) cannot reach `127.0.0.1`. It needs a public HTTPS URL for the MCP; the
   guide suggests a `cloudflared` tunnel. That's the owner's decision; Plume opens none.

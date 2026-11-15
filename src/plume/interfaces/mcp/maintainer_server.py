@@ -36,11 +36,11 @@ INSTRUCTIONS = """\
 Plume maintainer tools. Canonical models across 2..N APIs:
 1. suggest_concepts(apis) to see which concepts the APIs share (coverage per API).
 2. start_model_session(apis, concept) pins the latest build of each API.
-3. get_model_context(session_id) returns a compact index (per API the concept's documents
-   with field counts), the draft format and the rules. Then get_model_evidence(session_id,
+3. get_model_context(model_session) returns a compact index (per API the concept's documents
+   with field counts), the draft format and the rules. Then get_model_evidence(model_session,
    api) per API returns the fields with descriptions, page by page (follow next_cursor; pass
    doc_ids to read other documents of the pinned build).
-4. Write the model, then submit_model_draft(session_id, draft). Plume checks every citation
+4. Write the model, then submit_model_draft(model_session, draft). Plume checks every citation
    (document exists, quote is in it, field and endpoint exist). A refusal lists issue codes;
    fix and resubmit. An accepted draft becomes an immutable UNRELEASED snapshot: review it
    (get_model) and release_model(id) to make it official, or discard_model(id).
