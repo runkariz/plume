@@ -1,0 +1,67 @@
+.site-header {
+  height: 64px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+}
+.site-header .wrap {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 600 21px var(--font-serif);
+  letter-spacing: -0.01em;
+}
+.brand svg {
+  width: 26px;
+  height: 26px;
+  color: var(--accent);
+}
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  color: var(--muted);
+  font-weight: 500;
+  background: transparent;
+  border: 0;
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+.nav-link svg {
+  width: 18px;
+  height: 18px;
+}
+.page-note {
+  text-align: center;
+  color: var(--faint);
+  font-size: 12.5px;
+  padding: 26px 0;
+}
+.kit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 20px;
+  align-items: start;
+}
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.section {
+  padding: 28px 0;
+}
