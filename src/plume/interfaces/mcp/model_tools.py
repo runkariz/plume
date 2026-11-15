@@ -314,7 +314,8 @@ def register_model_tools(  # noqa: PLR0915
         async def list_all_models(
             api: str | None = None, visibility: str = "all"
         ) -> dict[str, Any]:
-            """Models newest first. visibility: official | unreleased | unlisted | all."""
+            """Models newest first. visibility: official | unreleased | unlisted | discarded |
+            superseded | all."""
 
             def go() -> dict[str, Any]:
                 wanted = Visibility.ALL if visibility == "all" else (visibility,)

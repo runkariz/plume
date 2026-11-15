@@ -561,7 +561,9 @@ class ModelListItem(Schema):
     generated_at: str
     stale: bool = Field(description="A pinned build is no longer the API's latest.")
     stale_inputs: list[StaleInput] = Field(default_factory=list)
-    visibility: Literal["official", "unreleased", "unlisted", "discarded"] = "official"
+    visibility: Literal["official", "unreleased", "unlisted", "discarded", "superseded"] = (
+        "official"
+    )
     official: bool = True
     version: int = 1
     versions: int = 1
