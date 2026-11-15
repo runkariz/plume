@@ -46,7 +46,10 @@ def models_router(
         return out
 
     def snapshot_json(snap: Any) -> dict[str, Any]:
-        body = payloads.snapshot_payload(snap, names([i.api for i in snap.inputs]))
+        service = models()
+        body = payloads.snapshot_payload(
+            snap, names([i.api for i in snap.inputs]), service.stale_inputs(snap)
+        )
         body["inputs"] = [_logo_for(logo, i) for i in body["inputs"]]
         return body
 
@@ -124,18 +127,27 @@ def models_router(
         api: Annotated[str | None, Query()] = None,
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
     ) -> s.ModelList:
-        return s.ModelList(
-            items=[
+        service = models()
+        items = []
+        for m in service.list(api, limit):
+            stale = service.stale_inputs(m)
+            items.append(
                 s.ModelListItem(
                     id=m.snapshot_id,
                     name=m.draft.name,
                     concept=m.concept,
                     apis=[i.api for i in m.inputs],
                     generated_at=m.created_at.isoformat(),
+                    stale=bool(stale),
+                    stale_inputs=[
+                        s.StaleInput(
+                            api=str(x["api"]), pinned=str(x["pinned"]), current=x["current"]
+                        )
+                        for x in stale
+                    ],
                 )
-                for m in models().list(api, limit)
-            ]
-        )
+            )
+        return s.ModelList(items=items)
 
     @router.get("/v1/models/{snapshot_id}", responses=errors)
     def get_model(snapshot_id: str) -> dict[str, Any]:

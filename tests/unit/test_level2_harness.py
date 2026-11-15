@@ -4,14 +4,18 @@ import json
 import stat
 from pathlib import Path
 
+import pytest
+
 from tests.live_claude.harness import (
     NOT_DOCUMENTED_CHECK,
     Run,
     Stack,
+    StackHTTPError,
     ToolCall,
     check_reader,
     mcp_config,
     parse_stream,
+    request_json,
 )
 
 
@@ -149,3 +153,37 @@ def test_hedged_answer_passes_when_absence_is_not_proven() -> None:
     flat = Run("q", 0, "loyalty_points is not documented.", [call])
     assert {c.name: c.passed for c in check_reader(hedged, "shopify")}[NOT_DOCUMENTED_CHECK]
     assert not {c.name: c.passed for c in check_reader(flat, "shopify")}[NOT_DOCUMENTED_CHECK]
+
+
+def test_request_json_retries_429_and_never_reads_error_bodies() -> None:
+    import httpx  # noqa: PLC0415
+
+    calls = {"n": 0}
+    waits: list[float] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            return httpx.Response(429, headers={"retry-after": "3"}, json={"error": "rate"})
+        return httpx.Response(200, json={"items": []})
+
+    http = httpx.Client(base_url="http://x", transport=httpx.MockTransport(handler))
+    assert request_json(http, "GET", "/v1/models", sleep=waits.append) == {"items": []}
+    assert waits == [3.0, 3.0]
+
+    always = httpx.Client(
+        base_url="http://x",
+        transport=httpx.MockTransport(lambda r: httpx.Response(429, json={"error": "rate"})),
+    )
+    with pytest.raises(StackHTTPError, match="429"):
+        request_json(always, "GET", "/v1/models", sleep=waits.append)
+    broken = httpx.Client(
+        base_url="http://x", transport=httpx.MockTransport(lambda r: httpx.Response(500))
+    )
+    with pytest.raises(StackHTTPError, match="500"):
+        request_json(broken, "GET", "/v1/models", sleep=waits.append)
+    missing = httpx.Client(
+        base_url="http://x",
+        transport=httpx.MockTransport(lambda r: httpx.Response(404, json={"error": "nf"})),
+    )
+    assert request_json(missing, "GET", "/d", ok=(200, 404), sleep=waits.append) == {"error": "nf"}

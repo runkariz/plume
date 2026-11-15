@@ -1,5 +1,6 @@
 """A small in-process sliding-window rate limit per client address (reader API is public)."""
 
+import hmac
 import time
 from collections import deque
 from collections.abc import Awaitable, Callable
@@ -17,18 +18,31 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         per_minute: int,
         clock: Callable[[], float] = time.monotonic,
         exempt: tuple[str, ...] = ("/health",),
+        trusted_tokens: tuple[str, ...] = (),
     ) -> None:
         super().__init__(app)
+        self._trusted = tuple(t.encode() for t in trusted_tokens)
         self._limit = per_minute
         self._clock = clock
         self._exempt = exempt
         self._hits: dict[str, deque[float]] = {}
+
+    def _trusted_request(self, request: Request) -> bool:
+        if not self._trusted:
+            return False
+        scheme, _, token = request.headers.get("authorization", "").partition(" ")
+        if scheme.lower() != "bearer" or not token:
+            return False
+        value = token.encode()
+        return any(hmac.compare_digest(value, t) for t in self._trusted)
 
     async def dispatch(
         self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
         if self._limit <= 0 or request.url.path in self._exempt or request.method == "OPTIONS":
             return await call_next(request)
+        if self._trusted_request(request):
+            return await call_next(request)  # authenticated maintainers are not rate limited
         key = request.client.host if request.client else "unknown"
         now = self._clock()
         window = self._hits.setdefault(key, deque())

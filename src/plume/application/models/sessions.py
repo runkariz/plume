@@ -317,5 +317,17 @@ class ModelSessions:
             raise NotFoundError(f"model {snapshot_id} not found")
         return s
 
+    def stale_inputs(self, snapshot: ModelSnapshot) -> list[dict[str, str | None]]:
+        """Pinned builds that are no longer their API's ``latest`` (empty = current)."""
+        out: list[dict[str, str | None]] = []
+        for pin in snapshot.inputs:
+            try:
+                current: str | None = self._resolver.resolve(pin.api).build.build_id.value
+            except NotFoundError:
+                current = None
+            if current != pin.build:
+                out.append({"api": pin.api, "pinned": pin.build, "current": current})
+        return out
+
     def list(self, api: str | None = None, limit: int = 50) -> list[ModelSnapshot]:
         return self._models.list_snapshots(api, max(1, min(limit, 200)))
