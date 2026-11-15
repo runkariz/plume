@@ -225,42 +225,58 @@ class InMemoryCollectionRepo:
     def __init__(self) -> None:
         self.collections: dict[str, Collection] = {}
         self.legacy: dict[str, str] = {}  # key hash -> collection id
-        self.entries: dict[str, list[tuple[str, str, datetime]]] = {}
+        # collection id -> {(kind, lineage): (version id, added at)}
+        self.entries: dict[str, dict[tuple[str, str], tuple[str | None, datetime]]] = {}
 
     def create(
         self, collection_id: str, created_at: datetime, legacy_key_hash: str | None = None
     ) -> None:
         self.collections[collection_id] = Collection(collection_id, created_at)
-        self.entries.setdefault(collection_id, [])
+        self.entries.setdefault(collection_id, {})
         if legacy_key_hash:
             self.legacy[legacy_key_hash] = collection_id
 
     def get(self, collection_id: str) -> Collection | None:
         return self.collections.get(collection_id)
 
-    def add(self, collection_id: str, kind: str, lineage_id: str, at: datetime) -> bool:
-        rows = self.entries.setdefault(collection_id, [])
-        if any((k, lin) == (kind, lineage_id) for k, lin, _ in rows):
-            return False
-        rows.append((kind, lineage_id, at))
-        return True
+    def add(
+        self,
+        collection_id: str,
+        kind: str,
+        lineage_id: str,
+        at: datetime,
+        version_id: str | None = None,
+    ) -> bool:
+        rows = self.entries.setdefault(collection_id, {})
+        prior = rows.get((kind, lineage_id))
+        if prior is None:
+            rows[(kind, lineage_id)] = (version_id, at)
+            return True
+        if version_id:
+            rows[(kind, lineage_id)] = (version_id, prior[1])
+        return False
 
-    def items(self, collection_id: str) -> list[tuple[str, str]]:
-        rows = sorted(self.entries.get(collection_id, []), key=lambda r: r[2], reverse=True)
-        return [(k, lin) for k, lin, _ in rows]
+    def items(self, collection_id: str) -> list[tuple[str, str, str | None]]:
+        rows = sorted(
+            self.entries.get(collection_id, {}).items(), key=lambda r: r[1][1], reverse=True
+        )
+        return [(k, lin, v) for (k, lin), (v, _) in rows]
 
     def containing(self, kind: str, lineage_id: str) -> list[str]:
-        return [
-            cid
-            for cid, rows in self.entries.items()
-            if any((k, lin) == (kind, lineage_id) for k, lin, _ in rows)
-        ]
+        return [cid for cid, rows in self.entries.items() if (kind, lineage_id) in rows]
 
     def for_legacy_keys(self, key_hashes: Sequence[str]) -> list[str]:
         return list(dict.fromkeys(self.legacy[h] for h in key_hashes if h in self.legacy))
 
     def merge(self, into: str, source: str, at: datetime) -> int:
-        moved = sum(self.add(into, k, lin, at) for k, lin, _ in self.entries.get(source, []))
-        self.entries[source] = []
+        target = self.entries.setdefault(into, {})
+        moved = 0
+        for key, (version, _) in self.entries.get(source, {}).items():
+            if key not in target:
+                target[key] = (version, at)
+                moved += 1
+            elif target[key][0] is None and version:
+                target[key] = (version, target[key][1])
+        self.entries[source] = {}
         self.collections[source] = replace(self.collections[source], merged_into=into)
         return moved

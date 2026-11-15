@@ -580,7 +580,9 @@ class ModelSessions:
             for prior in self._models.by_session(session.session_id):
                 if prior.key == content_key and prior.visibility != Visibility.DISCARDED:
                     return SubmitResult(
-                        prior, False, collection=self._collect(collection, prior.lineage)
+                        prior,
+                        False,
+                        collection=self._collect(collection, prior.lineage, prior.snapshot_id),
                     )
         visibility = Visibility.UNRELEASED if maintainer else Visibility.UNLISTED
         origin = Origin.MAINTAINER if maintainer else Origin.USER
@@ -605,17 +607,23 @@ class ModelSessions:
                 warnings=tuple(found_warnings),
             )
             if self._models.save_snapshot(snapshot):
-                ref = None if maintainer else self._collect(collection, snapshot.lineage)
+                ref = (
+                    None
+                    if maintainer
+                    else self._collect(collection, snapshot.lineage, snapshot.snapshot_id)
+                )
                 return SubmitResult(snapshot, True, collection=ref)
             stored = self._models.get_snapshot(snapshot.snapshot_id)
             if stored is not None:  # same content already stored (maintainer ids are hashes)
                 return SubmitResult(stored, False)
         raise ModelStateError("the model was changed concurrently; submit again")
 
-    def _collect(self, collection: str | None, lineage: str) -> CollectionRef | None:
-        return (
-            self._collections.save(collection, KIND_MODEL, lineage) if self._collections else None
-        )
+    def _collect(
+        self, collection: str | None, lineage: str, version_id: str
+    ) -> CollectionRef | None:
+        if self._collections is None:
+            return None
+        return self._collections.save(collection, KIND_MODEL, lineage, version_id)
 
     # -- snapshots -------------------------------------------------------------------------------
 

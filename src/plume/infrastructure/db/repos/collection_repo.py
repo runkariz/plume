@@ -33,27 +33,43 @@ class PostgresCollectionRepo:
             ).first()
         return Collection(r.collection_id, r.created_at, r.merged_into) if r else None
 
-    def add(self, collection_id: str, kind: str, lineage_id: str, at: datetime) -> bool:
+    def add(
+        self,
+        collection_id: str,
+        kind: str,
+        lineage_id: str,
+        at: datetime,
+        version_id: str | None = None,
+    ) -> bool:
         with self._engine.begin() as conn:
             result = conn.execute(
                 text(
-                    "INSERT INTO collection_items (collection_id, kind, lineage_id, added_at) "
-                    "VALUES (:c, :k, :l, :t) ON CONFLICT DO NOTHING"
+                    "INSERT INTO collection_items (collection_id, kind, lineage_id, added_at, "
+                    "version_id) VALUES (:c, :k, :l, :t, :v) ON CONFLICT DO NOTHING"
                 ),
-                {"c": collection_id, "k": kind, "l": lineage_id, "t": at},
+                {"c": collection_id, "k": kind, "l": lineage_id, "t": at, "v": version_id},
             )
-        return bool(result.rowcount)
+            created = bool(result.rowcount)
+            if not created and version_id:
+                conn.execute(
+                    text(
+                        "UPDATE collection_items SET version_id = :v WHERE collection_id = :c "
+                        "AND kind = :k AND lineage_id = :l"
+                    ),
+                    {"c": collection_id, "k": kind, "l": lineage_id, "v": version_id},
+                )
+        return created
 
-    def items(self, collection_id: str) -> list[tuple[str, str]]:
+    def items(self, collection_id: str) -> list[tuple[str, str, str | None]]:
         with self._engine.connect() as conn:
             rows = conn.execute(
                 text(
-                    "SELECT kind, lineage_id FROM collection_items WHERE collection_id = :c "
-                    "ORDER BY added_at DESC, lineage_id"
+                    "SELECT kind, lineage_id, version_id FROM collection_items "
+                    "WHERE collection_id = :c ORDER BY added_at DESC, lineage_id"
                 ),
                 {"c": collection_id},
             ).all()
-        return [(r.kind, r.lineage_id) for r in rows]
+        return [(r.kind, r.lineage_id, r.version_id) for r in rows]
 
     def containing(self, kind: str, lineage_id: str) -> list[str]:
         with self._engine.connect() as conn:
@@ -83,9 +99,12 @@ class PostgresCollectionRepo:
         with self._engine.begin() as conn:
             moved = conn.execute(
                 text(
-                    "INSERT INTO collection_items (collection_id, kind, lineage_id, added_at) "
-                    "SELECT :i, kind, lineage_id, :t FROM collection_items "
-                    "WHERE collection_id = :s ON CONFLICT DO NOTHING"
+                    "INSERT INTO collection_items (collection_id, kind, lineage_id, added_at, "
+                    "version_id) SELECT :i, kind, lineage_id, :t, version_id "
+                    "FROM collection_items WHERE collection_id = :s ON CONFLICT "
+                    "(collection_id, kind, lineage_id) DO UPDATE SET version_id = "
+                    "COALESCE(collection_items.version_id, EXCLUDED.version_id) "
+                    "WHERE collection_items.version_id IS NULL AND EXCLUDED.version_id IS NOT NULL"
                 ),
                 {"i": into, "s": source, "t": at},
             ).rowcount
