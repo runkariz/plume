@@ -79,7 +79,15 @@ export function buildReducer(state: BuildState, a: BuildAction): BuildState {
       };
     case 'service':
       return { ...state, services: { ...state.services, [a.service]: a.detail } };
-    case 'done':
-      return { ...state, phase: a.status, message: a.message ?? null };
+    case 'done': {
+      // A finished build has no running step left, whatever the stream said last.
+      const steps = Object.fromEntries(
+        Object.entries(state.steps).map(([k, v]) => [
+          k,
+          v.status === 'running' ? { ...v, status: a.status === 'staged' ? 'done' : 'failed' } : v,
+        ]),
+      ) as BuildState['steps'];
+      return { ...state, steps, phase: a.status, message: a.message ?? null };
+    }
   }
 }

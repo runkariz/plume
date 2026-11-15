@@ -4,6 +4,7 @@ import { useApiClient } from '@/api/context';
 import { STEP_KEYS, type StepStatus } from '@/api/types';
 import { Banner, Button, Card, ErrorState, LoadingState } from '@/components';
 import { CheckIcon } from '@/icons';
+import { formatClock } from '@/lib/format';
 import { buildReducer, initialBuildState, STEP_TITLES } from './buildState';
 import { WizardFrame } from './WizardFrame';
 import { stepFor, stepPath, useJob } from './useJob';
@@ -101,7 +102,11 @@ export function BuildStep() {
 
   const { progress } = build;
   const pct =
-    progress && progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
+    build.phase === 'staged'
+      ? 100
+      : progress && progress.total > 0
+        ? Math.round((progress.done / progress.total) * 100)
+        : 0;
   const lines = build.logs.slice(-VISIBLE_LOG_LINES);
   const live = build.phase === 'live' || build.phase === 'connecting';
 
@@ -123,7 +128,11 @@ export function BuildStep() {
             <div className="rowhead">
               <h2>Embedding changed chunks</h2>
               <span className="mono" aria-hidden>
-                {progress ? `${progress.done} / ${progress.total}` : '– / –'}
+                {progress
+                  ? `${progress.done} / ${progress.total}`
+                  : build.phase === 'staged'
+                    ? '0 / 0'
+                    : '– / –'}
               </span>
             </div>
             <div
@@ -142,9 +151,13 @@ export function BuildStep() {
             <p className="faint small">
               {build.phase === 'staged'
                 ? 'Embedding finished.'
-                : progress?.etaSeconds
-                  ? `About ${progress.etaSeconds} s left`
-                  : 'Waiting for the first batch'}
+                : !progress
+                  ? 'Waiting for the first batch'
+                  : progress.etaSeconds
+                    ? `About ${progress.etaSeconds} s left`
+                    : progress.total === 0
+                      ? 'Nothing to embed: every chunk is already cached'
+                      : `${progress.done} of ${progress.total} chunks embedded`}
             </p>
           </Card>
           <Card className="pad">
@@ -194,7 +207,7 @@ export function BuildStep() {
               {lines.length === 0 ? <div className="t">Waiting for the first event…</div> : null}
               {lines.map((l, i) => (
                 <div key={l.id} className={i === lines.length - 1 && live ? 'now' : undefined}>
-                  <span className="t">{l.t}</span>{' '}
+                  <span className="t">{formatClock(l.t)}</span>{' '}
                   <span className={`src ${l.source}`}>{SRC_LABEL[l.source]}</span> {l.message}
                 </div>
               ))}
@@ -208,7 +221,7 @@ export function BuildStep() {
           ) : null}
           {build.phase === 'failed' ? (
             <Banner tone="bad" title="The build failed">
-              {build.message ?? 'A step failed. Nothing was published.'}
+              {build.message ?? job.error ?? 'A step failed. Nothing was published.'}
             </Banner>
           ) : null}
         </div>
