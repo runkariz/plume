@@ -128,6 +128,7 @@ def models_router(  # noqa: PLR0915
         body.update(
             payloads.access_payload(snap, service.lineage_info(snap, maintainer), web_public_url)
         )
+        body["supersedes"] = list(service.replaced_by(snap))
         return body
 
     def list_item(m: ModelSnapshot, maintainer: bool) -> s.ModelListItem:
@@ -364,15 +365,18 @@ def models_router(  # noqa: PLR0915
         maintainer: Annotated[bool, Depends(optional)],
         api: Annotated[str | None, Query()] = None,
         limit: Annotated[int, Query(ge=1, le=200)] = 50,
-        visibility: Annotated[str, Query(pattern="^(official|unreleased|all)$")] = "official",
+        visibility: Annotated[
+            str, Query(pattern="^(official|unreleased|superseded|all)$")
+        ] = "official",
     ) -> s.ModelList:
         """Official models (the latest released version of each). With the maintainer token,
-        `visibility=unreleased|all` lists the others too. Newest first."""
+        `visibility=unreleased|superseded|all` lists the others too. Newest first."""
         if visibility != "official" and not maintainer:
             raise HTTPException(401, "this list needs the maintainer token")
         wanted = {
             "official": (Visibility.OFFICIAL,),
             "unreleased": (Visibility.UNRELEASED,),
+            "superseded": (Visibility.SUPERSEDED,),
             "all": Visibility.ALL,
         }[visibility]
         return s.ModelList(
