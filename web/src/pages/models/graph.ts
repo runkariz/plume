@@ -161,7 +161,7 @@ export function buildGraph(snap: ModelSnapshot): { nodes: ModelNode[]; edges: Mo
           source: left ? apiNode : canonNodeId(f.name),
           target: left ? canonNodeId(f.name) : apiNode,
           type: 'default',
-          label: derived ? src.transform : undefined,
+          label: derived ? (src.transform ?? (src.join?.length ? 'join' : undefined)) : undefined,
           data: { field: f.name, apiId: api.id, derived },
           style: {
             stroke: api.logo.color,

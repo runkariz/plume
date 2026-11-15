@@ -162,7 +162,15 @@ describe('Suggested models', () => {
     server.use(
       http.post(`${TEST_API_BASE}/v1/models/generate`, async () => {
         await new Promise<void>((r) => (release = r));
-        return HttpResponse.json({ snapshotId: 'snap_8f3a21' });
+        return HttpResponse.json({
+          sessionId: 's-1',
+          status: 'ready',
+          snapshotId: 'snap_8f3a21',
+          inputs: [],
+          contextUrl: '/v1/models/sessions/s-1/context',
+          claudePrompt: '',
+          mcpUrl: '',
+        });
       }),
     );
     renderApp(url);

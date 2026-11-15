@@ -31,13 +31,16 @@ function MappingDetail({ snap, sel }: { snap: ModelSnapshot; sel: Selection }) {
           {field.name} ← {api.shortName}
         </h2>
         {support === 'derived' ? (
-          <Chip tone="warn">derived: {src?.transform?.split(':')[0] ?? 'transform'}</Chip>
+          <Chip tone="warn">
+            derived: {src?.join?.length ? 'join' : src?.transform ? 'transform' : 'combine'}
+          </Chip>
         ) : support === 'supported' ? (
           <Chip tone="ok">direct</Chip>
         ) : (
           <Chip>not supported</Chip>
         )}
       </div>
+      {field.description ? <p className="muted small">{field.description}</p> : null}
       {!src ? (
         <p className="muted">{api.shortName} has no equivalent field.</p>
       ) : (
@@ -52,7 +55,7 @@ function MappingDetail({ snap, sel }: { snap: ModelSnapshot; sel: Selection }) {
             <div className="dl-k">Source</div>
             <div className="mono">{src.paths.map((p) => p.path).join(', ')}</div>
           </div>
-          {src.transform && !src.join ? (
+          {src.transform ? (
             <div className="dl">
               <div className="dl-k">Transform</div>
               <div className="mono">{src.transform}</div>
@@ -71,7 +74,7 @@ function MappingDetail({ snap, sel }: { snap: ModelSnapshot; sel: Selection }) {
           {src.evidence?.map((e) => (
             <blockquote key={e.quote} className="evidence">
               <p>“{e.quote}”</p>
-              <cite className="faint small">{e.anchor}</cite>
+              <cite className="faint small">{[e.docId, e.anchor].filter(Boolean).join(' · ')}</cite>
             </blockquote>
           ))}
         </>
@@ -156,7 +159,7 @@ export function ModelView() {
             <Chip tone="warn">Generated, unverified</Chip>
             <Chip>{snap.inputs.length} APIs</Chip>
             <Chip>{snap.fields.length} fields</Chip>
-            <Chip>snapshot {snap.id.replace('_', ' ').replace(/^snap /, 'snap_')}</Chip>
+            <Chip>snapshot {snap.id}</Chip>
           </div>
         </div>
         <div className="row">
@@ -235,6 +238,13 @@ export function ModelView() {
                 <li key={q.question}>
                   <div>{richText(q.question)}</div>
                   {q.detail ? <div className="faint small">{q.detail}</div> : null}
+                  {q.options?.length ? (
+                    <div className="row oq-options" aria-label="Options">
+                      {q.options.map((o) => (
+                        <Chip key={o}>{o}</Chip>
+                      ))}
+                    </div>
+                  ) : null}
                 </li>
               ))}
             </ul>

@@ -5,10 +5,17 @@ import type {
   GenerateRequest,
   ItemKind,
   Job,
+  ModelSnapshot,
   ReviewRequest,
   SearchRequest,
 } from '@/api/types';
-import { apiRef, modelCandidates, sampleSuggestions, snapshots } from './modelData';
+import {
+  apiRef,
+  modelCandidates,
+  productSnapshot,
+  sampleSuggestions,
+  snapshots,
+} from './modelData';
 import { buildScript, MID_BUILD_PAUSE, sampleJob, withEval, withReview } from './jobData';
 import {
   detailFor,
@@ -43,6 +50,9 @@ function readPauseAt(): number | null {
   }
 }
 
+const sameSet = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((x) => b.includes(x));
+
 const unauthorized = () =>
   HttpResponse.json({ detail: 'Invalid or missing token' }, { status: 401 });
 const isMaintainer = (req: Request) =>
@@ -52,6 +62,9 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
   const eventDelay = opts.eventDelayMs ?? 0;
   /** In-memory job store: one sample job per upload, advanced by the endpoints below. */
   const jobs = new Map<string, Job>();
+  const modelSessions = new Map<string, { apis: string[]; concept: string }>();
+  const made = new Map<string, { model: ModelSnapshot; apis: string[]; concept: string }>();
+  let sessionCounter = 0;
   let counter = 0;
   const guard = (req: Request, id: string) => {
     if (!isMaintainer(req)) return unauthorized();
@@ -71,16 +84,124 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
         return HttpResponse.json({ detail: 'Unknown API in the selection' }, { status: 404 });
       return HttpResponse.json(sampleSuggestions(apis));
     }),
+    // P5: the server runs no LLM. Inventory and Product already have a snapshot ("ready"); any other
+    // concept opens a session that waits for a draft, which a maintainer can submit (token pl_...).
     http.post(`${base}/v1/models/generate`, async ({ request }) => {
       const body = (await request.json()) as GenerateRequest;
-      const snapshotId = body.concept === 'inventory' ? 'snap_8f3a21' : 'snap_prod01';
-      return HttpResponse.json({ snapshotId });
+      const existing =
+        body.concept === 'inventory'
+          ? 'snap_8f3a21'
+          : body.concept === 'product'
+            ? 'snap_prod01'
+            : [...made.values()].find(
+                (m) => m.concept === body.concept && sameSet(m.apis, body.apis),
+              )?.model.id;
+      sessionCounter += 1;
+      const sessionId = `s-mock${sessionCounter}`;
+      modelSessions.set(sessionId, { apis: body.apis, concept: body.concept });
+      return HttpResponse.json({
+        sessionId,
+        status: existing ? 'ready' : 'awaiting_draft',
+        snapshotId: existing ?? null,
+        inputs: body.apis.map((api) => ({ api, build: 'b-6ff6063a275d40c14e4bcdd001f1c9ae' })),
+        contextUrl: `/v1/models/sessions/${sessionId}/context`,
+        claudePrompt: `Use the Plume maintainer MCP: get_model_context("${sessionId}"), write the canonical ${body.concept} model for ${body.apis.join(', ')}, then submit_model_draft("${sessionId}", draft).`,
+        mcpUrl: 'http://127.0.0.1:18481/mcp',
+      });
+    }),
+    http.get(`${base}/v1/models/sessions/:id/context`, ({ params }) => {
+      const session = modelSessions.get(String(params.id));
+      if (!session)
+        return HttpResponse.json(
+          { error: 'not_found', message: 'No such session' },
+          { status: 404 },
+        );
+      return HttpResponse.json({
+        session_id: params.id,
+        concept: session.concept,
+        apis: session.apis,
+        instructions:
+          'Write the canonical model from the documents below. Copy field names and quotes verbatim.',
+        draft_format: {
+          name: 'string',
+          fields: [{ name: 'string', sources: '{ api: { paths, evidence } }' }],
+        },
+        status: 'open',
+      });
+    }),
+    http.post(`${base}/v1/models/sessions/:id/draft`, async ({ params, request }) => {
+      if (!isMaintainer(request)) return unauthorized();
+      const session = modelSessions.get(String(params.id));
+      if (!session)
+        return HttpResponse.json(
+          { error: 'not_found', message: 'No such session' },
+          { status: 404 },
+        );
+      const draft = (await request.json()) as {
+        name?: unknown;
+        fields?: unknown;
+        refuse?: unknown;
+      };
+      const issues =
+        typeof draft.name !== 'string' || !Array.isArray(draft.fields) || draft.fields.length === 0
+          ? [
+              {
+                code: 'INVALID_FORMAT',
+                field: 'draft',
+                api: null,
+                message: 'the draft needs a name and at least one field',
+              },
+            ]
+          : draft.refuse === 'quote'
+            ? [
+                {
+                  code: 'QUOTE_NOT_FOUND',
+                  field: 'total',
+                  api: session.apis[0] ?? null,
+                  message: "the quote is not in model:order: 'Total including tax.'",
+                },
+              ]
+            : [];
+      if (issues.length)
+        return HttpResponse.json(
+          {
+            error: 'draft_refused',
+            message: `${issues.length} issue(s): ${issues[0]?.code}`,
+            detail: 'refused',
+            accepted: false,
+            issues,
+          },
+          { status: 422 },
+        );
+      const model = {
+        ...productSnapshot,
+        id: `m-mock${made.size + 1}`,
+        name: String(draft.name),
+        concept: session.concept,
+        sessionId: String(params.id),
+      };
+      made.set(model.id, { model, apis: session.apis, concept: session.concept });
+      return HttpResponse.json({ created: true, model }, { status: 201 });
+    }),
+    http.get(`${base}/v1/models`, ({ request }) => {
+      const api = new URL(request.url).searchParams.get('api');
+      const items = [...made.values()]
+        .filter((m) => !api || m.apis.includes(api))
+        .map((m) => ({
+          id: m.model.id,
+          name: m.model.name,
+          concept: m.concept,
+          apis: m.apis,
+          generatedAt: '2026-11-15T01:00:00Z',
+        }));
+      return HttpResponse.json({ items });
     }),
     http.get(`${base}/v1/models/:id`, ({ params }) => {
-      const snap = snapshots[String(params.id)];
+      const id = String(params.id);
+      const snap = snapshots[id] ?? made.get(id)?.model;
       return snap
         ? HttpResponse.json(snap)
-        : HttpResponse.json({ detail: 'Snapshot not found' }, { status: 404 });
+        : HttpResponse.json({ error: 'not_found', message: 'Snapshot not found' }, { status: 404 });
     }),
     http.get(`${base}/v1/maintainer/me`, ({ request }) =>
       isMaintainer(request) ? HttpResponse.json({ name: 'maintainer' }) : unauthorized(),

@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
+import { GenerateSession } from './GenerateSession';
 import { useAsync } from '@/api/useAsync';
-import { ApiError, type ApiRef, type Concept, type SuggestResponse } from '@/api/types';
+import {
+  ApiError,
+  type ApiRef,
+  type Concept,
+  type GenerateResponse,
+  type SuggestResponse,
+} from '@/api/types';
 import {
   ApiAvatar,
   Banner,
@@ -92,8 +99,12 @@ export function Suggestions() {
   const { state, retry } = useSuggestions(key);
   const [filter, setFilter] = useState<Filter>('all');
   const [generating, setGenerating] = useState<string | null>(null);
+  const [session, setSession] = useState<{ concept: Concept; response: GenerateResponse } | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const ctrl = useRef<AbortController | null>(null);
+  const openModel = useCallback((id: string) => navigate(`/models/${id}`), [navigate]);
   useEffect(() => () => ctrl.current?.abort(), []);
 
   const crumbs = [
@@ -119,11 +130,14 @@ export function Suggestions() {
     setGenerating(concept.id);
     setError(null);
     try {
-      const { snapshotId } = await client.generateModel(
-        { apis: apiIds, concept: concept.id },
-        c.signal,
-      );
-      navigate(`/models/${snapshotId}`);
+      const res = await client.generateModel({ apis: apiIds, concept: concept.id }, c.signal);
+      if (res.status === 'ready' && res.snapshotId) {
+        // a snapshot already exists for these builds: open it
+        navigate(`/models/${res.snapshotId}`);
+        return;
+      }
+      setSession({ concept, response: res });
+      setGenerating(null);
     } catch (e) {
       if (c.signal.aborted) return;
       setError(
@@ -214,6 +228,15 @@ export function Suggestions() {
               {error}
             </p>
           ) : null}
+          {session ? (
+            <GenerateSession
+              concept={session.concept}
+              apis={data.apis}
+              session={session.response}
+              onOpen={openModel}
+              onCancel={() => setSession(null)}
+            />
+          ) : null}
           <div className="concepts">
             {visible.length === 0 ? (
               <EmptyState title="No concepts match this filter">Try “All concepts”.</EmptyState>
@@ -224,7 +247,7 @@ export function Suggestions() {
                   concept={c}
                   apis={data.apis}
                   busy={generating === c.id}
-                  disabled={generating !== null}
+                  disabled={generating !== null || session !== null}
                   onGenerate={() => void generate(c)}
                 />
               ))
