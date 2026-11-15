@@ -40,7 +40,11 @@ from plume.interfaces import payloads
 from plume.interfaces.http import schemas as s
 from plume.interfaces.http.maintainer import maintainer_router
 from plume.interfaces.http.models_routes import models_router
-from plume.interfaces.http.rate_limit import RateLimitMiddleware
+from plume.interfaces.http.rate_limit import (
+    BodySizeLimitMiddleware,
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+)
 
 ApiPath = Annotated[str, Path(description="API id, e.g. shopify")]
 Version = Annotated[str | None, Query(description="Tag or build id; default latest")]
@@ -105,7 +109,9 @@ def create_app(deps: HttpDependencies) -> FastAPI:
         description="Reader API over sealed builds of API documentation. Every response names "
         "the build it was read from. Retrieval only: clients (Claude) write the answers.",
     )
+    app.add_middleware(BodySizeLimitMiddleware, max_bytes=deps.max_upload_bytes)
     app.add_middleware(RateLimitMiddleware, per_minute=deps.rate_limit_per_minute)
+    app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(deps.cors_origins),

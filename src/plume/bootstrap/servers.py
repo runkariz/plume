@@ -12,12 +12,14 @@ from fastapi import FastAPI
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from plume.bootstrap.container import Container
 from plume.interfaces.http.app import HttpDependencies, create_app
+from plume.interfaces.http.rate_limit import RateLimitMiddleware
 from plume.interfaces.mcp.maintainer_server import (
     McpMaintainerDependencies,
     create_maintainer_server,
@@ -138,7 +140,10 @@ def mcp_app(c: Container) -> Starlette:
         async with reader.session_manager.run(), maintainer.session_manager.run():
             yield
 
-    return Starlette(routes=routes, lifespan=lifespan)
+    # The public reader MCP is rate limited per client address like the HTTP reader API.
+    limit = c.settings.reader_rate_limit_per_minute
+    middleware = [Middleware(RateLimitMiddleware, per_minute=limit)]
+    return Starlette(routes=routes, lifespan=lifespan, middleware=middleware)
 
 
 def recover_jobs(c: Container) -> None:
