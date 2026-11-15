@@ -1,7 +1,15 @@
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState, type FormEvent } from 'react';
 import { useApiClient } from '@/api/context';
-import type { DraftIssue, ModelJobEvent, SetSessionResponse } from '@/api/types';
+import {
+  ApiError,
+  type DraftIssue,
+  type ModelJobEvent,
+  type SetSessionResponse,
+} from '@/api/types';
+import { useIsMaintainer } from '@/app/authStore';
 import { Banner, Button, Card, Chip } from '@/components';
+import { saveOwnerKey } from '@/lib/ownerKeys';
+import { Issues } from '@/pages/models/GenerateSession';
 
 /** How often the open session checks for the new set (tests lower it). */
 export const setPollConfig = { ms: 3000 };
@@ -20,21 +28,25 @@ export function SetSessionPanel({
 }: {
   session: SetSessionResponse;
   concepts: string[];
-  onOpen: (setId: string) => void;
+  onOpen: (setId: string, extra?: { ownerKey?: string }) => void;
   onCancel: () => void;
 }) {
   const client = useApiClient();
+  const maintainer = useIsMaintainer();
   const focus = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
   useEffect(() => focus.current?.focus(), []);
 
+  // While a pasted draft is being submitted the poll must not open the set: the submit knows the owner key, the
+  // poll does not, and whichever navigates last wins.
+  const submitting = useRef(false);
   const id = session.setSessionId;
   useEffect(() => {
     const ctrl = new AbortController();
     const timer = setInterval(() => {
       client.getSetSession(id, ctrl.signal).then(
         (r) => {
-          if (r.setId && !ctrl.signal.aborted) onOpen(r.setId);
+          if (r.setId && !ctrl.signal.aborted && !submitting.current) onOpen(r.setId);
         },
         () => undefined, // a missed poll is not an error: try again on the next tick
       );
@@ -44,6 +56,56 @@ export function SetSessionPanel({
       ctrl.abort();
     };
   }, [client, id, onOpen]);
+
+  // paste a draft yourself: a member's model first (its own session), then the set that names the stored models
+  const [kind, setKind] = useState('set');
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [issues, setIssues] = useState<DraftIssue[]>([]);
+  const [stored, setStored] = useState<Record<string, string>>({});
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setIssues([]);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(draft);
+    } catch {
+      setError('That is not valid JSON. Paste the whole draft object.');
+      return;
+    }
+    setBusy(true);
+    submitting.current = true;
+    try {
+      if (kind === 'set') {
+        const { set, ownerKey } = await client.submitSetDraft(id, parsed);
+        // a new lineage of someone without a token: the key lists "Your model sets" in this browser
+        if (ownerKey) saveOwnerKey(ownerKey);
+        onOpen(set.id, ownerKey ? { ownerKey } : undefined);
+      } else {
+        const memberSession = session.memberSessions[kind];
+        if (!memberSession) throw new Error(`There is no session for ${kind}.`);
+        const { model, ownerKey } = await client.submitModelDraft(memberSession, parsed);
+        if (ownerKey) saveOwnerKey(ownerKey);
+        setStored((s) => ({ ...s, [kind]: model.id }));
+        setDraft('');
+        setKind('set');
+        submitting.current = false;
+      }
+    } catch (err) {
+      submitting.current = false;
+      if (err instanceof ApiError && err.issues?.length) setIssues(err.issues);
+      else if (err instanceof ApiError && err.status === 401)
+        setError('Your session is not valid any more. Sign in again.');
+      else if (err instanceof ApiError && err.status === 413)
+        setError('That draft is too large for the server.');
+      else setError(err instanceof Error ? err.message : 'Could not submit the draft.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function copy() {
     try {
@@ -96,6 +158,79 @@ export function SetSessionPanel({
                 ? 'Copy failed: select the text instead'
                 : ''}
           </span>
+        </div>
+        <div className="session-draft">
+          <h3>Or paste a draft yourself</h3>
+          <p className="muted small">
+            A set is made of stored models: paste each member&apos;s model draft first, then the set
+            draft that names them (
+            <span className="mono">
+              {'{"name", "members": {"Concept": "<model id>"}, "relations": […]}'}
+            </span>
+            ).
+          </p>
+          {Object.keys(stored).length ? (
+            <ul className="plain" aria-label="Stored member models">
+              {Object.entries(stored).map(([concept, modelId]) => (
+                <li key={concept}>
+                  {concept}: <Chip tone="ok">stored</Chip>{' '}
+                  <span className="mono small">{modelId}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <form onSubmit={submit} noValidate>
+            <label htmlFor="set-draft-kind" className="small">
+              This draft is
+            </label>{' '}
+            <select
+              id="set-draft-kind"
+              className="input"
+              value={kind}
+              onChange={(e) => {
+                setKind(e.target.value);
+                setError(null);
+                setIssues([]);
+              }}
+            >
+              <option value="set">the set</option>
+              {concepts.map((c) => (
+                <option key={c} value={c}>
+                  the {c} model
+                </option>
+              ))}
+            </select>
+            <label htmlFor="set-draft-json" className="sr-only">
+              Draft JSON
+            </label>
+            <textarea
+              id="set-draft-json"
+              className="input mono draft-box"
+              rows={7}
+              spellCheck={false}
+              placeholder={
+                kind === 'set'
+                  ? '{ "name": "Product + Variant", "members": { … }, "relations": [ … ] }'
+                  : `{ "name": "${kind}", "fields": [ … ] }`
+              }
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+            {error ? (
+              <p role="alert" className="form-error">
+                {error}
+              </p>
+            ) : null}
+            {issues.length ? <Issues issues={issues} /> : null}
+            <div className="row" style={{ marginTop: 12 }}>
+              <Button type="submit" variant="primary" disabled={busy || draft.trim() === ''}>
+                {busy ? 'Checking the draft…' : 'Submit draft'}
+              </Button>
+              <span className="faint small">
+                {maintainer ? 'Stored unreleased.' : 'Stored unlisted: only people with the link.'}
+              </span>
+            </div>
+          </form>
         </div>
         <div className="actions session-actions">
           <button type="button" className="linkbtn muted-link" onClick={onCancel}>

@@ -260,7 +260,14 @@ export function RelatedConcepts() {
     }));
   const full = members.length >= MAX_MEMBERS;
 
-  const open = useCallback((setId: string) => navigate(`/model-sets/${setId}`), [navigate]);
+  const open = useCallback(
+    (setId: string, extra?: { ownerKey?: string }) =>
+      navigate(
+        `/model-sets/${setId}`,
+        extra?.ownerKey ? { state: { ownerKey: extra.ownerKey } } : undefined,
+      ),
+    [navigate],
+  );
 
   async function create(engine: 'claude' | 'server') {
     setError(null);

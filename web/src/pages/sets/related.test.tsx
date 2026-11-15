@@ -246,6 +246,98 @@ describe('Create a set with Claude', () => {
   });
 });
 
+describe('Paste a draft yourself (set session)', () => {
+  async function panel(signedIn = false) {
+    if (signedIn) authStore.signIn('pl_ok', 'maintainer', false);
+    const view = renderApp(url);
+    await loaded();
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Image' }));
+    await userEvent.click(within(bar()).getByRole('button', { name: 'Create with Claude' }));
+    const p = await screen.findByRole('region', { name: 'Create the set with Claude' });
+    return { p, ...view };
+  }
+  const paste = async (p: HTMLElement, text: string) => {
+    const box = within(p).getByLabelText('Draft JSON');
+    await userEvent.clear(box);
+    await userEvent.click(box);
+    await userEvent.paste(text);
+  };
+  const submit = (p: HTMLElement) =>
+    userEvent.click(within(p).getByRole('button', { name: 'Submit draft' }));
+
+  it('offers the set and every member model as what the draft is, and says where it is stored', async () => {
+    const { p } = await panel();
+    const kind = within(p).getByLabelText('This draft is');
+    expect(
+      within(kind)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual(['the set', 'the Product model', 'the Image model']);
+    expect(within(p).getByRole('button', { name: 'Submit draft' })).toBeDisabled();
+    expect(within(p).getByText('Stored unlisted: only people with the link.')).toBeInTheDocument();
+  });
+
+  it('says a signed-in maintainer gets an unreleased set', async () => {
+    const { p } = await panel(true);
+    expect(within(p).getByText('Stored unreleased.')).toBeInTheDocument();
+  });
+
+  it('rejects text that is not JSON before calling the server', async () => {
+    const { p } = await panel();
+    await paste(p, '{ nope');
+    await submit(p);
+    expect(await within(p).findByRole('alert')).toHaveTextContent('That is not valid JSON');
+  });
+
+  it('shows the issues of a refused set draft and stays on the page', async () => {
+    const { p, router } = await panel();
+    await paste(p, '{"refuse":"relation"}');
+    await submit(p);
+    const alert = await within(p).findByRole('alert');
+    expect(alert).toHaveTextContent('The draft was refused, nothing was stored');
+    expect(alert).toHaveTextContent('RELATION_INVALID');
+    expect(alert).toHaveTextContent('Order has no field "items" that can hold Product');
+    expect(router.state.location.pathname).toBe('/models/related');
+  });
+
+  it("stores a member's model first, lists it, and goes back to the set", async () => {
+    const { p } = await panel();
+    await userEvent.selectOptions(within(p).getByLabelText('This draft is'), 'Image');
+    await paste(p, '{"name":"Image","fields":[{"name":"url"}]}');
+    await submit(p);
+    const stored = await within(p).findByRole('list', { name: 'Stored member models' });
+    expect(stored).toHaveTextContent(/Image:\s*stored\s*u-mock/);
+    expect(within(p).getByLabelText('Draft JSON')).toHaveValue('');
+    expect(within(p).getByLabelText('This draft is')).toHaveValue('set');
+    expect(localStorage.getItem('plume-owner-keys')).toContain('ok-mock'); // a new lineage: its key is kept
+  });
+
+  it('a refused member draft shows its issues, and nothing is listed as stored', async () => {
+    const { p } = await panel();
+    await userEvent.selectOptions(within(p).getByLabelText('This draft is'), 'Product');
+    await paste(p, '{"name":"Product","fields":[{"name":"id"}],"refuse":"quote"}');
+    await submit(p);
+    expect(await within(p).findByRole('alert')).toHaveTextContent('QUOTE_NOT_FOUND');
+    expect(within(p).queryByRole('list', { name: 'Stored member models' })).not.toBeInTheDocument();
+  });
+
+  it('opens the set once stored, keeps its owner key and shows it once', async () => {
+    const { p, router } = await panel();
+    await paste(
+      p,
+      '{"name":"Product + Image","members":{"Product":"u-1","Image":"u-2"},"relations":[]}',
+    );
+    await submit(p);
+    await waitFor(() =>
+      expect(router.state.location.pathname).toMatch(/^\/model-sets\/u-set-mock/),
+    );
+    expect(JSON.parse(localStorage.getItem('plume-owner-keys') ?? '[]')).toEqual([
+      expect.stringMatching(/^pk_u-set-mock/),
+    ]);
+    expect(await screen.findByText('Your model set is saved, and unlisted')).toBeInTheDocument();
+  });
+});
+
 describe('Generate the set on the server (maintainer)', () => {
   async function start(concept = 'Product', pick = 'Image') {
     authStore.signIn('pl_ok', 'maintainer', true);

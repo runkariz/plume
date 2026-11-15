@@ -991,6 +991,7 @@ th {
   font-size: 14px;
 }
 .selbar-chips.plain {
+  display: flex; /* beats `ul.plain` (grid), which would stack the chips one per line */
   margin-top: 12px;
 }
 .selbar-chip.light {

@@ -16,7 +16,7 @@ import { EvidencePack } from './EvidencePack';
 /** How often the open session checks for the new model (tests lower it). */
 export const pollConfig = { ms: 3000 };
 
-function Issues({ issues }: { issues: DraftIssue[] }) {
+export function Issues({ issues }: { issues: DraftIssue[] }) {
   return (
     <div role="alert" className="draft-issues">
       <b>The draft was refused, nothing was stored.</b>
@@ -71,13 +71,16 @@ export function GenerateSession({
   }, []);
 
   // Poll the session: a draft accepted for it (by Claude or pasted elsewhere) names the model to open.
+  // While a pasted draft is being submitted the poll must not open the model: the submit knows the owner key, the
+  // poll does not, and whichever navigates last wins (the key and the "saved" notice would be lost).
+  const submitting = useRef(false);
   const sessionId = session.sessionId;
   useEffect(() => {
     const ctrl = new AbortController();
     const timer = setInterval(() => {
       client.getModelSession(sessionId, ctrl.signal).then(
         (r) => {
-          if (r.snapshotId && !ctrl.signal.aborted) onOpen(r.snapshotId);
+          if (r.snapshotId && !ctrl.signal.aborted && !submitting.current) onOpen(r.snapshotId);
         },
         () => undefined, // a missed poll is not an error: try again on the next tick
       );
@@ -131,12 +134,14 @@ export function GenerateSession({
       return;
     }
     setBusy(true);
+    submitting.current = true;
     try {
       const { model, ownerKey } = await client.submitModelDraft(session.sessionId, parsed);
       // a new lineage of someone without a token: the key lists "Your models" in this browser
       if (ownerKey) saveOwnerKey(ownerKey);
       onOpen(model.id, ownerKey ? { ownerKey } : undefined);
     } catch (err) {
+      submitting.current = false;
       if (err instanceof ApiError && err.issues?.length) setIssues(err.issues);
       else if (err instanceof ApiError && err.status === 401)
         setError('Your session is not valid any more. Sign in again.');
