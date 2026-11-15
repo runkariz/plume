@@ -307,9 +307,10 @@ def test_user_models_are_unlisted_with_a_random_id_and_a_my_models_link(
     assert len(ref.collection_id) >= 22
     retry = models.submit(session.session_id, _draft("good"))  # same draft again: same model
     assert (retry.created, retry.snapshot.snapshot_id) == (False, snap.snapshot_id)
-    # The first response may have been lost (a bridge timeout): the retry names the same link.
+    # Without the link, a retry gets a new one (never one the caller did not send).
     assert retry.collection is not None
-    assert (retry.collection.collection_id, retry.collection.created) == (ref.collection_id, False)
+    assert retry.collection.created
+    assert retry.collection.collection_id != ref.collection_id
     mine = stack.collections().content(ref.collection_id)
     assert [m.snapshot_id for m in mine.models] == [snap.snapshot_id]
     assert models.visible_snapshot(snap.snapshot_id) == snap  # the link works for anyone
@@ -594,3 +595,24 @@ def test_generation_feeds_warnings_back_once_and_sends_heartbeats(
     assert "at" in next(e for e in events if e["type"] == "started")
     assert "WRITE_ONLY_SOURCE" in writer.calls[-1][1][-1].text
     assert stack.models().snapshot(done.snapshot_id or "").warnings == ()  # the fixed draft
+
+
+def test_a_version_by_someone_else_never_reveals_the_authors_link(stack: FakeStack) -> None:
+    """plume-9a's leak: anyone with a model's link may add a version; saving it without a
+    collection must not answer with the author's My models link."""
+    models = stack.models()
+    first = models.submit(models.start(APIS, "Order", "user").session_id, _draft("good"))
+    assert first.collection is not None
+    author = first.collection.collection_id
+    stranger = models.submit(
+        models.revise(first.snapshot.snapshot_id)["session_id"],
+        dict(_draft("good"), description="A stranger's version."),
+        based_on=first.snapshot.snapshot_id,
+    )
+    assert stranger.snapshot.lineage == first.snapshot.lineage  # the same model, version 2
+    assert stranger.collection is not None
+    assert stranger.collection.created
+    assert stranger.collection.collection_id != author
+    # the author's link still lists their model (its latest version)
+    mine = stack.collections().content(author).models
+    assert [m.snapshot_id for m in mine] == [stranger.snapshot.snapshot_id]

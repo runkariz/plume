@@ -74,12 +74,10 @@ class Collections:
         return CollectionRef(c.collection_id, False)
 
     def save(self, collection_id: str | None, kind: str, lineage_id: str) -> CollectionRef:
-        """Put a lineage in a collection. Without one, the lineage's existing collection (a
-        retry) or a new one."""
-        if not (collection_id or "").strip():
-            held = self._repo.containing(kind, lineage_id)
-            if held:
-                return CollectionRef(held[0], False)
+        """Put a lineage in the caller's collection, or in a new one. Never answer with a
+        collection the caller did not send: a lineage may already sit in its author's link,
+        and anyone with a model's link may add a version (that must not reveal the author's
+        list). A retry without the link therefore gets a new link too."""
         ref = self.ensure(collection_id)
         items = self._repo.items(ref.collection_id)
         if (kind, lineage_id) not in items and len(items) >= MAX_COLLECTION_ITEMS:

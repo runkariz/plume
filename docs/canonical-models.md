@@ -167,8 +167,9 @@ design is in [design/model-relations.md](design/model-relations.md).
   [design/my-models-link.md](design/my-models-link.md)): the first save creates it and returns
   `collection: {id, url, created}`; later saves pass `collection` to add to it.
   `list_my_models(collection)` / `GET /v1/collections/{id}` lists the latest version of each
-  model and set in it; `POST /v1/collections/{id}/merge` joins two links. Resubmitting the same
-  draft in the same session returns the stored model and its link. Old owner keys (`pk_…`,
+  model and set in it; `POST /v1/collections/{id}/merge` joins two links. Plume never returns a
+  link the caller did not send: without `collection`, a save (also a version of someone else's
+  model, or a retry) gets a new link. Old owner keys (`pk_…`,
   before 2026-11-16) became one collection each; `POST /v1/models/mine` and
   `list_my_models(owner_keys)` still accept them and return the link. A lost link loses nothing
   but the listing: model links keep working. Unlisted ids are `u-` + 128 random bits (not a content hash: a
