@@ -123,7 +123,7 @@ for (const theme of THEMES) {
         { openLinks: true, width: 560 },
       );
       const notice = frame
-        .getByRole('alert')
+        .getByRole('status')
         .filter({ hasText: 'Your model is saved, and unlisted' });
       await expect(notice).toBeVisible();
       await expect(notice).toContainText('Keep this key to find or list your models later');

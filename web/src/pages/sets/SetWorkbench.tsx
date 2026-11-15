@@ -83,7 +83,12 @@ export function SetWorkbench({
           }}
         />
       </div>
-      <Card className="pad wb-detail" role="region" aria-label="Selected model or relation">
+      <Card
+        className="pad wb-detail"
+        role="region"
+        aria-label="Selected model or relation"
+        tabIndex={0}
+      >
         {children}
       </Card>
     </div>
