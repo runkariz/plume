@@ -412,9 +412,27 @@ def models_router(  # noqa: PLR0915
         dependencies=[Depends(auth)],
         responses={**token_errors, 409: {"model": s.ErrorBody}},
     )
-    def release(snapshot_id: str) -> dict[str, Any]:
-        """Make an unreleased model official (listed publicly). 409 unless it is unreleased."""
-        return snapshot_json(models().release(snapshot_id), True)
+    def release(snapshot_id: str, body: s.ReleaseRequest | None = None) -> dict[str, Any]:
+        """Make an unreleased model official (listed publicly). 409 unless it is unreleased.
+        ``supersedes``: official models of the same concept (from /supersedable) that this one
+        replaces: they stay readable by id with supersededBy, and leave the lists. 409 when an
+        id is not one of them."""
+        wanted = body.supersedes if body else []
+        out = snapshot_json(models().release(snapshot_id, wanted), True)
+        out["supersedes"] = list(dict.fromkeys(wanted))
+        return out
+
+    @router.get(
+        "/v1/models/{snapshot_id}/supersedable",
+        dependencies=[Depends(auth)],
+        responses={**token_errors, 404: {"model": s.ErrorBody}},
+    )
+    def supersedable(snapshot_id: str) -> dict[str, Any]:
+        """Official models of the same concept (case-insensitive) over ANY API set that a
+        release of this model may supersede, newest first. covered: its APIs are a subset of
+        this model's. Offer them; nothing is superseded unless release names it."""
+        service = models()
+        return {"items": service.supersedable(service.snapshot(snapshot_id))}
 
     @router.post(
         "/v1/models/{snapshot_id}/discard",

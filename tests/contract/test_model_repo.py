@@ -11,6 +11,7 @@ from sqlalchemy.exc import DBAPIError
 from plume.application.ports.model_repo import ModelRepo, ModelSession
 from plume.domain.models.canonical_model import parse_draft
 from plume.domain.models.snapshot import ModelSnapshot, PinnedInput, snapshot_id_for
+from plume.domain.models.validation import Issue
 from plume.infrastructure.db.repos.model_repo import PostgresModelRepo
 from tests.contract.conftest import Store
 from tests.fakes.models import InMemoryModelRepo
@@ -118,6 +119,16 @@ def test_visibility_lineages_and_owners(repo: ModelRepo) -> None:
     assert (got.visibility, got.released_at) == ("official", T)
     assert [s.snapshot_id for s in repo.list_snapshots()] == [m.snapshot_id]
     assert repo.replace_owner_key(m.snapshot_id, "hash-3") is False  # no owner: stays so
+    warned = (Issue("WRITE_ONLY_SOURCE", "status", "shopify", "cites a write"),)
+    newer = replace(_snap("s-2", T + timedelta(minutes=5)), snapshot_id="m-newer", warnings=warned)
+    assert repo.save_snapshot(newer) is True
+    assert repo.get_snapshot("m-newer").warnings == newer.warnings  # type: ignore[union-attr]
+    assert repo.supersede(m.snapshot_id, "m-newer", T + timedelta(minutes=6)) is True
+    gone = repo.get_snapshot(m.snapshot_id)
+    assert gone is not None
+    assert (gone.visibility, gone.superseded_by) == ("superseded", "m-newer")
+    assert gone.superseded_at is not None
+    assert repo.supersede(m.snapshot_id, "m-newer", T) is False  # only official ones
 
 
 def test_model_jobs(store: Store, request: pytest.FixtureRequest) -> None:

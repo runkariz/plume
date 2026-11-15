@@ -2948,6 +2948,21 @@
         "title": "RelationEditRequest",
         "type": "object"
       },
+      "ReleaseRequest": {
+        "properties": {
+          "supersedes": {
+            "description": "Official models of the same concept this release replaces (ids from GET /v1/models/{id}/supersedable).",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 50,
+            "title": "Supersedes",
+            "type": "array"
+          }
+        },
+        "title": "ReleaseRequest",
+        "type": "object"
+      },
       "ReviewRequest": {
         "properties": {
           "apiId": {
@@ -8818,7 +8833,7 @@
     },
     "/v1/models/{snapshot_id}/release": {
       "post": {
-        "description": "Make an unreleased model official (listed publicly). 409 unless it is unreleased.",
+        "description": "Make an unreleased model official (listed publicly). 409 unless it is unreleased.\n``supersedes``: official models of the same concept (from /supersedable) that this one\nreplaces: they stay readable by id with supersededBy, and leave the lists. 409 when an\nid is not one of them.",
         "operationId": "release_v1_models__snapshot_id__release_post",
         "parameters": [
           {
@@ -8847,6 +8862,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ReleaseRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -9011,6 +9043,107 @@
           }
         },
         "summary": "Revise",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models/{snapshot_id}/supersedable": {
+      "get": {
+        "description": "Official models of the same concept (case-insensitive) over ANY API set that a\nrelease of this model may supersede, newest first. covered: its APIs are a subset of\nthis model's. Offer them; nothing is superseded unless release names it.",
+        "operationId": "supersedable_v1_models__snapshot_id__supersedable_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Supersedable V1 Models  Snapshot Id  Supersedable Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Supersedable",
         "tags": [
           "models"
         ]

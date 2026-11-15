@@ -458,3 +458,122 @@ def test_official_models_group_by_concept_case_insensitively(stack: FakeStack) -
     assert models.same_concept(new) == ("m-old-lowercase",)
     assert models.same_concept(old) == (new.snapshot_id,)
     assert models.snapshot("m-old-lowercase").concept == "order"  # untouched
+
+
+def _with_post_orders(packages: Path, tmp_path: Path) -> FakeStack:
+    """test-catalog plus a POST /api/{version}/orders (a write echoing the order fields)."""
+    import shutil  # noqa: PLC0415
+
+    copy = tmp_path / "test-catalog"
+    shutil.copytree(packages / "test-catalog", copy)
+    eps = copy / "connector" / "endpoints"
+    shutil.copytree(eps / "get-api-v1-orders", eps / "post-api-v1-orders")
+    req = json.loads((eps / "post-api-v1-orders" / "request.json").read_text())
+    req["method"] = "POST"
+    req.pop("endpointId", None)
+    (eps / "post-api-v1-orders" / "request.json").write_text(json.dumps(req))
+    s = FakeStack(embedder=WordEmbedder())
+    s.load(str(copy))
+    s.load(str(packages / "second-catalog"))
+    return s
+
+
+def test_a_mapping_citing_only_a_write_is_stored_with_a_warning(
+    packages: Path, tmp_path: Path
+) -> None:
+    from plume.domain.shared.ids import BuildId  # noqa: PLC0415
+
+    stack = _with_post_orders(packages, tmp_path)
+    models = stack.models()
+    session = models.start(APIS, "Order")
+    pin = next(i.build for i in session.inputs if i.api == APIS[0])
+    post = "endpoint:POST~/api/{version}/orders"
+    doc = stack.documents.get_document(BuildId(pin), post)
+    assert doc is not None
+    spec = next(f for f in doc.fields if f.description and f.name.endswith("number"))
+    draft = _draft("good")
+    number = next(f for f in draft["fields"] if f["name"] == "number")
+    number["sources"][APIS[0]] = {
+        "paths": [{"path": spec.name}],
+        "evidence": [{"doc_id": post, "quote": spec.description}],
+    }
+    assert [w.code for w in models.check(session.session_id, draft)] == ["WRITE_ONLY_SOURCE"]
+    snap = models.submit(session.session_id, draft, maintainer=True).snapshot
+    assert [(w.code, w.field, w.api) for w in snap.warnings] == [
+        ("WRITE_ONLY_SOURCE", "number", APIS[0])
+    ]
+    assert models.snapshot(snap.snapshot_id).warnings == snap.warnings
+    # A GET fetch (or any read evidence) makes it a read mapping: no warning.
+    number["sources"][APIS[0]]["fetch"] = "GET /api/{version}/orders"
+    assert models.check(session.session_id, draft) == []
+
+
+def test_release_supersedes_only_what_the_maintainer_names(stack: FakeStack) -> None:
+    from plume.application.models.sessions import ModelStateError  # noqa: PLC0415
+
+    models = stack.models()
+    old = models.release(
+        models.submit(models.start(APIS, "order").session_id, _draft("good"), maintainer=True)
+        .snapshot.snapshot_id
+    )  # fmt: skip
+    draft = {**_draft("good"), "description": "v2 written independently"}
+    new = models.submit(models.start(APIS, "Order").session_id, draft, maintainer=True).snapshot
+    cands = models.supersedable(new)
+    assert [(c["id"], c["covered"], c["stale"]) for c in cands] == [(old.snapshot_id, True, False)]
+    with pytest.raises(ModelStateError, match="not an official Order model"):
+        models.release(new.snapshot_id, ["m-nope"])
+    assert models.snapshot(new.snapshot_id).visibility == "unreleased"  # nothing changed
+    released = models.release(new.snapshot_id, [old.snapshot_id])
+    assert released.visibility == "official"
+    gone = models.snapshot(old.snapshot_id)
+    assert (gone.visibility, gone.superseded_by) == ("superseded", new.snapshot_id)
+    assert models.visible_snapshot(old.snapshot_id).superseded_by == new.snapshot_id  # by id
+    assert [m.snapshot_id for m in models.list("test-catalog-api")] == [new.snapshot_id]
+    assert models.same_concept(released) == ()
+
+
+def test_generation_feeds_warnings_back_once_and_sends_heartbeats(
+    packages: Path, tmp_path: Path
+) -> None:
+    """R4: a write-only mapping goes back to the LLM once (the round limit stays); while the
+    model call runs, `heartbeat` events say so."""
+    import time  # noqa: PLC0415
+
+    from plume.application.models.generate import GenerateModels  # noqa: PLC0415
+    from plume.domain.shared.ids import BuildId  # noqa: PLC0415
+    from plume.infrastructure.jobs.thread_runner import InlineJobRunner  # noqa: PLC0415
+    from tests.fakes.models import ScriptedModelWriter  # noqa: PLC0415
+
+    stack = _with_post_orders(packages, tmp_path)
+    pin = stack.resolver().resolve(APIS[0]).build.build_id
+    post = "endpoint:POST~/api/{version}/orders"
+    doc = stack.documents.get_document(BuildId(pin.value), post)
+    assert doc is not None
+    spec = next(f for f in doc.fields if f.description and f.name.endswith("number"))
+    weak = _draft("good")
+    number = next(f for f in weak["fields"] if f["name"] == "number")
+    number["sources"][APIS[0]] = {
+        "paths": [{"path": spec.name}],
+        "evidence": [{"doc_id": post, "quote": spec.description}],
+    }
+
+    class SlowWriter(ScriptedModelWriter):
+        def write(self, system: str, turns: Any) -> str:
+            time.sleep(0.05)
+            return super().write(system, turns)
+
+    writer = SlowWriter([weak, _draft("good")])
+    gen = GenerateModels(stack.models(), writer, stack.model_jobs, stack.model_events,
+                         InlineJobRunner(), stack.clock, heartbeat_seconds=0.01)  # fmt: skip
+    job = gen.start(APIS, "Order")
+    done = gen.get(job.job_id)
+    assert done.status == "succeeded"
+    events = [e.payload for e in stack.model_events.after(job.job_id, 0)]
+    kinds = [e["type"] for e in events]
+    assert kinds.count("warnings") == 1
+    assert "heartbeat" in kinds
+    beat = next(e for e in events if e["type"] == "heartbeat")
+    assert (beat["phase"], beat["round"]) == ("waiting_for_model", 1)
+    assert "at" in next(e for e in events if e["type"] == "started")
+    assert "WRITE_ONLY_SOURCE" in writer.calls[-1][1][-1].text
+    assert stack.models().snapshot(done.snapshot_id or "").warnings == ()  # the fixed draft

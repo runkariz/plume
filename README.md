@@ -82,7 +82,11 @@ origin**: a reverse proxy serves `web/dist` and forwards `/v1/` to the API (buil
 same-origin needs no CORS at all. A minimal nginx block:
 
 ```nginx
-location /v1/ { proxy_pass http://127.0.0.1:18480; proxy_set_header Host $host; }
+location /v1/ {
+  proxy_pass http://127.0.0.1:18480;
+  proxy_set_header Host $host;
+  proxy_buffering off;  # build and generation progress are event streams
+}
 location /    { root /srv/plume-web; try_files $uri /index.html; }
 ```
 

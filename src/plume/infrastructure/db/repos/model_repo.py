@@ -8,6 +8,11 @@ from sqlalchemy import Engine, text
 from plume.application.ports.model_repo import ModelJob, ModelSession
 from plume.domain.models.canonical_model import parse_draft
 from plume.domain.models.snapshot import ModelSnapshot, PinnedInput, Visibility, draft_json
+from plume.domain.models.validation import Issue
+
+
+def _issue(w: Issue) -> dict[str, Any]:
+    return {"code": w.code, "field": w.field, "api": w.api, "message": w.message}
 
 
 def _j(v: Any) -> Any:
@@ -41,6 +46,11 @@ def _snapshot(r: Any) -> ModelSnapshot:
         content_key="" if r.content_key == r.snapshot_id else r.content_key,
         released_at=r.released_at,
         generator_usage=_j(r.generator_usage) if r.generator_usage is not None else None,
+        warnings=tuple(
+            Issue(w["code"], w["field"], w.get("api"), w["message"]) for w in _j(r.warnings) or []
+        ),
+        superseded_by=r.superseded_by,
+        superseded_at=r.superseded_at,
     )
 
 
@@ -91,9 +101,10 @@ class PostgresModelRepo:
                     "INSERT INTO model_snapshots (snapshot_id, session_id, concept, apis, inputs, "
                     "model, citations_checked, prompt_version, created_at, visibility, origin, "
                     "generator, lineage_id, version, based_on, content_key, released_at, "
-                    "generator_usage) VALUES "
+                    "generator_usage, warnings) VALUES "
                     "(:id, :s, :c, :apis, CAST(:i AS jsonb), CAST(:m AS jsonb), :n, :pv, :t, :vis, "
-                    ":o, :g, :l, :v, :b, :k, :r, CAST(:u AS jsonb)) ON CONFLICT DO NOTHING"
+                    ":o, :g, :l, :v, :b, :k, :r, CAST(:u AS jsonb), CAST(:w AS jsonb)) "
+                    "ON CONFLICT DO NOTHING"
                 ),
                 {
                     "id": snapshot.snapshot_id,
@@ -113,6 +124,7 @@ class PostgresModelRepo:
                     "b": snapshot.based_on,
                     "k": snapshot.key,
                     "r": snapshot.released_at,
+                    "w": json.dumps([_issue(w) for w in snapshot.warnings]),
                     "u": json.dumps(snapshot.generator_usage)
                     if snapshot.generator_usage is not None
                     else None,
@@ -195,6 +207,17 @@ class PostgresModelRepo:
                 ),
                 {"v": visibility, "r": released_at, "s": snapshot_id},
             )
+
+    def supersede(self, snapshot_id: str, by: str, at: datetime) -> bool:
+        with self._engine.begin() as conn:
+            result = conn.execute(
+                text(
+                    "UPDATE model_snapshots SET visibility = 'superseded', superseded_by = :b, "
+                    "superseded_at = :t WHERE snapshot_id = :s AND visibility = 'official'"
+                ),
+                {"s": snapshot_id, "b": by, "t": at},
+            )
+        return bool(result.rowcount)
 
     def lineages_for_owner(self, key_hashes: Sequence[str]) -> list[str]:
         if not key_hashes:
