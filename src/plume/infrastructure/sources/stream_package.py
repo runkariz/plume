@@ -354,7 +354,9 @@ class StreamPackageSource:
         icon, extra_hashed = self._icon(connector, package_root)
         export = package_root / "knowledge-export"
         if export.is_dir() and knowledge_export.detect(export):
-            documents = _apply_export(documents, knowledge_export.load(export), warnings)
+            documents = _apply_export(
+                documents, knowledge_export.load(export), warnings, info.versions
+            )
         elif export.is_dir():
             for path in sorted(export.rglob("*.md")):
                 add(self._export_page(path, export), str(path.relative_to(export)))
@@ -655,25 +657,43 @@ def _renamed(model: Document, name: str) -> Document:
     return replace(model, title=name, resource=resource, text=text, source_id=original)
 
 
+def endpoint_key(endpoint_id: str, versions: tuple[str, ...]) -> str:
+    """A producer endpoint id without a trailing ``-<API version>`` (one of the versions the
+    package's app.json declares): a 1.2 id (``...-json-2026-10``) and the 1.1 id of the same
+    endpoint (``...-json``) then match. Nothing is guessed beyond the declared versions."""
+    for version in versions:
+        suffix = f"-{version}"
+        if version and endpoint_id.endswith(suffix):
+            return endpoint_id[: -len(suffix)]
+    return endpoint_id
+
+
 def _apply_export(
-    documents: list[Document], export: "knowledge_export.KnowledgeExport", warnings: list[str]
+    documents: list[Document],
+    export: "knowledge_export.KnowledgeExport",
+    warnings: list[str],
+    versions: tuple[str, ...] = (),
 ) -> list[Document]:
     """Enrich endpoints with their page section and rules; add one guide per page."""
-    by_source = {d.source_id: i for i, d in enumerate(documents) if d.kind is DocumentKind.ENDPOINT}
+    by_source = {
+        endpoint_key(d.source_id, versions): i
+        for i, d in enumerate(documents)
+        if d.kind is DocumentKind.ENDPOINT and d.source_id
+    }
     rules_by_scope: dict[str, list[knowledge_export.Rule]] = {}
     for rule in export.rules:
-        rules_by_scope.setdefault(rule.scope, []).append(rule)
+        rules_by_scope.setdefault(endpoint_key(rule.scope, versions), []).append(rule)
     out = list(documents)
     used_rules: set[str] = set()
     for page in export.pages:
         for item_id, (anchor, section) in page.sections.items():
-            index = by_source.get(item_id)
+            index = by_source.get(endpoint_key(item_id, versions))
             if index is None:
                 warnings.append(f"knowledge-export: {page.file} names unknown endpoint {item_id}")
                 continue
             doc = out[index]
             extra = [f"## From the documentation page ({page.source_url}{anchor})", section]
-            rules = rules_by_scope.get(item_id, [])
+            rules = rules_by_scope.get(endpoint_key(item_id, versions), [])
             if rules:
                 extra.append("## Rules\n" + "\n".join(r.line() for r in rules))
                 used_rules.update(r.rule_id for r in rules)
