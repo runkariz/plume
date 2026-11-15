@@ -50,6 +50,68 @@ function readPauseAt(): number | null {
   }
 }
 
+interface EvidenceDoc {
+  doc_id: string;
+  title: string;
+  endpoint: string | null;
+  complete: boolean;
+  fields: {
+    path: string;
+    type: string;
+    location: string;
+    required: boolean;
+    description: string | null;
+  }[];
+}
+
+const evidenceDocs: EvidenceDoc[] = [
+  {
+    doc_id: 'model:order',
+    title: 'Order',
+    endpoint: null,
+    complete: true,
+    fields: [
+      {
+        path: 'id',
+        type: 'string',
+        location: 'model',
+        required: true,
+        description: 'Unique identifier of the order.',
+      },
+      {
+        path: 'number',
+        type: 'string',
+        location: 'model',
+        required: false,
+        description: 'Human-readable order reference.',
+      },
+      {
+        path: 'total',
+        type: 'string',
+        location: 'model',
+        required: true,
+        description: 'Total amount billed…',
+      },
+    ],
+  },
+  {
+    doc_id: 'endpoint:GET~/api/{version}/orders',
+    title: 'List orders',
+    endpoint: 'GET /api/{version}/orders',
+    complete: false,
+    fields: [
+      { path: 'limit', type: 'integer', location: 'query', required: false, description: null },
+      {
+        path: 'orders[].id',
+        type: 'string',
+        location: 'response',
+        required: false,
+        description: null,
+      },
+    ],
+  },
+];
+
 const sameSet = (a: string[], b: string[]) =>
   a.length === b.length && a.every((x) => b.includes(x));
 
@@ -120,7 +182,19 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
       return HttpResponse.json({
         session_id: params.id,
         concept: session.concept,
-        apis: session.apis,
+        apis: session.apis.map((api) => ({
+          api,
+          build: 'b-6ff6063a275d40c14e4bcdd001f1c9ae',
+          documents: evidenceDocs.map((d) => ({
+            doc_id: d.doc_id,
+            kind: d.doc_id.split(':')[0],
+            title: d.title,
+            endpoint: d.endpoint,
+            fields: d.fields.length,
+            complete: d.complete,
+          })),
+        })),
+        next: 'Read the fields per API with the evidence route, then write the draft.',
         instructions:
           'Write the canonical model from the documents below. Copy field names and quotes verbatim.',
         draft_format: {
@@ -128,6 +202,43 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
           fields: [{ name: 'string', sources: '{ api: { paths, evidence } }' }],
         },
         status: 'open',
+      });
+    }),
+    // Paged like the real route: two documents' worth of fields per page, then a cursor.
+    http.get(`${base}/v1/models/sessions/:id/evidence`, ({ params, request }) => {
+      const session = modelSessions.get(String(params.id));
+      if (!session)
+        return HttpResponse.json(
+          { error: 'not_found', message: 'No such session' },
+          { status: 404 },
+        );
+      const url = new URL(request.url);
+      const api = url.searchParams.get('api') ?? '';
+      if (!session.apis.includes(api))
+        return HttpResponse.json(
+          { error: 'bad_request', message: 'api is not in the session' },
+          { status: 400 },
+        );
+      const cursor = Number(url.searchParams.get('cursor') ?? 0);
+      const all = evidenceDocs.flatMap((d) => d.fields.map((f) => ({ doc: d, f })));
+      const PAGE = 3;
+      const slice = all.slice(cursor, cursor + PAGE);
+      const docs = new Map<string, EvidenceDoc>();
+      for (const { doc, f } of slice) {
+        const hit = docs.get(doc.doc_id) ?? { ...doc, fields: [] };
+        hit.fields = [...hit.fields, f];
+        docs.set(doc.doc_id, hit);
+      }
+      const next = cursor + PAGE < all.length ? cursor + PAGE : null;
+      return HttpResponse.json({
+        session_id: params.id,
+        api,
+        build: 'b-6ff6063a275d40c14e4bcdd001f1c9ae',
+        documents: [...docs.values()].map((d) => ({ ...d, source_url: null })),
+        returned: slice.length,
+        total_fields: all.length,
+        next_cursor: next,
+        missing_doc_ids: [],
       });
     }),
     http.post(`${base}/v1/models/sessions/:id/draft`, async ({ params, request }) => {

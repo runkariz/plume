@@ -65,7 +65,7 @@ for (const theme of THEMES) {
     test('the header is usable: the theme toggle and the links are reachable', async ({ page }) => {
       await page.goto('/');
       await expect(page.getByRole('link', { name: 'Models', exact: true })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'GitHub' })).toBeVisible(); // icon only, name kept for screen readers
+      await expect(page.getByRole('link', { name: 'GitHub', exact: true })).toBeVisible(); // icon only, name kept for screen readers
       await page.getByRole('button', { name: /Switch to (dark|light) theme/ }).click();
       await expect(page.getByRole('link', { name: 'Maintainer' })).toBeVisible();
     });

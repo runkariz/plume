@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
-import { useAsync } from '@/api/useAsync';
 import {
   ApiError,
   type ApiRef,
@@ -12,38 +11,13 @@ import {
 import { useIsMaintainer } from '@/app/authStore';
 import { Banner, Button, Card, Chip } from '@/components';
 import { shortBuild } from '@/lib/format';
+import { EvidencePack } from './EvidencePack';
 
 /** How often the open session checks for the new model (tests lower it). */
 export const pollConfig = { ms: 3000 };
 
 function sameSet(a: string[], b: string[]): boolean {
   return a.length === b.length && a.every((x) => b.includes(x));
-}
-
-function EvidencePack({ sessionId }: { sessionId: string }) {
-  const client = useApiClient();
-  const load = useCallback(
-    (signal: AbortSignal) => client.getModelContext(sessionId, signal),
-    [client, sessionId],
-  );
-  const { state, retry } = useAsync(load);
-  if (state.status === 'loading') return <p className="muted small">Loading the evidence pack…</p>;
-  if (state.status === 'error')
-    return (
-      <p role="alert" className="form-error">
-        Could not load the evidence pack: {state.error.message}{' '}
-        <button type="button" className="linkbtn small" onClick={retry}>
-          Try again
-        </button>
-      </p>
-    );
-  return (
-    // a scrollable region must be reachable with the keyboard
-    // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-    <pre className="code payload" tabIndex={0} aria-label="Evidence pack">
-      {JSON.stringify(state.data, null, 2)}
-    </pre>
-  );
 }
 
 function Issues({ issues }: { issues: DraftIssue[] }) {
@@ -225,7 +199,7 @@ export function GenerateSession({
             <button type="button" className="linkbtn small" onClick={() => setShowPack((v) => !v)}>
               {showPack ? 'Hide the evidence pack' : 'See what Plume gives Claude'}
             </button>
-            {showPack ? <EvidencePack sessionId={session.sessionId} /> : null}
+            {showPack ? <EvidencePack sessionId={session.sessionId} apis={apis} /> : null}
           </li>
           <li>
             <b>Claude submits the draft.</b> Plume refuses it with precise issue codes if a quote,

@@ -3,8 +3,10 @@ import { createSseParser } from './sse';
 import {
   ApiError,
   type DraftIssue,
+  type EvidencePage,
   type GenerateRequest,
   type GenerateResponse,
+  type ModelContext,
   type ModelListItem,
   type Job,
   type ModelSnapshot,
@@ -39,8 +41,14 @@ export interface PlumeApi {
   suggestModels(apis: string[], signal?: AbortSignal): Promise<SuggestResponse>;
   generateModel(req: GenerateRequest, signal?: AbortSignal): Promise<GenerateResponse>;
   listModels(api?: string, signal?: AbortSignal): Promise<{ items: ModelListItem[] }>;
-  /** The evidence pack Claude reads for a session (snake_case JSON from the server). */
-  getModelContext(sessionId: string, signal?: AbortSignal): Promise<unknown>;
+  /** The compact evidence index Claude reads for a session (snake_case JSON from the server). */
+  getModelContext(sessionId: string, signal?: AbortSignal): Promise<ModelContext>;
+  /** One page of the fields of an API's documents in a session; follow `next_cursor` for more. */
+  getModelEvidence(
+    sessionId: string,
+    q: { api: string; docs?: string[]; cursor?: number },
+    signal?: AbortSignal,
+  ): Promise<EvidencePage>;
   /** Maintainer token required. A refused draft rejects with an ApiError carrying `issues`. */
   submitModelDraft(
     sessionId: string,
@@ -211,7 +219,13 @@ export function createApiClient(
     listModels: (api, signal) =>
       call<{ items: ModelListItem[] }>(`/v1/models${api ? `?api=${enc(api)}` : ''}`, { signal }),
     getModelContext: (sessionId, signal) =>
-      call<unknown>(`/v1/models/sessions/${enc(sessionId)}/context`, { signal }),
+      call<ModelContext>(`/v1/models/sessions/${enc(sessionId)}/context`, { signal }),
+    getModelEvidence: (sessionId, q, signal) => {
+      const p = new URLSearchParams({ api: q.api });
+      for (const d of q.docs ?? []) p.append('doc', d);
+      if (q.cursor !== undefined) p.set('cursor', String(q.cursor));
+      return call<EvidencePage>(`/v1/models/sessions/${enc(sessionId)}/evidence?${p}`, { signal });
+    },
     submitModelDraft: (sessionId, body, signal) =>
       call<{ created: boolean; model: ModelSnapshot }>(
         `/v1/models/sessions/${enc(sessionId)}/draft`,

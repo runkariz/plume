@@ -122,7 +122,19 @@ for (const theme of THEMES) {
         panel.getByRole('list', { name: 'Pinned builds' }).getByText(/^b-[0-9a-f]{12}$/),
       ).toHaveCount(2);
       await panel.getByRole('button', { name: 'See what Plume gives Claude' }).click();
-      await expect(panel.getByLabel('Evidence pack')).toContainText('draft_format');
+      const pack = panel.getByRole('region', { name: 'Evidence pack' });
+      await expect(pack.getByRole('region', { name: 'Evidence for Test' })).toBeVisible();
+      await expect(pack.getByText('Draft format')).toBeVisible();
+      // the fields come page by page: the real paged route answers, and the count matches the API's total
+      await pack.getByRole('button', { name: /^Show Test fields/ }).click();
+      const evidence = (await (
+        await request.get(`${API}/v1/models/sessions/${sessionId}/evidence?api=${APIS[0]}`)
+      ).json()) as { total_fields: number };
+      await expect(
+        pack
+          .getByRole('region', { name: 'Evidence for Test' })
+          .getByText(new RegExp(`of ${evidence.total_fields} fields shown`)),
+      ).toBeVisible();
 
       // a real refusal: the quote is not in the cited document
       await panel.getByLabel('Draft JSON').fill(JSON.stringify(draft('bad-quote-not-in-doc')));

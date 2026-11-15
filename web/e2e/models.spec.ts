@@ -75,7 +75,14 @@ for (const theme of THEMES) {
         '/maintainer/mcp',
       );
       await panel.getByRole('button', { name: 'See what Plume gives Claude' }).click();
-      await expect(panel.getByLabel('Evidence pack')).toContainText('session_id');
+      const pack = panel.getByRole('region', { name: 'Evidence pack' });
+      await expect(pack.getByRole('region', { name: 'Evidence for Shopify' })).toContainText(
+        '3 fields',
+      );
+      await pack.getByRole('button', { name: /^Show Shopify fields/ }).click();
+      await expect(pack.getByText('3 of 5 fields shown').first()).toBeVisible();
+      await pack.getByRole('button', { name: 'Load more fields' }).first().click();
+      await expect(pack.getByText('5 of 5 fields shown').first()).toBeVisible();
 
       // a refused draft shows the server's issue codes and stores nothing
       await panel
