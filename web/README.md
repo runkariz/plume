@@ -134,6 +134,24 @@ is not possible yet is disabled with the server's reason) and saves them with ON
 which makes a NEW version (409: not the latest version; 422: the design was refused). Release is blocked while
 relations are undecided and lists the models released with the set. See `src/api/types.ts` for the shapes.
 
+### Related concepts and creating a set
+
+`/models/related?apis=a,b&concept=Product` (`src/pages/sets/RelatedConcepts.tsx`) is reached from a suggestion or a
+model ("Related concepts"). It calls `POST /v1/models/suggest-related` (deterministic, no LLM) and lists what the docs
+connect to the concept (Variant, Image, ...), per API how (nested objects, sub-resource, id field, model reference),
+the designs the evidence supports, and the quotes. Names that differ between the APIs (variant / variation) come as an
+**alias offer**: nothing is merged unless the person ticks "Treat ... as one concept"; the first chosen API's name then
+stands for it and the request carries `aliases: [{concept, names: {apiId: name}}]`.
+
+The person picks 1..7 related concepts (a set has 2..8 models) and creates the set:
+
+- **With Claude** (anyone): `POST /v1/model-sets/sessions`, the page shows the server's `claudePrompt` and polls
+  `GET /v1/model-sets/sessions/{id}` (snake_case `set_id`); it opens `/model-sets/{id}` when Claude has stored the set
+  (unlisted without a token, unreleased with one).
+- **On the server** (a signed-in maintainer, unless `generation` is false): `POST /v1/model-sets/generate`, a job on
+  `/v1/models/jobs/{id}/events` (`member`, `proposals`, `accepted`/`done` with `setId`). The set opens unreleased with
+  every proposed relation undecided. A server without a model key answers 503: the page offers the Claude path.
+
 ## The model view as an MCP App (the widget)
 
 Claude web and Desktop show a canonical model inline through an MCP App: one self-contained HTML file that Plume
@@ -149,6 +167,10 @@ How it works (`src/widget/`): `protocol.ts` is the host side of the spec (JSON-R
 `ui/initialize`, `initialized`, `tool-result`, `host-context-changed`, `size-changed`, `ui/open-link`);
 `model.ts` reads the model from `structuredContent.model ?? structuredContent` (and shows a refused draft);
 `WidgetApp.tsx` is the view; it follows the host's theme and reports its height.
+A **model set** result (`structuredContent.kind === "model_set"`, or `{set}` from submit/release) renders `SetPanel`:
+the same `SetWorkbench` as the web page (diagram, control box, detail), read only (no design choices; "Open in
+Plume" is the way on), plus the models and relations as text and the open questions. `SetDetail` takes its links as
+render props, so the bundle contains no router.
 
 Rules it must keep (the host's default CSP is `default-src 'none'`, scripts and styles inline, images `data:`,
 `connect-src 'none'`, and the frame has no storage):
