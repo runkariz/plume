@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "webhook": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "description": "Unique identifier for the webhook subscription."
+        },
+        "address": {
+          "type": "string",
+          "description": "Destination URI where webhook notifications are sent."
+        },
+        "topic": {
+          "type": "string",
+          "description": "Event topic that triggers this webhook."
+        },
+        "created_at": {
+          "type": "string",
+          "description": "Timestamp indicating when the webhook subscription was created."
+        },
+        "updated_at": {
+          "type": "string",
+          "description": "Timestamp indicating when the webhook subscription was last updated."
+        },
+        "format": {
+          "type": "string",
+          "description": "Serialization format used for payload delivery, such as json or xml."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "Top-level property name included in the delivered payload."
+          },
+          "description": "List of top-level resource properties sent in the webhook payload."
+        },
+        "metafield_namespaces": {
+          "type": "array",
+          "description": "List of metafield namespaces included in webhook payloads."
+        },
+        "api_version": {
+          "type": "string",
+          "description": "Shopify Admin API version applied to the webhook payload."
+        },
+        "private_metafield_namespaces": {
+          "type": "array",
+          "description": "List of private metafield namespaces included in webhook payloads."
+        },
+        "metafield_identifiers": {
+          "type": "array",
+          "description": "List of specific metafield keys and namespaces included in the payload."
+        }
+      },
+      "description": "Details of the newly created webhook subscription."
+    }
+  },
+  "required": [
+    "webhook"
+  ],
+  "description": "Response returned upon successfully creating a webhook subscription."
+}

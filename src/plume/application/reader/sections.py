@@ -81,6 +81,23 @@ class PackageSections:
         hooks = self._app_raw(r).get("webhooks")
         return [h for h in hooks if isinstance(h, dict)] if isinstance(hooks, list) else []
 
+    def endpoint_refs(
+        self, api: str, endpoint_ids: list[str], version: str | None = None
+    ) -> dict[str, dict[str, Any] | None]:
+        """The package's endpointIds (as the webhook mechanism and triggers name them) resolved
+        to Plume endpoint documents: {docId, method, path}, or None when not in the build."""
+        r = self._resolver.resolve(api, version)
+        ids = list(dict.fromkeys(endpoint_ids))
+        found = self._documents.by_source_ids(r.build.build_id, DocumentKind.ENDPOINT, ids)
+        return {
+            i: (
+                {"doc_id": d.doc_id, "method": d.method, "path": d.path}
+                if (d := found.get(i)) is not None
+                else None
+            )
+            for i in ids
+        }
+
     def mcp(self, api: str, version: str | None = None) -> tuple[BuildRef, dict[str, Any] | None]:
         """connector/mcp/ verbatim (None for docs-only APIs: no MCP server, by design)."""
         r = self._resolver.resolve(api, version)
@@ -171,3 +188,18 @@ def trigger_view(d: Document) -> dict[str, Any]:
         "source_url": d.source_url,
         "event": raw,
     }
+
+
+def endpoint_ids_in(value: Any) -> list[str]:
+    """Every ``endpointId`` / ``syncEndpointId`` string inside a JSON value, in order."""
+    out: list[str] = []
+    if isinstance(value, dict):
+        for k, v in value.items():
+            if k in ("endpointId", "syncEndpointId") and isinstance(v, str) and v:
+                out.append(v)
+            else:
+                out.extend(endpoint_ids_in(v))
+    elif isinstance(value, list):
+        for v in value:
+            out.extend(endpoint_ids_in(v))
+    return out

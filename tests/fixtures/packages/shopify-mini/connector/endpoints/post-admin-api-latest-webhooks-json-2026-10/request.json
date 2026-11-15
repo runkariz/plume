@@ -1,0 +1,83 @@
+{
+  "actionName": "Webhook",
+  "apiVersion": "2026-10",
+  "authorizationType": "OAUTH2",
+  "bodyContentType": "application/json",
+  "bodyContractRef": "body.schema.json",
+  "bodyType": "RAW",
+  "description": "Create a new webhook subscription by specifying both an address and a topic.",
+  "docLink": "https://shopify.dev/docs/api/admin-rest/latest/resources/webhook",
+  "endpointId": "post-admin-api-latest-webhooks-json-2026-10",
+  "errors": [
+    {
+      "meaning": "Unprocessable Entity",
+      "retryable": false,
+      "status": 422
+    }
+  ],
+  "examples": [
+    {
+      "request": {
+        "body": {
+          "webhook": {
+            "address": "pubsub://projectName:topicName",
+            "format": "json",
+            "topic": "customers/update"
+          }
+        },
+        "headers": {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": "{token}"
+        }
+      },
+      "source": "https://shopify.dev/docs/api/admin-rest/latest/resources/webhook",
+      "title": "Example 1"
+    }
+  ],
+  "headersContractRef": "headers.schema.json",
+  "isAdvanced": true,
+  "isDataSource": false,
+  "isDeprecated": false,
+  "isPreRelease": false,
+  "method": "POST",
+  "name": "Create webhook",
+  "operationKind": "create",
+  "permissionNote": "X-Shopify-Access-Token: {access_token}",
+  "provenance": {
+    "docAnchor": "#post-webhooks",
+    "extractedAt": "2026-11-15T08:54:32Z",
+    "sourceUrl": "https://shopify.dev/docs/api/admin-rest/latest/resources/webhook"
+  },
+  "rawBodyType": "JSON",
+  "resource": "Webhook",
+  "responses": [
+    {
+      "contentContractRef": "responses/201.schema.json",
+      "contentType": "application/json",
+      "statusCode": 201
+    },
+    {
+      "contentContractRef": "responses/422.schema.json",
+      "contentType": "application/json",
+      "retryable": false,
+      "statusCode": 422
+    }
+  ],
+  "sideEffects": [
+    "creates"
+  ],
+  "summary": "Create a new webhook subscription by specifying both an address and a topic.",
+  "tags": [
+    {
+      "colorSetId": 43,
+      "kind": "version",
+      "name": "2026-10"
+    },
+    {
+      "colorSetId": 30,
+      "kind": "category",
+      "name": "webhooks"
+    }
+  ],
+  "url": "{{app_env.servers.api}}/admin/api/2026-10/webhooks.json"
+}

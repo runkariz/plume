@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "errors": {
+      "type": "object",
+      "description": "Details of the validation errors preventing webhook creation."
+    }
+  },
+  "required": [
+    "errors"
+  ],
+  "description": "Response returned when webhook subscription parameters fail validation."
+}

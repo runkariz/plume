@@ -17,7 +17,7 @@ def test_list_and_detail(client: TestClient) -> None:
     items = client.get("/v1/apis").json()["items"]
     assert [i["id"] for i in items] == ["shopify", "test-catalog-api"]
     shop = items[0]
-    assert shop["endpoints"] == 7
+    assert shop["endpoints"] == 8
     assert shop["category"] == "e-commerce"
     assert shop["status"] == {"kind": "ready", "recallAt5": None}
     assert shop["logo"]["text"] == "S"
@@ -44,7 +44,7 @@ def test_errors(client: TestClient) -> None:
 
 def test_items(client: TestClient) -> None:
     r = client.get("/v1/apis/shopify/items", params={"kind": "endpoint", "limit": 2}).json()
-    assert r["total"] == 7
+    assert r["total"] == 8
     assert len(r["items"]) == 2
     assert r["items"][0]["method"]
     assert client.get("/v1/apis/shopify/items", params={"kind": "widget"}).status_code == 422

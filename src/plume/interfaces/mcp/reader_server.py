@@ -15,7 +15,12 @@ from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
 from plume.application.models.sessions import ModelSessions
 from plume.application.reader.resolve import BuildResolver
-from plume.application.reader.sections import PackageSections, scheme_view, trigger_view
+from plume.application.reader.sections import (
+    PackageSections,
+    endpoint_ids_in,
+    scheme_view,
+    trigger_view,
+)
 from plume.application.reader.use_cases import (
     CheckCall,
     FindFact,
@@ -287,6 +292,11 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
                     "present": bool(views or hooks),
                     "triggers": [{k: v for k, v in x.items() if k != "event"} for x in views],
                     "webhooks": hooks,
+                    "endpoint_refs": sections().endpoint_refs(
+                        api,
+                        endpoint_ids_in(hooks) + endpoint_ids_in([x["event"] for x in views]),
+                        version,
+                    ),
                 }
 
             return await _run(run)

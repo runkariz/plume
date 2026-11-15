@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "webhook": {
+      "type": "object",
+      "properties": {
+        "topic": {
+          "type": "string",
+          "description": "Event that triggers the webhook.",
+          "title": "Topic"
+        },
+        "address": {
+          "type": "string",
+          "description": "Destination URI to which the webhook subscription should send the POST request when an event occurs.",
+          "title": "Address URL"
+        },
+        "format": {
+          "type": "string",
+          "description": "Format in which the webhook subscription should send the data. Valid values are JSON and XML. Defaults to JSON.",
+          "enum": [
+            "json",
+            "xml"
+          ],
+          "title": "Format"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "Name of a specific resource property to include in the payload."
+          },
+          "description": "An optional array of top-level resource fields that should be serialized and sent in the POST request. If absent, all fields will be sent.",
+          "title": "Fields"
+        }
+      },
+      "required": [
+        "topic",
+        "address"
+      ],
+      "description": "The webhook subscription parameters to create.",
+      "title": "Webhook"
+    }
+  },
+  "required": [
+    "webhook"
+  ],
+  "description": "Payload containing the configuration to register a new webhook subscription."
+}

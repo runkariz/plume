@@ -1579,6 +1579,43 @@
         "title": "DraftRefused",
         "type": "object"
       },
+      "EndpointRef": {
+        "properties": {
+          "docId": {
+            "title": "Docid",
+            "type": "string"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          }
+        },
+        "required": [
+          "docId",
+          "method",
+          "path"
+        ],
+        "title": "EndpointRef",
+        "type": "object"
+      },
       "EnvironmentsOut": {
         "properties": {
           "api": {
@@ -3075,6 +3112,21 @@
           "build": {
             "title": "Build",
             "type": "string"
+          },
+          "endpointRefs": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EndpointRef"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description": "Every endpointId named by `webhooks` and by the events' syncEndpointId, resolved to the endpoint document (null when it is not in this build).",
+            "title": "Endpointrefs",
+            "type": "object"
           },
           "items": {
             "items": {

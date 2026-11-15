@@ -1,0 +1,32 @@
+{
+  "title": "Headers",
+  "type": "object",
+  "properties": {
+    "Content-Type": {
+      "type": "string",
+      "description": "Media type of the request body",
+      "enum": [
+        "application/json"
+      ],
+      "default": "application/json",
+      "examples": [
+        "application/json"
+      ],
+      "title": "Content Type"
+    },
+    "X-Shopify-Access-Token": {
+      "type": "string",
+      "description": "Authentication token",
+      "default": "{{ auth?.oauth?.token }}",
+      "examples": [
+        "{{ auth?.oauth?.token }}"
+      ],
+      "title": "Shopify Access Token"
+    }
+  },
+  "required": [
+    "Content-Type",
+    "X-Shopify-Access-Token"
+  ],
+  "description": "Request headers required to authenticate and send JSON data to the Shopify Admin API."
+}

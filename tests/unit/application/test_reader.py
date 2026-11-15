@@ -22,7 +22,7 @@ def test_overviews(shop: FakeStack) -> None:
     o = apis["shopify"]
     assert o.ref is not None
     assert o.ref.tag == "latest"
-    assert o.counts["endpoint"] == 7
+    assert o.counts["endpoint"] == 8
     assert o.counts["model"] == 4
     assert o.counts["chunks"] >= 15
     assert o.tags == ("latest",)
@@ -51,7 +51,7 @@ def test_pin_by_build_id(shop: FakeStack) -> None:
 
 def test_browse(shop: FakeStack) -> None:
     _, items, total = shop.browse().execute("shopify", "endpoint", limit=3)
-    assert total == 7
+    assert total == 8
     assert len(items) == 3
     assert all(i.kind.value == "endpoint" for i in items)
     _, found, n = shop.browse().execute("shopify", None, "fulfillment")
@@ -184,7 +184,7 @@ def test_check_call(shop: FakeStack) -> None:
     missing = shop.check_call().execute("shopify", "PATCH", "/admin/api/latest/products.json")
     assert missing.verdict == "not_documented"
     assert missing.matched_id is None
-    assert missing.checked["endpoints"] == 7
+    assert missing.checked["endpoints"] == 8
 
     with pytest.raises(ReaderInputError):
         shop.check_call().execute("shopify", "FETCH", "/x")
