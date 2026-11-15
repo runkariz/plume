@@ -49,6 +49,10 @@ class JobRepo(Protocol):
         """Save ``new`` only if the stored status is in ``expected`` (atomic)."""
         ...
 
+    def fail_interrupted(self, message: str) -> list[str]:
+        """Mark every ``building`` job as ``failed`` (startup recovery); returns their ids."""
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class StoredEvent:

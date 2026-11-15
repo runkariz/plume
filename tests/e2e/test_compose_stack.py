@@ -57,7 +57,7 @@ def test_compose_postgres_has_pgvector() -> None:
 def test_migrate_is_idempotent() -> None:
     result = _plume("migrate")
     assert result.returncode == 0
-    assert "up to date: 0003" in result.stdout
+    assert "up to date: 0004" in result.stdout
 
 
 def test_ingest_two_apis_stable_ids_and_diff(tmp_path: Path) -> None:

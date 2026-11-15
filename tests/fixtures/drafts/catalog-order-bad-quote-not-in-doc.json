@@ -1,0 +1,216 @@
+{
+  "name": "Order",
+  "description": "A customer purchase order in a shop, unified across both catalog APIs.",
+  "fields": [
+    {
+      "name": "id",
+      "type": "string",
+      "required": true,
+      "description": "Order id in the source API.",
+      "sources": {
+        "test-catalog-api": {
+          "paths": [
+            {
+              "path": "id",
+              "type": "string"
+            }
+          ],
+          "fetch": "GET /api/{version}/orders",
+          "evidence": [
+            {
+              "doc_id": "model:order",
+              "quote": "Unique identifier of the order."
+            }
+          ]
+        },
+        "second-catalog-api": {
+          "paths": [
+            {
+              "path": "id",
+              "type": "string"
+            }
+          ],
+          "fetch": "GET /api/{version}/orders",
+          "evidence": [
+            {
+              "doc_id": "model:order",
+              "quote": "Unique identifier of the order."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "number",
+      "type": "string",
+      "required": false,
+      "description": "Human-readable order reference.",
+      "sources": {
+        "test-catalog-api": {
+          "paths": [
+            {
+              "path": "number",
+              "type": "string"
+            }
+          ],
+          "fetch": "GET /api/{version}/orders",
+          "evidence": [
+            {
+              "doc_id": "model:order",
+              "quote": "Human-readable reference or tracking number for the order."
+            }
+          ]
+        },
+        "second-catalog-api": {
+          "paths": [
+            {
+              "path": "number",
+              "type": "string"
+            }
+          ],
+          "fetch": "GET /api/{version}/orders",
+          "evidence": [
+            {
+              "doc_id": "model:order",
+              "quote": "Human-readable order reference number."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "total",
+      "type": "decimal",
+      "required": true,
+      "description": "Total amount billed.",
+      "sources": {
+        "test-catalog-api": {
+          "paths": [
+            {
+              "path": "orders[].total",
+              "type": "string"
+            }
+          ],
+          "fetch": "GET /api/{version}/orders",
+          "evidence": [
+            {
+              "doc_id": "endpoint:GET~/api/{version}/orders",
+              "quote": "Total monetary amount billed for the order."
+            }
+          ],
+          "transform": "parse decimal string"
+        },
+        "second-catalog-api": {
+          "paths": [
+            {
+              "path": "total",
+              "type": "string"
+            }
+          ],
+          "fetch": "GET /api/{version}/orders",
+          "evidence": [
+            {
+              "doc_id": "model:order",
+              "quote": "Total including tax and shipping for the order."
+            }
+          ],
+          "transform": "parse decimal string"
+        }
+      }
+    },
+    {
+      "name": "currency",
+      "type": "string",
+      "required": true,
+      "description": "ISO currency code of the total.",
+      "sources": {
+        "test-catalog-api": {
+          "paths": [
+            {
+              "path": "currency",
+              "type": "string"
+            }
+          ],
+          "fetch": "GET /api/{version}/orders",
+          "evidence": [
+            {
+              "doc_id": "model:order",
+              "quote": "Three-letter currency code for the order total."
+            }
+          ]
+        },
+        "second-catalog-api": {
+          "paths": [
+            {
+              "path": "currency",
+              "type": "string"
+            }
+          ],
+          "fetch": "GET /api/{version}/orders",
+          "evidence": [
+            {
+              "doc_id": "model:order",
+              "quote": "Currency code used for the order total."
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "customer",
+      "type": "string",
+      "required": false,
+      "description": "Customer name or id.",
+      "sources": {
+        "test-catalog-api": {
+          "paths": [
+            {
+              "path": "customer",
+              "type": "string"
+            }
+          ],
+          "fetch": "GET /api/{version}/orders",
+          "evidence": [
+            {
+              "doc_id": "model:order",
+              "quote": "Name or identifier of the customer who placed the order."
+            }
+          ]
+        },
+        "second-catalog-api": {
+          "paths": [
+            {
+              "path": "customer",
+              "type": "string"
+            }
+          ],
+          "fetch": "GET /api/{version}/orders",
+          "evidence": [
+            {
+              "doc_id": "model:order",
+              "quote": "Name or identifier of the customer who placed the order."
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "open_questions": [
+    {
+      "question": "Is **total** before or after tax?",
+      "detail": "Neither API says.",
+      "options": [
+        "gross",
+        "net"
+      ]
+    },
+    {
+      "question": "Is **customer** a name or an id?",
+      "options": [
+        "name",
+        "id"
+      ]
+    }
+  ],
+  "_expect_code": "QUOTE_NOT_FOUND"
+}

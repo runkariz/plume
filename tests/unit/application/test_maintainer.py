@@ -55,6 +55,7 @@ def test_wizard_flow(stack: FakeStack, packages: Path) -> None:
     assert types[-1] == "done"
     steps = [e for _, e in m.events_after(job.job_id, 0) if e["type"] == "step"]
     assert {s["key"] for s in steps} >= {"validate", "chunk", "diff", "embed", "store", "evaluate"}
+    assert [s["status"] for s in steps if s["key"] == "evaluate"][-1] == "done"
     assert stack.tags.get(ApiId("test-catalog-api"), TagName("latest")) is None  # staged only
 
     published = m.publish(job.job_id)
@@ -149,3 +150,19 @@ def test_failed_build_is_reported(stack: FakeStack, packages: Path) -> None:
     stack.embedder.fail_on = None
     m.start_build(job.job_id)  # retry from failed
     assert m.get(job.job_id).status is JobStatus.STAGED
+
+
+def test_restart_recovery(stack: FakeStack, packages: Path) -> None:
+    from dataclasses import replace  # noqa: PLC0415
+
+    m = stack.maintainer()
+    job = m.upload("a.zip", zip_dir(packages / "test-catalog"))
+    m.review(job.job_id, "test-catalog-api", "", "latest")
+    stack._jobs.save(replace(m.get(job.job_id), status=JobStatus.BUILDING))
+    assert m.recover() == [job.job_id]
+    recovered = m.get(job.job_id)
+    assert recovered.status is JobStatus.FAILED
+    assert recovered.error is not None
+    assert "interrupted" in recovered.error
+    assert m.events_after(job.job_id, 0)[-1][1]["status"] == "failed"
+    assert m.recover() == []

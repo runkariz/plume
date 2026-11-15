@@ -1,6 +1,10 @@
 """Builds the HTTP and MCP ASGI apps from a container, and serves them."""
 
+import contextlib
+import hmac
 import json
+import logging
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 import uvicorn
@@ -8,10 +12,19 @@ from fastapi import FastAPI
 from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
+from starlette.responses import JSONResponse
+from starlette.routing import Route
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from plume.bootstrap.container import Container
 from plume.interfaces.http.app import HttpDependencies, create_app
+from plume.interfaces.mcp.maintainer_server import (
+    McpMaintainerDependencies,
+    create_maintainer_server,
+)
 from plume.interfaces.mcp.reader_server import McpReaderDependencies, create_reader_server
+
+logger = logging.getLogger("plume.server")
 
 
 def http_app(c: Container) -> FastAPI:
@@ -31,6 +44,8 @@ def http_app(c: Container) -> FastAPI:
             rate_limit_per_minute=s.reader_rate_limit_per_minute,
             cors_origins=s.cors_origins,
             maintainer=c.maintainer,
+            suggest=c.suggest,
+            models=c.models,
             maintainer_tokens=tuple(t.get_secret_value() for t in s.maintainer_tokens),
             max_upload_bytes=s.max_upload_bytes,
         )
@@ -48,8 +63,47 @@ def reader_server(c: Container) -> MCPServer:
             list_builds=c.list_builds,
             diff_builds=c.diff_builds,
             resolver=c.resolver,
+            models=c.models,
         )
     )
+
+
+def maintainer_mcp_server(c: Container) -> MCPServer:
+    return create_maintainer_server(
+        McpMaintainerDependencies(
+            suggest=c.suggest,
+            models=c.models,
+            resolver=c.resolver,
+            tag_build=c.tag_build,
+            jobs=c.maintainer,
+        )
+    )
+
+
+class BearerGate:
+    """ASGI wrapper: the maintainer MCP endpoint needs a maintainer bearer token."""
+
+    def __init__(self, app: ASGIApp, tokens: tuple[str, ...]) -> None:
+        self._app = app
+        self._tokens = tokens
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            headers = dict(scope.get("headers") or [])
+            scheme, _, token = headers.get(b"authorization", b"").decode().partition(" ")
+            ok = scheme.lower() == "bearer" and any(
+                hmac.compare_digest(token.encode(), t.encode()) for t in self._tokens
+            )
+            if not ok:
+                status = 503 if not self._tokens else 401
+                response = JSONResponse(
+                    {"error": "unauthorized", "message": "maintainer bearer token required"},
+                    status_code=status,
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+                await response(scope, receive, send)
+                return
+        await self._app(scope, receive, send)
 
 
 def mcp_app(c: Container) -> Starlette:
@@ -59,16 +113,47 @@ def mcp_app(c: Container) -> Starlette:
         allowed_hosts=hosts,
         allowed_origins=[f"http://{h}" for h in hosts] + [f"https://{h}" for h in hosts],
     )
-    return reader_server(c).streamable_http_app(
+    reader = reader_server(c)
+    maintainer = maintainer_mcp_server(c)
+    reader_app = reader.streamable_http_app(
         streamable_http_path="/mcp",
         stateless_http=True,
         host=c.settings.mcp_host,
         transport_security=security,
     )
+    maintainer_app = maintainer.streamable_http_app(
+        streamable_http_path="/maintainer/mcp",
+        stateless_http=True,
+        host=c.settings.mcp_host,
+        transport_security=security,
+    )
+    tokens = tuple(t.get_secret_value() for t in c.settings.maintainer_tokens)
+    routes = list(reader_app.routes)
+    for route in maintainer_app.routes:
+        if isinstance(route, Route) and route.path == "/maintainer/mcp":
+            routes.append(Route(route.path, endpoint=BearerGate(route.app, tokens)))
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_: Starlette) -> AsyncIterator[None]:
+        async with reader.session_manager.run(), maintainer.session_manager.run():
+            yield
+
+    return Starlette(routes=routes, lifespan=lifespan)
+
+
+def recover_jobs(c: Container) -> None:
+    try:
+        ids = c.maintainer().recover()
+    except Exception:
+        logger.exception("job recovery skipped")
+        return
+    if ids:
+        logger.warning("marked %d interrupted job(s) as failed: %s", len(ids), ", ".join(ids))
 
 
 def serve_api(c: Container, host: str | None = None, port: int | None = None) -> None:
     s = c.settings
+    recover_jobs(c)
     uvicorn.run(http_app(c), host=host or s.api_host, port=port or s.api_port, log_level="info")
 
 

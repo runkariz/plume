@@ -104,6 +104,18 @@ class PostgresJobRepo:
             conn.execute(text(_UPDATE), _params(new))
             return True
 
+    def fail_interrupted(self, message: str) -> list[str]:
+        with self._engine.begin() as conn:
+            return list(
+                conn.execute(
+                    text(
+                        "UPDATE jobs SET status = 'failed', error = :m, updated_at = now() "
+                        "WHERE status = 'building' RETURNING job_id"
+                    ),
+                    {"m": message},
+                ).scalars()
+            )
+
 
 class PostgresJobEventLog:
     def __init__(self, engine: Engine) -> None:

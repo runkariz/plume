@@ -20,6 +20,8 @@ from plume.application.errors import (
 from plume.application.jobs.maintainer import JobStateError, MaintainerJobs
 from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
+from plume.application.models.concepts import SuggestConcepts
+from plume.application.models.sessions import ModelSessions
 from plume.application.reader.dto import ApiOverview
 from plume.application.reader.resolve import BuildResolver
 from plume.application.reader.use_cases import (
@@ -37,6 +39,7 @@ from plume.domain.shared.ids import BuildId
 from plume.interfaces import payloads
 from plume.interfaces.http import schemas as s
 from plume.interfaces.http.maintainer import maintainer_router
+from plume.interfaces.http.models_routes import models_router
 from plume.interfaces.http.rate_limit import RateLimitMiddleware
 
 ApiPath = Annotated[str, Path(description="API id, e.g. shopify")]
@@ -59,6 +62,8 @@ class HttpDependencies:
     rate_limit_per_minute: int = 120
     cors_origins: tuple[str, ...] = ("http://127.0.0.1:18473", "http://localhost:18473")
     maintainer: Callable[[], MaintainerJobs] | None = None
+    suggest: Callable[[], SuggestConcepts] | None = None
+    models: Callable[[], ModelSessions] | None = None
     maintainer_tokens: tuple[str, ...] = ()
     max_upload_bytes: int = 200 * 1024 * 1024
 
@@ -433,6 +438,19 @@ def create_app(deps: HttpDependencies) -> FastAPI:
             unchanged=d.unchanged,
         )
 
+    if deps.suggest is not None and deps.models is not None:
+        app.include_router(
+            models_router(
+                deps.suggest,
+                deps.models,
+                deps.resolver,
+                deps.overviews,
+                _summary,
+                lambda api, name: _logo(api, name, None).model_dump(by_alias=True),
+                deps.maintainer_tokens,
+                deps.mcp_url,
+            )
+        )
     if deps.maintainer is not None:
         app.include_router(
             maintainer_router(deps.maintainer, deps.maintainer_tokens, deps.max_upload_bytes)

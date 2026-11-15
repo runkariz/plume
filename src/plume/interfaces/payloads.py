@@ -3,6 +3,7 @@ the same JSON as ``claudePayload`` so the web can display what Claude receives."
 
 from typing import Any
 
+from plume.application.models.concepts import Suggestions
 from plume.application.reader.dto import (
     ApiOverview,
     BuildRef,
@@ -13,6 +14,8 @@ from plume.application.reader.dto import (
     SearchResult,
 )
 from plume.domain.knowledge.citation import Citation
+from plume.domain.models.snapshot import ModelSnapshot
+from plume.domain.models.validation import Issue
 
 Json = dict[str, Any]
 
@@ -123,4 +126,104 @@ def check_call_payload(r: CheckCallResult) -> Json:
         "params": [{"name": p.name, "found": p.found, "where": p.where} for p in r.params],
         "checked": r.checked,
         "evidence": citation_payload(r.citation) if r.citation else None,
+    }
+
+
+# -- canonical models ----------------------------------------------------------------------------
+
+
+def _short(name: str) -> str:
+    return name.split(maxsplit=1)[0].capitalize() if name else name
+
+
+def api_ref(api: str, name: str) -> Json:
+    """ApiRef without the logo (HTTP adds it)."""
+    return {"id": api, "name": name, "shortName": _short(name)}
+
+
+def suggestions_payload(s: Suggestions) -> Json:
+    return {
+        "apis": [
+            api_ref(r.api.api_id.value, r.api.name) | {"build": r.build.build_id.value}
+            for r in s.apis
+        ],
+        "concepts": [
+            {
+                "id": c.key,
+                "name": c.name,
+                "description": c.description,
+                "likelyFields": c.likely_fields,
+                "coverage": c.coverage,
+                "operations": list(c.operations),
+                "difficulty": {"tone": c.difficulty[0], "label": c.difficulty[1]},
+                "documents": {a: list(ids) for a, ids in c.doc_ids.items()},
+            }
+            for c in s.concepts
+        ],
+        "notModeled": {
+            "count": s.not_modeled,
+            "summary": ", ".join(s.not_modeled_examples) or "none",
+        },
+    }
+
+
+def snapshot_payload(m: ModelSnapshot, names: dict[str, str]) -> Json:
+    """The ModelSnapshot JSON (HTTP and MCP)."""
+    fields = []
+    for f in m.draft.fields:
+        sources = {}
+        for api, src in f.sources:
+            sources[api] = {
+                "paths": [{"path": p.path, "type": p.type or ""} for p in src.paths],
+                "transform": src.transform,
+                "fetch": {"endpoint": src.fetch} if src.fetch else None,
+                "join": list(src.join),
+                "evidence": [
+                    {"quote": e.quote, "anchor": e.anchor or "", "docId": e.doc_id}
+                    for e in src.evidence
+                ],
+            }
+        support = {i.api: m.support(i.api)[f.name] for i in m.inputs}
+        fields.append(
+            {
+                "name": f.name,
+                "type": f.type,
+                "description": f.description,
+                "required": f.required,
+                "support": support,
+                "sources": sources,
+            }
+        )
+    coverage = {api: {"mapped": n, "total": t} for api, (n, t) in m.coverage().items()}
+    return {
+        "id": m.snapshot_id,
+        "name": m.draft.name,
+        "description": m.draft.description,
+        "concept": m.concept,
+        "status": m.status,
+        "generatedAt": m.created_at.isoformat(),
+        "promptVersion": m.prompt_version,
+        "sessionId": m.session_id,
+        "inputs": [api_ref(i.api, names.get(i.api, i.api)) | {"build": i.build} for i in m.inputs],
+        "fields": fields,
+        "openQuestions": [
+            {"question": q.question, "detail": q.detail, "options": list(q.options)}
+            for q in m.draft.open_questions
+        ],
+        "coverage": coverage,
+        "citations": {
+            "checked": m.citations_checked,
+            "found": m.citations_checked,
+            "missing": [],
+        },
+    }
+
+
+def refusal_payload(issues: list[Issue]) -> Json:
+    return {
+        "accepted": False,
+        "issues": [
+            {"code": i.code, "field": i.field, "api": i.api, "message": i.message} for i in issues
+        ],
+        "next": "Fix the listed mappings (or drop them) and call submit_model_draft again.",
     }

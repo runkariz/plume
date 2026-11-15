@@ -146,6 +146,8 @@ def _web_events(event: JobEvent) -> list[JsonObj]:
     source = _SOURCES.get(event.source, "plume")
     key = _STEP_KEYS.get(event.step)
     out: list[JsonObj] = []
+    if event.status is EventStatus.PROGRESS and event.step == "evaluate":
+        return [{"type": "log", "t": t, "source": "plume", "message": event.message}]
     if event.status is EventStatus.PROGRESS and event.step == "embed":
         done = int(event.data.get("done") or 0)
         total = int(event.data.get("total") or 0)
@@ -226,6 +228,14 @@ class MaintainerJobs:
     def events_after(self, job_id: str, seq: int) -> list[tuple[int, JsonObj]]:
         self.get(job_id)
         return [(e.seq, e.payload) for e in self._events.after(job_id, seq)]
+
+    def recover(self) -> list[str]:
+        """At startup: builds that were running when the server stopped are marked failed."""
+        message = "interrupted: the server restarted during the build; build again"
+        ids = self._jobs.fail_interrupted(message)
+        for job_id in ids:
+            self._events.append(job_id, {"type": "done", "status": "failed", "message": message})
+        return ids
 
     # -- upload ----------------------------------------------------------------------------------
 

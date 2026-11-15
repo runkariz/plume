@@ -18,6 +18,8 @@ from plume.application.knowledge.import_package import ImportPackage
 from plume.application.knowledge.list_builds import ListApis, ListBuilds
 from plume.application.knowledge.seal_build import SealBuild
 from plume.application.knowledge.tag_build import TagBuild
+from plume.application.models.concepts import SuggestConcepts
+from plume.application.models.sessions import ModelSessions
 from plume.application.ports.embedder import Embedder
 from plume.application.ports.job_events import JobEvents
 from plume.application.reader.resolve import BuildResolver
@@ -39,6 +41,7 @@ from plume.infrastructure.db.repos.api_repo import PostgresApiRepo
 from plume.infrastructure.db.repos.build_repo import PostgresBuildRepo
 from plume.infrastructure.db.repos.document_repo import PostgresDocumentRepo
 from plume.infrastructure.db.repos.eval_repo import PostgresEvalRepo
+from plume.infrastructure.db.repos.model_repo import PostgresModelRepo
 from plume.infrastructure.db.repos.tag_repo import PostgresTagRepo
 from plume.infrastructure.dumps.local_fs import LocalDumpStore
 from plume.infrastructure.embeddings.gemini import GeminiEmbedder
@@ -140,6 +143,23 @@ class Container:
 
     def migrate_schema(self) -> MigrateSchema:
         return MigrateSchema(AlembicMigrator(self.engine))
+
+    @cached_property
+    def models_repo(self) -> PostgresModelRepo:
+        return PostgresModelRepo(self.engine)
+
+    def suggest(self) -> SuggestConcepts:
+        return SuggestConcepts(self.resolver(), self.search_index, self.facts)
+
+    def models(self) -> ModelSessions:
+        return ModelSessions(
+            self.resolver(),
+            self.search_index,
+            self.fact_query,
+            self.documents,
+            self.models_repo,
+            self.clock,
+        )
 
     @cached_property
     def jobs(self) -> PostgresJobRepo:

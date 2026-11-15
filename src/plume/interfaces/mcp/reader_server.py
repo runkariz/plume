@@ -13,6 +13,7 @@ from plume import __version__
 from plume.application.errors import ApplicationError
 from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
+from plume.application.models.sessions import ModelSessions
 from plume.application.reader.resolve import BuildResolver
 from plume.application.reader.use_cases import (
     CheckCall,
@@ -55,6 +56,7 @@ class McpReaderDependencies:
     list_builds: Callable[[], ListBuilds]
     diff_builds: Callable[[], DiffBuilds]
     resolver: Callable[[], BuildResolver]
+    models: Callable[[], ModelSessions] | None = None
 
 
 async def _run(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
@@ -192,5 +194,42 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
             }
 
         return await _run(run)
+
+    if deps.models is not None:
+        models = deps.models
+
+        @server.tool(annotations=READ_ONLY, structured_output=True)
+        async def get_model(snapshot_id: str) -> dict[str, Any]:
+            """A stored canonical model (generated, unverified; every citation was checked)."""
+
+            def run() -> dict[str, Any]:
+                snap = models().snapshot(snapshot_id)
+                names = {}
+                for i in snap.inputs:
+                    try:
+                        names[i.api] = deps.resolver().resolve(i.api).api.name
+                    except ApplicationError:
+                        names[i.api] = i.api
+                return payloads.snapshot_payload(snap, names)
+
+            return await _run(run)
+
+        @server.tool(annotations=READ_ONLY, structured_output=True)
+        async def list_models(api: str | None = None) -> dict[str, Any]:
+            """Stored canonical models, newest first (reuse one instead of regenerating)."""
+            return await _run(
+                lambda: {
+                    "models": [
+                        {
+                            "snapshot_id": m.snapshot_id,
+                            "name": m.draft.name,
+                            "concept": m.concept,
+                            "apis": [i.api for i in m.inputs],
+                            "created_at": m.created_at.isoformat(),
+                        }
+                        for m in models().list(api)
+                    ]
+                }
+            )
 
     return server

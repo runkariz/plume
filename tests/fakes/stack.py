@@ -13,6 +13,8 @@ from plume.application.knowledge.extract_facts import ExtractFacts
 from plume.application.knowledge.import_package import ImportPackage
 from plume.application.knowledge.seal_build import SealBuild
 from plume.application.knowledge.tag_build import TagBuild
+from plume.application.models.concepts import SuggestConcepts
+from plume.application.models.sessions import ModelSessions
 from plume.application.ports.job_events import JobEvents
 from plume.application.ports.package_source import PackageSource
 from plume.application.reader.resolve import BuildResolver
@@ -43,6 +45,7 @@ from tests.fakes.knowledge import (
     InMemoryVectorIndex,
     RecordingEvents,
 )
+from tests.fakes.models import InMemoryModelRepo
 from tests.fakes.search import InMemoryFactQuery, InMemorySearchIndex
 
 
@@ -63,6 +66,7 @@ class FakeStack:
     gold: JsonGoldSource = field(default_factory=JsonGoldSource)
     policy: GatePolicy = field(default_factory=GatePolicy)
     data_dir: Path | None = None
+    models_repo: InMemoryModelRepo = field(default_factory=InMemoryModelRepo)
 
     def __post_init__(self) -> None:
         self.vectors = InMemoryVectorIndex(self.documents)
@@ -187,3 +191,16 @@ class FakeStack:
     def load(self, path: str, tag: str | None = "latest") -> str:
         """Run the pipeline on a package; returns the build id."""
         return self.pipeline().execute("job-test", path, tag=tag).build_id.value
+
+    def suggest(self) -> SuggestConcepts:
+        return SuggestConcepts(self.resolver(), self.search_index, self.facts)
+
+    def models(self) -> ModelSessions:
+        return ModelSessions(
+            self.resolver(),
+            self.search_index,
+            self.fact_query,
+            self.documents,
+            self.models_repo,
+            self.clock,
+        )
