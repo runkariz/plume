@@ -1,10 +1,14 @@
 import json
+import logging
+import time
 from typing import Any
 
 from sqlalchemy import Engine, text
 
 from plume.application.ports.jobs import Job, JobStatus, JsonObj, StoredEvent
 
+logger = logging.getLogger("plume.jobs")
+CHANNEL = "plume_job_events"
 _COLS = (
     "job_id, status, api_id, display_name, tag, package_path, package, diff, plan, eval, "
     "live_build, staged_build, error, created_at, updated_at"
@@ -130,7 +134,35 @@ class PostgresJobEventLog:
                 ),
                 {"j": job_id, "p": json.dumps(payload)},
             ).scalar_one()
+            # Delivered at commit; SSE streams of this job wake up instead of polling.
+            conn.execute(text("SELECT pg_notify(:c, :j)"), {"c": CHANNEL, "j": job_id})
         return int(seq)
+
+    def wait(self, job_id: str, seq: int, timeout: float) -> bool:
+        """LISTEN for this job's NOTIFY; falls back to a short sleep if listening fails."""
+        try:
+            with self._engine.connect() as conn:
+                raw = conn.connection.driver_connection
+                if raw is None or not hasattr(raw, "notifies"):
+                    raise RuntimeError("driver without LISTEN support")
+                raw.autocommit = True
+                try:
+                    raw.execute(f"LISTEN {CHANNEL}")
+                    if self.after(job_id, seq, 1):  # appended before LISTEN took effect
+                        return True
+                    deadline = time.monotonic() + timeout
+                    while (left := deadline - time.monotonic()) > 0:
+                        for note in raw.notifies(timeout=left, stop_after=1):
+                            if note.payload == job_id:
+                                return True
+                    return False
+                finally:
+                    raw.execute(f"UNLISTEN {CHANNEL}")
+                    raw.autocommit = False
+        except Exception:
+            logger.warning("LISTEN failed; polling job events", exc_info=True)
+            time.sleep(min(timeout, 0.25))
+            return True
 
     def after(self, job_id: str, seq: int, limit: int = 500) -> list[StoredEvent]:
         with self._engine.connect() as conn:

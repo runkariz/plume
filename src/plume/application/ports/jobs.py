@@ -65,6 +65,13 @@ class JobEventLog(Protocol):
 
     def after(self, job_id: str, seq: int, limit: int = 500) -> list[StoredEvent]: ...
 
+    def wait(self, job_id: str, seq: int, timeout: float) -> bool:
+        """Block until the job has an event after ``seq`` or ``timeout`` seconds pass.
+
+        Returns whether new events may be there (a spurious True is allowed; callers re-read).
+        """
+        ...
+
 
 @dataclass(frozen=True, slots=True)
 class StoredPackage:

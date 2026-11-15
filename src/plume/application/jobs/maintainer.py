@@ -227,6 +227,9 @@ class MaintainerJobs:
             raise NotFoundError(f"job {job_id} not found")
         return job
 
+    def wait_events(self, job_id: str, seq: int, timeout: float) -> bool:
+        return self._events.wait(job_id, seq, timeout)
+
     def events_after(self, job_id: str, seq: int) -> list[tuple[int, JsonObj]]:
         self.get(job_id)
         return [(e.seq, e.payload) for e in self._events.after(job_id, seq)]
