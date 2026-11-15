@@ -2,6 +2,7 @@ import { useMemo, useState, useSyncExternalStore, type CSSProperties, type React
 import type { ModelSnapshot } from '@/api/types';
 import { Card } from '@/components';
 import { CONTROLS_W, GraphControls } from './GraphControls';
+import { findField } from './fields';
 import { mappingRows, type Selection } from './graph';
 import { MappingDetail } from './MappingDetail';
 import { MappingGraph } from './MappingGraph';
@@ -74,13 +75,11 @@ export function ModelWorkbench({
 
   // "Selected field": one field and the APIs that fill it
   const focusedField =
-    scope === 'field' && selection
-      ? snap.fields.find((f) => f.name === selection.field)
-      : undefined;
+    scope === 'field' && selection ? findField(snap, selection.field)?.field : undefined;
   const graphSnap = focusedField
     ? {
         ...snap,
-        fields: [focusedField],
+        fields: [{ ...focusedField, fields: undefined }], // the one mapping, not its sub-fields
         inputs: snap.inputs.filter(
           (a) => (focusedField.support[a.id] ?? 'unsupported') !== 'unsupported',
         ),

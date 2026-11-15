@@ -35,7 +35,7 @@ export function Logo({
 }) {
   const [failed, setFailed] = useState(false);
   const base = useApiBaseUrl();
-  const src = iconSrc(url, base ?? undefined);
+  const src = iconSrc(url, base);
   if (src && !failed)
     return (
       <div

@@ -10,6 +10,7 @@ async function boxOf(locator: Locator) {
 /** The model graph with its control box and the mapping detail beside it, and the brand mark. */
 const ORDER = '/models/m-38f24111baf1076f44c9cfa7'; // the 40-field Order model of the mock (a live snapshot)
 const SMALL = '/models/snap_8f3a21';
+const NESTED = '/models/u-nested0000000000000000000000001'; // a model with nested objects and arrays
 
 for (const theme of THEMES) {
   test.describe(`model workbench (${theme})`, () => {
@@ -103,6 +104,53 @@ for (const theme of THEMES) {
       await settle(page);
       await expectNoSeriousA11y(page);
       await shot(page, 'w14-graph-selected-field', theme);
+    });
+
+    test('nested fields: expandable rows in the table, paths in the graph and its list', async ({
+      page,
+    }) => {
+      await page.goto(`${NESTED}?view=table`);
+      await expect(page.getByRole('heading', { level: 1, name: 'Order with lines' })).toBeVisible();
+      const names = () =>
+        page.locator('table.mtable-grid th[scope="row"] .mtable-name').evaluateAll((els) =>
+          els.map((el) =>
+            [...el.childNodes]
+              .filter((n) => n.nodeType === Node.TEXT_NODE)
+              .map((n) => n.textContent)
+              .join('')
+              .trim(),
+          ),
+        );
+      expect(await names()).toEqual([
+        'id',
+        'customer',
+        'name',
+        'email',
+        'lines',
+        'sku',
+        'price',
+        'amount',
+        'currency',
+      ]);
+      await settle(page);
+      await expectNoSeriousA11y(page);
+      await shot(page, 'w15-nested-table', theme);
+      await page.getByRole('button', { name: 'Collapse lines', exact: true }).click();
+      expect(await names()).toEqual(['id', 'customer', 'name', 'email', 'lines']);
+      await page.getByRole('button', { name: 'Expand lines', exact: true }).click();
+      // the graph: the mapped fields by canonical path, the list indented, the detail by path
+      await page.goto(`${NESTED}?view=graph&scope=all`);
+      await expect(page.locator('.react-flow__node-canonical')).toHaveCount(7);
+      await page.getByRole('option', { name: /lines\[\]\.price\.amount ← Shopify/ }).click();
+      await expect(
+        page
+          .getByRole('region', { name: 'Mapping detail' })
+          .getByRole('heading', { name: 'lines[].price.amount ← Shopify' }),
+      ).toBeVisible();
+      await expect(page).toHaveURL(/field=lines/);
+      await settle(page);
+      await expectNoSeriousA11y(page);
+      await shot(page, 'w15-nested-graph', theme);
     });
 
     test('keyboard: the mapping list is one tab stop, arrows move, Enter selects', async ({

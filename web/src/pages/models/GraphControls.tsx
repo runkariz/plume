@@ -158,6 +158,7 @@ export function GraphControls({
                   className={[selected ? 'sel' : '', i === idx ? 'act' : '', on ? '' : 'off']
                     .filter(Boolean)
                     .join(' ')}
+                  style={{ paddingLeft: 8 + Math.min(r.depth, 3) * 12 }}
                   onClick={() => {
                     setActive(i);
                     onSelect({ field: r.field, apiId: r.apiId });

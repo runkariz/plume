@@ -18,7 +18,12 @@ describe('iconSrc', () => {
       '',
     ])
       expect(iconSrc(bad, 'http://127.0.0.1:18490'), bad).toBeNull();
-    expect(iconSrc(null)).toBeNull();
-    expect(iconSrc(undefined)).toBeNull();
+    expect(iconSrc(null, 'http://127.0.0.1:18490')).toBeNull();
+    expect(iconSrc(undefined, 'http://127.0.0.1:18490')).toBeNull();
+  });
+  it('shows nothing without an API base to load from (the embedded view has none)', () => {
+    expect(iconSrc('/v1/apis/shopify/icon')).toBeNull();
+    expect(iconSrc('/v1/apis/shopify/icon', null)).toBeNull();
+    expect(iconSrc('/v1/apis/shopify/icon', '')).toBeNull();
   });
 });

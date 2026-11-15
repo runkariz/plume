@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { ModelSnapshot } from '@/api/types';
 import { Chip } from '@/components';
+import { findField } from './fields';
 import type { Selection } from './graph';
 
 /** One mapping in full: where the data is fetched, the source path, how it is transformed, and the evidence. */
@@ -14,7 +15,7 @@ export function MappingDetail({
   /** How a cited document is shown: a link in the web app. Without it, plain text (the embedded view has no pages). */
   renderDocLink?: (apiId: string, docId: string) => ReactNode;
 }) {
-  const field = snap.fields.find((f) => f.name === sel.field);
+  const field = findField(snap, sel.field)?.field;
   const api = snap.inputs.find((a) => a.id === sel.apiId);
   const src = field?.sources[sel.apiId];
   const support = field?.support[sel.apiId];
@@ -23,7 +24,7 @@ export function MappingDetail({
     <>
       <div className="rowhead">
         <h2 className="mono-h">
-          {field.name} ← {api.shortName}
+          {field.path ?? field.name} ← {api.shortName}
         </h2>
         {support === 'derived' ? (
           <Chip tone="warn">

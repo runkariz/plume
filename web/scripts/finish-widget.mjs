@@ -20,6 +20,11 @@ if (/@font-face|font\/woff/i.test(html))
   problems.push('a font file: the host CSP has no font-src, it would be blocked');
 if (!html.includes('ui/initialize')) problems.push('the handshake is missing');
 if (!/<script type="module">/.test(html)) problems.push('the script is not inline');
+// the output must not carry the builder's environment (an .env file, a shell variable) or a local address
+if (/VITE_[A-Z_]+/.test(html))
+  problems.push('a VITE_ variable (its name or its value) is in the file');
+if (/127\.0\.0\.1|localhost/.test(html))
+  problems.push('a local address (127.0.0.1 or localhost) is in the file');
 const size = Buffer.byteLength(html);
 if (size > 3_000_000) problems.push(`the file is ${size} bytes, over the 3 MB limit`);
 if (problems.length) {

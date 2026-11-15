@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ModelSnapshot } from '@/api/types';
 import { FixedThemeProvider, type Theme } from '@/app/theme';
 import { ApiAvatar, Banner, Button, Chip, Segmented } from '@/components';
+import { countLeaves } from '@/pages/models/fields';
 import { ModelWorkbench } from '@/pages/models/ModelWorkbench';
 import { defaultSelection, type Selection } from '@/pages/models/graph';
 import { toggleApi } from '@/pages/models/modelView';
@@ -181,7 +182,7 @@ function ModelPanel({
   link: string | null;
   connection: HostConnection | null;
 }) {
-  const big = model.fields.length > BIG;
+  const big = countLeaves(model) > BIG;
   const [scope, setScope] = useState<'field' | 'all'>(big ? 'field' : 'all');
   const [text, setText] = useState('');
   const [show, setShow] = useState<string[] | null>(null);
@@ -203,7 +204,7 @@ function ModelPanel({
                 v{lineage.version} of {lineage.versions}
               </Chip>
             ) : null}
-            <Chip>{model.fields.length} fields</Chip>
+            <Chip>{countLeaves(model)} fields</Chip>
             {model.stale ? <Chip tone="warn">Built on older docs</Chip> : null}
             <span className="widget-apis" aria-label="APIs">
               {model.inputs.map((a) => (
@@ -271,7 +272,7 @@ function Summary({ model }: { model: ModelSnapshot }) {
     <div className="widget-summary">
       <ul className="widget-coverage" aria-label="Coverage">
         {model.inputs.map((a) => {
-          const cov = model.coverage[a.id] ?? { mapped: 0, total: model.fields.length };
+          const cov = model.coverage[a.id] ?? { mapped: 0, total: countLeaves(model) };
           return (
             <li key={a.id}>
               <ApiAvatar text={a.logo.text} color={a.logo.color} size={18} />

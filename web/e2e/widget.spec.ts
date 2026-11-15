@@ -12,8 +12,13 @@ const THEMES = ['light', 'dark'] as const;
  */
 const SHOTS = process.env.PLUME_E2E_SHOTS_DIR;
 const order = realOrder();
+// as MCP results are shaped: the inputs carry no logo (only the HTTP routes add one)
+const mcpInputs = (order.inputs as Record<string, unknown>[]).map((a) =>
+  Object.fromEntries(Object.entries(a).filter(([k]) => k !== 'logo')),
+);
 const small = {
   ...order,
+  inputs: mcpInputs,
   fields: (order.fields as unknown[]).slice(0, 5),
   visibility: 'unlisted',
   lineage: { id: 'L', version: 3, versions: 3, basedOn: 'u-prev', latestId: 'u-1', history: [] },
@@ -201,6 +206,9 @@ test('the built file loads nothing remote and keeps everything inline', async ()
   expect(html).not.toMatch(/<(script|link|img|iframe)[^>]+(src|href)="(?!data:|#)[^"]*"/i);
   expect(html).not.toMatch(/@import|url\(\s*(?!["']?(data:|#))/i);
   expect(html).not.toMatch(/@font-face|font\/woff/); // the host CSP has no font-src: fonts would be blocked
+  // the committed file must not depend on who built it: no env variable (name or value), no local address
+  expect(html).not.toMatch(/VITE_[A-Z_]+/);
+  expect(html).not.toMatch(/127\.0\.0\.1|localhost/);
   expect(html).toContain('ui/initialize');
   expect(Buffer.byteLength(html)).toBeLessThan(3_000_000);
 });

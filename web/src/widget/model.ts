@@ -1,5 +1,6 @@
 import type { DraftIssue, ModelSnapshot } from '@/api/types';
 import { apiLabel } from '@/lib/names';
+import { withPaths } from '@/pages/models/fields';
 import type { CallToolResult } from './protocol';
 
 /** What a tool result means for the view. */
@@ -43,17 +44,40 @@ export function extractModel(result: CallToolResult): Shown {
   return { kind: 'model', model: normalise(candidate), link };
 }
 
+const NEUTRAL = '#6a655e';
+
+/**
+ * The tile of an API from what the server sent. Hosts and servers vary (an older server sent no `logo` in MCP
+ * results at all), so a missing or odd value falls back to the first letter on a neutral colour instead of
+ * breaking the view. The icon URL is always dropped: a relative /v1/... path cannot load in the sandboxed frame.
+ */
+export function safeLogo(a: {
+  id?: string;
+  shortName?: string;
+  logo?: { text?: unknown; color?: unknown };
+}): ModelSnapshot['inputs'][number]['logo'] {
+  const text =
+    typeof a.logo?.text === 'string' && a.logo.text.trim() !== ''
+      ? a.logo.text
+      : (a.shortName ?? a.id ?? '?').trim().slice(0, 1).toUpperCase() || '?';
+  const color =
+    typeof a.logo?.color === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(a.logo.color.trim())
+      ? a.logo.color.trim()
+      : NEUTRAL;
+  return { text, color, url: null };
+}
+
 /**
  * The model as the view shows it: the display names of the APIs, and no icon URLs (a relative /v1/... path cannot
  * load inside the sandboxed frame, so the letter tile is used).
  */
 export function normalise(m: ModelSnapshot): ModelSnapshot {
-  return {
+  return withPaths({
     ...m,
     inputs: m.inputs.map((a) => ({
       ...a,
       shortName: apiLabel(a),
-      logo: { ...a.logo, url: null },
+      logo: safeLogo(a),
     })),
-  };
+  });
 }

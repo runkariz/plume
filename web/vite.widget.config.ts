@@ -43,6 +43,11 @@ function inlineIntoHtml(): Plugin {
 
 export default defineConfig({
   plugins: [react(), inlineIntoHtml()],
+  // The committed file must not depend on who builds it: no .env files, and no VITE_* variable of the shell
+  // (a prefix nothing matches), so import.meta.env carries only the constants of a production build.
+  envDir: false,
+  envPrefix: 'PLUME_WIDGET_BUILD_NEVER_MATCHES_',
+  mode: 'production',
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

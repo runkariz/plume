@@ -1,3 +1,4 @@
+import { withPaths } from '@/pages/models/fields';
 import { apiLabel, apiTitle } from '@/lib/names';
 import { apiBaseUrl } from './config';
 import { createSseParser } from './sse';
@@ -400,7 +401,7 @@ export function createApiClient(
       }>(`/v1/models/sessions/${enc(sessionId)}/draft`, { method: 'POST', body, signal }),
     getSnapshot: async (id, signal) => {
       const m = await call<ModelSnapshot>(`/v1/models/${enc(id)}`, { signal });
-      return { ...m, inputs: m.inputs.map(withLabel) };
+      return withPaths({ ...m, inputs: m.inputs.map(withLabel) });
     },
     verifyMaintainer: (key, signal) =>
       call<MaintainerIdentity>('/v1/maintainer/me', { key, signal }),

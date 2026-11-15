@@ -739,3 +739,131 @@ export const snapshots: Record<string, ModelSnapshot> = {
   [inventorySnapshot.id]: inventorySnapshot,
   [productSnapshot.id]: productSnapshot,
 };
+
+/** A model with nested fields as the server sends them: canonical `path` on every field, `fields` on containers. */
+const leaf = (
+  name: string,
+  path: string,
+  support: Record<string, 'supported' | 'derived' | 'unsupported'>,
+  sources: Record<string, string>,
+  extra: Partial<ModelSnapshot['fields'][number]> = {},
+): ModelSnapshot['fields'][number] => ({
+  name,
+  path,
+  type: 'string',
+  required: false,
+  support,
+  sources: Object.fromEntries(
+    Object.entries(sources).map(([api, p]) => [
+      api,
+      {
+        paths: [{ path: p, type: 'string' }],
+        evidence: [{ quote: `${name} as documented`, anchor: '', docId: `model:${api}-order` }],
+      },
+    ]),
+  ),
+  ...extra,
+});
+
+export const nestedSnapshot: ModelSnapshot = {
+  id: 'u-nested0000000000000000000000001',
+  name: 'Order with lines',
+  description: 'An order with its customer and its lines.',
+  status: 'generated_unverified',
+  generatedAt: '2026-11-16T09:00:00Z',
+  promptVersion: 'v1',
+  inputs: (['shopify', 'woocommerce'] as const).map((id) => ({
+    ...(REFS[id] as ApiRef),
+    build: apiBuild[id],
+  })),
+  fields: [
+    leaf(
+      'id',
+      'id',
+      { shopify: 'supported', woocommerce: 'supported' },
+      { shopify: 'id', woocommerce: 'id' },
+      {
+        required: true,
+      },
+    ),
+    {
+      // a container without sources of its own: derived because its children are mapped
+      name: 'customer',
+      path: 'customer',
+      type: 'object',
+      required: false,
+      support: { shopify: 'derived', woocommerce: 'derived' },
+      sources: {},
+      fields: [
+        leaf(
+          'name',
+          'customer.name',
+          { shopify: 'supported', woocommerce: 'supported' },
+          {
+            shopify: 'customer.first_name',
+            woocommerce: 'billing.first_name',
+          },
+        ),
+        leaf(
+          'email',
+          'customer.email',
+          { shopify: 'supported', woocommerce: 'unsupported' },
+          {
+            shopify: 'customer.email',
+          },
+        ),
+      ],
+    },
+    {
+      // a container that is also mapped as a whole (it has sources of its own)
+      name: 'lines',
+      path: 'lines',
+      type: 'array',
+      required: false,
+      support: { shopify: 'supported', woocommerce: 'supported' },
+      sources: {
+        shopify: { paths: [{ path: 'line_items', type: 'array' }] },
+        woocommerce: { paths: [{ path: 'line_items', type: 'array' }] },
+      },
+      fields: [
+        leaf(
+          'sku',
+          'lines[].sku',
+          { shopify: 'supported', woocommerce: 'supported' },
+          {
+            shopify: 'line_items[].sku',
+            woocommerce: 'line_items[].sku',
+          },
+        ),
+        {
+          name: 'price',
+          path: 'lines[].price',
+          type: 'object',
+          required: false,
+          support: { shopify: 'derived', woocommerce: 'derived' },
+          sources: {},
+          fields: [
+            leaf(
+              'amount',
+              'lines[].price.amount',
+              { shopify: 'derived', woocommerce: 'supported' },
+              {
+                shopify: 'line_items[].price',
+                woocommerce: 'line_items[].price',
+              },
+            ),
+            leaf(
+              'currency',
+              'lines[].price.currency',
+              { shopify: 'unsupported', woocommerce: 'unsupported' },
+              {},
+            ),
+          ],
+        },
+      ],
+    },
+  ],
+  openQuestions: [],
+  coverage: { shopify: { mapped: 5, total: 6 }, woocommerce: { mapped: 4, total: 6 } },
+  citations: { checked: 8, found: 8, missing: [] },
+};

@@ -144,6 +144,8 @@ Rules it must keep (the host's default CSP is `default-src 'none'`, scripts and 
   `data:` font is blocked: the view uses the host's `--font-sans` or the system fonts);
 - no `fetch`, no storage, no router; package text only as React text nodes; icon URLs are dropped (letter tiles);
 - a fixed canvas height (the host sizes the frame from the content, so `vh` would loop).
+- the build ignores `.env` files and `VITE_*` shell variables (`envDir: false`), so the committed file is the same
+  on every machine; the check in `scripts/finish-widget.mjs` fails on any `VITE_` name or local address.
 
 `scripts/finish-widget.mjs` fails the build if the file refers to anything outside itself. `e2e/widget.spec.ts`
 runs the BUILT file in a sandboxed iframe under that CSP with the network cut, driven by a stand-in host
