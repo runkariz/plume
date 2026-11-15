@@ -1,0 +1,179 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 10px;
+  font: 600 14px var(--font-sans);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.btn.ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.btn.lg {
+  padding: 12px 20px;
+  font-size: 15px;
+}
+.btn svg {
+  width: 16px;
+  height: 16px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--line2);
+  color: var(--muted);
+}
+.chip.ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+.chip.info {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.chip.warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.chip.bad {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+.chip.acc {
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  display: inline-block;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+}
+.pad {
+  padding: 22px 24px;
+}
+.tile {
+  padding: 18px 20px;
+}
+.tile .v {
+  font: 600 30px var(--font-serif);
+  letter-spacing: -0.02em;
+}
+.tile .k {
+  color: var(--muted);
+  font-size: 13px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.field label {
+  font-weight: 600;
+  font-size: 13.5px;
+}
+.input {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 11px 13px;
+  background: var(--surface);
+  font: 15px var(--font-sans);
+  color: var(--ink);
+}
+.input.mono {
+  font: 13.5px var(--font-mono);
+}
+.hint {
+  color: var(--faint);
+  font-size: 12.5px;
+}
+.pillf {
+  padding: 5px 12px;
+  border-radius: 99px;
+  border: 1px solid var(--line);
+  background: transparent;
+  font: 500 13px var(--font-sans);
+  color: var(--muted);
+  cursor: pointer;
+}
+.pillf.on,
+.pillf[aria-pressed='true'] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+kbd {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 7px;
+  color: var(--faint);
+  background: var(--bg);
+}
+.state {
+  display: grid;
+  place-items: center;
+  gap: 8px;
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--muted);
+}
+.state h3 {
+  color: var(--ink);
+}
+.state.error h3 {
+  color: var(--bad);
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--line2), var(--line), var(--line2));
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite linear;
+  border-radius: 8px;
+  min-height: 14px;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+pre.code {
+  background: var(--code-bg);
+  color: var(--code-ink);
+  border-radius: 11px;
+  padding: 14px 16px;
+  font: 12.5px/1.6 var(--font-mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+}

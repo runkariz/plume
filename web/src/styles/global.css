@@ -1,0 +1,85 @@
+@import './tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+* {
+  margin: 0;
+  padding: 0;
+}
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.55 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+code,
+kbd,
+.mono {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+h1 {
+  font: 600 44px/1.08 var(--font-serif);
+  letter-spacing: -0.02em;
+}
+h1 em {
+  color: var(--accent);
+  font-style: italic;
+}
+h2 {
+  font: 600 20px var(--font-serif);
+  letter-spacing: -0.01em;
+}
+h3 {
+  font: 600 15px var(--font-sans);
+}
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+.muted {
+  color: var(--muted);
+}
+.faint {
+  color: var(--faint);
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.eyebrow {
+  font: 600 12px var(--font-sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent-ink);
+  margin-bottom: 14px;
+}
+.lead {
+  font-size: 18px;
+  color: var(--muted);
+  max-width: 620px;
+}
+@media (max-width: 720px) {
+  .wrap {
+    padding: 0 16px;
+  }
+  h1 {
+    font-size: 32px;
+  }
+}
