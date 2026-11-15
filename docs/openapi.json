@@ -2557,6 +2557,15 @@
             "title": "Jobid",
             "type": "string"
           },
+          "kind": {
+            "default": "model",
+            "enum": [
+              "model",
+              "model_set"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
           "maxRounds": {
             "title": "Maxrounds",
             "type": "integer"
@@ -2575,6 +2584,17 @@
               }
             ],
             "title": "Sessionid"
+          },
+          "setId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Setid"
           },
           "snapshotId": {
             "anyOf": [
@@ -2875,6 +2895,26 @@
           "evaluatedAt"
         ],
         "title": "Quality",
+        "type": "object"
+      },
+      "RelationEditRequest": {
+        "properties": {
+          "relations": {
+            "description": "[{id, kind?, cardinality?, embed?, ref?, from?, to?, confirmed?}]: design changes for existing relations (their evidence stays).",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Relations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "relations"
+        ],
+        "title": "RelationEditRequest",
         "type": "object"
       },
       "ReviewRequest": {
@@ -6161,6 +6201,126 @@
         ]
       }
     },
+    "/v1/model-sets/generate": {
+      "post": {
+        "description": "Maintainer: Plume writes every member model with its LLM (same validation), then\nproposes relations from the documented candidates as UNDECIDED (confirmed: false).\nThe set is stored unreleased; decide the relations, then release. Progress:\nGET /v1/models/jobs/{jobId} and its events (kind model_set, setId).",
+        "operationId": "generate_v1_model_sets_generate_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSessionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelJobOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Generate",
+        "tags": [
+          "model sets"
+        ]
+      }
+    },
     "/v1/model-sets/mine": {
       "post": {
         "operationId": "mine_v1_model_sets_mine_post",
@@ -6922,6 +7082,123 @@
           }
         },
         "summary": "Discard",
+        "tags": [
+          "model sets"
+        ]
+      }
+    },
+    "/v1/model-sets/{set_id}/relations": {
+      "post": {
+        "description": "The web's relation editor: change relation designs (kind, cardinality, embed/ref,\nconfirmed) of the latest version; a new version is stored (unlisted without the token,\nunreleased with it). Only designs whose fields exist in the members pass (see each\nrelation's `editableOptions`); anything else is a revision with Claude (422).",
+        "operationId": "edit_relations_v1_model_sets__set_id__relations_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "set_id",
+            "required": true,
+            "schema": {
+              "title": "Set Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RelationEditRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Edit Relations",
         "tags": [
           "model sets"
         ]

@@ -38,7 +38,7 @@ offset?)` (paged; see canonical-models.md), the model tools above except
 `list_my_models` (drafts are stored **unreleased**; `get_model` also shows unreleased models),
 `list_models(api?, visibility="all")` (official | unreleased | unlisted | all),
 `release_model`, `discard_model`, `generate_model(apis, concept)` (Plume's LLM; returns a job),
-`get_generation(job_id)`, `publish_build`, `get_job`. See
+`get_generation(job_id)`, `generate_model_set(apis, concepts)` (members by the LLM, relations proposed undecided), `release_model_set` / `discard_model_set`, `publish_build`, `get_job`. See
 [canonical-models.md](canonical-models.md).
 
 The same use cases back the HTTP API (`docs/openapi.json`); `POST /v1/apis/{api}/search`

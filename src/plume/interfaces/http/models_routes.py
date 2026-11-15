@@ -60,7 +60,7 @@ def make_optional_auth(tokens: tuple[str, ...]) -> Callable[..., bool]:
     return maintainer_or_anonymous
 
 
-def _job_out(job: ModelJob) -> s.ModelJobOut:
+def job_out(job: ModelJob) -> s.ModelJobOut:
     return s.ModelJobOut(
         job_id=job.job_id,
         status=job.status,
@@ -69,13 +69,19 @@ def _job_out(job: ModelJob) -> s.ModelJobOut:
         session_id=job.session_id,
         round=job.round,
         max_rounds=job.max_rounds,
-        snapshot_id=job.snapshot_id,
+        snapshot_id=None if _is_set(job) else job.snapshot_id,
         error=job.error,
         generator=job.generator,
         created_at=job.created_at.isoformat(),
         updated_at=job.updated_at.isoformat(),
         events_url=f"/v1/models/jobs/{job.job_id}/events",
+        kind="model_set" if _is_set(job) else "model",
+        set_id=job.snapshot_id if _is_set(job) else None,
     )
+
+
+def _is_set(job: ModelJob) -> bool:
+    return (job.session_id or "").startswith("ss-")
 
 
 def models_router(  # noqa: PLR0915
@@ -209,7 +215,7 @@ def models_router(  # noqa: PLR0915
         if engine == "server" and not (existing and not body.force):
             job = generator().start(body.apis, body.concept)
             return JSONResponse(
-                _job_out(job).model_dump(by_alias=True, mode="json"), status_code=202
+                job_out(job).model_dump(by_alias=True, mode="json"), status_code=202
             )
         session = service.start(
             body.apis, body.concept, Origin.MAINTAINER if maintainer else Origin.USER
@@ -233,7 +239,7 @@ def models_router(  # noqa: PLR0915
     )
     def get_job(job_id: str) -> s.ModelJobOut:
         """A server-side generation job (maintainer)."""
-        return _job_out(generator().get(job_id))
+        return job_out(generator().get(job_id))
 
     @router.get(
         "/v1/models/jobs/{job_id}/events",

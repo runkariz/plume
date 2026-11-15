@@ -173,3 +173,110 @@ def test_set_tools_on_the_maintainer_mcp(stack: FakeStack) -> None:
 
     x = anyio.run(flow)
     assert (x["kind"], x["undecided"]) == ("model_set", ["order-items"])
+
+
+def test_web_relation_edit(client: TestClient, stack: FakeStack) -> None:
+    ss, pins, ids = _members(client, stack, {})
+    body = {"name": "Shop", "members": ids, "relations": [_relation(stack, pins)]}
+    x = client.post(f"/v1/model-sets/sessions/{ss}/draft", json=body).json()["set"]
+    options = x["relations"][0]["editableOptions"]
+    by = {(o["kind"], o["cardinality"]): o for o in options}
+    assert by[("embedded", "1:n")]["editable"] is True
+    assert by[("embedded", "1:n")]["current"] is True
+    assert by[("embedded", "1:1")]["editable"] is False  # Order.items is an array
+    ref = by[("reference", "n:1")]
+    assert (ref["from"], ref["to"], ref["editable"]) == ("Product", "Order", False)
+    assert ref["missing"] == ["Product: a field holding the Order id"]
+    url = f"/v1/model-sets/{x['id']}/relations"
+    v2 = client.post(url, json={"relations": [{"id": "order-items", "confirmed": False}]})
+    assert v2.status_code == 201
+    v2set = v2.json()["set"]
+    assert (v2set["lineage"]["version"], v2set["undecided"]) == (2, ["order-items"])
+    assert v2.json()["ownerKey"] is None  # same lineage
+    stale = client.post(url, json={"relations": [{"id": "order-items", "confirmed": True}]})
+    assert stale.status_code == 409  # v1 is no longer the latest
+    url2 = f"/v1/model-sets/{v2set['id']}/relations"
+    shape = client.post(url2, json={"relations": [{"id": "order-items", "cardinality": "1:1"}]})
+    assert shape.status_code == 422
+    assert shape.json()["issues"][0]["code"] == "RELATION_SHAPE_MISMATCH"
+    evidence = client.post(url2, json={"relations": [{"id": "order-items", "sources": {}}]})
+    assert evidence.status_code == 400
+    unknown = client.post(url2, json={"relations": [{"id": "nope", "confirmed": True}]})
+    assert unknown.status_code == 400
+
+
+def _shop_draft(stack: FakeStack, name: str, fields: dict[str, str]) -> dict[str, Any]:
+    from plume.domain.shared.ids import BuildId  # noqa: PLC0415
+
+    build = BuildId(stack.resolver().resolve("shopify").build.build_id.value)
+    doc_id = "endpoint:GET~/admin/api/{version}/products.json"
+    doc = stack.documents.get_document(build, doc_id)
+    assert doc is not None
+    specs = {f.name: f for f in doc.fields}
+    return {
+        "name": name,
+        "fields": [
+            {
+                "name": canonical,
+                "type": "string",
+                "sources": {
+                    "shopify": {
+                        "paths": [{"path": path}],
+                        "evidence": [{"doc_id": doc_id, "quote": specs[path].description}],
+                    }
+                },
+            }
+            for canonical, path in fields.items()
+        ],
+    }
+
+
+def test_server_generated_set_proposes_undecided_relations(packages: Path, tmp_path: Path) -> None:
+    s = FakeStack(embedder=WordEmbedder(), data_dir=tmp_path)
+    for p in ("shopify-mini", "woo-mini"):
+        s.load(str(packages / p))
+    s.writer.replies = [
+        _shop_draft(s, "Product", {"id": "products[].id"}),
+        _shop_draft(
+            s, "Variant",
+            {"id": "products[].variants[].id", "product_id": "products[].variants[].product_id"},
+        ),
+    ]  # fmt: skip
+    client = TestClient(
+        create_app(
+            HttpDependencies(
+                overviews=s.overviews, browse=s.browse, search=s.search,
+                get_document=s.get_document, find_fact=s.find_fact, check_call=s.check_call,
+                list_builds=lambda: ListBuilds(s.builds, s.tags),
+                diff_builds=lambda: DiffBuilds(s.builds), resolver=s.resolver,
+                rate_limit_per_minute=0, suggest=s.suggest, models=s.models,
+                model_sets=s.model_sets, generate_models=s.generate, maintainer_tokens=(TOKEN,),
+            )
+        )
+    )  # fmt: skip
+    body = {"apis": ["shopify", "woocommerce"], "concepts": ["Product", "Variant"]}
+    assert client.post("/v1/model-sets/generate", json=body).status_code == 401
+    job = client.post("/v1/model-sets/generate", json=body, headers=AUTH).json()
+    done = client.get(f"/v1/models/jobs/{job['jobId']}", headers=AUTH).json()
+    assert (done["status"], done["kind"]) == ("succeeded", "model_set")
+    x = client.get(f"/v1/model-sets/{done['setId']}", headers=AUTH).json()
+    assert x["visibility"] == "unreleased"
+    (rel,) = x["relations"]
+    assert (rel["from"], rel["to"], rel["kind"], rel["confirmed"]) == (
+        "Variant", "Product", "reference", False,
+    )  # fmt: skip
+    assert rel["ref"] == {"field": "product_id", "key": "id"}
+    assert rel["support"] == {"shopify": "id_field", "woocommerce": None}
+    assert x["undecided"] == [rel["id"]]
+    assert client.post(f"/v1/model-sets/{x['id']}/release", headers=AUTH).status_code == 409
+    with client.stream("GET", f"/v1/models/jobs/{job['jobId']}/events", headers=AUTH) as r:
+        events = [ln[7:] for ln in "".join(r.iter_text()).splitlines() if ln.startswith("event: ")]
+    assert events.count("member") == 2
+    assert events[-3:] == ["proposals", "accepted", "done"]
+    decided = client.post(
+        f"/v1/model-sets/{x['id']}/relations",
+        json={"relations": [{"id": rel["id"], "confirmed": True}]},
+        headers=AUTH,
+    ).json()["set"]
+    released = client.post(f"/v1/model-sets/{decided['id']}/release", headers=AUTH).json()
+    assert len(released["releasedMembers"]) == 2

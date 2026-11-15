@@ -567,6 +567,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 lambda api, name: _logo(api, name, _icon_url(api)).model_dump(by_alias=True),
                 deps.maintainer_tokens,
                 deps.web_public_url,
+                deps.generate_models,
             )
         )
     if deps.maintainer is not None:

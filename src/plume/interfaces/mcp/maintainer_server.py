@@ -119,7 +119,15 @@ def create_maintainer_server(deps: McpMaintainerDependencies) -> MCPServer:
         deps.suggest_related,
     )
     if deps.model_sets is not None:
-        register_set_tools(server, deps.model_sets, deps.resolver, _run, True, deps.web_public_url)
+        register_set_tools(
+            server,
+            deps.model_sets,
+            deps.resolver,
+            _run,
+            True,
+            deps.web_public_url,
+            deps.generate,
+        )
 
     @server.tool(annotations=WRITE, structured_output=True, meta=MODEL_ONLY_META)
     async def publish_build(api: str, build: str, tag: str = "latest") -> dict[str, Any]:

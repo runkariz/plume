@@ -11,6 +11,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
+from plume.application.models.generate import GenerateModels
 from plume.application.models.model_sets import ModelSets
 from plume.application.models.sessions import ModelDraftRefusedError
 from plume.application.reader.resolve import BuildResolver
@@ -19,15 +20,16 @@ from plume.domain.models.snapshot import Visibility
 from plume.interfaces import payloads
 from plume.interfaces.http import schemas as s
 from plume.interfaces.http.maintainer import make_auth
-from plume.interfaces.http.models_routes import make_optional_auth
+from plume.interfaces.http.models_routes import job_out, make_optional_auth
 
 
-def model_sets_router(
+def model_sets_router(  # noqa: PLR0915 - one route per operation
     sets: Callable[[], ModelSets],
     resolver: Callable[[], BuildResolver],
     logo: Callable[[str, str], dict[str, Any]],
     tokens: tuple[str, ...],
     web_public_url: str | None = None,
+    generate_models: Callable[[], GenerateModels] | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["model sets"])
     auth = make_auth(tokens)
@@ -60,6 +62,9 @@ def model_sets_router(
             web_public_url,
         )
         body["inputs"] = [{**i, "logo": logo(i["id"], i["name"])} for i in body["inputs"]]
+        editable = service.editable_options(x)
+        for rel in body["relations"]:
+            rel["editableOptions"] = editable.get(rel["id"], [])
         return body
 
     @router.post("/v1/model-sets/sessions", responses=errors)
@@ -79,6 +84,22 @@ def model_sets_router(
                 f'then submit_model_set("{x.session_id}", draft).'
             ),
         }
+
+    @router.post(
+        "/v1/model-sets/generate",
+        status_code=202,
+        dependencies=[Depends(auth)],
+        response_model=s.ModelJobOut,
+        responses={**errors, 503: {"model": s.ErrorBody}},
+    )
+    def generate(body: s.SetSessionRequest) -> s.ModelJobOut:
+        """Maintainer: Plume writes every member model with its LLM (same validation), then
+        proposes relations from the documented candidates as UNDECIDED (confirmed: false).
+        The set is stored unreleased; decide the relations, then release. Progress:
+        GET /v1/models/jobs/{jobId} and its events (kind model_set, setId)."""
+        if generate_models is None:
+            raise HTTPException(503, "server-side generation is not configured")
+        return job_out(generate_models().start_set(sets(), body.apis, body.concepts))
 
     @router.get("/v1/model-sets/sessions/{session_id}", responses=errors)
     def session_status(session_id: str) -> dict[str, Any]:
@@ -172,6 +193,35 @@ def model_sets_router(
             "membersCurrent": r["members_current"],
             "next": r["next"],
         }
+
+    @router.post("/v1/model-sets/{set_id}/relations", status_code=201, responses=errors)
+    def edit_relations(
+        set_id: str,
+        body: s.RelationEditRequest,
+        maintainer: Annotated[bool, Depends(optional)],
+    ) -> JSONResponse:
+        """The web's relation editor: change relation designs (kind, cardinality, embed/ref,
+        confirmed) of the latest version; a new version is stored (unlisted without the token,
+        unreleased with it). Only designs whose fields exist in the members pass (see each
+        relation's `editableOptions`); anything else is a revision with Claude (422)."""
+        try:
+            result = sets().edit_relations(set_id, body.relations, maintainer)
+        except ModelDraftRefusedError as exc:
+            out = payloads.refusal_payload(exc.issues)
+            return JSONResponse(
+                {"error": exc.code, "message": str(exc), "detail": str(exc), **out},
+                status_code=422,
+            )
+        x = result.snapshot
+        return JSONResponse(
+            {
+                "created": result.created,
+                "visibility": x.visibility,
+                "ownerKey": result.owner_key,
+                "set": set_json(x, maintainer),
+            },
+            status_code=201 if result.created else 200,
+        )
 
     @router.post("/v1/model-sets/{set_id}/release", dependencies=[Depends(auth)], responses=errors)
     def release(set_id: str) -> dict[str, Any]:

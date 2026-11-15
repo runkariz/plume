@@ -11,6 +11,7 @@ from dataclasses import replace
 from typing import Any
 
 from plume.application.errors import NotFoundError
+from plume.application.models.model_sets import ModelSets
 from plume.application.models.sessions import (
     DRAFT_FORMAT,
     INSTRUCTIONS,
@@ -103,6 +104,83 @@ class GenerateModels:
         self._runner.submit(lambda: self._run(job.job_id))
         return job
 
+    def start_set(self, sets: ModelSets, apis: list[str], concepts: list[str]) -> ModelJob:
+        """Plume writes every member model, then PROPOSES relations from the documented
+        candidates (confirmed: false: the maintainer decides them before release)."""
+        if not self._writer.available():
+            raise ModelWriterUnavailableError(
+                "server-side generation is not configured (PLUME_VERTEX_KEY_FILE)"
+            )
+        session = sets.start(apis, concepts, Origin.MAINTAINER)
+        now = self._clock.now()
+        job = ModelJob(
+            job_id=f"mj-{uuid.uuid4().hex[:16]}",
+            status="queued",
+            apis=tuple(i.api for i in session.inputs),
+            concept=" + ".join(session.concepts),
+            created_at=now,
+            updated_at=now,
+            session_id=session.session_id,
+            max_rounds=self._max_rounds,
+            generator=self._writer.name,
+        )
+        self._jobs.create(job)
+        self._emit(job.job_id, "queued", jobId=job.job_id, kind="model_set")
+        self._runner.submit(lambda: self._run_set(job.job_id, sets))
+        return job
+
+    def _run_set(self, job_id: str, sets: ModelSets) -> None:
+        job = self.get(job_id)
+        try:
+            job = self._save(job, status="running")
+            session = sets.get_session(job.session_id or "")
+            self._emit(job_id, "started", apis=list(job.apis), concept=job.concept)
+            members: dict[str, str] = {}
+            for concept, member_session in session.member_sessions:
+                sid = self._write_model(self.get(job_id), member_session, concept)
+                if sid is None:
+                    self._fail(self.get(job_id), "draft_refused", f"no valid {concept} model")
+                    return
+                members[concept] = sid
+            relations, questions = sets.propose_relations(session.session_id, members)
+            self._emit(
+                job_id,
+                "proposals",
+                relations=[r["id"] for r in relations],
+                openQuestions=len(questions),
+            )
+            draft = {
+                "name": job.concept,
+                "members": members,
+                "relations": relations,
+                "open_questions": questions,
+            }
+            try:
+                result = sets.submit(
+                    session.session_id, draft, maintainer=True, generator=self._writer.name
+                )
+            except ModelDraftRefusedError as exc:  # drop the refused proposals, keep the rest
+                refused = {i.field for i in exc.issues}
+                self._emit(job_id, "refused", round=0, issues=_issues(exc.issues), kind="set")
+                draft["relations"] = [r for r in relations if r["id"] not in refused]
+                draft["open_questions"] = questions + [
+                    {"question": f"Relation {r['id']}: the proposal did not validate; decide it."}
+                    for r in relations
+                    if r["id"] in refused
+                ]
+                result = sets.submit(
+                    session.session_id, draft, maintainer=True, generator=self._writer.name
+                )
+            set_id = result.snapshot.set_id
+            self._save(self.get(job_id), status="succeeded", snapshot_id=set_id)
+            self._emit(job_id, "accepted", setId=set_id, kind="model_set")
+            self._emit(job_id, "done", status="succeeded", snapshotId=None, setId=set_id)
+        except (ModelWriterUnavailableError, ModelWriterError) as exc:
+            self._fail(job, exc.code, str(exc))
+        except Exception as exc:
+            logger.exception("model set job %s failed", job_id)
+            self._fail(job, "internal_error", type(exc).__name__)
+
     def get(self, job_id: str) -> ModelJob:
         job = self._jobs.get(job_id)
         if job is None:
@@ -124,8 +202,8 @@ class GenerateModels:
 
     # -- the run ----------------------------------------------------------------------------------
 
-    def _emit(self, job_id: str, kind: str, **data: Any) -> None:
-        self._events.append(job_id, {"type": kind, **data})
+    def _emit(self, job_id: str, event_type: str, **data: Any) -> None:
+        self._events.append(job_id, {"type": event_type, **data})
 
     def _save(self, job: ModelJob, **changes: Any) -> ModelJob:
         job = replace(job, updated_at=self._clock.now(), **changes)
@@ -160,55 +238,68 @@ class GenerateModels:
             )
         return pack, documents, fields
 
+    def _write_model(
+        self, job: ModelJob, session_id: str, concept: str | None = None
+    ) -> str | None:
+        """The LLM writes one model in a session (same validation, refusals fed back). Returns
+        the stored snapshot id, or None after the last refused round."""
+        tag = {"concept": concept} if concept else {}
+        pack, documents, fields = self._evidence_pack(session_id)
+        self._emit(job.job_id, "context", documents=documents, fields=fields, **tag)
+        turns = [
+            Turn(
+                "user",
+                "Write the canonical model from this evidence pack:\n"
+                + json.dumps(pack, ensure_ascii=False),
+            )
+        ]
+        for n in range(1, self._max_rounds + 1):
+            job = self._save(job, round=n)
+            self._emit(job.job_id, "round", n=n, of=self._max_rounds, **tag)
+            reply = self._writer.write(SYSTEM, turns)
+            turns.append(Turn("model", reply))
+            try:
+                draft = parse_reply(reply)
+                result = self._sessions.submit(
+                    session_id, draft, maintainer=True, generator=self._writer.name
+                )
+            except (json.JSONDecodeError, ModelDraftRefusedError) as exc:
+                issues = (
+                    exc.issues
+                    if isinstance(exc, ModelDraftRefusedError)
+                    else [Issue("INVALID_FORMAT", "", None, f"not JSON: {exc}")]
+                )
+                self._emit(job.job_id, "refused", round=n, issues=_issues(issues), **tag)
+                turns.append(
+                    Turn(
+                        "user",
+                        "Plume refused the draft:\n"
+                        + json.dumps(_issues(issues), ensure_ascii=False)
+                        + "\nFix those mappings (drop any you cannot support from the "
+                        "evidence) and reply with the full corrected draft as one JSON object.",
+                    )
+                )
+                continue
+            sid = result.snapshot.snapshot_id
+            if concept:
+                self._emit(job.job_id, "member", concept=concept, snapshotId=sid, round=n)
+            return sid
+        return None
+
     def _run(self, job_id: str) -> None:
         job = self.get(job_id)
         try:
             job = self._save(job, status="running")
             self._emit(job_id, "started", apis=list(job.apis), concept=job.concept)
-            session_id = job.session_id or ""
-            pack, documents, fields = self._evidence_pack(session_id)
-            self._emit(job_id, "context", documents=documents, fields=fields)
-            turns = [
-                Turn(
-                    "user",
-                    "Write the canonical model from this evidence pack:\n"
-                    + json.dumps(pack, ensure_ascii=False),
+            sid = self._write_model(job, job.session_id or "")
+            if sid is None:
+                self._fail(
+                    job, "draft_refused", f"no valid draft after {self._max_rounds} round(s)"
                 )
-            ]
-            for n in range(1, self._max_rounds + 1):
-                job = self._save(job, round=n)
-                self._emit(job_id, "round", n=n, of=self._max_rounds)
-                reply = self._writer.write(SYSTEM, turns)
-                turns.append(Turn("model", reply))
-                try:
-                    draft = parse_reply(reply)
-                    result = self._sessions.submit(
-                        session_id, draft, maintainer=True, generator=self._writer.name
-                    )
-                except (json.JSONDecodeError, ModelDraftRefusedError) as exc:
-                    issues = (
-                        exc.issues
-                        if isinstance(exc, ModelDraftRefusedError)
-                        else [Issue("INVALID_FORMAT", "", None, f"not JSON: {exc}")]
-                    )
-                    self._emit(job_id, "refused", round=n, issues=_issues(issues))
-                    turns.append(
-                        Turn(
-                            "user",
-                            "Plume refused the draft:\n"
-                            + json.dumps(_issues(issues), ensure_ascii=False)
-                            + "\nFix those mappings (drop any you cannot support from the "
-                            "evidence) and reply with the full corrected draft as one JSON object.",
-                        )
-                    )
-                    continue
-                sid = result.snapshot.snapshot_id
-                self._save(job, status="succeeded", snapshot_id=sid)
-                self._emit(job_id, "accepted", snapshotId=sid, round=n)
-                self._emit(job_id, "done", status="succeeded", snapshotId=sid)
                 return
-            message = f"no valid draft after {self._max_rounds} round(s)"
-            self._fail(job, "draft_refused", message)
+            self._save(self.get(job_id), status="succeeded", snapshot_id=sid)
+            self._emit(job_id, "accepted", snapshotId=sid, round=self.get(job_id).round)
+            self._emit(job_id, "done", status="succeeded", snapshotId=sid)
         except (ModelWriterUnavailableError, ModelWriterError) as exc:
             self._fail(job, exc.code, str(exc))
         except Exception as exc:
