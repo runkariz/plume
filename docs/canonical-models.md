@@ -117,6 +117,25 @@ design is in [design/model-relations.md](design/model-relations.md).
     `submit_model_set`, `get_model_set` (the view), `revise_model_set`, `list_model_sets`;
   - reader: `list_my_model_sets`;
   - maintainer: `release_model_set` and `discard_model_set`.
+- **Web relation edit:** `POST /v1/model-sets/{id}/relations {relations: [{id, kind?,
+  cardinality?, embed?, ref?, from?, to?, confirmed?}]}`. It changes only the design of
+  existing relations of the **latest** version; their evidence stays. Each relation in the set
+  JSON carries `editableOptions [{kind, from, to, cardinality, embed|ref, editable, missing[],
+  current}]`, and only designs whose fields already exist in the members pass validation. A new
+  version is stored (unlisted without the token, unreleased with it). Errors:
+  - 409 when the set isn't the latest version;
+  - 422 with the usual codes for a design the members can't express (that's a revision with
+    Claude);
+  - 400 when trying to change the evidence or the members.
+- **Server generation (maintainer):** `POST /v1/model-sets/generate {apis, concepts}` (token)
+  or the maintainer MCP `generate_model_set`.
+  - Plume's LLM writes every member model with the same loop and validation as single models.
+  - Plume then proposes relations from the documented candidates, using only a design whose
+    fields exist in the generated members, always `confirmed: false`. Candidates no design
+    fits become open questions.
+  - The job reports `kind: "model_set"` and `setId`. Its events include `member {concept,
+    snapshotId}` and `proposals`. Release stays blocked until a maintainer decides every
+    relation (on the web or via the edit endpoint).
 - **Set JSON** (`kind: "model_set"`):
   - members `{concept, modelId, name, fieldCount, coverage, visibility, version}`;
   - relations with `support {api: as|null}`, plus `undecided` (relation ids) and lineage;

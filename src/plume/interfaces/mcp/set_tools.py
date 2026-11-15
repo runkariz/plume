@@ -8,6 +8,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp_types import CallToolResult
 
 from plume.application.errors import ApplicationError
+from plume.application.models.generate import GenerateModels
 from plume.application.models.model_sets import ModelSets
 from plume.application.models.sessions import ModelDraftRefusedError
 from plume.application.reader.resolve import BuildResolver
@@ -20,7 +21,7 @@ from plume.interfaces.mcp.apps.model_view import (
     UI_WRITE_META,
     ui_result,
 )
-from plume.interfaces.mcp.model_tools import READ, WRITE
+from plume.interfaces.mcp.model_tools import READ, WRITE, job_payload
 
 
 def set_text(x: dict[str, Any], full: bool = False) -> str:
@@ -57,6 +58,7 @@ def register_set_tools(  # noqa: PLR0915
     run: Callable[[Callable[[], dict[str, Any]]], Awaitable[dict[str, Any]]],
     maintainer: bool,
     web_public_url: str | None = None,
+    generate: Callable[[], GenerateModels] | None = None,
 ) -> None:
     origin = "maintainer" if maintainer else "user"
 
@@ -195,6 +197,17 @@ def register_set_tools(  # noqa: PLR0915
             return ui_result(
                 out, f"Released. Members released with it: {members}.\n" + set_text(out["set"])
             )
+
+        if generate is not None:
+            gen = generate
+
+            @server.tool(annotations=WRITE, structured_output=True, meta=MODEL_ONLY_META)
+            async def generate_model_set(apis: list[str], concepts: list[str]) -> dict[str, Any]:
+                """Plume writes every member model with its LLM, then PROPOSES relations from
+                the documented candidates as undecided (confirmed: false). Returns a job; poll
+                get_generation(job_id): its snapshot_id is the set id. Decide the relations
+                before release_model_set."""
+                return await run(lambda: job_payload(gen().start_set(sets(), apis, concepts)))
 
         @server.tool(annotations=WRITE, structured_output=True, meta=MODEL_ONLY_META)
         async def discard_model_set(set_id: str) -> dict[str, Any]:

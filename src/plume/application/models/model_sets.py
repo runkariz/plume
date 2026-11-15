@@ -421,6 +421,203 @@ class ModelSets:
             ],
         }
 
+    def propose_relations(
+        self, session_id: str, members: dict[str, str]
+    ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Relation PROPOSALS for generated members (confirmed: false), from the documented
+        candidates only, with the first design whose fields exist in the member models. A
+        candidate no design fits becomes an open question for the maintainer."""
+        s = self.get_session(session_id)
+        keys = {concept_key(c): c for c in s.concepts}
+        drafts = {}
+        for concept, model_id in members.items():
+            snap = self._models.get_snapshot(model_id)
+            if snap is not None:
+                drafts[concept] = dict(snap.draft.walk())
+        candidates, _, labels = self._related.candidates(self._pinned(s.inputs))
+        relations: list[dict[str, Any]] = []
+        questions: list[dict[str, Any]] = []
+        for c in candidates:
+            if c.parent not in keys or c.child not in keys:
+                continue
+            parent, child = keys[c.parent], keys[c.child]
+            fp, fc = drafts.get(parent, {}), drafts.get(child, {})
+            sources = {
+                api: {
+                    "as": es[0].kind,
+                    "paths": list(es[0].paths) if es[0].kind == "id_field" else [],
+                    "fetch": es[0].fetch,
+                    "evidence": [{"doc_id": e.doc_id, "quote": e.quote} for e in es[:2]],
+                }
+                for api, es in sorted(c.sources.items())
+            }
+            design = None
+            for o in c.options(labels):
+                if o.kind == "embedded":
+                    want = "array" if o.cardinality == "1:n" else "object"
+                    holder = next(
+                        (
+                            p
+                            for p, f in fp.items()
+                            if f.type == want and concept_key(f.name) == c.child
+                        ),
+                        None,
+                    )
+                    if holder:
+                        design = {
+                            "from": parent,
+                            "to": child,
+                            "kind": "embedded",
+                            "cardinality": o.cardinality,
+                            "embed": {"field": holder},
+                        }
+                else:
+                    key_field = next(
+                        (p for p in fc if p.split(".")[-1] in (f"{c.parent}_id", "parent_id")),
+                        None,
+                    )
+                    if key_field and "id" in fp:
+                        design = {
+                            "from": child,
+                            "to": parent,
+                            "kind": "reference",
+                            "cardinality": o.cardinality,
+                            "ref": {"field": key_field, "key": "id"},
+                        }
+                if design:
+                    break
+            if design is None:
+                kinds = sorted({e.kind for es in c.sources.values() for e in es})
+                questions.append(
+                    {
+                        "question": f"How should {parent} and {child} relate?",
+                        "detail": f"The docs relate them ({', '.join(kinds)}), but the generated "
+                        "models have no field for any documented design yet.",
+                        "options": [f"{o.kind} {o.cardinality}" for o in c.options(labels)],
+                    }
+                )
+                continue
+            relations.append(
+                {
+                    "id": f"{c.parent}-{c.child}",
+                    **design,
+                    "confirmed": False,
+                    "candidate": c.id,
+                    "sources": sources,
+                }
+            )
+        return relations, questions
+
+    def editable_options(self, x: ModelSetSnapshot) -> dict[str, list[dict[str, Any]]]:
+        """Per relation, the designs the web may switch to without new fields: the current one,
+        the other kind (embedded <-> reference) and the other cardinality. A design whose fields
+        are missing from the member models is listed with `editable: false` and `missing`."""
+        drafts = {c: m.draft for c, m in self.member_models(x).items() if m is not None}
+        out: dict[str, list[dict[str, Any]]] = {}
+        for r in x.draft.relations:
+            parent, child = (r.from_, r.to) if r.kind == "embedded" else (r.to, r.from_)
+            options: list[dict[str, Any]] = []
+            p_model, c_model = drafts.get(parent), drafts.get(child)
+            if p_model is None or c_model is None:
+                out[r.id] = options
+                continue
+            fields_p = dict(p_model.walk())
+            fields_c = dict(c_model.walk())
+            # embedded: a field of the parent holding the child (named after it)
+            holder = next(
+                (
+                    p
+                    for p, f in fields_p.items()
+                    if f.type in ("array", "object")
+                    and (concept_key(f.name) == concept_key(child) or p == r.embed_field)
+                ),
+                None,
+            )
+            for card in ("1:n", "1:1"):
+                want = "array" if card == "1:n" else "object"
+                ok = holder is not None and fields_p[holder].type == want
+                options.append(
+                    {
+                        "kind": "embedded",
+                        "from": parent,
+                        "to": child,
+                        "cardinality": card,
+                        "embed": {"field": holder or f"{concept_key(child)}s"},
+                        "ref": None,
+                        "editable": ok,
+                        "missing": [] if ok else [f"{parent}: an {want} field holding {child}"],
+                    }
+                )
+            # reference: the child holds the parent's key
+            key_field = next(
+                (
+                    p
+                    for p in fields_c
+                    if p.split(".")[-1] in (f"{concept_key(parent)}_id", "parent_id")
+                    or p == r.ref_field
+                ),
+                None,
+            )
+            has_key = "id" in fields_p or (r.ref_key in fields_p if r.ref_key else False)
+            key = r.ref_key if r.ref_key and r.ref_key in fields_p else "id"
+            for card in ("n:1", "1:1"):
+                missing = []
+                if key_field is None:
+                    missing.append(f"{child}: a field holding the {parent} id")
+                if not has_key:
+                    missing.append(f"{parent}: an id field")
+                options.append(
+                    {
+                        "kind": "reference",
+                        "from": child,
+                        "to": parent,
+                        "cardinality": card,
+                        "embed": None,
+                        "ref": {"field": key_field or f"{concept_key(parent)}_id", "key": key},
+                        "editable": not missing,
+                        "missing": missing,
+                    }
+                )
+            for o in options:
+                o["current"] = (
+                    o["kind"] == r.kind
+                    and o["cardinality"] == r.cardinality
+                    and o["from"] == r.from_
+                )
+            out[r.id] = options
+        return out
+
+    def edit_relations(
+        self,
+        set_id: str,
+        changes: Sequence[dict[str, Any]],
+        maintainer: bool = False,
+    ) -> SetSubmitResult:
+        """The web edit: change relation DESIGNS (kind, cardinality, embed/ref, confirmed) of the
+        latest version of a set; the evidence stays. Saved as a new version through the same
+        validation (unlisted without the token, unreleased with it)."""
+        base = self.visible(set_id, maintainer)
+        latest = self.lineage_info(base, maintainer)["latest_id"]
+        if latest != base.set_id:
+            raise ModelStateError(f"{set_id} is not the latest version ({latest}); reload it")
+        raw = set_draft_json(base.draft)
+        by_id = {r["id"]: r for r in raw["relations"]}
+        allowed = {"kind", "cardinality", "embed", "ref", "confirmed", "from", "to"}
+        for change in changes:
+            rel = by_id.get(str(change.get("id")))
+            if rel is None:
+                raise ModelInputError(f"no relation {change.get('id')!r} in {set_id}")
+            extra = set(change) - allowed - {"id"}
+            if extra:
+                raise ModelInputError(f"only the design can change here, not {sorted(extra)}")
+            ends = {rel["from"], rel["to"]}
+            if {change.get("from", rel["from"]), change.get("to", rel["to"])} != ends:
+                raise ModelInputError("a relation keeps its two members")
+            rel.update({k: v for k, v in change.items() if k != "id"})
+            rel["embed"] = rel["embed"] if rel["kind"] == "embedded" else None
+            rel["ref"] = rel["ref"] if rel["kind"] == "reference" else None
+        return self.submit(base.session_id, raw, base.set_id, maintainer, base.generator)
+
     def revise(self, set_id: str, maintainer: bool = False) -> dict[str, Any]:
         base = self.visible(set_id, maintainer)
         if base.visibility == Visibility.DISCARDED:
