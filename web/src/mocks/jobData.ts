@@ -49,6 +49,8 @@ export function sampleJob(overrides: Partial<Job> = {}): Job {
     apiId: 'shopify',
     displayName: 'Shopify Admin REST',
     status: 'uploaded',
+    tag: 'latest',
+    error: null,
     liveBuild: '2026-11-02',
     stagedBuild: '2026-11-14',
     package: {

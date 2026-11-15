@@ -98,6 +98,11 @@ export function UploadStep() {
   }
 
   const blockers = job?.package.validation.filter((c) => c.status === 'fail') ?? [];
+  // The server cannot rename an API yet: the package must be for the API being updated.
+  const mismatch =
+    !isNew && job !== null && job.package.suggested.apiId !== apiId
+      ? job.package.suggested.apiId
+      : null;
   const idError =
     fields.apiId && !API_ID.test(fields.apiId)
       ? 'Use lowercase letters, digits, "-" or "_".'
@@ -105,6 +110,7 @@ export function UploadStep() {
   const ready =
     job !== null &&
     blockers.length === 0 &&
+    mismatch === null &&
     !idError &&
     fields.apiId !== '' &&
     fields.displayName.trim() !== '' &&
@@ -189,9 +195,9 @@ export function UploadStep() {
               label="API id"
               mono
               value={fields.apiId}
-              readOnly={!isNew}
+              readOnly
               onChange={(e) => setFields({ ...fields, apiId: e.target.value })}
-              hint={idError ?? 'Lowercase. Becomes the tag.'}
+              hint={idError ?? 'Taken from the package.'}
               aria-invalid={idError ? true : undefined}
               disabled={!job}
             />
@@ -212,6 +218,12 @@ export function UploadStep() {
           {uploading ? (
             <p role="status" className="muted small">
               Validating the package…
+            </p>
+          ) : null}
+          {mismatch ? (
+            <p role="alert" className="form-error">
+              This package is for “{mismatch}”, not “{apiId}”. Choose the package for this API, or
+              add “{mismatch}” as a new API.
             </p>
           ) : null}
           {error ? (

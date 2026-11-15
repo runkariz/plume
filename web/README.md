@@ -23,8 +23,16 @@ Against the real API (compose stack from the repo root: `make up`, then load the
 `plume load tests/fixtures/packages/<shopify-mini|test-catalog|second-catalog>`):
 
 ```bash
-PLUME_E2E_API_URL=http://127.0.0.1:18480 npm run e2e:real:docker   # specs in e2e-real/, dev server without mocks
+# stack with a maintainer token (the wizard spec needs one); gold sets come from tests/fixtures/gold
+PLUME_MAINTAINER_TOKENS='["pl_dev_local"]' make up
+PLUME_E2E_API_URL=http://127.0.0.1:18480 PLUME_E2E_TOKEN=pl_dev_local npm run e2e:real:docker
 ```
+
+The real-API specs (`e2e-real/`) cover the reader pages and the maintainer wizard end to end (upload a zipped
+fixture package, review, build over SSE, download the dump, publish). They run serially because they publish.
+The docker scripts mount the whole repo (`/repo`) because the wizard spec zips `tests/fixtures/packages`.
+The maintainer key lives in memory only, so these specs navigate inside the app after signing in
+(a `page.goto` reload signs out on purpose).
 
 Every page is checked with axe in light and dark: no serious or critical violations (contrast included).
 

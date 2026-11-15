@@ -19,6 +19,61 @@ describe('apiBaseUrl', () => {
   });
 });
 
+describe('error bodies and dump download', () => {
+  const jsonFetch = (status: number, body: unknown, headers: Record<string, string> = {}) =>
+    (() =>
+      Promise.resolve(
+        new Response(JSON.stringify(body), {
+          status,
+          headers: { 'Content-Type': 'application/json', ...headers },
+        }),
+      )) as unknown as typeof fetch;
+
+  it('reads {error, message}, FastAPI {detail:[{msg}]} and {detail: string}', async () => {
+    await expect(
+      createApiClient('http://x', {
+        fetchImpl: jsonFetch(404, { error: 'not_found', message: 'No such API' }),
+      }).getApi('a'),
+    ).rejects.toMatchObject({ status: 404, message: 'No such API' });
+    await expect(
+      createApiClient('http://x', {
+        fetchImpl: jsonFetch(422, { detail: [{ msg: 'field required' }] }),
+      }).getApi('a'),
+    ).rejects.toMatchObject({ status: 422, message: 'field required' });
+    await expect(
+      createApiClient('http://x', { fetchImpl: jsonFetch(409, { detail: 'wrong state' }) }).getApi(
+        'a',
+      ),
+    ).rejects.toMatchObject({ message: 'wrong state' });
+  });
+
+  it('adds Retry-After to a 429 message', async () => {
+    const c = createApiClient('http://x', {
+      fetchImpl: jsonFetch(
+        429,
+        { error: 'rate_limited', message: 'Slow down.' },
+        { 'Retry-After': '12' },
+      ),
+    });
+    await expect(c.listApis()).rejects.toMatchObject({
+      status: 429,
+      message: 'Slow down. Try again in 12 s.',
+    });
+  });
+
+  it('takes the dump file name from Content-Disposition', async () => {
+    const f = (() =>
+      Promise.resolve(
+        new Response('x', {
+          headers: { 'Content-Disposition': 'attachment; filename="shopify-b-123.dump.gz"' },
+        }),
+      )) as unknown as typeof fetch;
+    const out = await createApiClient('http://x', { fetchImpl: f }).downloadDump('job-1');
+    expect(out.filename).toBe('shopify-b-123.dump.gz');
+    expect(out.blob.size).toBe(1);
+  });
+});
+
 describe('createApiClient', () => {
   const client = createApiClient(TEST_API_BASE);
 

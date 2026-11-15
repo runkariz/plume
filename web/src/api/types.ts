@@ -179,8 +179,9 @@ export interface DiffItem {
   change: 'new' | 'changed' | 'removed';
   kind: ItemKind;
   title: string;
-  method?: HttpMethod;
-  path?: string;
+  method?: HttpMethod | null;
+  path?: string | null;
+  /** The server sends the chunk id here; mocks send a sentence. Shown as small text. */
   note: string;
 }
 
@@ -223,8 +224,13 @@ export interface Job {
   apiId: string;
   displayName: string;
   status: JobStatus;
+  /** The tag the review diffed against (e.g. "latest"). */
+  tag?: string;
+  /** Set when status is failed. */
+  error?: string | null;
   liveBuild: string | null;
-  stagedBuild: string;
+  /** null until the build is staged. */
+  stagedBuild: string | null;
   package: PackageInfo;
   diff: JobDiff | null;
   plan: EmbeddingPlan | null;
@@ -244,6 +250,7 @@ export type EventSource = 'plume' | 'postgres' | 'gemini';
 
 /** One build event from GET /v1/jobs/{id}/events (SSE). `id` is the SSE id, used to resume. */
 export type JobEvent =
+  /** `t` is an ISO time from the server (mocks send HH:MM:SS); show it with formatClock. */
   | { type: 'log'; id: string; t: string; source: EventSource; message: string }
   | { type: 'step'; id: string; key: StepKey; status: StepStatus; detail: string }
   | { type: 'progress'; id: string; done: number; total: number; etaSeconds: number | null }

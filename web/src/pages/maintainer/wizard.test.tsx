@@ -71,17 +71,26 @@ describe('Upload step', () => {
     expect(screen.getByRole('button', { name: 'Review changes →' })).toBeDisabled();
   });
 
-  it('rejects an invalid API id on a new API', async () => {
+  it('takes the API id from the package (read-only) and blocks a package for another API', async () => {
+    authStore.signIn('pl_ok', 'maintainer');
+    renderApp('/maintainer/apis/other-api/update');
+    await screen.findByRole('heading', { name: /Update/ });
+    await userEvent.upload(screen.getByLabelText('Choose package file'), zip());
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'This package is for “shopify”, not “other-api”',
+    );
+    expect(screen.getByLabelText('API id')).toHaveAttribute('readonly');
+    expect(screen.getByRole('button', { name: 'Review changes →' })).toBeDisabled();
+  });
+
+  it('a new API gets its id from the package', async () => {
     authStore.signIn('pl_ok', 'maintainer');
     renderApp('/maintainer/apis/new/update');
     await screen.findByRole('heading', { name: 'Add an API' });
     await userEvent.upload(screen.getByLabelText('Choose package file'), zip());
-    const id = await screen.findByLabelText('API id');
-    await waitFor(() => expect(id).toHaveValue('shopify'));
-    await userEvent.clear(id);
-    await userEvent.type(id, 'Bad Id!');
-    expect(screen.getByText(/Use lowercase letters/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Review changes →' })).toBeDisabled();
+    await waitFor(() => expect(screen.getByLabelText('API id')).toHaveValue('shopify'));
+    expect(screen.getByLabelText('API id')).toHaveAttribute('readonly');
+    expect(screen.getByRole('button', { name: 'Review changes →' })).toBeEnabled();
   });
 
   it('goes to the review step', async () => {
@@ -249,12 +258,35 @@ describe('Publish step', () => {
     expect(within(table).getByText('+0.01')).toBeInTheDocument();
     expect(screen.getByText('shopify-2026-11-14.dump.gz')).toBeInTheDocument();
     expect(screen.getByText('Switch live search to the staged build')).toBeInTheDocument();
+    expect(screen.getByText('Move the tag “latest” to it')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Publish 2026-11-14' }));
     expect(await screen.findByText('Published 2026-11-14')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'View Shopify Admin REST' })).toHaveAttribute(
       'href',
       '/apis/shopify',
     );
+  });
+
+  it('lets you publish when no gold set exists (eval is null) and says the gate did not run', async () => {
+    const id = await seedJob('staged');
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/jobs/${id}`, async () => {
+        const { sampleJob } = await import('@/mocks/jobData');
+        return HttpResponse.json(
+          sampleJob({
+            id,
+            status: 'staged',
+            stagedBuild: 'b-6ff6063a275d40c14e4bcdd001f1c9ae',
+            eval: null,
+          }),
+        );
+      }),
+    );
+    renderApp(`/maintainer/jobs/${id}/publish`);
+    expect(await screen.findByText('No quality gate ran')).toBeInTheDocument();
+    expect(screen.getByText(/Add a gold question set/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Publish b-6ff6063a275d' })).toBeEnabled();
+    expect(screen.getByText('b-6ff6063a275d40c14e4bcdd001f1c9ae')).toBeInTheDocument();
   });
 
   it('blocks publishing when the gate failed', async () => {

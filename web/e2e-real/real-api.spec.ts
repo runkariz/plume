@@ -44,7 +44,11 @@ for (const theme of THEMES) {
 
     test('Home lists the loaded APIs with real counts and honest quality state', async ({
       page,
+      request,
     }) => {
+      const list = (await (await request.get(`${API}/v1/apis`)).json()) as {
+        items: { id: string; status: { recallAt5: number | null } }[];
+      };
       await page.goto('/');
       await expect(page.getByRole('link', { name: 'Test Catalog API' })).toBeVisible();
       await expect(page.locator('article.api-card')).toHaveCount(3);
@@ -53,9 +57,12 @@ for (const theme of THEMES) {
         'true',
       );
       await expect(page.getByRole('button', { name: 'E-commerce · 3' })).toBeVisible();
-      // the eval gate has not run yet: no invented recall number
-      await expect(page.getByText('Not evaluated').first()).toBeVisible();
-      await expect(page.getByText(/Recall@5 \d/)).toHaveCount(0);
+      // the chips show exactly what the API reports: a recall number only for evaluated builds
+      const evaluated = list.items.filter((a) => a.status.recallAt5 !== null);
+      await expect(page.getByText(/^Recall@5 \d/)).toHaveCount(evaluated.length);
+      await expect(page.getByText('Not evaluated')).toHaveCount(
+        list.items.length - evaluated.length,
+      );
       await settle(page);
       await expectNoSeriousA11y(page);
       await shot(page, 'w5-real-home', theme);
@@ -71,12 +78,21 @@ for (const theme of THEMES) {
         name: string;
         endpoints: number;
         chunks: number;
-        connect: { claudeCode: string };
+        quality: { recallAt5: number; goldQuestions: number } | null;
       };
       await page.goto('/apis/shopify');
       await expect(page.getByRole('heading', { level: 1, name: detail.name })).toBeVisible();
       await expect(page.getByText(String(detail.chunks), { exact: true })).toBeVisible();
-      await expect(page.getByText('Not evaluated yet.')).toBeVisible();
+      if (detail.quality) {
+        await expect(
+          page.getByText(`Gold set of ${detail.quality.goldQuestions} questions`),
+        ).toBeVisible();
+        await expect(
+          page.getByText(detail.quality.recallAt5.toFixed(2), { exact: true }).first(),
+        ).toBeVisible();
+      } else {
+        await expect(page.getByText('Not evaluated yet.')).toBeVisible();
+      }
       await expect(page.getByText(/claude mcp add/)).toBeVisible();
       const ep = await firstEndpoint(request, 'shopify');
       await expect(page.getByText(ep.path).first()).toBeVisible();
