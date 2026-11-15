@@ -17,7 +17,9 @@ AUTH = {"Authorization": f"Bearer {TOKEN}"}
 GOLD = Path(__file__).resolve().parents[2] / "fixtures" / "gold"
 
 
-def _client(stack: FakeStack, tokens: tuple[str, ...] = (TOKEN,)) -> TestClient:
+def _client(
+    stack: FakeStack, tokens: tuple[str, ...] = (TOKEN,), generate: bool = False
+) -> TestClient:
     return TestClient(
         create_app(
             HttpDependencies(
@@ -33,6 +35,9 @@ def _client(stack: FakeStack, tokens: tuple[str, ...] = (TOKEN,)) -> TestClient:
                 rate_limit_per_minute=0,
                 maintainer=stack.maintainer,
                 maintainer_tokens=tokens,
+                models=stack.models if generate else None,
+                suggest=stack.suggest if generate else None,
+                generate_models=stack.generate if generate else None,
             )
         )
     )
@@ -59,7 +64,16 @@ def test_auth(stack: FakeStack) -> None:
     assert r.status_code == 401
     assert r.json()["error"] == "unauthorized"
     assert r.headers["www-authenticate"] == "Bearer"
-    assert client.get("/v1/maintainer/me", headers=AUTH).json() == {"name": "maintainer"}
+    me = client.get("/v1/maintainer/me", headers=AUTH).json()
+    assert me == {"name": "maintainer", "generation": False}  # no generation configured
+
+
+def test_me_says_whether_server_generation_works(stack: FakeStack) -> None:
+    on = _client(stack, generate=True).get("/v1/maintainer/me", headers=AUTH).json()
+    assert on["generation"] is True
+    stack.writer = type(stack.writer)(available=False)  # no model key
+    off = _client(stack, generate=True).get("/v1/maintainer/me", headers=AUTH).json()
+    assert off["generation"] is False
     off = _client(stack, tokens=())
     assert off.get("/v1/maintainer/me", headers=AUTH).status_code == 503
 

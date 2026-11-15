@@ -336,6 +336,10 @@ def dump(model: BaseModel) -> dict[str, Any]:
 
 class Me(Schema):
     name: str
+    generation: bool = Field(
+        description="Server-side model generation is configured (a model key is readable): "
+        "POST /v1/models/generate with engine server will not answer 503 llm_unavailable."
+    )
 
 
 class ReviewRequest(Schema):
@@ -671,3 +675,10 @@ class McpOut(Schema):
         description="connector/mcp/: per server {id, server (servers/<id>.json), tools: [{tool, "
         "inputSchema, outputSchema}]}, verbatim. Docs-only APIs have none.",
     )
+
+
+class SuggestRelatedRequest(Schema):
+    apis: list[str] = Field(min_length=2, max_length=6)
+    concept: str = Field(min_length=1, max_length=100)
+    limit: int = Field(default=24, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)

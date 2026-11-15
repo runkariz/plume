@@ -15,6 +15,7 @@ from plume.application.knowledge.seal_build import SealBuild
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.models.concepts import SuggestConcepts
 from plume.application.models.generate import GenerateModels
+from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import ModelSessions
 from plume.application.ports.job_events import JobEvents
 from plume.application.ports.package_source import PackageSource
@@ -208,6 +209,9 @@ class FakeStack:
 
     def suggest(self) -> SuggestConcepts:
         return SuggestConcepts(self.resolver(), self.search_index, self.facts)
+
+    def suggest_related(self) -> SuggestRelated:
+        return SuggestRelated(self.resolver(), self.search_index, self.facts, self.documents)
 
     def models(self) -> ModelSessions:
         return ModelSessions(

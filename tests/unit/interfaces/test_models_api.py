@@ -436,3 +436,76 @@ async def test_reader_mcp_user_model_flow(stack: FakeStack) -> None:
         mine = await call(client, "list_my_models", owner_keys=[saved["owner_key"]])
         assert [m["snapshot_id"] for m in mine["models"]] == [v2["snapshot_id"]]
         assert (await call(client, "list_models"))["models"] == []
+
+
+def test_suggest_related_route_and_mcp_tool(packages: Path, tmp_path: Path) -> None:
+    import anyio  # noqa: PLC0415
+
+    from plume.interfaces.mcp.reader_server import (  # noqa: PLC0415
+        McpReaderDependencies,
+        create_reader_server,
+    )
+
+    s = FakeStack(embedder=WordEmbedder(), data_dir=tmp_path)
+    for p in ("shopify-mini", "woo-mini"):
+        s.load(str(packages / p))
+    client = TestClient(
+        create_app(
+            HttpDependencies(
+                overviews=s.overviews,
+                browse=s.browse,
+                search=s.search,
+                get_document=s.get_document,
+                find_fact=s.find_fact,
+                check_call=s.check_call,
+                list_builds=lambda: ListBuilds(s.builds, s.tags),
+                diff_builds=lambda: DiffBuilds(s.builds),
+                resolver=s.resolver,
+                rate_limit_per_minute=0,
+                suggest=s.suggest,
+                models=s.models,
+                suggest_related=s.suggest_related,
+                maintainer_tokens=(TOKEN,),
+            )
+        )
+    )
+    body = {"apis": ["shopify", "woocommerce"], "concept": "Product"}
+    r = client.post("/v1/models/suggest-related", json=body).json()
+    assert r["concept"] == {"id": "product", "name": "Product"}
+    variant = next(x for x in r["related"] if x["id"] == "variant")
+    assert variant["kinds"]["shopify"] == ["id_field"]
+    cand = variant["candidates"][0]
+    assert cand["parent"]["id"] == "product"
+    assert cand["options"] == [
+        {"kind": "reference", "cardinality": "n:1", "needs": cand["options"][0]["needs"]}
+    ]
+    ev = cand["sources"]["shopify"][0]
+    assert set(ev) == {"kind", "docId", "quote", "paths", "fetch", "many"}
+    assert r["apis"][0]["logo"]["text"]
+    assert (r["total"], r["offset"], r["nextOffset"]) == (len(r["related"]), 0, None)
+    bad = client.post("/v1/models/suggest-related", json={**body, "apis": ["shopify"]})
+    assert bad.status_code == 422
+
+    server = create_reader_server(
+        McpReaderDependencies(
+            overviews=s.overviews,
+            search=s.search,
+            get_document=s.get_document,
+            find_fact=s.find_fact,
+            check_call=s.check_call,
+            list_builds=lambda: ListBuilds(s.builds, s.tags),
+            diff_builds=lambda: DiffBuilds(s.builds),
+            resolver=s.resolver,
+            models=s.models,
+            suggest_related=s.suggest_related,
+        )
+    )
+
+    async def mcp() -> dict[str, Any]:
+        async with Client(server) as c:
+            tool = next(t for t in (await c.list_tools()).tools if t.name == "suggest_related")
+            assert "never decide silently" in (tool.description or "")
+            res = await c.call_tool("suggest_related", body)
+            return dict(res.structured_content or {})
+
+    assert anyio.run(mcp)["related"] == r["related"]

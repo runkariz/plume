@@ -17,6 +17,7 @@ from plume.application.jobs.maintainer import MaintainerJobs, job_payload
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.models.concepts import SuggestConcepts, SuggestFilter
 from plume.application.models.generate import GenerateModels
+from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import ModelSessions
 from plume.application.reader.resolve import BuildResolver
 from plume.domain.shared.ids import BuildId
@@ -66,6 +67,7 @@ class McpMaintainerDependencies:
     jobs: Callable[[], MaintainerJobs] | None = None
     generate: Callable[[], GenerateModels] | None = None
     web_public_url: str | None = None
+    suggest_related: Callable[[], SuggestRelated] | None = None
     mcp_app_html: str | None = None
 
 
@@ -104,7 +106,14 @@ def create_maintainer_server(deps: McpMaintainerDependencies) -> MCPServer:
         return await _run(lambda: payloads.suggestions_payload(deps.suggest().execute(apis, f)))
 
     register_model_tools(
-        server, deps.models, deps.resolver, _run, True, deps.web_public_url, deps.generate
+        server,
+        deps.models,
+        deps.resolver,
+        _run,
+        True,
+        deps.web_public_url,
+        deps.generate,
+        deps.suggest_related,
     )
 
     @server.tool(annotations=WRITE, structured_output=True, meta=MODEL_ONLY_META)

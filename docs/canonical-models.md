@@ -40,7 +40,39 @@ as model names.
   update, delete); ... About 532 fields are likely to map. Straightforward because every API
   documents Order directly."
 
-## Who sees what
+## Related concepts (relation candidates)
+
+`POST /v1/models/suggest-related {apis, concept, limit?, offset?}` and the MCP tool
+`suggest_related` (reader and maintainer) list the concepts related to one concept. There is
+no LLM; each **candidate** is built only from documented evidence, cited per API:
+
+| Kind | Evidence |
+|---|---|
+| `nested` | a model/response field path nests the other concept (`products[].variants[].id`) |
+| `sub_resource` | an endpoint path `/{parent}/{parent_id}/{child}` (`/products/{product_id}/variations`); the child may be a collection that is no concept of its own |
+| `id_field` | `<x>_id` / `<x>_ids` / `parent_id` whose **description names** the target ("The ID of the order the refund is associated with."). The holder is the innermost container of the field |
+| `model_ref` | a field whose documented type names the other concept's model |
+
+- **Shape.** A candidate runs `parent → child` with `sources {api: [{kind, docId, quote,
+  paths, fetch, many}]}`. Every quote is found verbatim in its document; a test checks this on
+  the real packages.
+- **Options.** Each candidate lists only the designs its evidence supports, with what each
+  needs: `embedded` (1:n for arrays/collections, 1:1 for objects) and `reference` (n:1, or n:m
+  for `_ids`).
+- **The user chooses the design**; Claude asks, never decides.
+- **Aliases.** Different names at the same documented position (Shopify `variant` vs
+  WooCommerce `variation`, both sub-resources of `product`) come back as `aliases`, with both
+  endpoints cited, only when:
+  - both are collections;
+  - neither name exists in the other API;
+  - the names are close: string similarity ≥ 0.75. That only narrows the list; it never links
+    anything.
+
+  The docs never say the two are the same, so it's the user's call (design D2).
+- **Noise.** Generic, timestamp, type and action words (`updated`, `boolean`, `admin`,
+  `create`, `/cancel`) are never concepts.
+
+
 
 | Visibility | Written by | Readable by | Listed |
 |---|---|---|---|

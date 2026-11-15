@@ -35,7 +35,8 @@ def auth() -> dict[str, str]:
 def test_wizard_over_http_with_sse(auth: dict[str, str]) -> None:
     with httpx.Client(base_url=API, timeout=30) as http:
         assert http.get("/v1/maintainer/me").status_code == 401
-        assert http.get("/v1/maintainer/me", headers=auth).json() == {"name": "maintainer"}
+        me = http.get("/v1/maintainer/me", headers=auth).json()
+        assert me == {"name": "maintainer", "generation": False}  # no key file in e2e
         data = zip_dir(PACKAGES / "second-catalog", "second/")
         r = http.post("/v1/packages", headers=auth, files={"file": ("second.zip", data)})
         assert r.status_code == 201, r.text

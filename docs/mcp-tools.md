@@ -17,6 +17,7 @@ DNS-rebinding protection (allowed hosts from `PLUME_MCP_ALLOWED_HOSTS`). Every r
 | `list_triggers` / `get_trigger` | `api[, key], version?` | trigger events / webhook topics; `present: false` when the package has none |
 | `get_environments` | `api, version?` | environments, base URLs, versioning and the variables schema, verbatim |
 | `get_vendor_mcp` | `api, version?` | the vendor's own MCP server(s) and tools when the package lists them; `present: false` otherwise |
+| `suggest_related` | `apis, concept, limit?, offset?` | related concepts with relation candidates (documented evidence only, cited per API) and the designs it supports; `aliases` for differently named concepts at the same position. The user decides |
 | `start_model_session` | `apis, concept` | a session pinned to the current builds (2..6 APIs) |
 | `get_model_context` / `get_model_evidence` | `session_id[, api, doc_ids?, cursor?]` | the evidence index; the fields, paged |
 | `submit_model_draft` | `session_id, draft, based_on?` | validated → stored **unlisted** (`share_url`, `owner_key` once for a new model, `version`) or refused with issue codes |

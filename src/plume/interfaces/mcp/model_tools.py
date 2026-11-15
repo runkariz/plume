@@ -12,6 +12,7 @@ from mcp_types import CallToolResult
 
 from plume.application.errors import ApplicationError
 from plume.application.models.generate import GenerateModels
+from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import (
     ModelDraftRefusedError,
     ModelSessions,
@@ -111,6 +112,7 @@ def register_model_tools(  # noqa: PLR0915
     maintainer: bool,
     web_public_url: str | None = None,
     generate: Callable[[], GenerateModels] | None = None,
+    related: Callable[[], SuggestRelated] | None = None,
 ) -> None:
     origin = Origin.MAINTAINER if maintainer else Origin.USER
 
@@ -135,6 +137,22 @@ def register_model_tools(  # noqa: PLR0915
         service = models()
         versions = service.lineage_info(m, maintainer)["versions"]
         return payloads.model_list_item(m, service.stale_inputs(m), versions)
+
+    if related is not None:
+        rel = related
+
+        @server.tool(annotations=READ, structured_output=True)
+        async def suggest_related(
+            apis: list[str], concept: str, limit: int = 24, offset: int = 0
+        ) -> dict[str, Any]:
+            """Concepts related to one concept (e.g. Product -> Variant, Image), with relation
+            candidates from documented evidence only, cited per API, and the designs the evidence
+            supports (embedded / reference, cardinality). The USER chooses the design: offer the
+            options and ask; never decide silently. `aliases` (different names at the same
+            documented position, e.g. variant / variation) are only offers for the user."""
+            return await run(
+                lambda: payloads.related_payload(rel().execute(apis, concept, limit, offset))
+            )
 
     @server.tool(annotations=WRITE, structured_output=True, meta=MODEL_ONLY_META)
     async def start_model_session(apis: list[str], concept: str) -> dict[str, Any]:
