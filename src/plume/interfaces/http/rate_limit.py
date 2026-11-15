@@ -46,3 +46,48 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             for k in [k for k, v in self._hits.items() if not v or now - v[-1] >= 60]:
                 del self._hits[k]
         return await call_next(request)
+
+
+class BodySizeLimitMiddleware(BaseHTTPMiddleware):
+    """Refuse a request whose declared body is larger than the limit before it is read."""
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        max_bytes: int,
+        default_bytes: int = 1024 * 1024,
+        upload_paths: tuple[str, ...] = ("/v1/packages",),
+    ) -> None:
+        super().__init__(app)
+        self._max = max_bytes
+        self._default = default_bytes
+        self._upload_paths = upload_paths
+
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        if request.method in ("POST", "PUT", "PATCH"):
+            limit = self._max if request.url.path in self._upload_paths else self._default
+            declared = request.headers.get("content-length")
+            if declared is not None and (not declared.isdigit() or int(declared) > limit):
+                return JSONResponse(
+                    {
+                        "error": "too_large",
+                        "message": f"request body over {limit} bytes",
+                        "detail": f"request body over {limit} bytes",
+                    },
+                    status_code=413,
+                )
+        return await call_next(request)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(
+        self, request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Cross-Origin-Resource-Policy", "same-site")
+        return response
