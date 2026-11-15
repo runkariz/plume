@@ -330,3 +330,88 @@ class JobOut(BaseModel):
     plan: dict[str, Any] | None
     eval: dict[str, Any] | None
     error: str | None
+
+
+class SuggestRequest(Schema):
+    apis: list[str] = Field(min_length=2, max_length=6)
+
+
+class ApiRef(Schema):
+    id: str
+    name: str
+    short_name: str
+    logo: Logo
+    build: str | None = None
+
+
+class Difficulty(Schema):
+    tone: Literal["ok", "warn", "bad"]
+    label: str
+
+
+class Concept(Schema):
+    id: str
+    name: str
+    description: str
+    likely_fields: int
+    coverage: dict[str, Literal["direct", "derived", "absent"]]
+    operations: list[Literal["read", "write"]]
+    difficulty: Difficulty
+    documents: dict[str, list[str]]
+
+
+class NotModeled(Schema):
+    count: int
+    summary: str
+
+
+class SuggestResponse(Schema):
+    apis: list[ApiRef]
+    concepts: list[Concept]
+    not_modeled: NotModeled
+
+
+class GenerateRequest(Schema):
+    apis: list[str] = Field(min_length=2, max_length=6)
+    concept: str = Field(min_length=1, max_length=100)
+
+
+class PinnedInput(Schema):
+    api: str
+    build: str
+
+
+class GenerateResponse(Schema):
+    session_id: str
+    status: Literal["awaiting_draft", "ready"]
+    snapshot_id: str | None
+    inputs: list[PinnedInput]
+    context_url: str
+    claude_prompt: str
+    mcp_url: str
+
+
+class DraftIssue(Schema):
+    code: str
+    field: str
+    api: str | None
+    message: str
+
+
+class DraftRefused(Schema):
+    error: str
+    message: str
+    accepted: bool
+    issues: list[DraftIssue]
+
+
+class ModelListItem(Schema):
+    id: str
+    name: str
+    concept: str
+    apis: list[str]
+    generated_at: str
+
+
+class ModelList(Schema):
+    items: list[ModelListItem]

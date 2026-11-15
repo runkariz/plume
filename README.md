@@ -14,7 +14,8 @@ Claude (and any MCP client) so answers about the API come with citations.
 Status: early. In place: ingest (read a connector package, chunk, embed, extract exact facts,
 seal, tag), the reader (hybrid search, exact facts, documents, call checks) over HTTP and MCP,
 the quality gate on gold questions, export/restore of builds, and the maintainer API (upload,
-review, build with live events, publish). Canonical models and the web UI follow.
+review, build with live events, publish), and canonical models across APIs (Claude writes them
+from an evidence pack; Plume checks every citation and stores immutable snapshots).
 
 ## Quick start
 
@@ -70,6 +71,12 @@ make eval                                                           # gold sets 
 A dump is gzipped JSON lines (manifest, documents, chunks with vectors, facts). Restore checks
 every chunk hash against the build's sealed content hash before writing anything. Maintainers
 can drive the same flow over HTTP: see [docs/maintainer-api.md](docs/maintainer-api.md).
+
+## Canonical models
+
+Pick 2..6 APIs and a concept; Claude reads the evidence (documented fields per API), writes the
+model, and Plume refuses any mapping whose citation does not hold. See
+[docs/canonical-models.md](docs/canonical-models.md).
 
 ## Serve and connect Claude
 

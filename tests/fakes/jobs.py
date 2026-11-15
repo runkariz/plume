@@ -36,6 +36,15 @@ class InMemoryJobRepo:
             self.jobs[job_id] = new
             return True
 
+    def fail_interrupted(self, message: str) -> list[str]:
+        ids = []
+        with self._lock:
+            for jid, job in list(self.jobs.items()):
+                if job.status is JobStatus.BUILDING:
+                    self.jobs[jid] = replace(job, status=JobStatus.FAILED, error=message)
+                    ids.append(jid)
+        return ids
+
 
 class InMemoryJobEventLog:
     def __init__(self) -> None:

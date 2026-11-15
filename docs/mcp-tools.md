@@ -13,6 +13,15 @@ DNS-rebinding protection (allowed hosts from `PLUME_MCP_ALLOWED_HOSTS`). Every r
 | `check_call` | `api, method, path, params?, version?` | `documented` / `not_documented`, matched endpoint, per-param location |
 | `list_builds` | `api` | builds (newest first) with tags |
 | `diff_builds` | `api, from_version, to_version?, limit?` | added / changed / removed chunk ids |
+| `get_model` | `snapshot_id` | a stored canonical model |
+| `list_models` | `api?` | stored canonical models, newest first |
+
+## Maintainer server
+
+`http://127.0.0.1:18481/maintainer/mcp`, `Authorization: Bearer <token>` (401 without; 503 when
+no tokens are configured). Tools: `suggest_concepts`, `start_model_session`,
+`get_model_context`, `submit_model_draft`, `get_model`, `list_models`, `publish_build`,
+`get_job`. See [canonical-models.md](canonical-models.md).
 
 The same use cases back the HTTP API (`docs/openapi.json`); `POST /v1/apis/{api}/search`
 returns the exact MCP payload as `claudePayload`.

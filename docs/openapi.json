@@ -149,6 +149,44 @@
         "title": "ApiList",
         "type": "object"
       },
+      "ApiRef": {
+        "properties": {
+          "build": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "logo": {
+            "$ref": "#/components/schemas/Logo"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "shortName": {
+            "title": "Shortname",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "shortName",
+          "logo"
+        ],
+        "title": "ApiRef",
+        "type": "object"
+      },
       "ApiStatus": {
         "properties": {
           "kind": {
@@ -721,6 +759,74 @@
         "title": "Citation",
         "type": "object"
       },
+      "Concept": {
+        "properties": {
+          "coverage": {
+            "additionalProperties": {
+              "enum": [
+                "direct",
+                "derived",
+                "absent"
+              ],
+              "type": "string"
+            },
+            "title": "Coverage",
+            "type": "object"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "difficulty": {
+            "$ref": "#/components/schemas/Difficulty"
+          },
+          "documents": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Documents",
+            "type": "object"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "likelyFields": {
+            "title": "Likelyfields",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "operations": {
+            "items": {
+              "enum": [
+                "read",
+                "write"
+              ],
+              "type": "string"
+            },
+            "title": "Operations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "likelyFields",
+          "coverage",
+          "operations",
+          "difficulty",
+          "documents"
+        ],
+        "title": "Concept",
+        "type": "object"
+      },
       "Connect": {
         "properties": {
           "claudeCode": {
@@ -789,6 +895,29 @@
           "unchanged"
         ],
         "title": "DiffOut",
+        "type": "object"
+      },
+      "Difficulty": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "tone": {
+            "enum": [
+              "ok",
+              "warn",
+              "bad"
+            ],
+            "title": "Tone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tone",
+          "label"
+        ],
+        "title": "Difficulty",
         "type": "object"
       },
       "DocumentOut": {
@@ -925,6 +1054,72 @@
           "scopes"
         ],
         "title": "DocumentOut",
+        "type": "object"
+      },
+      "DraftIssue": {
+        "properties": {
+          "api": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "field",
+          "api",
+          "message"
+        ],
+        "title": "DraftIssue",
+        "type": "object"
+      },
+      "DraftRefused": {
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "boolean"
+          },
+          "error": {
+            "title": "Error",
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/DraftIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error",
+          "message",
+          "accepted",
+          "issues"
+        ],
+        "title": "DraftRefused",
         "type": "object"
       },
       "ErrorBody": {
@@ -1237,6 +1432,88 @@
         "title": "FindFactResponse",
         "type": "object"
       },
+      "GenerateRequest": {
+        "properties": {
+          "apis": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 2,
+            "title": "Apis",
+            "type": "array"
+          },
+          "concept": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Concept",
+            "type": "string"
+          }
+        },
+        "required": [
+          "apis",
+          "concept"
+        ],
+        "title": "GenerateRequest",
+        "type": "object"
+      },
+      "GenerateResponse": {
+        "properties": {
+          "claudePrompt": {
+            "title": "Claudeprompt",
+            "type": "string"
+          },
+          "contextUrl": {
+            "title": "Contexturl",
+            "type": "string"
+          },
+          "inputs": {
+            "items": {
+              "$ref": "#/components/schemas/PinnedInput"
+            },
+            "title": "Inputs",
+            "type": "array"
+          },
+          "mcpUrl": {
+            "title": "Mcpurl",
+            "type": "string"
+          },
+          "sessionId": {
+            "title": "Sessionid",
+            "type": "string"
+          },
+          "snapshotId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshotid"
+          },
+          "status": {
+            "enum": [
+              "awaiting_draft",
+              "ready"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionId",
+          "status",
+          "snapshotId",
+          "inputs",
+          "contextUrl",
+          "claudePrompt",
+          "mcpUrl"
+        ],
+        "title": "GenerateResponse",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1508,6 +1785,76 @@
         "title": "Me",
         "type": "object"
       },
+      "ModelList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ModelListItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ModelList",
+        "type": "object"
+      },
+      "ModelListItem": {
+        "properties": {
+          "apis": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Apis",
+            "type": "array"
+          },
+          "concept": {
+            "title": "Concept",
+            "type": "string"
+          },
+          "generatedAt": {
+            "title": "Generatedat",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "concept",
+          "apis",
+          "generatedAt"
+        ],
+        "title": "ModelListItem",
+        "type": "object"
+      },
+      "NotModeled": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "count",
+          "summary"
+        ],
+        "title": "NotModeled",
+        "type": "object"
+      },
       "ParamCheck": {
         "properties": {
           "found": {
@@ -1571,6 +1918,24 @@
           "sourceUrl"
         ],
         "title": "Passage",
+        "type": "object"
+      },
+      "PinnedInput": {
+        "properties": {
+          "api": {
+            "title": "Api",
+            "type": "string"
+          },
+          "build": {
+            "title": "Build",
+            "type": "string"
+          }
+        },
+        "required": [
+          "api",
+          "build"
+        ],
+        "title": "PinnedInput",
         "type": "object"
       },
       "Quality": {
@@ -1829,6 +2194,52 @@
           "claudePayload"
         ],
         "title": "SearchResponse",
+        "type": "object"
+      },
+      "SuggestRequest": {
+        "properties": {
+          "apis": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "minItems": 2,
+            "title": "Apis",
+            "type": "array"
+          }
+        },
+        "required": [
+          "apis"
+        ],
+        "title": "SuggestRequest",
+        "type": "object"
+      },
+      "SuggestResponse": {
+        "properties": {
+          "apis": {
+            "items": {
+              "$ref": "#/components/schemas/ApiRef"
+            },
+            "title": "Apis",
+            "type": "array"
+          },
+          "concepts": {
+            "items": {
+              "$ref": "#/components/schemas/Concept"
+            },
+            "title": "Concepts",
+            "type": "array"
+          },
+          "notModeled": {
+            "$ref": "#/components/schemas/NotModeled"
+          }
+        },
+        "required": [
+          "apis",
+          "concepts",
+          "notModeled"
+        ],
+        "title": "SuggestResponse",
         "type": "object"
       },
       "TraceStep": {
@@ -3531,6 +3942,480 @@
         "summary": "Me",
         "tags": [
           "maintainer"
+        ]
+      }
+    },
+    "/v1/models": {
+      "get": {
+        "operationId": "list_models_v1_models_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "api",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Models",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models/candidates": {
+      "get": {
+        "description": "APIs with a published build (the ones a model can be built from).",
+        "operationId": "candidates_v1_models_candidates_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "Candidates",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models/generate": {
+      "post": {
+        "description": "Start a model session. Plume does not run an LLM: Claude writes the model through the\nmaintainer MCP (or POST .../draft). If a snapshot already exists for the same concept on\nthe current builds, its id is returned.",
+        "operationId": "generate_v1_models_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Generate",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models/sessions/{session_id}/context": {
+      "get": {
+        "description": "The evidence pack for the session (what Claude reads).",
+        "operationId": "context_v1_models_sessions__session_id__context_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Context V1 Models Sessions  Session Id  Context Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Context",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models/sessions/{session_id}/draft": {
+      "post": {
+        "operationId": "submit_v1_models_sessions__session_id__draft_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Draft",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftRefused"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Submit",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models/suggest": {
+      "post": {
+        "operationId": "suggest_concepts_v1_models_suggest_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Suggest Concepts",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models/{snapshot_id}": {
+      "get": {
+        "description": "A model snapshot (ModelSnapshot in the web client).",
+        "operationId": "get_model_v1_models__snapshot_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Model V1 Models  Snapshot Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Model",
+        "tags": [
+          "models"
         ]
       }
     },
