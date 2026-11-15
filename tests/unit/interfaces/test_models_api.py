@@ -543,3 +543,31 @@ def test_release_with_supersedes(stack: FakeStack, client: TestClient) -> None:
     assert (gone["visibility"], gone["supersededBy"]) == ("superseded", nid)
     assert gone["supersededAt"]
     assert [m["id"] for m in client.get("/v1/models").json()["items"]] == [nid]
+
+
+def test_an_official_model_supersedes_older_ones_later(
+    stack: FakeStack, client: TestClient
+) -> None:
+    models = stack.models()
+    old = models.release(
+        models.submit(models.start(APIS, "Order").session_id, _draft("good"), maintainer=True)
+        .snapshot.snapshot_id
+    ).snapshot_id  # fmt: skip
+    draft = {**_draft("good"), "description": "newer"}
+    new = models.release(
+        models.submit(models.start(APIS, "order").session_id, draft, maintainer=True)
+        .snapshot.snapshot_id
+    ).snapshot_id  # fmt: skip
+    url = f"/v1/models/{new}/supersede"
+    assert client.post(url, json={"supersedes": [old]}).status_code == 401
+    assert client.post(url, headers=AUTH, json={"supersedes": ["m-x"]}).status_code == 409
+    assert client.post(url, headers=AUTH, json={"supersedes": []}).status_code == 400
+    out = client.post(url, headers=AUTH, json={"supersedes": [old]})
+    assert (out.status_code, out.json()["supersedes"]) == (200, [old])
+    gone = client.get(f"/v1/models/{old}").json()
+    assert (gone["visibility"], gone["supersededBy"]) == ("superseded", new)
+    assert [m["id"] for m in client.get("/v1/models").json()["items"]] == [new]
+    # a superseded model can not supersede, and is no longer a candidate
+    again = client.post(f"/v1/models/{old}/supersede", headers=AUTH, json={"supersedes": [new]})
+    assert again.status_code == 409
+    assert client.get(f"/v1/models/{new}/supersedable", headers=AUTH).json()["items"] == []

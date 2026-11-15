@@ -342,6 +342,19 @@ def register_model_tools(  # noqa: PLR0915
                 text += f"\nSuperseded: {', '.join(wanted)}."
             return ui_result(model, text, apps_shown(ctx))
 
+        @server.tool(annotations=WRITE, structured_output=True, meta=UI_WRITE_META)
+        async def supersede_models(
+            ctx: Context, snapshot_id: str, supersedes: list[str]
+        ) -> Annotated[CallToolResult, dict[str, Any]]:
+            """An OFFICIAL model retires older official models of its concept (ids from
+            list_supersedable_models; ASK the maintainer, never decide): they stay readable by
+            id with supersededBy, and leave the lists."""
+            wanted = list(dict.fromkeys(supersedes))
+            model = await run(lambda: model_json(models().supersede(snapshot_id, wanted)))
+            model["supersedes"] = wanted
+            text = model_text(model) + f"\nSuperseded: {', '.join(wanted)}."
+            return ui_result(model, text, apps_shown(ctx))
+
         @server.tool(annotations=READ, structured_output=True)
         async def list_supersedable_models(snapshot_id: str) -> dict[str, Any]:
             """Official models of the same concept (any API set) that releasing this model may

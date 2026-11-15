@@ -422,6 +422,19 @@ def models_router(  # noqa: PLR0915
         out["supersedes"] = list(dict.fromkeys(wanted))
         return out
 
+    @router.post(
+        "/v1/models/{snapshot_id}/supersede",
+        dependencies=[Depends(auth)],
+        responses={**token_errors, 400: {"model": s.ErrorBody}, 409: {"model": s.ErrorBody}},
+    )
+    def supersede(snapshot_id: str, body: s.ReleaseRequest) -> dict[str, Any]:
+        """An official model retires older official models of its concept (ids from
+        /supersedable): they stay readable by id with supersededBy and leave the lists. 409
+        when this model is not official or an id is not a candidate; nothing changes then."""
+        out = snapshot_json(models().supersede(snapshot_id, body.supersedes), True)
+        out["supersedes"] = list(dict.fromkeys(body.supersedes))
+        return out
+
     @router.get(
         "/v1/models/{snapshot_id}/supersedable",
         dependencies=[Depends(auth)],
