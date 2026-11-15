@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from plume.domain.knowledge.api import ApiInfo
+from plume.domain.knowledge.asset import Asset
 from plume.domain.knowledge.document import Document
 
 
@@ -16,6 +17,7 @@ class SourcePackage:
     run_id: str | None = None
     contract_version: str | None = None
     warnings: tuple[str, ...] = ()
+    assets: tuple[Asset, ...] = ()
 
 
 class PackageSource(Protocol):

@@ -42,6 +42,7 @@ def http_app(c: Container) -> FastAPI:
             list_builds=c.list_builds,
             diff_builds=c.diff_builds,
             resolver=c.resolver,
+            sections=c.sections,
             mcp_url=s.mcp_public_url,
             rate_limit_per_minute=s.reader_rate_limit_per_minute,
             cors_origins=s.cors_origins,
@@ -66,6 +67,7 @@ def reader_server(c: Container) -> MCPServer:
             diff_builds=c.diff_builds,
             resolver=c.resolver,
             models=c.models,
+            sections=c.sections,
         )
     )
 

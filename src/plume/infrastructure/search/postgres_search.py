@@ -20,6 +20,7 @@ _BROWSE_FILTER = (
     + " AND (CAST(:q AS text) IS NULL OR lower(d.title) LIKE :like ESCAPE '\\' "
     "OR lower(coalesce(d.path, '')) LIKE :like ESCAPE '\\' "
     "OR lower(d.doc_id) LIKE :like ESCAPE '\\')"
+    " AND (CAST(:tag AS text) IS NULL OR :tag = ANY(d.tags))"
 )
 # OR-semantics query: every word may match. ts_rank (weights A=title, B=body; normalised by
 # log length) favours documents whose title matches over long pages repeating one common word.
@@ -46,6 +47,7 @@ def _summary(row: Any) -> DocumentSummary:
         method=row.method,
         path=row.path,
         deprecated=row.deprecated,
+        tags=tuple(getattr(row, "tags", None) or ()),
     )
 
 
@@ -109,11 +111,13 @@ class PostgresSearchIndex:
         query: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        tag: str | None = None,
     ) -> tuple[list[DocumentSummary], int]:
         with self._engine.connect() as conn:
             rows = conn.execute(
                 text(
-                    "SELECT d.doc_id, d.kind, d.title, d.resource, d.method, d.path, d.deprecated, "  # noqa: S608 - constant fragments
+                    "SELECT d.doc_id, d.kind, d.title, d.resource, d.method, d.path, "  # noqa: S608
+                    "d.deprecated, d.tags, "
                     f"count(*) OVER () AS total FROM documents d WHERE {_BROWSE_FILTER} "
                     "ORDER BY d.kind, d.doc_id LIMIT :n OFFSET :o"
                 ),
@@ -122,6 +126,7 @@ class PostgresSearchIndex:
                     "kinds": [k.value for k in kinds],
                     "q": query or None,
                     "like": f"%{_like(query)}%" if query else "%",
+                    "tag": tag,
                     "n": limit,
                     "o": offset,
                 },
@@ -137,6 +142,7 @@ class PostgresSearchIndex:
                         "kinds": [k.value for k in kinds],
                         "q": query or None,
                         "like": f"%{_like(query)}%" if query else "%",
+                        "tag": tag,
                     },
                 ).scalar_one()
         return [_summary(r) for r in rows], int(total)
@@ -147,7 +153,7 @@ class PostgresSearchIndex:
         with self._engine.connect() as conn:
             rows = conn.execute(
                 text(
-                    "SELECT doc_id, kind, title, resource, method, path, deprecated "
+                    "SELECT doc_id, kind, title, resource, method, path, deprecated, tags "
                     "FROM documents WHERE build_id = :b AND doc_id = ANY(:ids)"
                 ),
                 {"b": build_id.value, "ids": list(doc_ids)},

@@ -1,0 +1,9 @@
+{
+  "delivery": "webhook",
+  "key": "carts/create",
+  "provenance": {
+    "evidenceUrl": "https://shopify.dev/docs/api/admin-rest/latest/resources/webhook",
+    "source": "docs"
+  },
+  "title": "carts/create"
+}

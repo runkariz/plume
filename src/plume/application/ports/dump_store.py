@@ -7,6 +7,7 @@ from typing import Protocol
 from plume.application.ports.embedder import Vector
 from plume.application.ports.eval_repo import EvalRecord
 from plume.domain.knowledge.api import ApiInfo
+from plume.domain.knowledge.asset import Asset
 from plume.domain.knowledge.build import Build
 from plume.domain.knowledge.chunk import Chunk
 from plume.domain.knowledge.document import Document
@@ -28,6 +29,7 @@ class BuildSnapshot:
     vectors: Mapping[str, Vector]
     facts: tuple[Fact, ...]
     eval: EvalRecord | None = None
+    assets: tuple[Asset, ...] = ()
 
 
 class DumpStore(Protocol):

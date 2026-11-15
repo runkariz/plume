@@ -5,10 +5,12 @@ are built from the HTTP method and the path with the API-version segment replace
 ``{version}``, never from a producer's own id (those change when the vendor version rolls).
 """
 
+import json
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Any
 
 from plume.domain.shared.errors import InvalidIdentifierError
 from plume.domain.shared.hashing import ContentHash, content_hash
@@ -26,6 +28,7 @@ class DocumentKind(StrEnum):
     MODEL = "model"
     GUIDE = "guide"
     AUTH = "auth"
+    TRIGGER = "trigger"
     APP = "app"
 
 
@@ -106,6 +109,11 @@ class Document:
     # Structural hash of a model's schema (title/description/examples ignored): equal shapes
     # are the same structure published under several names.
     shape: str | None = None
+    # Tags the package gives the item (e.g. request.json tags[].name: "v3", "webhooks").
+    tags: tuple[str, ...] = ()
+    # The package's source JSON for this item, verbatim (request.json, a model schema, an auth
+    # scheme + its variables schema, a trigger event). Never derived.
+    raw: Mapping[str, Any] | None = field(default=None, hash=False)
 
     def __post_init__(self) -> None:
         if not _DOC_ID.fullmatch(self.doc_id):
@@ -118,4 +126,8 @@ class Document:
     @property
     def content_hash(self) -> ContentHash:
         """Hash of what is shown for this document (title, text, source)."""
-        return content_hash(f"{self.title}\n{self.source_url or ''}\n{self.text}")
+        base = f"{self.title}\n{self.source_url or ''}\n{self.text}"
+        if self.tags or self.raw is not None:  # older documents keep their hash
+            extra = json.dumps({"tags": list(self.tags), "raw": self.raw}, sort_keys=True)
+            base = f"{base}\n{extra}"
+        return content_hash(base)

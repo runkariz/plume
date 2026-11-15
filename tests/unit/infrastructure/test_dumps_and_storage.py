@@ -125,3 +125,17 @@ def test_package_storage_rejects_unsafe_zips(tmp_path: Path, data: bytes, match:
 def test_package_storage_size_limit(tmp_path: Path) -> None:
     with pytest.raises(SourcePackageError, match="larger"):
         LocalPackageStorage(tmp_path, 10).save("job-y", "p.zip", b"0" * 11)
+
+
+def test_codec_carries_assets_raw_and_tags(packages: Path, tmp_path: Path) -> None:
+    stack = FakeStack(embedder=WordEmbedder(), data_dir=tmp_path)
+    build = stack.pipeline().execute("j", str(packages / "shopify-mini")).build_id
+    snap = stack.export().snapshot(build)
+    assert [a.name for a in snap.assets] == ["icon"]
+    back = decode(encode(snap))
+    assert back.assets == snap.assets
+    trig = next(d for d in back.documents if d.kind.value == "trigger")
+    assert trig.raw is not None
+    assert trig.raw["delivery"] == "webhook"
+    ep = next(d for d in back.documents if d.kind.value == "endpoint")
+    assert ep.tags

@@ -5,6 +5,7 @@ document, chunk (with its vector) and fact, in id order. The gzip header carries
 time, so the same build always gives the same bytes.
 """
 
+import base64
 import gzip
 import io
 import json
@@ -17,6 +18,7 @@ from plume.application.ports.dump_store import DUMP_FORMAT, DUMP_VERSION, BuildS
 from plume.application.ports.eval_repo import EvalRecord
 from plume.domain.eval.metrics import EvalMetrics
 from plume.domain.knowledge.api import ApiId, ApiInfo, Category
+from plume.domain.knowledge.asset import Asset
 from plume.domain.knowledge.build import Build, BuildSpec, BuildStatus
 from plume.domain.knowledge.chunk import Chunk
 from plume.domain.knowledge.citation import Citation
@@ -164,6 +166,8 @@ def _doc(d: Document) -> dict[str, Any]:
         "scopes": list(d.scopes),
         "source_id": d.source_id,
         "shape": d.shape,
+        "tags": list(d.tags),
+        "raw": d.raw,
     }
 
 
@@ -184,6 +188,8 @@ def _doc_back(d: dict[str, Any]) -> Document:
         scopes=tuple(d.get("scopes", [])),
         source_id=d.get("source_id"),
         shape=d.get("shape"),
+        tags=tuple(d.get("tags", [])),
+        raw=d.get("raw"),
     )
 
 
@@ -237,6 +243,7 @@ def _lines(s: BuildSnapshot) -> Iterator[dict[str, Any]]:
             "documents": len(s.documents),
             "chunks": len(s.chunks),
             "facts": len(s.facts),
+            **({"assets": len(s.assets)} if s.assets else {}),
         },
     }
     for d in sorted(s.documents, key=lambda d: d.doc_id):
@@ -253,6 +260,14 @@ def _lines(s: BuildSnapshot) -> Iterator[dict[str, Any]]:
         }
     for f in sorted(s.facts, key=lambda f: f.fact_id):
         yield _fact(f)
+    for a in sorted(s.assets, key=lambda a: a.name):
+        yield {
+            "type": "asset",
+            "name": a.name,
+            "content_type": a.content_type,
+            "source": a.source,
+            "data": base64.b64encode(a.data).decode("ascii"),
+        }
 
 
 def encode(snapshot: BuildSnapshot) -> bytes:
@@ -270,6 +285,7 @@ def _read_record(
     chunks: list[Chunk],
     vectors: dict[str, tuple[float, ...]],
     facts: list[Fact],
+    assets: list[Asset],
 ) -> None:
     if len(raw) > MAX_LINE:
         raise DumpFormatError("line too long")
@@ -286,6 +302,10 @@ def _read_record(
             vectors[chunk.chunk_id] = tuple(float(x) for x in rec["embedding"])
     elif kind == "fact":
         facts.append(_fact_back(rec))
+    elif kind == "asset":
+        assets.append(
+            Asset(rec["name"], rec["content_type"], base64.b64decode(rec["data"]), rec["source"])
+        )
     else:
         raise DumpFormatError(f"unknown record type {kind!r}")
 
@@ -308,10 +328,11 @@ def decode(data: bytes) -> BuildSnapshot:
     chunks: list[Chunk] = []
     vectors: dict[str, tuple[float, ...]] = {}
     facts: list[Fact] = []
+    assets: list[Asset] = []
     try:
         for raw in lines[1:]:
             if raw.strip():
-                _read_record(raw, docs, chunks, vectors, facts)
+                _read_record(raw, docs, chunks, vectors, facts, assets)
         snapshot = BuildSnapshot(
             api=_api_back(manifest["api"]),
             build=_build_back(manifest["build"]),
@@ -320,12 +341,16 @@ def decode(data: bytes) -> BuildSnapshot:
             vectors=vectors,
             facts=tuple(facts),
             eval=_eval_back(manifest["eval"]) if manifest.get("eval") else None,
+            assets=tuple(assets),
         )
     except DumpFormatError:
         raise
     except (KeyError, TypeError, ValueError) as exc:
         raise DumpFormatError(f"malformed dump: {exc}") from exc
     counts = manifest.get("counts", {})
-    if counts != {"documents": len(docs), "chunks": len(chunks), "facts": len(facts)}:
+    expected = {"documents": len(docs), "chunks": len(chunks), "facts": len(facts)}
+    if assets:
+        expected["assets"] = len(assets)
+    if counts != expected:
         raise DumpFormatError("record counts do not match the manifest")
     return snapshot

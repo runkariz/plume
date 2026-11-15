@@ -64,4 +64,6 @@ def document_from_row(row: Any) -> Document:
         scopes=tuple(row.scopes or ()),
         source_id=row.source_id,
         shape=row.shape,
+        tags=tuple(row.tags or ()),
+        raw=(json.loads(row.raw) if isinstance(row.raw, str) else row.raw),
     )
