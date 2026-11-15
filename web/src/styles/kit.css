@@ -284,6 +284,7 @@ pre.code {
 .kv {
   display: flex;
   justify-content: space-between;
+  gap: 16px;
   padding: 8px 0;
   font-size: 14px;
   border-top: 1px solid var(--line2);
@@ -344,7 +345,8 @@ pre.code {
   font-size: 12px;
   font-weight: 600;
 }
-.log-src.gemini {
+.log-src.gemini,
+.log-src.embedder {
   background: var(--ok-soft);
   color: var(--ok);
 }
@@ -355,4 +357,13 @@ pre.code {
 .log-src.plume {
   background: var(--line2);
   color: var(--muted);
+}
+
+.kv > span:last-child {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.payload {
+  max-height: 520px;
+  overflow: auto;
 }

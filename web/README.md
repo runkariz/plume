@@ -19,6 +19,13 @@ PLUME_E2E_SHOTS_DIR=/shots ...  # set (and mount) a directory OUTSIDE the repo t
 PLUME_E2E_BASE_URL=http://host:port npm run e2e   # run against a running stack instead (no dev server)
 ```
 
+Against the real API (compose stack from the repo root: `make up`, then load the fixtures with
+`plume load tests/fixtures/packages/<shopify-mini|test-catalog|second-catalog>`):
+
+```bash
+PLUME_E2E_API_URL=http://127.0.0.1:18480 npm run e2e:real:docker   # specs in e2e-real/, dev server without mocks
+```
+
 Every page is checked with axe in light and dark: no serious or critical violations (contrast included).
 
 ## Notes

@@ -268,10 +268,14 @@ describe('Model view', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Copy for Claude' }));
     await waitFor(() => expect(writeText).toHaveBeenCalled());
     expect(writeText.mock.calls[0]?.[0]).toContain('get_snapshot with id "snap_8f3a21"');
-    expect(await screen.findByText('Copied')).toBeInTheDocument();
+    expect(await screen.findByText('Prompt copied: paste it into Claude')).toBeInTheDocument();
     const open = screen.getByRole('link', { name: 'Open in Claude' });
-    expect(open.getAttribute('href')).toMatch(/^https:\/\/claude\.ai\/new\?q=/);
+    expect(open).toHaveAttribute('href', 'https://claude.ai/new');
     expect(open).toHaveAttribute('rel', 'noreferrer');
+    // "Open in Claude" also copies the prompt, because the new chat cannot be pre-filled
+    writeText.mockClear();
+    await userEvent.click(open);
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
   });
 
   it('says so when copying fails', async () => {

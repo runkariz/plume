@@ -49,6 +49,19 @@ export interface PlumeApi {
   watchJob(id: string, onEvent: (e: JobEvent) => void, signal?: AbortSignal): Promise<void>;
 }
 
+export function errorMessage(body: unknown): string | undefined {
+  if (!body || typeof body !== 'object') return undefined;
+  const b = body as Record<string, unknown>;
+  if (typeof b.message === 'string') return b.message;
+  if (typeof b.detail === 'string') return b.detail;
+  if (Array.isArray(b.detail)) {
+    const first: unknown = b.detail[0];
+    if (first && typeof first === 'object' && 'msg' in first && typeof first.msg === 'string')
+      return first.msg;
+  }
+  return undefined;
+}
+
 /** Typed fetch client. The maintainer key, when present, is passed in by the caller (never stored here). */
 export function createApiClient(
   baseUrl: string = apiBaseUrl(),
@@ -67,16 +80,19 @@ export function createApiClient(
     return key ? { Authorization: `Bearer ${key}` } : {};
   }
 
+  /** Plume errors are {error, message}; FastAPI validation errors are {detail: [...]}; mocks use {detail: string}. */
   async function fail(res: Response): Promise<never> {
-    let detail = res.statusText;
+    let message = res.statusText;
     try {
-      const body: unknown = await res.json();
-      if (body && typeof body === 'object' && 'detail' in body && typeof body.detail === 'string')
-        detail = body.detail;
+      message = errorMessage(await res.json()) ?? message;
     } catch {
       /* non-JSON error body */
     }
-    throw new ApiError(res.status, detail || `Request failed (${res.status})`);
+    if (res.status === 429) {
+      const wait = res.headers.get('Retry-After');
+      message = `${message || 'Too many requests'}${wait ? ` Try again in ${wait} s.` : ''}`;
+    }
+    throw new ApiError(res.status, message || `Request failed (${res.status})`);
   }
 
   async function raw(

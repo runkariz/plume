@@ -1,3 +1,4 @@
+import { readableOn } from '@/lib/color';
 import type { CoverageKind } from '@/api/types';
 
 const LABEL: Record<CoverageKind, string> = {
@@ -23,7 +24,7 @@ export function ApiAvatar({
   const label = name ? (kind === 'direct' ? name : `${name} (${LABEL[kind]})`) : undefined;
   const style =
     kind === 'direct'
-      ? { background: color, color: '#fff' }
+      ? { background: color, color: readableOn(color) }
       : kind === 'derived'
         ? { background: 'transparent', color, border: `1.5px dashed ${color}` }
         : { background: 'var(--line2)', color: 'var(--faint)' };

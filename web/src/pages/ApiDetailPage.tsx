@@ -24,7 +24,7 @@ import {
   Tile,
 } from '@/components';
 import { SearchIcon } from '@/icons';
-import { formatDate, formatScore } from '@/lib/format';
+import { categoryLabel, formatDate, formatScore } from '@/lib/format';
 
 type Tab = 'all' | ItemKind;
 const TABS: { value: Tab; label: string }[] = [
@@ -104,7 +104,7 @@ function Browse({ api }: { api: ApiSummary }) {
                   <div className={it.path ? 'mono ep-path' : 'ep-path'}>{it.path ?? it.title}</div>
                   {it.path ? <div className="muted small">{it.title}</div> : null}
                 </div>
-                <Chip>{it.resource}</Chip>
+                {it.resource ? <Chip>{it.resource}</Chip> : null}
               </li>
             ))}
           </ul>
@@ -135,19 +135,28 @@ function Detail({ api }: { api: ApiDetail }) {
                 <Chip tone="ok" dot>
                   Live
                 </Chip>
+              ) : api.status.kind === 'unpublished' ? (
+                <Chip dot>Not published</Chip>
               ) : (
                 <Chip tone="acc" dot>
                   Updating
                 </Chip>
               )}
-              <Chip tone="acc">{api.category}</Chip>
+              <Chip tone="acc">{categoryLabel(api.category)}</Chip>
               <span className="muted">
-                {api.tag} · docs as of {formatDate(api.docsAsOf)}
+                {api.docsAsOf
+                  ? `${api.tag ? `${api.tag} · ` : ''}docs as of ${formatDate(api.docsAsOf)}`
+                  : 'No docs published yet'}
               </span>
             </div>
           </div>
         </div>
         <div className="row">
+          {api.docLink ? (
+            <a className="btn" href={api.docLink} target="_blank" rel="noreferrer">
+              Official docs
+            </a>
+          ) : null}
           <a className="btn" href="#connect">
             Use in Claude Code
           </a>
@@ -170,24 +179,32 @@ function Detail({ api }: { api: ApiDetail }) {
         <div className="stack">
           <Card className="pad">
             <h2 style={{ marginBottom: 12 }}>Answer quality</h2>
-            <Metric label="Recall@5" value={formatScore(api.quality.recallAt5)} />
-            <Metric label="MRR" value={formatScore(api.quality.mrr)} />
-            <Metric
-              label="Invented endpoints"
-              value={`${api.quality.inventedEndpoints} / ${api.quality.goldQuestions}`}
-              tone={api.quality.inventedEndpoints === 0 ? 'ok' : undefined}
-            />
-            <p className="faint small" style={{ marginTop: 10 }}>
-              Gold set of {api.quality.goldQuestions} questions · evaluated{' '}
-              {formatDate(api.quality.evaluatedAt)}
-            </p>
+            {api.quality ? (
+              <>
+                <Metric label="Recall@5" value={formatScore(api.quality.recallAt5)} />
+                <Metric label="MRR" value={formatScore(api.quality.mrr)} />
+                <Metric
+                  label="Invented endpoints"
+                  value={`${api.quality.inventedEndpoints} / ${api.quality.goldQuestions}`}
+                  tone={api.quality.inventedEndpoints === 0 ? 'ok' : undefined}
+                />
+                <p className="faint small" style={{ marginTop: 10 }}>
+                  Gold set of {api.quality.goldQuestions} questions · evaluated{' '}
+                  {formatDate(api.quality.evaluatedAt)}
+                </p>
+              </>
+            ) : (
+              <p className="muted">
+                Not evaluated yet. Scores appear here once the quality gate has run on a build.
+              </p>
+            )}
           </Card>
           <Card className="pad">
             <h2 style={{ marginBottom: 12 }}>Index</h2>
-            <Kv label="Embedding" value={api.index.embedding} />
-            <Kv label="Dimensions" value={api.index.dimensions} />
+            <Kv label="Embedding" value={api.index.embedding ?? '–'} />
+            <Kv label="Dimensions" value={api.index.dimensions ?? '–'} />
             <Kv label="Store" value={api.index.store} />
-            <Kv label="Build" value={api.index.build} mono />
+            <Kv label="Build" value={api.index.build ?? '–'} mono />
           </Card>
           <Card className="pad" id="connect">
             <h2 style={{ marginBottom: 12 }}>Connect</h2>
