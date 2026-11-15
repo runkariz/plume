@@ -5,6 +5,8 @@ import { isGenerateJob } from '@/api/types';
 import { authStore } from '@/app/authStore';
 import { renderApp, testClient } from '@/test/render';
 import { createHandlers } from '@/mocks/handlers';
+import { DEMO_COLLECTION } from '@/mocks/collectionStore';
+import { saveCollectionId } from '@/lib/collection';
 import { server, TEST_API_BASE } from '@/test/server';
 import { pollConfig } from './GenerateSession';
 
@@ -265,18 +267,25 @@ describe('Generate: pasting a draft (signed out)', () => {
     await userEvent.click(within(panel).getByRole('button', { name: 'Submit draft' }));
   };
 
-  it('stores the model unlisted, keeps the owner key in this browser and shows the share link', async () => {
+  it('stores the model unlisted, keeps the My models link in this browser and shows the share link', async () => {
     await submit('{"name":"Order","fields":[{"name":"sku"}]}');
     expect(await screen.findByRole('heading', { level: 1, name: 'Order' })).toBeInTheDocument();
     expect(screen.getByText('Unlisted: anyone with the link')).toBeInTheDocument();
-    // shown once, with the key
+    // shown once, with the My models link: the same one is kept in this browser
     const notice = screen
       .getByText('Your model is saved, and unlisted')
       .closest('div') as HTMLElement;
     expect(notice).toBeInTheDocument();
-    const key = /ok-mock\d+/.exec(document.body.textContent ?? '')?.[0];
-    expect(key).toBeTruthy();
-    expect(JSON.parse(localStorage.getItem('plume-owner-keys') ?? '[]')).toEqual([key]);
+    const id = /c-MockCollection\d+/.exec(
+      (
+        within(notice.parentElement as HTMLElement).getByLabelText(
+          'Link to My models',
+        ) as HTMLInputElement
+      ).value,
+    )?.[0];
+    expect(id).toBeTruthy();
+    expect(localStorage.getItem('plume-collection')).toBe(id);
+    expect(document.body.textContent).not.toMatch(/owner key|ok-mock/i);
     // the share link is this site's origin + the model's path
     const link = within(screen.getByRole('region', { name: 'Share this model' })).getByLabelText(
       'Link to this model',
@@ -291,10 +300,38 @@ describe('Generate: pasting a draft (signed out)', () => {
     expect(screen.queryByText('Your model is saved, and unlisted')).not.toBeInTheDocument();
   });
 
+  it('sends the My models link this browser holds, joins it, and shows no new-link notice', async () => {
+    saveCollectionId(DEMO_COLLECTION);
+    const drafts: string[] = [];
+    server.events.on('request:start', ({ request }) => {
+      if (request.url.includes('/draft')) drafts.push(request.url);
+    });
+    await submit('{"name":"Order","fields":[{"name":"sku"}]}');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Order' })).toBeInTheDocument();
+    server.events.removeAllListeners();
+    expect(drafts).toHaveLength(1);
+    expect(new URL(drafts[0] ?? '').searchParams.get('collection')).toBe(DEMO_COLLECTION);
+    // already its link: nothing new to bookmark
+    expect(screen.queryByText('Your model is saved, and unlisted')).not.toBeInTheDocument();
+    expect(localStorage.getItem('plume-collection')).toBe(DEMO_COLLECTION);
+    const mine = await fetch(`${TEST_API_BASE}/v1/collections/${DEMO_COLLECTION}`).then((r) =>
+      r.json(),
+    );
+    expect((mine as { models: { name: string }[] }).models.map((m) => m.name)).toContain('Order');
+  });
+
+  it('a link the server does not know is replaced by the new one it made, and says why', async () => {
+    saveCollectionId('c-Mistyped0123456789ab');
+    await submit('{"name":"Order","fields":[{"name":"sku"}]}');
+    expect(await screen.findByText('Your model is saved, and unlisted')).toBeInTheDocument();
+    expect(screen.getByText(/not known here, so a new one was made/)).toBeInTheDocument();
+    expect(localStorage.getItem('plume-collection')).toMatch(/^c-MockCollection\d+$/);
+  });
+
   it('shows the refusal for a bad draft and stores nothing', async () => {
     await submit('{"name":"Order","fields":[{"name":"total"}],"refuse":"quote"}');
     expect(await screen.findByText('QUOTE_NOT_FOUND')).toBeInTheDocument();
-    expect(localStorage.getItem('plume-owner-keys')).toBeNull();
+    expect(localStorage.getItem('plume-collection')).toBeNull();
   });
 });
 

@@ -1,6 +1,8 @@
 import { delay, http, HttpResponse } from 'msw';
 import { apiBaseUrl } from '@/api/config';
 import type {
+  Collection,
+  CollectionRef,
   CheckCallRequest,
   GenerateRequest,
   ItemKind,
@@ -15,6 +17,13 @@ import type {
 import { apiRef, modelCandidates, productSnapshot, sampleSuggestions } from './modelData';
 import { relatedFor } from './relatedData';
 import {
+  collectionUrl,
+  DEMO_COLLECTION,
+  LEGACY_KEYS,
+  SET_COLLECTION,
+  type MockCollection,
+} from './collectionStore';
+import {
   applyEdits,
   newSet,
   seedSets,
@@ -26,6 +35,7 @@ import {
 import {
   decorate,
   jobScript,
+  lineageOf as lineageOfModel,
   listItem,
   seedModels,
   setJobScript,
@@ -181,6 +191,97 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
     string,
     { apis: string[]; concepts: string[]; aliases: SetAlias[]; setId: string | null }
   >();
+  /** My models: the links of the mock server (the demo ones are seeded). */
+  const collections = new Map<string, MockCollection>([
+    [DEMO_COLLECTION, { id: DEMO_COLLECTION }],
+    [SET_COLLECTION, { id: SET_COLLECTION }],
+  ]);
+  let collectionCounter = 0;
+  /** A merged link points at the one that holds its things now. */
+  const resolveCollection = (id: string): string => {
+    let cur = id;
+    for (let i = 0; i < 10 && collections.get(cur)?.mergedInto; i += 1)
+      cur = collections.get(cur)?.mergedInto ?? cur;
+    return cur;
+  };
+  /**
+   * An anonymous save: the link sent when known, else a NEW one (with a note when one was sent but unknown). The server
+   * never answers a link the caller did not send, not even for a new version of someone else's model or set.
+   */
+  const collectionRefFor = (request: Request): CollectionRef => {
+    const asked = new URL(request.url).searchParams.get('collection');
+    const known = asked && collections.has(asked) ? resolveCollection(asked) : null;
+    if (known) return { id: known, url: collectionUrl(known), created: false };
+    collectionCounter += 1;
+    const id = `c-MockCollection${String(collectionCounter).padStart(8, '0')}`;
+    collections.set(id, { id });
+    return {
+      id,
+      url: collectionUrl(id),
+      created: true,
+      ...(asked
+        ? { note: 'The My models link you sent is not known here, so a new one was made.' }
+        : {}),
+    };
+  };
+  /** What a link holds: the latest non-discarded version of each lineage, newest first; a merged link holds nothing. */
+  const collectionJson = (id: string): Collection => {
+    const c = collections.get(id);
+    const empty = Boolean(c?.mergedInto);
+    const allM = allModels();
+    const ms = empty
+      ? []
+      : allM
+          .filter((m) => m.collection === id && m.visibility !== 'discarded')
+          .filter(
+            (m, _i, rows) =>
+              !rows.some((o) => o.lineageId === m.lineageId && o.createdAt > m.createdAt),
+          )
+          .sort((x, y) => y.createdAt.localeCompare(x.createdAt));
+    const allS = allSets();
+    const ss = empty
+      ? []
+      : allS
+          .filter((x) => x.collection === id && x.set.visibility !== 'discarded')
+          .filter(
+            (x, _i, rows) =>
+              !rows.some((o) => o.lineageId === x.lineageId && o.createdAt > x.createdAt),
+          )
+          .sort((x, y) => y.createdAt.localeCompare(x.createdAt));
+    // the version saved into this link is the listed one; a newer version of its lineage elsewhere is named
+    const newerModel = (m: StoredModel) => {
+      const latest = allM
+        .filter((o) => o.lineageId === m.lineageId && o.visibility !== 'discarded')
+        .sort((x, y) => y.createdAt.localeCompare(x.createdAt))[0];
+      return latest && latest.createdAt > m.createdAt
+        ? {
+            id: latest.model.id,
+            version: lineageOfModel(allM, latest).version,
+            url: `/models/${latest.model.id}`,
+          }
+        : null;
+    };
+    const newerSet = (x: StoredSet) => {
+      const latest = allS
+        .filter((o) => o.lineageId === x.lineageId && o.set.visibility !== 'discarded')
+        .sort((p, q) => q.createdAt.localeCompare(p.createdAt))[0];
+      return latest && latest.createdAt > x.createdAt
+        ? {
+            id: latest.set.id,
+            version: lineageOfSet(allS, latest).version,
+            url: `/model-sets/${latest.set.id}`,
+          }
+        : null;
+    };
+    return {
+      id,
+      url: collectionUrl(id),
+      mergedInto: c?.mergedInto ?? null,
+      count: ms.length + ss.length,
+      models: ms.map((m) => ({ ...listItem(allM, m), newerVersion: newerModel(m) })),
+      sets: ss.map((x) => ({ ...setListItem(allS, x), newerVersion: newerSet(x) })),
+    };
+  };
   let jobCounter = 0;
   let sessionCounter = 0;
   let counter = 0;
@@ -421,14 +522,14 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
           { status: 422 },
         );
       // Open to everyone: with the token the model is stored unreleased, without it unlisted (its link is its id).
-      // A new lineage returns an ownerKey once; a revision of a model that is not official stays in its lineage.
+      // An anonymous save joins a My models link (the one sent, else a new one); a revision of a model that is not official stays in its lineage.
       const maintainer = isMaintainer(request);
       const basedOn = new URL(request.url).searchParams.get('basedOn') ?? session.basedOn;
       const base = basedOn ? models.get(basedOn) : undefined;
       const sameLineage = base && base.visibility !== 'official' ? base : undefined;
       const n = models.size + 1;
       const id = maintainer ? `m-mock${n}` : `u-mock${String(n).padStart(28, '0')}`;
-      const ownerKey = maintainer || sameLineage ? undefined : `ok-mock${n}`;
+      const ref = maintainer ? null : collectionRefFor(request);
       const stored: StoredModel = {
         model: {
           ...productSnapshot,
@@ -445,7 +546,7 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
         origin: maintainer ? 'maintainer' : 'user',
         generator: 'claude',
         basedOn: base?.model.id ?? null,
-        ownerKey: ownerKey ?? sameLineage?.ownerKey,
+        collection: ref?.id,
         createdAt: new Date(Date.UTC(2026, 10, 15, 9, 0, models.size)).toISOString(),
       };
       models.set(id, stored);
@@ -455,7 +556,7 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
           created: true,
           model: decorate(allModels(), stored),
           visibility: stored.visibility,
-          ...(ownerKey ? { ownerKey } : {}),
+          collection: ref,
         },
         { status: 201 },
       );
@@ -489,15 +590,57 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
     http.post(`${base}/v1/models/mine`, async ({ request }) => {
       const { ownerKeys } = (await request.json()) as { ownerKeys?: string[] };
       const keys = Array.isArray(ownerKeys) ? ownerKeys : [];
+      // transition: the links the old keys became
+      const links = [...new Set(keys.flatMap((k) => (LEGACY_KEYS[k] ? [LEGACY_KEYS[k]] : [])))];
       const all = allModels();
       const mine = all
-        .filter((m) => m.ownerKey && keys.includes(m.ownerKey) && m.visibility !== 'discarded')
+        .filter((m) => m.collection && links.includes(m.collection) && m.visibility !== 'discarded')
         .filter(
           (m, _i, rows) =>
             !rows.some((o) => o.lineageId === m.lineageId && o.createdAt > m.createdAt),
         )
         .sort((x, y) => y.createdAt.localeCompare(x.createdAt));
-      return HttpResponse.json({ items: mine.map((m) => listItem(all, m)) });
+      return HttpResponse.json({
+        items: mine.map((m) => listItem(all, m)),
+        collections: links.map((id) => ({
+          id: resolveCollection(id),
+          url: collectionUrl(resolveCollection(id)),
+        })),
+      });
+    }),
+    http.get(`${base}/v1/collections/:id`, ({ params }) => {
+      const id = String(params.id);
+      if (!collections.has(id))
+        return HttpResponse.json(
+          { error: 'not_found', message: 'No such My models link' },
+          { status: 404 },
+        );
+      return HttpResponse.json(collectionJson(id));
+    }),
+    http.post(`${base}/v1/collections/:id/merge`, async ({ params, request }) => {
+      const id = String(params.id);
+      if (!collections.has(id))
+        return HttpResponse.json(
+          { error: 'not_found', message: 'No such My models link' },
+          { status: 404 },
+        );
+      const body = (await request.json().catch(() => ({}))) as { from?: unknown };
+      const from = (Array.isArray(body.from) ? body.from : []).filter(
+        (x): x is string => typeof x === 'string' && x !== id && collections.has(x),
+      );
+      const moving = from.reduce((n, f) => n + collectionJson(f).count, 0);
+      if (collectionJson(id).count + moving > 500)
+        return HttpResponse.json(
+          { error: 'invalid_request', message: 'A My models link holds at most 500 items.' },
+          { status: 400 },
+        );
+      for (const f of from) {
+        for (const m of allModels()) if (m.collection === f) m.collection = id;
+        for (const x of allSets()) if (x.collection === f) x.collection = id;
+        const c = collections.get(f);
+        if (c) c.mergedInto = id;
+      }
+      return HttpResponse.json(collectionJson(id));
     }),
     http.get(`${base}/v1/models/jobs/:id`, ({ params, request }) => {
       if (!isMaintainer(request)) return unauthorized();
@@ -802,13 +945,15 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
       const s = newSet(id, x.concepts, x.apis, maintainer ? 'unreleased' : 'unlisted', {
         aliases: x.aliases.map((a) => ({ concept: a.concept, names: a.names })),
       });
+      const ref = maintainer ? null : collectionRefFor(request);
+      if (ref) s.collection = ref.id;
       sets.set(id, s);
       x.setId = id;
       return HttpResponse.json(
         {
           created: true,
           visibility: s.set.visibility,
-          ownerKey: s.ownerKey ?? null,
+          collection: ref,
           set: setJson(allSets(), s),
         },
         { status: 201 },
@@ -875,9 +1020,12 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
     http.post(`${base}/v1/model-sets/mine`, async ({ request }) => {
       const { ownerKeys } = (await request.json()) as { ownerKeys?: string[] };
       const keys = Array.isArray(ownerKeys) ? ownerKeys : [];
+      const links = keys.flatMap((k) => (LEGACY_KEYS[k] ? [LEGACY_KEYS[k]] : []));
       const all = allSets();
       const mine = all
-        .filter((x) => x.ownerKey && keys.includes(x.ownerKey) && x.set.visibility !== 'discarded')
+        .filter(
+          (x) => x.collection && links.includes(x.collection) && x.set.visibility !== 'discarded',
+        )
         .filter(
           (x, _i, rows) =>
             !rows.some((o) => o.lineageId === x.lineageId && o.createdAt > x.createdAt),
@@ -1000,7 +1148,7 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
           : 'unreleased'
         : 'unlisted';
       const id = visibility === 'unlisted' ? `u-set${String(n).padStart(23, '0')}` : `set_v${n}`;
-      const ownerKey = fresh ? `pk_set_mock${n}` : null;
+      const ref = maintainer ? null : collectionRefFor(request);
       const stored: StoredSet = {
         set: {
           ...baseSet.set,
@@ -1015,12 +1163,12 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
           generatedAt: '2026-11-16T15:00:00Z',
         },
         lineageId: fresh ? `S-${id}` : baseSet.lineageId,
-        ownerKey: ownerKey ?? baseSet.ownerKey,
+        collection: ref?.id ?? baseSet.collection,
         createdAt: new Date(Date.UTC(2026, 10, 16, 15, 0, sets.size)).toISOString(),
       };
       sets.set(id, stored);
       return HttpResponse.json(
-        { created: true, visibility, ownerKey, set: setJson(allSets(), stored) },
+        { created: true, visibility, collection: ref, set: setJson(allSets(), stored) },
         { status: 201 },
       );
     }),

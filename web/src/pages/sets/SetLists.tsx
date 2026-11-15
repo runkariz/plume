@@ -7,9 +7,9 @@ import { useIsMaintainer } from '@/app/authStore';
 import { Card, Chip } from '@/components';
 import { formatDate } from '@/lib/format';
 import { apiLabel } from '@/lib/names';
-import { readOwnerKeys } from '@/lib/ownerKeys';
 
-function Rows({ items }: { items: SetListItem[] }) {
+/** The rows of a list of model sets (also used by the My models pages). */
+export function SetRows({ items }: { items: SetListItem[] }) {
   return (
     <ul>
       {items.map((s) => (
@@ -26,6 +26,11 @@ function Rows({ items }: { items: SetListItem[] }) {
             <span className="faint small">
               v{s.version} of {s.versions}
             </span>
+          ) : null}
+          {s.newerVersion ? (
+            <Link to={`/model-sets/${s.newerVersion.id}`} className="small newer-version">
+              A newer version exists (v{s.newerVersion.version})
+            </Link>
           ) : null}
           {s.official ? <Chip tone="ok">Official</Chip> : null}
           {s.visibility === 'unlisted' ? <Chip tone="info">Unlisted</Chip> : null}
@@ -54,7 +59,7 @@ function SetList({
     <Card className="pad model-list" role="region" aria-label={title}>
       <h2 className="h2-sm">{title}</h2>
       {intro ? <p className="muted small">{intro}</p> : null}
-      <Rows items={state.data.items} />
+      <SetRows items={state.data.items} />
     </Card>
   );
 }
@@ -78,23 +83,4 @@ export function UnreleasedSets() {
     [client, maintainer],
   );
   return <SetList title="Sets waiting for review" load={load} />;
-}
-
-/** The sets made in this browser (owner keys); POST so the keys never reach a URL. */
-export function MySets() {
-  const client = useApiClient();
-  const load = useCallback(
-    async (signal: AbortSignal) => {
-      const keys = readOwnerKeys();
-      return keys.length ? client.listMyModelSets(keys, signal) : { items: [] };
-    },
-    [client],
-  );
-  return (
-    <SetList
-      title="Your model sets"
-      intro="Listed by the owner keys this browser holds: made here, or added by key. Only people with a set's link can open it."
-      load={load}
-    />
-  );
 }

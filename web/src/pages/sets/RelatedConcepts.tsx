@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
+import { collectionArrival } from '@/lib/collection';
 import { useAsync } from '@/api/useAsync';
 import {
   ApiError,
@@ -11,6 +12,7 @@ import {
   type SetAlias,
   type SetSessionRequest,
   type SetSessionResponse,
+  type CollectionRef,
 } from '@/api/types';
 import { useIsMaintainer, useServerGeneration } from '@/app/authStore';
 import {
@@ -261,11 +263,8 @@ export function RelatedConcepts() {
   const full = members.length >= MAX_MEMBERS;
 
   const open = useCallback(
-    (setId: string, extra?: { ownerKey?: string }) =>
-      navigate(
-        `/model-sets/${setId}`,
-        extra?.ownerKey ? { state: { ownerKey: extra.ownerKey } } : undefined,
-      ),
+    (setId: string, extra?: { collection?: CollectionRef | null }) =>
+      navigate(`/model-sets/${setId}`, collectionArrival(extra?.collection)),
     [navigate],
   );
 

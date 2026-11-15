@@ -1,12 +1,12 @@
-import type { DraftIssue, ModelSet, ModelSnapshot } from '@/api/types';
+import type { CollectionRef, DraftIssue, ModelSet, ModelSnapshot } from '@/api/types';
 import { apiLabel } from '@/lib/names';
 import { withPaths } from '@/pages/models/fields';
 import type { CallToolResult } from './protocol';
 
 /** What a tool result means for the view. */
 export type Shown =
-  | { kind: 'model'; model: ModelSnapshot; link: string | null; ownerKey: string | null }
-  | { kind: 'set'; set: ModelSet; link: string | null; ownerKey: string | null }
+  | { kind: 'model'; model: ModelSnapshot; link: string | null; collection: CollectionRef | null }
+  | { kind: 'set'; set: ModelSet; link: string | null; collection: CollectionRef | null }
   | { kind: 'refused'; issues: DraftIssue[] }
   | { kind: 'pending'; status: string }
   | { kind: 'error'; message: string }
@@ -31,10 +31,26 @@ function looksLikeModel(v: unknown): v is ModelSnapshot {
  * sends {accepted, snapshot_id, share_url, model}, get_generation sends the job and the model once it succeeded.
  * So the view reads `structuredContent.model ?? structuredContent`. A refused draft carries its issues instead.
  */
-/** The owner key of a new lineage made without a token: the server sends it only here, never in the text. */
-function ownerKeyOf(sc: Record<string, unknown>): string | null {
-  const k = sc.owner_key ?? sc.ownerKey;
-  return typeof k === 'string' && k.trim() !== '' ? k : null;
+/**
+ * The My models link of a save without a token: `structuredContent.collection` {id, url, created, note?} (the tool
+ * text only points to the view). Anything that is not that shape is no link: a view must never show a half-link.
+ */
+function collectionOf(sc: Record<string, unknown>): CollectionRef | null {
+  const c = sc.collection;
+  if (
+    !isObject(c) ||
+    typeof c.id !== 'string' ||
+    c.id === '' ||
+    typeof c.url !== 'string' ||
+    c.url === ''
+  )
+    return null;
+  return {
+    id: c.id,
+    url: c.url,
+    created: c.created === true,
+    note: typeof c.note === 'string' && c.note.trim() !== '' ? c.note : null,
+  };
 }
 
 export function extractModel(result: CallToolResult): Shown {
@@ -51,7 +67,7 @@ export function extractModel(result: CallToolResult): Shown {
       (typeof sc.share_url === 'string' && sc.share_url) ||
       (typeof asSet.shareUrl === 'string' && asSet.shareUrl) ||
       null;
-    return { kind: 'set', set: normaliseSet(asSet), link: setLink, ownerKey: ownerKeyOf(sc) };
+    return { kind: 'set', set: normaliseSet(asSet), link: setLink, collection: collectionOf(sc) };
   }
   const candidate = looksLikeModel(sc.model) ? sc.model : sc;
   if (!looksLikeModel(candidate)) {
@@ -63,7 +79,7 @@ export function extractModel(result: CallToolResult): Shown {
     (typeof sc.share_url === 'string' && sc.share_url) ||
     (typeof candidate.shareUrl === 'string' && candidate.shareUrl) ||
     null;
-  return { kind: 'model', model: normalise(candidate), link, ownerKey: ownerKeyOf(sc) };
+  return { kind: 'model', model: normalise(candidate), link, collection: collectionOf(sc) };
 }
 
 const NEUTRAL = '#6a655e';

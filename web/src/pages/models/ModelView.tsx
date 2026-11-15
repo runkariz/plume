@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
-import { ApiError, type ModelSnapshot } from '@/api/types';
+import { ApiError, type CollectionRef, type ModelSnapshot } from '@/api/types';
 import {
   ApiAvatar,
   Banner,
@@ -35,7 +35,7 @@ import {
   SupersededBanner,
   SupersedesLine,
   LineageLine,
-  OwnerKeyNotice,
+  CollectionNotice,
   ReviewBanner,
   ReviseCard,
   ShareCard,
@@ -72,15 +72,16 @@ export function ModelView() {
   );
   const { state, retry } = useAsync(load);
   const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
-  // right after someone without a token created this model: the owner key, shown once (then dropped from history)
+  // right after someone without a token started their My models collection with this model: its link, shown once
+  // (then dropped from the history)
   const location = useLocation();
   const navigate = useNavigate();
-  const [ownerKey] = useState<string | null>(
-    () => (location.state as { ownerKey?: string } | null)?.ownerKey ?? null,
+  const [arrival] = useState<CollectionRef | null>(
+    () => (location.state as { collection?: CollectionRef } | null)?.collection ?? null,
   );
-  const [ownerKeyOpen, setOwnerKeyOpen] = useState(ownerKey !== null);
+  const [noticeOpen, setNoticeOpen] = useState(arrival !== null);
   useEffect(() => {
-    if (ownerKey) navigate(location.pathname + location.search, { replace: true, state: null });
+    if (arrival) navigate(location.pathname + location.search, { replace: true, state: null });
     // once, on arrival
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -191,9 +192,9 @@ export function ModelView() {
           </span>
         </div>
       </div>
-      {ownerKey && ownerKeyOpen ? (
+      {arrival && noticeOpen ? (
         <div className="access-banner">
-          <OwnerKeyNotice ownerKey={ownerKey} onClose={() => setOwnerKeyOpen(false)} />
+          <CollectionNotice collection={arrival} onClose={() => setNoticeOpen(false)} />
         </div>
       ) : null}
       <div className="access-banner">

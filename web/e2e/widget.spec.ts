@@ -106,17 +106,17 @@ for (const theme of THEMES) {
       }
     });
 
-    test('a new lineage: the owner key is shown once, with Copy, in the sandboxed frame; nothing is stored or requested', async ({
+    test('a save without a token: "Your models" link with Copy, in the sandboxed frame; nothing is stored or requested', async ({
       page,
     }) => {
-      const KEY = 'ok-e2e-owner-key-0123456789abcdef';
+      const URL_ = 'https://plume.example/mine/c-E2eCollection0123456789';
       const { frame, problems } = await open(
         page,
         theme,
         asResult({
           accepted: true,
           created: true,
-          owner_key: KEY,
+          collection: { id: 'c-E2eCollection0123456789', url: URL_, created: true },
           share_url: 'https://plume.example/models/u-1',
           model: small,
         }),
@@ -126,13 +126,18 @@ for (const theme of THEMES) {
         .getByRole('status')
         .filter({ hasText: 'Your model is saved, and unlisted' });
       await expect(notice).toBeVisible();
-      await expect(notice).toContainText('Keep this key to find or list your models later');
-      await expect(frame.getByLabel('Owner key')).toHaveValue(KEY);
+      await expect(notice).toContainText('Your models:');
+      await expect(frame.getByLabel('Link to My models')).toHaveValue(URL_);
       // the sandbox may or may not allow the clipboard: either way the person is told what happened
-      await frame.getByRole('button', { name: 'Copy key' }).click();
+      await frame.getByRole('button', { name: 'Copy link' }).click();
       await expect(notice.getByRole('status')).toHaveText(
-        /Key copied|Copy failed: the key is selected/,
+        /Link copied|Copy failed: the link is selected/,
       );
+      // opening it goes through the host
+      await frame.getByRole('button', { name: 'Open My models' }).click();
+      await expect
+        .poll(() => page.evaluate(() => (window as unknown as { __opened: string[] }).__opened))
+        .toContain(URL_);
       const { violations } = await new AxeBuilder({ page }).analyze();
       expect(
         violations
@@ -142,12 +147,12 @@ for (const theme of THEMES) {
       if (SHOTS) {
         mkdirSync(SHOTS, { recursive: true });
         await page.screenshot({
-          path: join(SHOTS, `w18-widget-owner-key-${theme}.png`),
+          path: join(SHOTS, `w21-widget-my-models-${theme}.png`),
           fullPage: true,
         });
       }
       await frame.getByRole('button', { name: 'Dismiss' }).click();
-      await expect(frame.getByLabel('Owner key')).toHaveCount(0);
+      await expect(frame.getByLabel('Link to My models')).toHaveCount(0);
       expect(problems).toEqual([]);
     });
 

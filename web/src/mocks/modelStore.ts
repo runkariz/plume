@@ -10,6 +10,7 @@ import type {
 } from '@/api/types';
 import { inventorySnapshot, nestedSnapshot, order40Snapshot, productSnapshot } from './modelData';
 import { iconApis } from './sectionData';
+import { DEMO_COLLECTION } from './collectionStore';
 
 /** What the mock server keeps for a model: the snapshot plus the access fields plume-6f's API adds. */
 export interface StoredModel {
@@ -21,7 +22,8 @@ export interface StoredModel {
   origin: 'user' | 'maintainer';
   generator: string;
   basedOn: string | null;
-  ownerKey?: string;
+  /** The My models link this lineage was saved under (an anonymous save). */
+  collection?: string;
   createdAt: string;
   /** Set when a newer model replaced this one on release. */
   supersededBy?: string;
@@ -55,7 +57,7 @@ export const UNRELEASED = 'm-unrel0a1b2c3d4e5f60718293a4b5c6d7e8f';
 export const UNRELEASED_ORDER = 'm-unrelorder0a1b2c3d4e5f60718293a4b5c';
 /** An official Order over Shopify + WooCommerce, built on older docs (stale). */
 export const OFFICIAL_ORDER_SW = 'm-ordersw0a1b2c3d4e5f60718293a4b5c6d7';
-/** The owner key of the unlisted lineage above (tests put it in localStorage to see "Your models"). */
+/** The old owner key of the unlisted lineage above: only the transition (POST /v1/models/mine) still takes it. */
 export const DEMO_OWNER_KEY = 'ok-demo-3f9a0c71d2e84b5f';
 
 const seed = (
@@ -79,7 +81,7 @@ function unlisted(id: string, name: string, at: string, basedOn: string | null):
     lineageId: 'L-demo',
     origin: 'user',
     basedOn,
-    ownerKey: DEMO_OWNER_KEY,
+    collection: DEMO_COLLECTION,
   });
 }
 

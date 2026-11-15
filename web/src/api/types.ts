@@ -564,6 +564,16 @@ export type ModelJobEvent =
       setId?: string | null;
     };
 
+/**
+ * In a My models list: a link lists the version saved INTO it. When the lineage has a newer version elsewhere (someone
+ * with the model's link saved one) this says which; `url` is the server's own address for it (the web links by id).
+ */
+export interface NewerVersion {
+  id: string;
+  version: number;
+  url?: string;
+}
+
 export interface ModelListItem {
   id: string;
   name: string;
@@ -577,6 +587,8 @@ export interface ModelListItem {
   versions?: number;
   stale?: boolean;
   staleInputs?: StaleInput[];
+  /** Only in a My models list: a newer version of this lineage exists elsewhere (null/absent: this is the latest). */
+  newerVersion?: NewerVersion | null;
 }
 
 /** GET /v1/models/sessions/{id}/context: a compact index of the evidence (field lists are paged separately). */
@@ -878,6 +890,8 @@ export interface SetListItem {
   version?: number;
   versions?: number;
   stale?: boolean;
+  /** Only in a My models list: a newer version of this lineage exists elsewhere (null/absent: this is the latest). */
+  newerVersion?: NewerVersion | null;
 }
 
 /** The design fields of a relation the editor may change (anything else is refused with 400). */
@@ -890,6 +904,29 @@ export interface RelationEdit {
   from?: string;
   to?: string;
   confirmed?: boolean;
+}
+
+// ---- "My models": a link per person (collections replace owner keys) ----
+
+/** What a save without a maintainer token answers instead of an owner key: the link of the person's collection. */
+export interface CollectionRef {
+  id: string;
+  /** "<web address>/mine/<id>", or just "/mine/<id>" when the server does not know the web's address. */
+  url: string;
+  /** True when the save started a new collection (none was sent, or the one sent is unknown: see `note`). */
+  created: boolean;
+  note?: string | null;
+}
+
+/** GET /v1/collections/{id}: the latest non-discarded version of each model and set in it, newest first. */
+export interface Collection {
+  id: string;
+  url: string;
+  /** Set when this link was merged into another: it then lists nothing. */
+  mergedInto: string | null;
+  count: number;
+  models: ModelListItem[];
+  sets: SetListItem[];
 }
 
 // ---- related concepts (POST /v1/models/suggest-related) and creating a set ----

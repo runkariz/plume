@@ -56,7 +56,7 @@ async function quote(request: APIRequestContext, api: string, field: string): Pr
 async function createSet(
   request: APIRequestContext,
   opts: { token: boolean; confirmed: boolean; name: string },
-): Promise<{ set: SetJson; ownerKey: string | null }> {
+): Promise<{ set: SetJson; collection: { id: string; url: string; created: boolean } | null }> {
   const headers = opts.token ? auth : {};
   const start = (await (
     await request.post(`${API}/v1/model-sets/sessions`, {
@@ -139,8 +139,11 @@ async function createSet(
     data: { name: opts.name, members: ids, relations: [relation] },
   });
   expect(res.status(), await res.text()).toBe(201);
-  const body = (await res.json()) as { set: SetJson; ownerKey?: string | null };
-  return { set: body.set, ownerKey: body.ownerKey ?? null };
+  const body = (await res.json()) as {
+    set: SetJson;
+    collection?: { id: string; url: string; created: boolean } | null;
+  };
+  return { set: body.set, collection: body.collection ?? null };
 }
 
 async function signIn(page: Page) {
@@ -286,13 +289,13 @@ test('anonymous: a set made without the token is unlisted, and confirming its re
   page,
   request,
 }) => {
-  const { set, ownerKey } = await createSet(request, {
+  const { set, collection } = await createSet(request, {
     token: false,
     confirmed: false,
     name: `Mine ${RUN}`,
   });
   expect(set.visibility).toBe('unlisted');
-  expect(ownerKey).toBeTruthy();
+  expect(collection?.id).toMatch(/^c-/); // an anonymous save answers the My models link, not a key
   await page.goto(`/model-sets/${set.id}?sel=r:order-items`);
   await expect(page.getByRole('heading', { level: 1, name: `Mine ${RUN}` })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Share this model set' })).toBeVisible();
@@ -303,8 +306,10 @@ test('anonymous: a set made without the token is unlisted, and confirming its re
   await expect(bar).toContainText('a new version of this unlisted set');
   await bar.getByRole('button', { name: 'Save as a new version' }).click();
   await expect(page.getByText('Saved as a new version')).toBeVisible();
-  // the same lineage: no new owner key is shown
-  await expect(page.getByText('Your model set is saved, and unlisted')).toHaveCount(0);
+  // this browser holds no My models link (the set was made over HTTP by someone else): it must never keep the author's
+  // link, even if the server answers it for a new version (it must be a link this browser made or sent)
+  const kept = await page.evaluate(() => localStorage.getItem('plume-collection'));
+  expect(kept === null || kept !== collection?.id).toBe(true);
   await expect(page.getByText(/v2 of 2/).first()).toBeVisible();
   // anyone with the link sees it; it is in no public list
   const id2 = page.url().split('/model-sets/')[1]?.split('?')[0] ?? '';

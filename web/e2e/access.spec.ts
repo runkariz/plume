@@ -4,7 +4,8 @@ import { expectNoSeriousA11y, settle, shot, test, THEMES } from './helpers';
 /** Who sees which model: official list, unlisted share page with lineage, unreleased review, server generation. */
 const TOKEN = 'pl_e2e_token_value';
 const UNLISTED_V3 = 'u-3f9a0c71d2e84b5f9a6c1d7e8b2a4c60';
-const DEMO_KEY = 'ok-demo-3f9a0c71d2e84b5f';
+/** The mock server's link of the unlisted demo lineage (src/mocks/collectionStore.ts). */
+const DEMO_COLLECTION = 'c-DemoCollection3f9a0c71d2e8';
 
 async function signInThenModels(page: Page) {
   await page.goto('/maintainer');
@@ -27,10 +28,12 @@ for (const theme of THEMES) {
   test.describe(`model access (${theme})`, () => {
     test.use({ theme });
 
-    test('the Models list: Official only; "Your models" from this browser', async ({ page }) => {
+    test('the Models list: Official only; "Your models" from this browser\'s My models link', async ({
+      page,
+    }) => {
       await page.addInitScript(
-        (k) => localStorage.setItem('plume-owner-keys', JSON.stringify([k])),
-        DEMO_KEY,
+        (id) => localStorage.setItem('plume-collection', id),
+        DEMO_COLLECTION,
       );
       await page.goto('/models');
       const official = page.getByRole('region', { name: 'Official models' });
@@ -91,7 +94,7 @@ for (const theme of THEMES) {
       await shot(page, 'w12-generate-503', theme);
     });
 
-    test('signed out: Claude session, a pasted draft is stored unlisted with its owner key', async ({
+    test('signed out: Claude session, a pasted draft is stored unlisted and starts a My models link', async ({
       page,
     }) => {
       await page.goto('/models');
@@ -105,6 +108,9 @@ for (const theme of THEMES) {
       await panel.getByRole('button', { name: 'Submit draft' }).click();
       await expect(page.getByRole('heading', { level: 1, name: 'Shipment' })).toBeVisible();
       await expect(page.getByText('Your model is saved, and unlisted')).toBeVisible();
+      await expect(page.getByLabel('Link to My models')).toHaveValue(
+        /\/mine\/c-MockCollection\d+$/,
+      );
       await expect(page.getByRole('region', { name: 'Share this model' })).toBeVisible();
       await settle(page);
       await expectNoSeriousA11y(page);

@@ -106,11 +106,18 @@ Where to change what:
   `sessionStorage` (`src/app/authStore.ts`): a refresh keeps the session, closing the tab, Sign out or a 401 from
   the API ends it. Never put it in the URL, `localStorage` or a log. Blocked storage falls back to memory. See
   docs/security.md (Web UI session) for the trade-off and the cookie follow-up. The one other thing kept in
-  `localStorage` is the list of **owner keys** (`plume-owner-keys`, `src/lib/ownerKeys.ts`): the server hands one
-  out once when someone without a token creates a model, and it only lists "Your models" (it cannot change or
-  release anything; a model's link works without it).
-  A key from another browser, or from the Claude view, is pasted under "Have an owner key?" on the Models page
-  (`OwnerKeyPaste`): it is checked against the server (POST) first, so a mistyped key is not kept.
+  `localStorage` is the id of the person's **My models link** (`plume-collection`, `src/lib/collection.ts`): no
+  accounts, the link is the identity. A save without a token (paste, Create with Claude, an anonymous edit) sends it
+  as `?collection=`, and the server answers `collection: {id, url, created, note?}` (a new link on the first save, or when the one
+  sent is unknown: then the note says so); the id is kept, and the link is shown once on arrival (`CollectionNotice`).
+  It is a list, not a key: it only shows which models and sets are under it. `/models` "Your models" is that link's
+  content (models and sets) with the link to copy; "Open another My models link" takes a link or its id and checks
+  it first; `/mine/<id>` (`src/pages/mine/`) is the page of any link, with "Use this link in this browser" and "Merge
+  my other link into this one" (`POST /v1/collections/{id}/merge`), and points to where a merged link's models went.
+  A link lists the version saved INTO it: when someone with the model's link saved a newer one (it goes to their own
+  link), the item says "A newer version exists (vN)" and links to it (`newerVersion`).
+  Old owner keys (`plume-owner-keys`, `src/lib/ownerKeys.ts`) are read once, on /models: `POST /v1/models/mine`
+  answers `collections`, the first link is kept (the others are merged into it) and the keys are forgotten.
 - **No third-party requests.** Fonts are self-hosted (`@fontsource-variable/*`); an API's icon is loaded only
   from a relative `/v1/...` path on the API (`src/lib/icon.ts`), never from an external URL, with the letter logo
   as the fallback. Do not add analytics or CDNs.
@@ -185,10 +192,11 @@ the same `SetWorkbench` as the web page (diagram, control box, detail), read onl
 Plume" is the way on), plus the models and relations as text and the open questions. `SetDetail` takes its links as
 render props, so the bundle contains no router.
 
-A new lineage made without a token (submit_model_draft / submit_model_set) carries its **owner key** only in
-`structuredContent.owner_key` (the tool text just points to the view): the widget shows it once (`OwnerKeyNotice`:
-the key, Copy with a fallback for a sandbox that refuses the clipboard, Dismiss), in memory only, and says to paste
-it in "Your models". A retry of the same draft returns a new key and shows it again.
+A save without a token (submit_model_draft / submit_model_set) carries the person's **My models link** in
+`structuredContent.collection` (`{id, url, created, note?}`; the tool text says "Your models: <url>"): the widget
+shows it (`CollectionNotice`: "Your models: <link>", Copy with a fallback for a sandbox that refuses the clipboard,
+"Open My models" through the host when the link is absolute, the server's note, Dismiss), as text only: no storage,
+no request. A maintainer save has `collection: null` and shows nothing.
 
 Rules it must keep (the host's default CSP is `default-src 'none'`, scripts and styles inline, images `data:`,
 `connect-src 'none'`, and the frame has no storage):

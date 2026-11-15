@@ -6,10 +6,11 @@ import {
   type Concept,
   type DraftIssue,
   type GenerateResponse,
+  type CollectionRef,
 } from '@/api/types';
 import { useIsMaintainer } from '@/app/authStore';
 import { Button, Card, Chip } from '@/components';
-import { saveOwnerKey } from '@/lib/ownerKeys';
+import { readCollectionId, rememberCollection } from '@/lib/collection';
 import { shortBuild } from '@/lib/format';
 import { EvidencePack } from './EvidencePack';
 
@@ -52,7 +53,7 @@ export function GenerateSession({
   concept: Concept;
   apis: ApiRef[];
   session: GenerateResponse;
-  onOpen: (snapshotId: string, extra?: { ownerKey?: string }) => void;
+  onOpen: (snapshotId: string, extra?: { collection?: CollectionRef | null }) => void;
   onCancel: () => void;
 }) {
   const client = useApiClient();
@@ -71,7 +72,7 @@ export function GenerateSession({
   }, []);
 
   // Poll the session: a draft accepted for it (by Claude or pasted elsewhere) names the model to open.
-  // While a pasted draft is being submitted the poll must not open the model: the submit knows the owner key, the
+  // While a pasted draft is being submitted the poll must not open the model: the submit knows the My models link, the
   // poll does not, and whichever navigates last wins (the key and the "saved" notice would be lost).
   const submitting = useRef(false);
   const sessionId = session.sessionId;
@@ -136,10 +137,16 @@ export function GenerateSession({
     setBusy(true);
     submitting.current = true;
     try {
-      const { model, ownerKey } = await client.submitModelDraft(session.sessionId, parsed);
-      // a new lineage of someone without a token: the key lists "Your models" in this browser
-      if (ownerKey) saveOwnerKey(ownerKey);
-      onOpen(model.id, ownerKey ? { ownerKey } : undefined);
+      // someone without a token: the model joins the My models collection this browser holds, or starts one
+      const sent = readCollectionId();
+      const { model, collection } = await client.submitModelDraft(
+        session.sessionId,
+        parsed,
+        undefined,
+        { collection: sent },
+      );
+      rememberCollection(collection, sent);
+      onOpen(model.id, collection ? { collection } : undefined);
     } catch (err) {
       submitting.current = false;
       if (err instanceof ApiError && err.issues?.length) setIssues(err.issues);

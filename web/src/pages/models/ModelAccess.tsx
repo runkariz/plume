@@ -1,11 +1,18 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
-import { ApiError, type ModelSnapshot, type ModelVisibility, type Supersedable } from '@/api/types';
+import {
+  ApiError,
+  type CollectionRef,
+  type ModelSnapshot,
+  type ModelVisibility,
+  type Supersedable,
+} from '@/api/types';
 import { useIsMaintainer } from '@/app/authStore';
 import { Banner, Button, Card, Chip } from '@/components';
 import { formatDate } from '@/lib/format';
-import { shareLink } from '@/lib/ownerKeys';
+import { collectionLink } from '@/lib/collection';
+import { shareLink } from '@/lib/shareLink';
 import { ReleaseChoice } from './ReleaseChoice';
 import { groupWarnings, WARNINGS_ID } from './warnings';
 
@@ -262,32 +269,53 @@ export function ReviseCard({
   );
 }
 
-/** Shown right after someone without a token created a model: the owner key lists "Your models" in this browser. */
-export function OwnerKeyNotice({
-  ownerKey,
+/**
+ * Shown right after someone without a token saved something that started a My models collection: the link to the
+ * person's models, to bookmark. It lists them from any browser; it is a list, not a key (it changes nothing).
+ */
+export function CollectionNotice({
+  collection,
   onClose,
   what = 'model',
 }: {
-  ownerKey: string;
+  collection: CollectionRef;
   onClose: () => void;
   what?: string;
 }) {
   const { state, copy } = useCopy();
+  const link = collectionLink(collection.id);
   return (
     <Banner tone="accent" title={`Your ${what} is saved, and unlisted`}>
       <p>
-        Only people with this page's link can open it. This browser remembers the {what} under{' '}
-        <b>Your {what}s</b> on the Models page. To see it from another browser, keep this key:
+        Only people with this page's link can open it. Your models are listed at one link,{' '}
+        <b>My models</b>: bookmark it to find them later, from any browser.
       </p>
+      {collection.note ? <p className="small">{collection.note}</p> : null}
       <div className="share-row">
-        <code className="mono owner-key">{ownerKey}</code>
-        <Button onClick={() => void copy(ownerKey)}>Copy key</Button>
+        <label htmlFor="my-models-link" className="sr-only">
+          Link to My models
+        </label>
+        <input
+          id="my-models-link"
+          className="input mono"
+          readOnly
+          value={link}
+          onFocus={(e) => e.currentTarget.select()}
+        />
+        <Button onClick={() => void copy(link)}>Copy link</Button>
+        <Link className="btn" to={`/mine/${collection.id}`}>
+          Open My models
+        </Link>
         <Button variant="ghost" onClick={onClose}>
           Dismiss
         </Button>
       </div>
       <span role="status" className="faint small">
-        {state === 'ok' ? 'Key copied' : ''}
+        {state === 'ok'
+          ? 'Link copied'
+          : state === 'fail'
+            ? 'Copy failed: select the link instead'
+            : ''}
       </span>
     </Banner>
   );

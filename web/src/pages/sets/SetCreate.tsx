@@ -5,10 +5,11 @@ import {
   type DraftIssue,
   type ModelJobEvent,
   type SetSessionResponse,
+  type CollectionRef,
 } from '@/api/types';
 import { useIsMaintainer } from '@/app/authStore';
 import { Banner, Button, Card, Chip } from '@/components';
-import { saveOwnerKey } from '@/lib/ownerKeys';
+import { readCollectionId, rememberCollection } from '@/lib/collection';
 import { Issues } from '@/pages/models/GenerateSession';
 import { BeatLine, JobClock, type Beat } from '@/pages/models/JobClock';
 
@@ -29,7 +30,7 @@ export function SetSessionPanel({
 }: {
   session: SetSessionResponse;
   concepts: string[];
-  onOpen: (setId: string, extra?: { ownerKey?: string }) => void;
+  onOpen: (setId: string, extra?: { collection?: CollectionRef | null }) => void;
   onCancel: () => void;
 }) {
   const client = useApiClient();
@@ -38,9 +39,12 @@ export function SetSessionPanel({
   const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
   useEffect(() => focus.current?.focus(), []);
 
-  // While a pasted draft is being submitted the poll must not open the set: the submit knows the owner key, the
+  // While a pasted draft is being submitted the poll must not open the set: the submit knows the My models link, the
   // poll does not, and whichever navigates last wins.
   const submitting = useRef(false);
+  // A member pasted first can start the person's My models link while they stay on this page: it is shown when the
+  // set opens (the set itself then joins that link and starts nothing new).
+  const startedLink = useRef<CollectionRef | null>(null);
   const id = session.setSessionId;
   useEffect(() => {
     const ctrl = new AbortController();
@@ -81,15 +85,26 @@ export function SetSessionPanel({
     submitting.current = true;
     try {
       if (kind === 'set') {
-        const { set, ownerKey } = await client.submitSetDraft(id, parsed);
-        // a new lineage of someone without a token: the key lists "Your model sets" in this browser
-        if (ownerKey) saveOwnerKey(ownerKey);
-        onOpen(set.id, ownerKey ? { ownerKey } : undefined);
+        const sent = readCollectionId();
+        const { set, collection } = await client.submitSetDraft(id, parsed, undefined, {
+          collection: sent,
+        });
+        rememberCollection(collection, sent);
+        const shown = collection?.created ? collection : (startedLink.current ?? collection);
+        onOpen(set.id, shown ? { collection: shown } : undefined);
       } else {
         const memberSession = session.memberSessions[kind];
         if (!memberSession) throw new Error(`There is no session for ${kind}.`);
-        const { model, ownerKey } = await client.submitModelDraft(memberSession, parsed);
-        if (ownerKey) saveOwnerKey(ownerKey);
+        // each member joins the collection the first one started (remembered here), so the set and its models are one list
+        const sent = readCollectionId();
+        const { model, collection } = await client.submitModelDraft(
+          memberSession,
+          parsed,
+          undefined,
+          { collection: sent },
+        );
+        rememberCollection(collection, sent);
+        if (collection?.created) startedLink.current = collection;
         setStored((s) => ({ ...s, [kind]: model.id }));
         setDraft('');
         setKind('set');

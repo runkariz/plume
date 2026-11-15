@@ -10,6 +10,8 @@ import {
   type GenerateRequest,
   type GenerateJobResponse,
   type GenerateResponse,
+  type Collection,
+  type CollectionRef,
   type ModelJob,
   type RelatedConcepts,
   type SetSessionRequest,
@@ -97,8 +99,18 @@ export interface PlumeApi {
     signal?: AbortSignal,
     opts?: { visibility?: ModelVisibility | 'all' },
   ): Promise<{ items: ModelListItem[] }>;
-  /** The models of the owner keys this browser holds (POST so the keys stay out of URLs and logs). */
-  listMyModels(ownerKeys: string[], signal?: AbortSignal): Promise<{ items: ModelListItem[] }>;
+  /**
+   * Transition only: the models of old owner keys (POST so the keys stay out of URLs and logs), and the My models
+   * links those keys became (`collections`), so the browser can switch to the link once.
+   */
+  listMyModels(
+    ownerKeys: string[],
+    signal?: AbortSignal,
+  ): Promise<{ items: ModelListItem[]; collections?: { id: string; url: string }[] }>;
+  /** A My models link: what is in it (404: no such link). */
+  getCollection(id: string, signal?: AbortSignal): Promise<Collection>;
+  /** Moves everything of the `from` links into `id` (400 over 500 items); the old links then say `mergedInto`. */
+  mergeCollection(id: string, from: string[], signal?: AbortSignal): Promise<Collection>;
   /** Public poll of a session: has a draft been accepted for it yet? */
   getModelSession(sessionId: string, signal?: AbortSignal): Promise<ModelSessionStatus>;
   /** Maintainer token. 409 invalid_state unless the model is unreleased. */
@@ -129,18 +141,20 @@ export interface PlumeApi {
     signal?: AbortSignal,
   ): Promise<EvidencePage>;
   /**
-   * Open to everyone: without the token the model is stored unlisted (a new lineage returns an `ownerKey`, shown
-   * once), with it unreleased. A refused draft rejects with an ApiError carrying `issues`.
+   * Open to everyone: without the token the model is stored unlisted and joins a My models collection (`collection`:
+   * the one sent, else a new one, answered as `collection`), with it unreleased (`collection: null`). A refused draft
+   * rejects with an ApiError carrying `issues`.
    */
   submitModelDraft(
     sessionId: string,
     draft: unknown,
     signal?: AbortSignal,
+    opts?: SaveOpts,
   ): Promise<{
     created: boolean;
     model: ModelSnapshot;
     visibility?: ModelVisibility;
-    ownerKey?: string;
+    collection?: CollectionRef | null;
   }>;
   getSnapshot(id: string, signal?: AbortSignal): Promise<ModelSnapshot>;
   // model sets
@@ -150,7 +164,6 @@ export interface PlumeApi {
     opts?: { visibility?: ModelVisibility | 'all' },
     signal?: AbortSignal,
   ): Promise<{ items: SetListItem[] }>;
-  listMyModelSets(ownerKeys: string[], signal?: AbortSignal): Promise<{ items: SetListItem[] }>;
   /** Maintainer token. 409 while relations are undecided or the set is not unreleased. */
   releaseModelSet(
     id: string,
@@ -165,17 +178,18 @@ export interface PlumeApi {
   /** For Claude: one model session per member (anyone; the set is stored unlisted without the token). */
   startSetSession(req: SetSessionRequest, signal?: AbortSignal): Promise<SetSessionResponse>;
   /**
-   * Open to everyone, like a model draft: unlisted without the token (a new lineage returns an `ownerKey`, shown
-   * once), unreleased with it. A refused draft rejects with an ApiError carrying `issues`.
+   * Open to everyone, like a model draft: unlisted without the token (and in a My models collection), unreleased with
+   * it. A refused draft rejects with an ApiError carrying `issues`.
    */
   submitSetDraft(
     sessionId: string,
     draft: unknown,
     signal?: AbortSignal,
+    opts?: SaveOpts,
   ): Promise<{
     created: boolean;
     visibility?: ModelVisibility;
-    ownerKey: string | null;
+    collection?: CollectionRef | null;
     set: ModelSet;
   }>;
   /** Public poll: has the set been stored for this session yet? */
@@ -190,10 +204,11 @@ export interface PlumeApi {
     id: string,
     relations: RelationEdit[],
     signal?: AbortSignal,
+    opts?: SaveOpts,
   ): Promise<{
     created: boolean;
     visibility?: ModelVisibility;
-    ownerKey: string | null;
+    collection?: CollectionRef | null;
     set: ModelSet;
   }>;
   // maintainer (the key is sent as a bearer token)
@@ -232,6 +247,14 @@ export function errorMessage(body: unknown): string | undefined {
   }
   return undefined;
 }
+
+/** Saving without a maintainer token joins a My models collection: the one this browser holds, if any. */
+export interface SaveOpts {
+  collection?: string | null;
+}
+
+const collectionQuery = (opts?: SaveOpts) =>
+  opts?.collection ? `?collection=${encodeURIComponent(opts.collection)}` : '';
 
 /** Typed fetch client. The maintainer key, when present, is passed in by the caller (never stored here). */
 export function createApiClient(
@@ -441,9 +464,19 @@ export function createApiClient(
       return call<{ items: ModelListItem[] }>(`/v1/models${qs ? `?${qs}` : ''}`, { signal });
     },
     listMyModels: (ownerKeys, signal) =>
-      call<{ items: ModelListItem[] }>('/v1/models/mine', {
+      call<{ items: ModelListItem[]; collections?: { id: string; url: string }[] }>(
+        '/v1/models/mine',
+        {
+          method: 'POST',
+          body: { ownerKeys },
+          signal,
+        },
+      ),
+    getCollection: (id, signal) => call<Collection>(`/v1/collections/${enc(id)}`, { signal }),
+    mergeCollection: (id, from, signal) =>
+      call<Collection>(`/v1/collections/${enc(id)}/merge`, {
         method: 'POST',
-        body: { ownerKeys },
+        body: { from },
         signal,
       }),
     getModelSession: (sessionId, signal) =>
@@ -484,13 +517,17 @@ export function createApiClient(
       if (q.cursor !== undefined) p.set('cursor', String(q.cursor));
       return call<EvidencePage>(`/v1/models/sessions/${enc(sessionId)}/evidence?${p}`, { signal });
     },
-    submitModelDraft: (sessionId, body, signal) =>
+    submitModelDraft: (sessionId, body, signal, opts) =>
       call<{
         created: boolean;
         model: ModelSnapshot;
         visibility?: ModelVisibility;
-        ownerKey?: string;
-      }>(`/v1/models/sessions/${enc(sessionId)}/draft`, { method: 'POST', body, signal }),
+        collection?: CollectionRef | null;
+      }>(`/v1/models/sessions/${enc(sessionId)}/draft${collectionQuery(opts)}`, {
+        method: 'POST',
+        body,
+        signal,
+      }),
     getSnapshot: async (id, signal) => {
       const m = await call<ModelSnapshot>(`/v1/models/${enc(id)}`, { signal });
       return withPaths({ ...m, inputs: m.inputs.map(withLabel) });
@@ -504,12 +541,6 @@ export function createApiClient(
         `/v1/model-sets${opts.visibility ? `?visibility=${enc(opts.visibility)}` : ''}`,
         { signal },
       ),
-    listMyModelSets: (ownerKeys, signal) =>
-      call<{ items: SetListItem[] }>('/v1/model-sets/mine', {
-        method: 'POST',
-        body: { ownerKeys },
-        signal,
-      }),
     releaseModelSet: (id, signal) =>
       call<{ set: ModelSet; releasedMembers: string[] }>(`/v1/model-sets/${enc(id)}/release`, {
         method: 'POST',
@@ -546,22 +577,30 @@ export function createApiClient(
         concepts: Array.isArray(r.concepts) ? (r.concepts as string[]) : [],
       };
     },
-    submitSetDraft: (sessionId, body, signal) =>
+    submitSetDraft: (sessionId, body, signal, opts) =>
       call<{
         created: boolean;
         visibility?: ModelVisibility;
-        ownerKey: string | null;
+        collection?: CollectionRef | null;
         set: ModelSet;
-      }>(`/v1/model-sets/sessions/${enc(sessionId)}/draft`, { method: 'POST', body, signal }),
+      }>(`/v1/model-sets/sessions/${enc(sessionId)}/draft${collectionQuery(opts)}`, {
+        method: 'POST',
+        body,
+        signal,
+      }),
     generateModelSet: (req, signal) =>
       call<GenerateJobResponse>('/v1/model-sets/generate', { method: 'POST', body: req, signal }),
-    saveSetRelations: (id, relations, signal) =>
+    saveSetRelations: (id, relations, signal, opts) =>
       call<{
         created: boolean;
         visibility?: ModelVisibility;
-        ownerKey: string | null;
+        collection?: CollectionRef | null;
         set: ModelSet;
-      }>(`/v1/model-sets/${enc(id)}/relations`, { method: 'POST', body: { relations }, signal }),
+      }>(`/v1/model-sets/${enc(id)}/relations${collectionQuery(opts)}`, {
+        method: 'POST',
+        body: { relations },
+        signal,
+      }),
     verifyMaintainer: (key, signal) =>
       call<MaintainerIdentity>('/v1/maintainer/me', { key, signal }),
     uploadPackage: (file, signal) => {
