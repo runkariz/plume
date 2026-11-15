@@ -1,6 +1,7 @@
 # Design: model sets, relations between models, and nested objects
 
-Status: **proposal** (plume-6f, 2026-11-16), for review by plume coord before any code.
+Status: **approved** by plume coord on 2026-11-16, with decisions D1–D5 below. It's built in
+four cuts, in order.
 
 ## Goal (the owner's intent)
 
@@ -273,7 +274,18 @@ WooCommerce), Image, Option. Same paging and filters style as suggest-v2.
 4. **Web relation edit + MCP App set view + Gemini proposals.** Shapes go to plume-9a after
    step 1 for the nested rows, and after step 3 for the diagram.
 
-## Decisions I need
+## Decisions (approved 2026-11-16)
+
+- D1: sets have 2..6 APIs, like models.
+- D2: as proposed. An alias candidate needs structural evidence in **both** APIs, both cited, and
+  is only a candidate until the user accepts it. The coordinator may come back if the owner
+  wants it stricter.
+- D3: releasing a set releases its unreleased members in one step. The release confirmation
+  (web and tool result) **lists the members released with it**.
+- D4: 1..8 members, nesting depth 3.
+- D5: members are shared and referenced; a model can be in several sets.
+
+## Decisions as proposed
 
 - **D1. Can a set have one API?** The owner's rule for models is 2..6. I propose the same for
   sets, so a set always compares APIs.

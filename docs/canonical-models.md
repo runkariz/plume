@@ -106,6 +106,25 @@ evidence), optional `fetch` ("METHOD /path"), `join`, `transform`, and `evidence
 (`doc_id` + a verbatim `quote`). A mapping with `transform`, `join` or several paths counts
 as **derived**; otherwise **supported**; an API missing from a field is **unsupported**.
 
+## Nested objects
+
+A field of type `object` or `array` may carry its own `fields`, at most 3 levels deep, with at
+most 200 fields in total. Each sub-field is mapped and cited per API like a top-level field.
+Its source `paths` are the API's full paths (`variants[].sku`); a different endpoint uses
+`fetch`/`join` as usual.
+
+- **Canonical path:** derived from the nesting, `parent[].child` for arrays and
+  `parent.child` for objects. Refusal issues name it in `field`, and the model JSON gives it to
+  every field as `path`, with children under `fields`.
+- **Containers** need their own `sources` only when mapped as a whole. Their `support` is
+  `derived` when only their sub-fields are mapped.
+- **Coverage** counts leaves.
+- **Existing models** have no nesting, so their JSON and content hash (and so their ids) are
+  unchanged.
+
+See [design/model-relations.md](design/model-relations.md) for model sets and relations
+(coming in later cuts).
+
 ## Validation (refusal codes)
 
 | Code | Meaning |
