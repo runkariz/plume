@@ -24,6 +24,27 @@ describe('buildReducer', () => {
     s = buildReducer(s, { type: 'done', id: '4', status: 'staged' });
     expect(s.phase).toBe('staged');
   });
+  it('a finished build has no running step left', () => {
+    let s = buildReducer(initialBuildState(), {
+      type: 'step',
+      id: '1',
+      key: 'evaluate',
+      status: 'running',
+      detail: 'x',
+    });
+    s = buildReducer(s, { type: 'done', id: '2', status: 'staged' });
+    expect(s.steps.evaluate.status).toBe('done');
+    let f = buildReducer(initialBuildState(), {
+      type: 'step',
+      id: '1',
+      key: 'embed',
+      status: 'running',
+      detail: 'x',
+    });
+    f = buildReducer(f, { type: 'done', id: '2', status: 'failed', message: 'boom' });
+    expect(f.steps.embed.status).toBe('failed');
+    expect(f.message).toBe('boom');
+  });
   it('ignores a log line replayed after a reconnect', () => {
     const e = { type: 'log', id: '9', t: '14:00:00', source: 'plume', message: 'x' } as const;
     let s = buildReducer(initialBuildState(), e);

@@ -3,6 +3,7 @@ import { Link, Navigate, useParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { Banner, Button, Card, Chip, ErrorState, Kv, LoadingState } from '@/components';
 import { WizardFrame } from './WizardFrame';
+import { shortBuild } from '@/lib/format';
 import { stepFor, stepPath, useJob } from './useJob';
 
 export function PublishStep() {
@@ -38,11 +39,12 @@ export function PublishStep() {
     setBusy('dump');
     setError(null);
     try {
-      const blob = await client.downloadDump(jobId);
+      const { blob, filename } = await client.downloadDump(jobId);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = job?.eval?.release.knowledgeFile ?? `${job?.apiId ?? 'plume'}.dump.gz`;
+      a.download =
+        filename ?? job?.eval?.release.knowledgeFile ?? `${job?.apiId ?? 'plume'}.dump.gz`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -56,7 +58,8 @@ export function PublishStep() {
     return (
       <WizardFrame name={job.displayName} step={4}>
         <Banner tone="warn" title="Build discarded">
-          The staged build {job.stagedBuild} was removed. Live search is unchanged.
+          The staged build {job.stagedBuild ? shortBuild(job.stagedBuild) : ''} was removed. Live
+          search is unchanged.
         </Banner>
         <div className="actions">
           <span />
@@ -68,19 +71,25 @@ export function PublishStep() {
     );
 
   const ev = job.eval;
-  if (!ev)
-    return <ErrorState title="No evaluation yet" message="This build has not been evaluated." />;
   const published = job.status === 'published';
+  // No gold questions for the API means no eval: the gate did not run and does not block publishing.
+  const version = ev?.release.version ?? job.stagedBuild ?? '';
+  const gatePassed = ev ? ev.gate.passed : true;
 
   return (
     <WizardFrame name={job.displayName} step={4} allDone={published}>
       {published ? (
-        <Banner tone="ok" icon title={`Published ${ev.release.version}`}>
-          Live search now uses build {ev.release.version}.
+        <Banner tone="ok" icon title={`Published ${shortBuild(version)}`}>
+          Live search now uses build {version}.
+        </Banner>
+      ) : !ev ? (
+        <Banner tone="warn" title="No quality gate ran">
+          There are no gold questions for this API, so the staged build was not evaluated. You can
+          still publish it.
         </Banner>
       ) : ev.gate.passed ? (
         <Banner tone="ok" icon title="Quality gate passed">
-          {ev.gate.message}
+          {ev.gate.message.replace(/\.$/, '') === 'Quality gate passed' ? '' : ev.gate.message}
         </Banner>
       ) : (
         <Banner tone="bad" title="Quality gate failed">
@@ -88,51 +97,59 @@ export function PublishStep() {
         </Banner>
       )}
       <div className="two publish">
-        <Card className="pad">
-          <h2 className="h2-sm">Evaluation, staged vs live</h2>
-          <table>
-            <caption className="sr-only">
-              Evaluation metrics, staged build against the live build
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">Metric</th>
-                <th scope="col">Live</th>
-                <th scope="col">Staged</th>
-                <th scope="col">
-                  <span className="sr-only">Change</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {ev.metrics.map((m) => (
-                <tr key={m.key}>
-                  <td>{m.label}</td>
-                  <td className="mono">{m.live}</td>
-                  <td className="mono">
-                    <b>{m.staged}</b>
-                  </td>
-                  <td>
-                    <Chip tone={m.tone === 'neutral' ? 'neutral' : m.tone}>{m.delta}</Chip>
-                  </td>
+        {ev ? (
+          <Card className="pad">
+            <h2 className="h2-sm">Evaluation, staged vs live</h2>
+            <table>
+              <caption className="sr-only">
+                Evaluation metrics, staged build against the live build
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Metric</th>
+                  <th scope="col">Live</th>
+                  <th scope="col">Staged</th>
+                  <th scope="col">
+                    <span className="sr-only">Change</span>
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+              </thead>
+              <tbody>
+                {ev.metrics.map((m) => (
+                  <tr key={m.key}>
+                    <td>{m.label}</td>
+                    <td className="mono">{m.live}</td>
+                    <td className="mono">
+                      <b>{m.staged}</b>
+                    </td>
+                    <td>
+                      <Chip tone={m.tone === 'neutral' ? 'neutral' : m.tone}>{m.delta}</Chip>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Card>
+        ) : (
+          <Card className="pad">
+            <h2 className="h2-sm">Evaluation, staged vs live</h2>
+            <p className="muted">
+              Not evaluated. Add a gold question set for this API to enable the quality gate.
+            </p>
+          </Card>
+        )}
         <div className="stack">
           <Card className="pad">
             <h2 className="h2-sm">Release</h2>
-            <Kv label="Version" value={ev.release.version} mono />
-            <Kv label="Knowledge file" value={ev.release.knowledgeFile} mono />
-            <Kv label="Notes" value={ev.release.notes} />
+            <Kv label="Version" value={version} mono />
+            {ev ? <Kv label="Knowledge file" value={ev.release.knowledgeFile} mono /> : null}
+            {ev ? <Kv label="Notes" value={ev.release.notes} /> : null}
           </Card>
           <Card className="pad">
             <h2 className="h2-sm">Publishing will</h2>
             <ul className="bullets muted">
               <li>Switch live search to the staged build</li>
-              <li>Export the dump and attach it to a GitHub release</li>
-              <li>Update the knowledge manifest</li>
+              <li>Move the tag “{job.tag ?? 'latest'}” to it</li>
             </ul>
           </Card>
         </div>
@@ -177,10 +194,10 @@ export function PublishStep() {
             <Button
               variant="primary"
               size="lg"
-              disabled={!ev.gate.passed || busy !== null}
+              disabled={!gatePassed || busy !== null}
               onClick={() => void run('publish')}
             >
-              Publish {ev.release.version}
+              Publish {shortBuild(version)}
             </Button>
           </span>
         </div>

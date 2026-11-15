@@ -183,7 +183,10 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
       const job = guard(request, String(params.id));
       if (job instanceof Response) return job;
       return new HttpResponse(new Blob(['mock dump']), {
-        headers: { 'Content-Type': 'application/gzip' },
+        headers: {
+          'Content-Type': 'application/gzip',
+          'Content-Disposition': 'attachment; filename="shopify-2026-11-14.dump.gz"',
+        },
       });
     }),
     http.get(`${base}/v1/apis`, () => HttpResponse.json({ items: sampleApis })),

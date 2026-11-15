@@ -44,7 +44,7 @@ export interface PlumeApi {
   startBuild(id: string, signal?: AbortSignal): Promise<Job>;
   publishJob(id: string, signal?: AbortSignal): Promise<Job>;
   discardJob(id: string, signal?: AbortSignal): Promise<Job>;
-  downloadDump(id: string, signal?: AbortSignal): Promise<Blob>;
+  downloadDump(id: string, signal?: AbortSignal): Promise<{ blob: Blob; filename: string | null }>;
   /** Streams build events; resolves after a `done` event, rejects after repeated connection loss. */
   watchJob(id: string, onEvent: (e: JobEvent) => void, signal?: AbortSignal): Promise<void>;
 }
@@ -204,8 +204,12 @@ export function createApiClient(
       call<Job>(`/v1/jobs/${enc(id)}/publish`, { method: 'POST', signal }),
     discardJob: (id, signal) =>
       call<Job>(`/v1/jobs/${enc(id)}/discard`, { method: 'POST', signal }),
-    downloadDump: async (id, signal) =>
-      (await raw(`/v1/jobs/${enc(id)}/dump`, { signal, accept: 'application/gzip' })).blob(),
+    downloadDump: async (id, signal) => {
+      const res = await raw(`/v1/jobs/${enc(id)}/dump`, { signal, accept: 'application/gzip' });
+      const disposition = res.headers.get('Content-Disposition') ?? '';
+      const filename = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)?.[1] ?? null;
+      return { blob: await res.blob(), filename: filename ? decodeURIComponent(filename) : null };
+    },
     watchJob: watch,
   };
 }
