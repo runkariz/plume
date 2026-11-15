@@ -553,6 +553,11 @@ class ModelListItem(Schema):
     version: int = 1
     versions: int = 1
     lineage_id: str = ""
+    same_concept: list[str] = Field(
+        default_factory=list,
+        description="Other official models of the same concept over the same APIs (readable "
+        "by id); the list shows the newest.",
+    )
 
 
 class ModelList(Schema):

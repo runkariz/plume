@@ -44,6 +44,12 @@ class InMemoryModelRepo:
     def get_snapshot(self, snapshot_id: str) -> ModelSnapshot | None:
         return self.snapshots.get(snapshot_id)
 
+    def replace_owner_key(self, lineage_id: str, owner_key_hash: str) -> bool:
+        if not self.owners.get(lineage_id):
+            return False
+        self.owners[lineage_id] = owner_key_hash
+        return True
+
     def list_snapshots(
         self,
         api: str | None = None,

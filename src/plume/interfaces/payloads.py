@@ -10,7 +10,7 @@ from plume.application.models.relations import (
     RelatedConcepts,
     RelationCandidate,
 )
-from plume.application.models.sessions import revise_prompt
+from plume.application.models.sessions import normalize_concept, revise_prompt
 from plume.application.reader.dto import (
     ApiOverview,
     BuildRef,
@@ -317,7 +317,7 @@ def snapshot_payload(
         "id": m.snapshot_id,
         "name": m.draft.name,
         "description": m.draft.description,
-        "concept": m.concept,
+        "concept": normalize_concept(m.concept),
         "status": m.status,
         "stale": bool(stale_inputs),
         "staleInputs": list(stale_inputs or []),
@@ -348,7 +348,7 @@ def model_list_item(
     return {
         "snapshot_id": m.snapshot_id,
         "name": m.draft.name,
-        "concept": m.concept,
+        "concept": normalize_concept(m.concept),
         "apis": [i.api for i in m.inputs],
         "created_at": m.created_at.isoformat(),
         "stale": bool(stale_inputs),

@@ -22,6 +22,7 @@ from plume.application.models.sessions import (
     ModelDraftRefusedError,
     ModelSessions,
     claude_prompt,
+    normalize_concept,
 )
 from plume.application.ports.model_repo import ModelJob
 from plume.application.reader.resolve import BuildResolver
@@ -135,7 +136,7 @@ def models_router(  # noqa: PLR0915
         return s.ModelListItem(
             id=m.snapshot_id,
             name=m.draft.name,
-            concept=m.concept,
+            concept=normalize_concept(m.concept),
             apis=[i.api for i in m.inputs],
             generated_at=m.created_at.isoformat(),
             stale=bool(stale),
@@ -148,6 +149,9 @@ def models_router(  # noqa: PLR0915
             version=m.version,
             versions=service.lineage_info(m, maintainer)["versions"],
             lineage_id=m.lineage,
+            same_concept=list(service.same_concept(m))
+            if m.visibility == Visibility.OFFICIAL
+            else [],
         )
 
     def generator() -> GenerateModels:

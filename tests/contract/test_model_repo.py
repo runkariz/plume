@@ -101,6 +101,9 @@ def test_visibility_lineages_and_owners(repo: ModelRepo) -> None:
     assert [s.snapshot_id for s in repo.by_session("s-1")] == ["u-two", "u-one"]
     assert repo.lineages_for_owner(["hash-1", "nope"]) == ["u-one"]
     assert repo.lineages_for_owner([]) == []
+    assert repo.replace_owner_key("u-one", "hash-2") is True  # a retry's new key
+    assert repo.lineages_for_owner(["hash-1"]) == []
+    assert repo.lineages_for_owner(["hash-2"]) == ["u-one"]
     assert repo.list_snapshots() == []  # official only by default
     assert [s.snapshot_id for s in repo.list_snapshots(visibilities=("unlisted",))] == [
         "u-two",
@@ -114,6 +117,7 @@ def test_visibility_lineages_and_owners(repo: ModelRepo) -> None:
     assert got is not None
     assert (got.visibility, got.released_at) == ("official", T)
     assert [s.snapshot_id for s in repo.list_snapshots()] == [m.snapshot_id]
+    assert repo.replace_owner_key(m.snapshot_id, "hash-3") is False  # no owner: stays so
 
 
 def test_model_jobs(store: Store, request: pytest.FixtureRequest) -> None:

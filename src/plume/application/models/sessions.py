@@ -20,8 +20,7 @@ from plume.application.ports.model_repo import ModelRepo, ModelSession
 from plume.application.ports.search_index import DocumentSummary, FactQuery, SearchIndex
 from plume.application.reader.resolve import BuildResolver
 from plume.domain.knowledge.call_check import path_matches
-from plume.domain.knowledge.document import DocumentKind, FieldLocation
-from plume.domain.knowledge.fact import FactKind
+from plume.domain.knowledge.document import Document, DocumentKind, FieldLocation
 from plume.domain.models.canonical_model import DraftFormatError, parse_draft
 from plume.domain.models.snapshot import (
     ModelSnapshot,
@@ -342,7 +341,7 @@ class ModelSessions:
                         "doc_id": d.doc_id,
                         "kind": d.kind.value,
                         "title": d.title,
-                        "endpoint": f"{d.method} {d.path}" if d.method else None,
+                        "endpoint": f"{d.method} {d.path}" if d.method else _returned_by(full),
                         "fields": sum(1 for f in full.fields if f.location in _DATA_LOCATIONS),
                         "complete": full.complete,
                     }
@@ -440,25 +439,47 @@ class ModelSessions:
     # -- drafts ----------------------------------------------------------------------------------
 
     def _oracle(self, session: ModelSession) -> Oracle:
+        """Lookups into the pinned builds, cached for one validation: a large draft cites the
+        same documents, paths and endpoints many times (each was a database round trip)."""
         builds = {p.api: BuildId(p.build) for p in session.inputs}
+        texts: dict[tuple[str, str], str | None] = {}
+        endpoints: dict[str, list[tuple[str, str]]] = {}
 
         def doc_text(api: str, doc_id: str) -> str | None:
-            d = self._documents.get_document(builds[api], doc_id)
-            if d is None:
-                return None
-            descriptions = " ".join(f.description or "" for f in d.fields)
-            return f"{d.title}\n{d.text}\n{descriptions}"
+            if (api, doc_id) not in texts:
+                d = self._documents.get_document(builds[api], doc_id)
+                texts[(api, doc_id)] = (
+                    None
+                    if d is None
+                    else f"{d.title}\n{d.text}\n{' '.join(f.description or '' for f in d.fields)}"
+                )
+            return texts[(api, doc_id)]
+
+        known: dict[str, set[str]] = {}
 
         def field_exists(api: str, path: str) -> bool:
-            return bool(self._facts.find(builds[api], path, kind=FactKind.FIELD))
+            # Same rule as FactQuery.find (exact name or a ".name" suffix, case-insensitive),
+            # from one query per API instead of one scan per path.
+            if api not in known:
+                names = known[api] = set()
+                for name in self._facts.field_names(builds[api]):
+                    parts = name.lower().split(".")
+                    names.update(".".join(parts[i:]) for i in range(len(parts)))
+            return path.lower() in known[api]
 
         def endpoint_exists(api: str, call: str) -> bool:
+            if api not in endpoints:
+                endpoints[api] = [
+                    (m, p)
+                    for m, _, p in (
+                        f.name.partition(" ") for f in self._facts.endpoints(builds[api])
+                    )
+                ]
             method, _, path = call.strip().partition(" ")
-            for f in self._facts.endpoints(builds[api]):
-                m, _, p = f.name.partition(" ")
-                if m == method.upper() and (p == path.strip() or path_matches(p, path.strip())):
-                    return True
-            return False
+            return any(
+                m == method.upper() and (p == path.strip() or path_matches(p, path.strip()))
+                for m, p in endpoints[api]
+            )
 
         return Oracle(doc_text, field_exists, endpoint_exists)
 
@@ -511,7 +532,7 @@ class ModelSessions:
         if not maintainer:  # a retry of the same draft returns the stored model
             for prior in self._models.by_session(session.session_id):
                 if prior.key == content_key and prior.visibility != Visibility.DISCARDED:
-                    return SubmitResult(prior, False)
+                    return SubmitResult(prior, False, self._reissue_key(prior))
         visibility = Visibility.UNRELEASED if maintainer else Visibility.UNLISTED
         origin = Origin.MAINTAINER if maintainer else Origin.USER
         owner_key = None if maintainer or same_lineage else new_owner_key()
@@ -543,6 +564,15 @@ class ModelSessions:
             if stored is not None:  # same content already stored (maintainer ids are hashes)
                 return SubmitResult(stored, False)
         raise ModelStateError("the model was changed concurrently; submit again")
+
+    def _reissue_key(self, prior: ModelSnapshot) -> str | None:
+        """A retry in the same session gets a new owner key for the model it started: the first
+        response (the only copy of the old key) may never have arrived (a bridge timeout). The
+        old key stops working; the session id is what proves the caller made the model."""
+        if prior.lineage != prior.snapshot_id:
+            return None  # a new version of an existing model: the owner keeps their key
+        key = new_owner_key()
+        return key if self._models.replace_owner_key(prior.lineage, owner_key_hash(key)) else None
 
     # -- snapshots -------------------------------------------------------------------------------
 
@@ -666,7 +696,48 @@ class ModelSessions:
                     seen.add(s.lineage)
                     latest.append(s)
             items = sorted(latest, key=lambda s: (-s.created_at.timestamp(), s.snapshot_id))
+            # One official model per concept (case-insensitive) and API set: the newest; the
+            # others stay readable by id and are named by same_concept() (never deleted).
+            groups: set[tuple[str, frozenset[str]]] = set()
+            grouped = []
+            for s in items:
+                key = _concept_group(s)
+                if key not in groups:
+                    groups.add(key)
+                    grouped.append(s)
+            items = grouped
         return items[:limit]
+
+    def same_concept(self, snap: ModelSnapshot) -> tuple[str, ...]:
+        """Other official models of the same concept (case-insensitive) over the same APIs,
+        newest first (e.g. "Order" and "order" made before concept spelling was normalised)."""
+        key = _concept_group(snap)
+        api = snap.inputs[0].api if snap.inputs else None
+        others = [
+            s
+            for s in self._models.list_snapshots(api, 200, (Visibility.OFFICIAL,))
+            if _concept_group(s) == key and s.lineage != snap.lineage
+        ]
+        seen: set[str] = set()
+        out = []
+        for s in others:
+            if s.lineage not in seen:
+                seen.add(s.lineage)
+                out.append(s.snapshot_id)
+        return tuple(out)
+
+
+def _returned_by(doc: Document) -> str | None:
+    """A model's operation, when the package names it (x-plume-returned-by: endpoint ids)."""
+    ops = doc.raw.get("x-plume-returned-by") if isinstance(doc.raw, dict) else None
+    if not ops:
+        return None
+    method, _, path = str(ops[0]).removeprefix("endpoint:").partition("~")
+    return f"{method} {path}"
+
+
+def _concept_group(s: ModelSnapshot) -> tuple[str, frozenset[str]]:
+    return concept_key(s.concept), frozenset(i.api for i in s.inputs)
 
 
 def _visible(maintainer: bool) -> tuple[str, ...]:

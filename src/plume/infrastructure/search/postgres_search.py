@@ -228,6 +228,14 @@ class PostgresFactQuery:
             ).all()
         return [fact_from_row(r) for r in rows]
 
+    def field_names(self, build_id: BuildId) -> list[str]:
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text("SELECT DISTINCT name FROM facts WHERE build_id = :b AND kind = 'field'"),
+                {"b": build_id.value},
+            ).all()
+        return [r.name for r in rows]
+
     def for_owner(self, build_id: BuildId, owner_id: str) -> list[Fact]:
         with self._engine.connect() as conn:
             rows = conn.execute(
