@@ -1,4 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/react';
+import { http, HttpResponse } from 'msw';
 import userEvent from '@testing-library/user-event';
 import { authStore } from '@/app/authStore';
 import { renderApp, testClient } from '@/test/render';
@@ -72,17 +73,58 @@ describe('Generate: waiting for a draft (P5 sessions)', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows what Plume gives Claude (the evidence pack) on demand', async () => {
+  it('shows the evidence index on demand, then the fields page by page', async () => {
     const panel = await openSession();
-    expect(within(panel).queryByLabelText('Evidence pack')).not.toBeInTheDocument();
+    expect(within(panel).queryByRole('region', { name: 'Evidence pack' })).not.toBeInTheDocument();
     await userEvent.click(
       within(panel).getByRole('button', { name: 'See what Plume gives Claude' }),
     );
-    expect(await within(panel).findByLabelText('Evidence pack')).toHaveTextContent(
-      '"session_id": "s-mock',
-    );
+    const pack = await within(panel).findByRole('region', { name: 'Evidence pack' });
+    // compact index: documents with field counts, one section per API
+    const shopify = within(pack).getByRole('region', { name: 'Evidence for Shopify' });
+    expect(within(shopify).getByText('Order')).toBeInTheDocument();
+    expect(within(shopify).getByText('3 fields')).toBeInTheDocument();
+    expect(within(shopify).getByText('GET /api/{version}/orders')).toBeInTheDocument();
+    expect(within(shopify).getByText('partial schema')).toBeInTheDocument();
+    expect(within(shopify).queryByRole('table')).not.toBeInTheDocument();
+    // the fields come on request, one page at a time
+    await userEvent.click(within(pack).getByRole('button', { name: /^Show Shopify fields/ }));
+    expect(await within(shopify).findByText('3 of 5 fields shown')).toBeInTheDocument();
+    const orderTable = within(shopify).getByRole('table', { name: 'Fields of Order' });
+    expect(within(orderTable).getByText('number')).toBeInTheDocument();
+    expect(within(orderTable).getAllByText('required')).toHaveLength(2);
+    expect(within(shopify).queryByText('orders[].id')).not.toBeInTheDocument();
+    await userEvent.click(within(shopify).getByRole('button', { name: 'Load more fields' }));
+    expect(await within(shopify).findByText('5 of 5 fields shown')).toBeInTheDocument();
+    expect(within(shopify).getByText('orders[].id')).toBeInTheDocument();
+    expect(
+      within(shopify).queryByRole('button', { name: 'Load more fields' }),
+    ).not.toBeInTheDocument();
+    // the draft format stays one click away
+    await userEvent.click(within(pack).getByText('Draft format'));
+    expect(within(pack).getByLabelText('Draft format')).toHaveTextContent('"fields"');
     await userEvent.click(within(panel).getByRole('button', { name: 'Hide the evidence pack' }));
-    expect(within(panel).queryByLabelText('Evidence pack')).not.toBeInTheDocument();
+    expect(within(panel).queryByRole('region', { name: 'Evidence pack' })).not.toBeInTheDocument();
+  });
+
+  it('shows an error when a page of fields cannot be loaded, and retries', async () => {
+    server.use(
+      http.get(
+        `${TEST_API_BASE}/v1/models/sessions/:id/evidence`,
+        () => HttpResponse.json({ error: 'bad_request', message: 'index busy' }, { status: 503 }),
+        { once: true },
+      ),
+    );
+    const panel = await openSession();
+    await userEvent.click(
+      within(panel).getByRole('button', { name: 'See what Plume gives Claude' }),
+    );
+    const pack = await within(panel).findByRole('region', { name: 'Evidence pack' });
+    await userEvent.click(within(pack).getByRole('button', { name: /^Show Shopify fields/ }));
+    const alert = await within(pack).findByRole('alert');
+    expect(alert).toHaveTextContent('index busy');
+    await userEvent.click(within(alert).getByRole('button', { name: 'Try again' }));
+    expect(await within(pack).findByText('3 of 5 fields shown')).toBeInTheDocument();
   });
 
   it('asks signed-out visitors to sign in before pasting a draft', async () => {

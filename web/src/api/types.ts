@@ -383,3 +383,78 @@ export interface ModelListItem {
   apis: string[];
   generatedAt: string;
 }
+
+/** GET /v1/models/sessions/{id}/context: a compact index of the evidence (field lists are paged separately). */
+export interface ModelContext {
+  session_id: string;
+  concept: string;
+  apis: {
+    api: string;
+    build: string;
+    documents: {
+      doc_id: string;
+      kind: string;
+      title: string;
+      endpoint: string | null;
+      /** A count; the fields themselves come from the evidence route. */
+      fields: number;
+      complete: boolean;
+    }[];
+  }[];
+  next?: string;
+  instructions?: string;
+  draft_format?: unknown;
+  status?: string;
+}
+
+/** GET /v1/models/sessions/{id}/evidence?api=&doc=&cursor=: one page of fields (about 20k characters at most). */
+export interface EvidencePage {
+  session_id: string;
+  api: string;
+  build: string;
+  documents: {
+    doc_id: string;
+    title: string;
+    endpoint: string | null;
+    source_url: string | null;
+    complete: boolean;
+    fields: {
+      path: string;
+      type: string | null;
+      location: string;
+      required: boolean;
+      description: string | null;
+    }[];
+  }[];
+  returned: number;
+  total_fields: number;
+  next_cursor: number | null;
+  missing_doc_ids: string[];
+}
+
+/** GET /v1/apis/{api}/documents/{docId}: one stored document (what a citation points at). */
+export interface DocumentOut {
+  api: string;
+  build: string;
+  docsAsOf: string;
+  id: string;
+  kind: string;
+  title: string;
+  resource: string | null;
+  method: string | null;
+  path: string | null;
+  deprecated: boolean;
+  complete: boolean;
+  sourceUrl: string | null;
+  anchor: string | null;
+  /** Plain text taken from the vendor docs: untrusted, render as text. */
+  text: string;
+  fields: {
+    name: string;
+    location: string;
+    type: string | null;
+    required: boolean;
+    description: string | null;
+  }[];
+  scopes: string[];
+}

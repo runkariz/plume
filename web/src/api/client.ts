@@ -1,10 +1,14 @@
+import { apiLabel, apiTitle } from '@/lib/names';
 import { apiBaseUrl } from './config';
 import { createSseParser } from './sse';
 import {
   ApiError,
+  type DocumentOut,
   type DraftIssue,
+  type EvidencePage,
   type GenerateRequest,
   type GenerateResponse,
+  type ModelContext,
   type ModelListItem,
   type Job,
   type ModelSnapshot,
@@ -26,6 +30,7 @@ import {
 export interface PlumeApi {
   listApis(signal?: AbortSignal): Promise<ApiList>;
   getApi(id: string, signal?: AbortSignal): Promise<ApiDetail>;
+  getDocument(api: string, docId: string, signal?: AbortSignal): Promise<DocumentOut>;
   browse(
     id: string,
     q: { kind?: ItemKind; query?: string; limit?: number },
@@ -39,8 +44,14 @@ export interface PlumeApi {
   suggestModels(apis: string[], signal?: AbortSignal): Promise<SuggestResponse>;
   generateModel(req: GenerateRequest, signal?: AbortSignal): Promise<GenerateResponse>;
   listModels(api?: string, signal?: AbortSignal): Promise<{ items: ModelListItem[] }>;
-  /** The evidence pack Claude reads for a session (snake_case JSON from the server). */
-  getModelContext(sessionId: string, signal?: AbortSignal): Promise<unknown>;
+  /** The compact evidence index Claude reads for a session (snake_case JSON from the server). */
+  getModelContext(sessionId: string, signal?: AbortSignal): Promise<ModelContext>;
+  /** One page of the fields of an API's documents in a session; follow `next_cursor` for more. */
+  getModelEvidence(
+    sessionId: string,
+    q: { api: string; docs?: string[]; cursor?: number },
+    signal?: AbortSignal,
+  ): Promise<EvidencePage>;
   /** Maintainer token required. A refused draft rejects with an ApiError carrying `issues`. */
   submitModelDraft(
     sessionId: string,
@@ -59,6 +70,17 @@ export interface PlumeApi {
   downloadDump(id: string, signal?: AbortSignal): Promise<{ blob: Blob; filename: string | null }>;
   /** Streams build events; resolves after a `done` event, rejects after repeated connection loss. */
   watchJob(id: string, onEvent: (e: JobEvent) => void, signal?: AbortSignal): Promise<void>;
+}
+
+/** Names are normalised once, where they come in, so every page shows the display form. */
+function withLabel<T extends { id: string; shortName: string }>(a: T): T {
+  return { ...a, shortName: apiLabel(a) };
+}
+function withTitle<T extends { id: string; name: string }>(a: T): T {
+  return { ...a, name: apiTitle(a) };
+}
+function normaliseList(list: ApiList): ApiList {
+  return { ...list, items: list.items.map(withTitle) };
 }
 
 export function errorMessage(body: unknown): string | undefined {
@@ -187,8 +209,11 @@ export function createApiClient(
   }
 
   return {
-    listApis: (signal) => call<ApiList>('/v1/apis', { signal }),
-    getApi: (id, signal) => call<ApiDetail>(`/v1/apis/${enc(id)}`, { signal }),
+    listApis: async (signal) => normaliseList(await call<ApiList>('/v1/apis', { signal })),
+    getApi: async (id, signal) =>
+      withTitle(await call<ApiDetail>(`/v1/apis/${enc(id)}`, { signal })),
+    getDocument: (api, docId, signal) =>
+      call<DocumentOut>(`/v1/apis/${enc(api)}/documents/${enc(docId)}`, { signal }),
     browse: (id, q, signal) => {
       const p = new URLSearchParams();
       if (q.kind) p.set('kind', q.kind);
@@ -203,21 +228,37 @@ export function createApiClient(
       call<AskResponse>(`/v1/apis/${enc(id)}/ask`, { method: 'POST', body: { question }, signal }),
     checkCall: (id, body, signal) =>
       call<CheckCallResponse>(`/v1/apis/${enc(id)}/check-call`, { method: 'POST', body, signal }),
-    listModelCandidates: (signal) => call<ApiList>('/v1/models/candidates', { signal }),
-    suggestModels: (apis, signal) =>
-      call<SuggestResponse>('/v1/models/suggest', { method: 'POST', body: { apis }, signal }),
+    listModelCandidates: async (signal) =>
+      normaliseList(await call<ApiList>('/v1/models/candidates', { signal })),
+    suggestModels: async (apis, signal) => {
+      const r = await call<SuggestResponse>('/v1/models/suggest', {
+        method: 'POST',
+        body: { apis },
+        signal,
+      });
+      return { ...r, apis: r.apis.map(withLabel) };
+    },
     generateModel: (body, signal) =>
       call<GenerateResponse>('/v1/models/generate', { method: 'POST', body, signal }),
     listModels: (api, signal) =>
       call<{ items: ModelListItem[] }>(`/v1/models${api ? `?api=${enc(api)}` : ''}`, { signal }),
     getModelContext: (sessionId, signal) =>
-      call<unknown>(`/v1/models/sessions/${enc(sessionId)}/context`, { signal }),
+      call<ModelContext>(`/v1/models/sessions/${enc(sessionId)}/context`, { signal }),
+    getModelEvidence: (sessionId, q, signal) => {
+      const p = new URLSearchParams({ api: q.api });
+      for (const d of q.docs ?? []) p.append('doc', d);
+      if (q.cursor !== undefined) p.set('cursor', String(q.cursor));
+      return call<EvidencePage>(`/v1/models/sessions/${enc(sessionId)}/evidence?${p}`, { signal });
+    },
     submitModelDraft: (sessionId, body, signal) =>
       call<{ created: boolean; model: ModelSnapshot }>(
         `/v1/models/sessions/${enc(sessionId)}/draft`,
         { method: 'POST', body, signal },
       ),
-    getSnapshot: (id, signal) => call<ModelSnapshot>(`/v1/models/${enc(id)}`, { signal }),
+    getSnapshot: async (id, signal) => {
+      const m = await call<ModelSnapshot>(`/v1/models/${enc(id)}`, { signal });
+      return { ...m, inputs: m.inputs.map(withLabel) };
+    },
     verifyMaintainer: (key, signal) =>
       call<MaintainerIdentity>('/v1/maintainer/me', { key, signal }),
     uploadPackage: (file, signal) => {

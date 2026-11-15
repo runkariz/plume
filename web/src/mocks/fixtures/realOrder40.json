@@ -1,0 +1,1461 @@
+{
+  "id": "m-38f24111baf1076f44c9cfa7",
+  "name": "Order",
+  "description": "A customer purchase as seen by an e-commerce platform or marketplace: identity, status, dates, monetary totals, customer and addresses, payment, line items, shipping/tracking, refunds and custom data. Shopify is covered only through the order-scoped fulfillment documents of the current build (no core order resource is indexed), so many Shopify mappings are partial.",
+  "concept": "Order",
+  "status": "generated_unverified",
+  "generatedAt": "2026-11-15T01:42:58.085743+00:00",
+  "promptVersion": "plume-models-v1",
+  "sessionId": "s-bb0491da6f454f5c",
+  "inputs": [
+    {
+      "id": "shopify",
+      "name": "shopify",
+      "shortName": "Shopify",
+      "build": "b-e9f58eb5a9cb0b835a4ed625c692e546",
+      "logo": { "text": "S", "color": "#5b5bd6", "url": null }
+    },
+    {
+      "id": "woocommerce",
+      "name": "woocommerce",
+      "shortName": "Woocommerce",
+      "build": "b-574fe7333dffe19c2d28cda69505f8f6",
+      "logo": { "text": "W", "color": "#0d9488", "url": null }
+    },
+    {
+      "id": "mirakl",
+      "name": "mirakl",
+      "shortName": "Mirakl",
+      "build": "b-a357a8c50aded00818147d3ee2f9f72e",
+      "logo": { "text": "M", "color": "#2563eb", "url": null }
+    }
+  ],
+  "fields": [
+    {
+      "name": "id",
+      "type": "string",
+      "description": "Platform identifier of the order.",
+      "required": true,
+      "support": { "shopify": "derived", "woocommerce": "derived", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "order_id", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Order's identifier",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "shopify": {
+          "paths": [{ "path": "fulfillment_orders[].order_id", "type": "integer" }],
+          "transform": "Order id is the {order_id} used in the path; also exposed on each fulfillment order.",
+          "fetch": {
+            "endpoint": "GET /admin/api/{version}/orders/{order_id}/fulfillment_orders.json"
+          },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Unique identifier of the order that contains this fulfillment order.",
+              "anchor": "",
+              "docId": "endpoint:GET~/admin/api/{version}/orders/{order_id}/fulfillment_orders.json"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "id", "type": "integer" }],
+          "transform": "Cast integer to string.",
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Unique identifier for the order.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "display_number",
+      "type": "string",
+      "description": "Human-readable order number or name.",
+      "required": false,
+      "support": { "shopify": "supported", "woocommerce": "supported", "mirakl": "unsupported" },
+      "sources": {
+        "shopify": {
+          "paths": [{ "path": "fulfillment_orders[].order_name", "type": "string" }],
+          "transform": null,
+          "fetch": {
+            "endpoint": "GET /admin/api/{version}/orders/{order_id}/fulfillment_orders.json"
+          },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Human-readable identifier or reference name of the order.",
+              "anchor": "",
+              "docId": "endpoint:GET~/admin/api/{version}/orders/{order_id}/fulfillment_orders.json"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "number", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Sequential or formatted order number.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "status",
+      "type": "string",
+      "description": "Current lifecycle state of the order, in the platform's own vocabulary.",
+      "required": true,
+      "support": { "shopify": "unsupported", "woocommerce": "derived", "mirakl": "derived" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "order_state", "type": "string" }],
+          "transform": "Map platform values to a canonical enum (mapping table not derivable from the evidence).",
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            { "quote": "Order's state", "anchor": "", "docId": "model:or11-response-200-orders" }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "status", "type": "string" }],
+          "transform": "Map platform values to a canonical enum (mapping table not derivable from the evidence).",
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Current processing status of the order.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "currency",
+      "type": "string",
+      "description": "ISO currency code of the order amounts.",
+      "required": true,
+      "support": { "shopify": "unsupported", "woocommerce": "supported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "currency_iso_code", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Shop's currency (iso format)",
+              "anchor": "",
+              "docId": "model:or11-response-200-orders"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "currency", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Currency code used for the order amounts.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "created_at",
+      "type": "datetime",
+      "description": "When the order was created.",
+      "required": true,
+      "support": { "shopify": "unsupported", "woocommerce": "derived", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "created_date", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Order's creation date",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "date_created_gmt", "type": "string" }],
+          "transform": "Prefer the GMT variant; date_created is the site-local equivalent.",
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Creation timestamp of the order in GMT.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "processed_at",
+      "type": "datetime",
+      "description": "When the order was processed by the platform.",
+      "required": false,
+      "support": { "shopify": "supported", "woocommerce": "unsupported", "mirakl": "unsupported" },
+      "sources": {
+        "shopify": {
+          "paths": [{ "path": "fulfillment_orders[].order_processed_at", "type": "string" }],
+          "transform": null,
+          "fetch": {
+            "endpoint": "GET /admin/api/{version}/orders/{order_id}/fulfillment_orders.json"
+          },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Date and time when the order was originally processed.",
+              "anchor": "",
+              "docId": "endpoint:GET~/admin/api/{version}/orders/{order_id}/fulfillment_orders.json"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "updated_at",
+      "type": "datetime",
+      "description": "When the order was last modified.",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "supported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "last_updated_date", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Last update date of the order",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "date_modified_gmt", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Last modification timestamp of the order in GMT.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "paid_at",
+      "type": "datetime",
+      "description": "When payment for the order was recorded.",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "supported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "customer_debited_date", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "The payment's date of the order by the customer",
+              "anchor": "",
+              "docId": "model:or11-response-200-orders"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "date_paid_gmt", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Timestamp when the payment was recorded, in GMT.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "completed_at",
+      "type": "datetime",
+      "description": "When the order was marked complete.",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "supported", "mirakl": "unsupported" },
+      "sources": {
+        "woocommerce": {
+          "paths": [{ "path": "date_completed_gmt", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Timestamp when the order was marked complete, in GMT.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "total",
+      "type": "decimal",
+      "description": "Grand total of the order.",
+      "required": true,
+      "support": { "shopify": "unsupported", "woocommerce": "derived", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "total_price", "type": "number" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Order's total price (sum of the order price and the order shipping price)",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "total", "type": "string" }],
+          "transform": "Parse decimal string.",
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Grand total charged for the order.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "items_subtotal",
+      "type": "decimal",
+      "description": "Sum of the line prices, excluding shipping.",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "unsupported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "price", "type": "number" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Order's price (sum of order line price)",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "shipping_total",
+      "type": "decimal",
+      "description": "Total shipping charge of the order.",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "derived", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "shipping_price", "type": "number" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Order's shipping price (sum of order line shipping price)",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "shipping_total", "type": "string" }],
+          "transform": "Parse decimal string.",
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Total shipping cost for the order.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "discount_total",
+      "type": "decimal",
+      "description": "Total discount applied to the order.",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "derived", "mirakl": "unsupported" },
+      "sources": {
+        "woocommerce": {
+          "paths": [{ "path": "discount_total", "type": "string" }],
+          "transform": "Parse decimal string.",
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Total amount of discounts applied to the order.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "tax_total",
+      "type": "decimal",
+      "description": "Total tax on the order.",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "derived", "mirakl": "derived" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "order_taxes", "type": "array" }],
+          "transform": "Sum the tax amounts of order_taxes[]; only present when order level tax calculation is enabled.",
+          "fetch": { "endpoint": "GET /api/orders" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Total amount of taxes aggregated per tax code and rate",
+              "anchor": "",
+              "docId": "model:or11-response-200-orders"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "total_tax", "type": "string" }],
+          "transform": "Parse decimal string.",
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Sum of all taxes applied across items and shipping.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "prices_include_tax",
+      "type": "boolean",
+      "description": "Whether item prices already include tax.",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "supported", "mirakl": "derived" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "order_tax_mode", "type": "string" }],
+          "transform": "true when order_tax_mode is TAX_INCLUDED, false when TAX_EXCLUDED.",
+          "fetch": { "endpoint": "GET /api/orders" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "The tax mode is only useful if taxes are specified in the order.",
+              "anchor": "",
+              "docId": "model:or11-response-200-orders"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "prices_include_tax", "type": "boolean" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Indicates whether item prices already include taxes.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "customer_id",
+      "type": "string",
+      "description": "Identifier of the customer who placed the order.",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "derived", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "customer.customer_id", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Unique identifier of the customer.",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "customer_id", "type": "integer" }],
+          "transform": "Cast integer to string.",
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Unique identifier of the registered customer who placed the order.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "customer_note",
+      "type": "string",
+      "description": "Note left by the customer at checkout.",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "supported", "mirakl": "unsupported" },
+      "sources": {
+        "woocommerce": {
+          "paths": [{ "path": "customer_note", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Note or special instructions left by the customer during checkout.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "billing_address",
+      "type": "object",
+      "description": "Billing address and contact details (name, company, street lines, city, state, postal code, country, phone, email where available).",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "derived", "mirakl": "derived" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "customer.billing_address", "type": "object" }],
+          "transform": "billing_address.firstname/lastname/company/street_1/street_2/city/state/zip_code/country_iso_code/phone map to the canonical address parts.",
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Billing address information for the customer.",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "billing", "type": "object" }],
+          "transform": "billing.first_name/last_name/address_1/address_2/city/state/postcode/country/email/phone map to the canonical address parts.",
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Billing address and contact details for the order.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "shipping_address",
+      "type": "object",
+      "description": "Delivery address and recipient details.",
+      "required": false,
+      "support": { "shopify": "derived", "woocommerce": "derived", "mirakl": "derived" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "customer.shipping_address", "type": "object" }],
+          "transform": "shipping_address.firstname/lastname/company/street_1/street_2/city/state/zip_code/country_iso_code/phone map to the canonical address parts.",
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Shipping address information for delivery to the customer.",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "shopify": {
+          "paths": [{ "path": "fulfillment_orders[].destination", "type": "object" }],
+          "transform": "destination.first_name/last_name/company/address1/address2/city/province/zip/country/phone/email map to the canonical address parts; one destination per fulfillment order.",
+          "fetch": {
+            "endpoint": "GET /admin/api/{version}/orders/{order_id}/fulfillment_orders.json"
+          },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Destination address and contact details where the fulfillment order items will be shipped.",
+              "anchor": "",
+              "docId": "endpoint:GET~/admin/api/{version}/orders/{order_id}/fulfillment_orders.json"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "shipping", "type": "object" }],
+          "transform": "shipping.first_name/last_name/address_1/address_2/city/state/postcode/country map to the canonical address parts.",
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Shipping address details for delivery.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "payment_method",
+      "type": "string",
+      "description": "Payment method used for the order.",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "supported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "payment_type", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Payment's type used by the customer to pay this order",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "payment_method", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Unique slug of the payment gateway used for the order.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "payment_transaction_id",
+      "type": "string",
+      "description": "Reference of the payment transaction.",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "supported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "transaction_number", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Payment's transaction number",
+              "anchor": "",
+              "docId": "model:or11-response-200-orders"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "transaction_id", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Reference identifier assigned by the payment provider.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "line_items",
+      "type": "array",
+      "description": "Ordered items.",
+      "required": true,
+      "support": { "shopify": "derived", "woocommerce": "supported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "order_lines", "type": "array" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            { "quote": "Order lines", "anchor": "", "docId": "endpoint:GET~/api/orders/{order_id}" }
+          ]
+        },
+        "shopify": {
+          "paths": [{ "path": "fulfillment.line_items", "type": "array" }],
+          "transform": "Union of fulfillment.line_items[] across the order's fulfillments (covers fulfilled items only).",
+          "fetch": {
+            "endpoint": "GET /admin/api/{version}/orders/{order_id}/fulfillments/{fulfillment_id}.json"
+          },
+          "join": ["fulfillments[].order_id = order id"],
+          "evidence": [
+            {
+              "quote": "List of line items included in this fulfillment.",
+              "anchor": "",
+              "docId": "endpoint:GET~/admin/api/{version}/orders/{order_id}/fulfillments/{fulfillment_id}.json"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "line_items", "type": "array" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "List of products and quantities included in the order.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "line_items[].quantity",
+      "type": "integer",
+      "description": "Units ordered for the line.",
+      "required": true,
+      "support": { "shopify": "derived", "woocommerce": "supported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "order_lines[].quantity", "type": "integer" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Number of units ordered.",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "shopify": {
+          "paths": [{ "path": "fulfillment.line_items[].quantity", "type": "integer" }],
+          "transform": "Quantity fulfilled, not necessarily quantity ordered.",
+          "fetch": {
+            "endpoint": "GET /admin/api/{version}/orders/{order_id}/fulfillments/{fulfillment_id}.json"
+          },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Number of units fulfilled for this line item.",
+              "anchor": "",
+              "docId": "endpoint:GET~/admin/api/{version}/orders/{order_id}/fulfillments/{fulfillment_id}.json"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "line_items[].quantity", "type": "integer" }],
+          "transform": null,
+          "fetch": { "endpoint": "POST /wp-json/wc/{version}/orders" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Number of units of the product to order.",
+              "anchor": "",
+              "docId": "endpoint:POST~/wp-json/wc/{version}/orders"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "line_items[].sku",
+      "type": "string",
+      "description": "Seller SKU of the ordered item.",
+      "required": false,
+      "support": { "shopify": "supported", "woocommerce": "unsupported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "order_lines[].offer_sku", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Seller SKU of the offer.",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "shopify": {
+          "paths": [{ "path": "fulfillment.line_items[].sku", "type": "string" }],
+          "transform": null,
+          "fetch": {
+            "endpoint": "GET /admin/api/{version}/orders/{order_id}/fulfillments/{fulfillment_id}.json"
+          },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Stock keeping unit identifier for the item.",
+              "anchor": "",
+              "docId": "endpoint:GET~/admin/api/{version}/orders/{order_id}/fulfillments/{fulfillment_id}.json"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "line_items[].product_ref",
+      "type": "string",
+      "description": "Identifier of the product (or variant) behind the line.",
+      "required": false,
+      "support": { "shopify": "derived", "woocommerce": "derived", "mirakl": "derived" },
+      "sources": {
+        "mirakl": {
+          "paths": [
+            { "path": "order_lines[].product_sku", "type": "string" },
+            { "path": "order_lines[].offer_id", "type": "integer" }
+          ],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Marketplace product SKU.",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "shopify": {
+          "paths": [
+            { "path": "fulfillment.line_items[].product_id", "type": "integer" },
+            { "path": "fulfillment.line_items[].variant_id", "type": "integer" }
+          ],
+          "transform": null,
+          "fetch": {
+            "endpoint": "GET /admin/api/{version}/orders/{order_id}/fulfillments/{fulfillment_id}.json"
+          },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Unique identifier of the parent product.",
+              "anchor": "",
+              "docId": "endpoint:GET~/admin/api/{version}/orders/{order_id}/fulfillments/{fulfillment_id}.json"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [
+            { "path": "line_items[].product_id", "type": "integer" },
+            { "path": "line_items[].variation_id", "type": "integer" }
+          ],
+          "transform": null,
+          "fetch": { "endpoint": "POST /wp-json/wc/{version}/orders" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Unique identifier of the product being purchased.",
+              "anchor": "",
+              "docId": "endpoint:POST~/wp-json/wc/{version}/orders"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "line_items[].title",
+      "type": "string",
+      "description": "Display name of the ordered item.",
+      "required": false,
+      "support": { "shopify": "supported", "woocommerce": "unsupported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "order_lines[].product_title", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Title or name of the product.",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "shopify": {
+          "paths": [{ "path": "fulfillment.line_items[].title", "type": "string" }],
+          "transform": null,
+          "fetch": {
+            "endpoint": "GET /admin/api/{version}/orders/{order_id}/fulfillments/{fulfillment_id}.json"
+          },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Title of the product.",
+              "anchor": "",
+              "docId": "endpoint:GET~/admin/api/{version}/orders/{order_id}/fulfillments/{fulfillment_id}.json"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "line_items[].unit_price",
+      "type": "decimal",
+      "description": "Price of one unit.",
+      "required": false,
+      "support": { "shopify": "derived", "woocommerce": "unsupported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "order_lines[].price_unit", "type": "number" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Unit price of the product.",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "shopify": {
+          "paths": [{ "path": "fulfillment.line_items[].price", "type": "string" }],
+          "transform": "Parse decimal string.",
+          "fetch": {
+            "endpoint": "GET /admin/api/{version}/orders/{order_id}/fulfillments/{fulfillment_id}.json"
+          },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Price charged per unit before discounts.",
+              "anchor": "",
+              "docId": "endpoint:GET~/admin/api/{version}/orders/{order_id}/fulfillments/{fulfillment_id}.json"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "line_items[].line_total",
+      "type": "decimal",
+      "description": "Total price of the line, excluding shipping.",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "unsupported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "order_lines[].price", "type": "number" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Total price of the items in the order line, excluding shipping.",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "line_items[].discount_total",
+      "type": "decimal",
+      "description": "Discount applied to the line.",
+      "required": false,
+      "support": { "shopify": "derived", "woocommerce": "unsupported", "mirakl": "unsupported" },
+      "sources": {
+        "shopify": {
+          "paths": [{ "path": "fulfillment.line_items[].total_discount", "type": "string" }],
+          "transform": "Parse decimal string.",
+          "fetch": {
+            "endpoint": "GET /admin/api/{version}/orders/{order_id}/fulfillments/{fulfillment_id}.json"
+          },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Total discount amount applied across all units of this line item.",
+              "anchor": "",
+              "docId": "endpoint:GET~/admin/api/{version}/orders/{order_id}/fulfillments/{fulfillment_id}.json"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "line_items[].status",
+      "type": "string",
+      "description": "State of the individual line.",
+      "required": false,
+      "support": { "shopify": "supported", "woocommerce": "unsupported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "order_lines[].order_line_state", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Order line's state",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "shopify": {
+          "paths": [{ "path": "fulfillment.line_items[].fulfillment_status", "type": "string" }],
+          "transform": null,
+          "fetch": {
+            "endpoint": "GET /admin/api/{version}/orders/{order_id}/fulfillments/{fulfillment_id}.json"
+          },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Fulfillment state of this specific line item within the order.",
+              "anchor": "",
+              "docId": "endpoint:GET~/admin/api/{version}/orders/{order_id}/fulfillments/{fulfillment_id}.json"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "shipping_method",
+      "type": "string",
+      "description": "Shipping method or type chosen for the order.",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "derived", "mirakl": "derived" },
+      "sources": {
+        "mirakl": {
+          "paths": [
+            { "path": "shipping_type_code", "type": "string" },
+            { "path": "shipping_type_label", "type": "string" }
+          ],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Label of shipping's type",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [
+            { "path": "shipping_lines", "type": "array" },
+            { "path": "shipping_lines[].method_id", "type": "string" },
+            { "path": "shipping_lines[].method_title", "type": "string" }
+          ],
+          "transform": "Take shipping_lines[]; an order may have several shipping lines.",
+          "fetch": { "endpoint": "POST /wp-json/wc/{version}/orders" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Display label for the selected shipping method.",
+              "anchor": "",
+              "docId": "endpoint:POST~/wp-json/wc/{version}/orders"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "shipment_carrier",
+      "type": "string",
+      "description": "Carrier handling the shipment.",
+      "required": false,
+      "support": { "shopify": "derived", "woocommerce": "unsupported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "shipping_company", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Shipping company",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "shopify": {
+          "paths": [{ "path": "fulfillments[].tracking_company", "type": "string" }],
+          "transform": "One value per fulfillment.",
+          "fetch": { "endpoint": "GET /admin/api/{version}/orders/{order_id}/fulfillments.json" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "The name of the shipping carrier handling the package.",
+              "anchor": "",
+              "docId": "endpoint:GET~/admin/api/{version}/orders/{order_id}/fulfillments.json"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "tracking_number",
+      "type": "string",
+      "description": "Carrier tracking number.",
+      "required": false,
+      "support": { "shopify": "derived", "woocommerce": "unsupported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "shipping_tracking", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Shipping tracking",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "shopify": {
+          "paths": [{ "path": "fulfillments[].tracking_number", "type": "string" }],
+          "transform": "One value per fulfillment; tracking_numbers[] lists all.",
+          "fetch": { "endpoint": "GET /admin/api/{version}/orders/{order_id}/fulfillments.json" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "The tracking number assigned to the shipment.",
+              "anchor": "",
+              "docId": "endpoint:GET~/admin/api/{version}/orders/{order_id}/fulfillments.json"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "tracking_url",
+      "type": "string",
+      "description": "URL to follow the shipment.",
+      "required": false,
+      "support": { "shopify": "supported", "woocommerce": "unsupported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "shipping_tracking_url", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Shipping tracking url",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        },
+        "shopify": {
+          "paths": [{ "path": "fulfillments[].tracking_url", "type": "string" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /admin/api/{version}/orders/{order_id}/fulfillments.json" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "The web URL to track the shipment with the carrier.",
+              "anchor": "",
+              "docId": "endpoint:GET~/admin/api/{version}/orders/{order_id}/fulfillments.json"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "fulfillments",
+      "type": "array",
+      "description": "Shipments/fulfillments of the order.",
+      "required": false,
+      "support": { "shopify": "derived", "woocommerce": "unsupported", "mirakl": "unsupported" },
+      "sources": {
+        "shopify": {
+          "paths": [
+            { "path": "fulfillments", "type": "array" },
+            { "path": "fulfillments[].status", "type": "string" }
+          ],
+          "transform": null,
+          "fetch": { "endpoint": "GET /admin/api/{version}/orders/{order_id}/fulfillments.json" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "A list of fulfillments associated with the order.",
+              "anchor": "",
+              "docId": "endpoint:GET~/admin/api/{version}/orders/{order_id}/fulfillments.json"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "refunds",
+      "type": "array",
+      "description": "Refunds issued against the order.",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "supported", "mirakl": "derived" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "order_refunds", "type": "array" }],
+          "transform": "Only populated when order level tax calculation is enabled; line-level refunds live under order_lines[].",
+          "fetch": { "endpoint": "GET /api/orders" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "The list of refunds aggregated by group identifier",
+              "anchor": "",
+              "docId": "model:or11-response-200-orders"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "refunds", "type": "array" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "List of refunds issued against the order.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "discounts",
+      "type": "array",
+      "description": "Coupons, promotions or discount campaigns applied.",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "supported", "mirakl": "derived" },
+      "sources": {
+        "mirakl": {
+          "paths": [
+            { "path": "promotions", "type": "or11-response-200-orders-promotions" },
+            { "path": "discount_campaigns", "type": "array" }
+          ],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Promotions' summary applied to the order",
+              "anchor": "",
+              "docId": "model:or11-response-200-orders"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "coupon_lines", "type": "array" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Coupons applied to discount the order.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "sales_channel",
+      "type": "string",
+      "description": "Channel where the order originated.",
+      "required": false,
+      "support": { "shopify": "supported", "woocommerce": "unsupported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "channel", "type": "or11-response-200-orders-channel" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "The channel of the commercial's order",
+              "anchor": "",
+              "docId": "model:or11-response-200-orders"
+            }
+          ]
+        },
+        "shopify": {
+          "paths": [{ "path": "fulfillment_orders[].channel_id", "type": "integer" }],
+          "transform": null,
+          "fetch": {
+            "endpoint": "GET /admin/api/{version}/orders/{order_id}/fulfillment_orders.json"
+          },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Unique identifier of the sales channel where the order originated.",
+              "anchor": "",
+              "docId": "endpoint:GET~/admin/api/{version}/orders/{order_id}/fulfillment_orders.json"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "custom_fields",
+      "type": "array",
+      "description": "Merchant-defined key/value data on the order.",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "supported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "order_additional_fields", "type": "array" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Order's custom fields",
+              "anchor": "",
+              "docId": "model:or11-response-200-orders"
+            }
+          ]
+        },
+        "woocommerce": {
+          "paths": [{ "path": "meta_data", "type": "array" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /wp-json/wc/{version}/orders/{id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "List of custom metadata key-value pairs attached to the order.",
+              "anchor": "",
+              "docId": "endpoint:GET~/wp-json/wc/{version}/orders/{id}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "marketplace_commission",
+      "type": "decimal",
+      "description": "Commission retained by the marketplace on the order (marketplace-only concept).",
+      "required": false,
+      "support": { "shopify": "unsupported", "woocommerce": "unsupported", "mirakl": "supported" },
+      "sources": {
+        "mirakl": {
+          "paths": [{ "path": "total_commission", "type": "number" }],
+          "transform": null,
+          "fetch": { "endpoint": "GET /api/orders/{order_id}" },
+          "join": [],
+          "evidence": [
+            {
+              "quote": "Order's total commission (sum of the order line total commission)",
+              "anchor": "",
+              "docId": "endpoint:GET~/api/orders/{order_id}"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "openQuestions": [
+    {
+      "question": "Shopify has no core order resource in this build (only order-scoped fulfillment, fulfillment-order, event and transaction-count documents). Should Shopify order-level fields (totals, status, customer, billing address, currency) be filled from a later build or another document set?",
+      "detail": null,
+      "options": ["wait for an indexed Orders resource", "accept partial Shopify coverage"]
+    },
+    {
+      "question": "Is total tax-inclusive or tax-exclusive in each API? WooCommerce exposes prices_include_tax; Mirakl exposes order_tax_mode, and its total_price is documented as order price plus shipping price.",
+      "detail": null,
+      "options": ["gross", "net", "per-order flag"]
+    },
+    {
+      "question": "Mirakl has both order_id and commercial_id (a commercial order can group several seller orders). Which one is the canonical order identity?",
+      "detail": null,
+      "options": ["order_id", "commercial_id"]
+    },
+    {
+      "question": "Shopify fulfillment_orders[].order_processed_at is mapped to processed_at, not created_at. Is it equivalent to creation time?",
+      "detail": null,
+      "options": ["same as created_at", "distinct"]
+    },
+    {
+      "question": "Status vocabularies differ (WooCommerce status vs Mirakl order_state) and the evidence gives no mapping; Shopify fulfillment status is not an order status. What canonical status enum should be used?",
+      "detail": null,
+      "options": []
+    },
+    {
+      "question": "Mirakl is a multi-seller marketplace and WooCommerce/Shopify are single-merchant stores; is an Order one seller's order (Mirakl order_id) or the customer's whole purchase?",
+      "detail": null,
+      "options": ["per seller", "per customer purchase"]
+    }
+  ],
+  "coverage": {
+    "shopify": { "mapped": 17, "total": 40 },
+    "woocommerce": { "mapped": 26, "total": 40 },
+    "mirakl": { "mapped": 33, "total": 40 }
+  },
+  "citations": { "checked": 76, "found": 76, "missing": [] }
+}

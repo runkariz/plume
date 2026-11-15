@@ -1045,7 +1045,7 @@ th {
   vertical-align: middle;
 }
 .flow {
-  height: 760px;
+  height: var(--flow-h, 760px); /* set by the model size */
   border: 1px solid var(--line);
   border-radius: var(--r);
   overflow: hidden;
@@ -1118,6 +1118,9 @@ th {
   background: var(--surface);
   border: 1.5px solid var(--faint);
 }
+.model-cols.two-up {
+  grid-template-columns: 1.4fr 1fr;
+}
 .model-cols {
   display: grid;
   grid-template-columns: 1.25fr 1fr 0.8fr;
@@ -1183,19 +1186,24 @@ th {
   margin-bottom: 16px;
 }
 .cov li {
-  display: grid;
-  grid-template-columns: 1fr 90px auto;
-  gap: 12px;
-  align-items: center;
-}
-.cov li > .mono {
-  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 .cov-name {
   display: flex;
   align-items: center;
   gap: 10px;
   font-weight: 500;
+  min-width: 0;
+}
+.cov-label {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cov-count {
+  white-space: nowrap;
 }
 .cov-dot {
   width: 24px;
@@ -1362,7 +1370,7 @@ th {
     flex-wrap: wrap;
   }
   .flow {
-    height: 560px;
+    height: min(var(--flow-h, 760px), 560px);
   }
   .stepper .step span:not(.bar):not(.sr-only) {
     display: none;
@@ -1401,5 +1409,202 @@ th {
   .concept .btn {
     width: 100%;
     justify-content: center;
+  }
+}
+
+/* ---- evidence pack (paged) ---- */
+.evidence-pack {
+  margin: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.ev-api {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  background: var(--surface-2);
+}
+.ev-api h4 {
+  font: 600 15px var(--font-sans);
+  margin-bottom: 8px;
+}
+.ev-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.ev-doc {
+  margin: 12px 0;
+}
+.ev-doc-head {
+  margin-bottom: 6px;
+}
+.ev-fields {
+  font-size: 13px;
+}
+.ev-fields td,
+.ev-fields th {
+  padding: 6px 10px 6px 0;
+}
+.ev-req {
+  margin-left: 6px;
+}
+.ev-format summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.ev-fields {
+  width: 100%;
+}
+.ev-fields td,
+.ev-fields th {
+  overflow-wrap: anywhere;
+}
+
+.map-filter {
+  margin-bottom: 10px;
+}
+.map-filter .input {
+  width: 100%;
+}
+
+.doc-cols {
+  grid-template-columns: 1.4fr 1fr;
+}
+.doc-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 13.5px/1.65 var(--font-mono);
+  color: var(--ink);
+}
+
+/* ---- mapping table (primary view of a big model) ---- */
+.view-switch {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 4px 0 14px;
+}
+.mtable-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.mtable-controls .input {
+  min-width: min(380px, 80vw);
+}
+.mtable-grid {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  font-size: 14px;
+}
+.mtable-grid thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  font: 600 14px var(--font-sans);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.mtable-grid td,
+.mtable-grid tbody th {
+  padding: 12px 14px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+  border-top: 1px solid var(--line2);
+  text-align: left;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+.mtable-grid tbody tr:first-child td,
+.mtable-grid tbody tr:first-child th {
+  border-top: 0;
+}
+.mtable-field {
+  width: 24%;
+}
+.mtable-field > span {
+  display: block;
+}
+.mtable-name {
+  font-weight: 600;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.mtable-path {
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+}
+.mtable-cites {
+  margin-top: 6px;
+  font-size: 13px;
+}
+.mtable-cites summary {
+  cursor: pointer;
+  color: var(--accent-ink);
+  font-weight: 500;
+}
+.mtable-cites ul {
+  list-style: none;
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mtable-cites q {
+  color: var(--muted);
+}
+.mtable-cites a {
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  /* one card per field: no sideways scrolling */
+  .mtable-grid,
+  .mtable-grid tbody,
+  .mtable-grid tr,
+  .mtable-grid td,
+  .mtable-grid tbody th {
+    display: block;
+    width: auto;
+  }
+  .mtable-grid thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .mtable-grid tr {
+    border-top: 1px solid var(--line);
+  }
+  .mtable-grid td::before {
+    content: attr(data-label);
+    display: block;
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--faint);
+    margin-bottom: 4px;
+  }
+  .mtable-field {
+    width: auto;
   }
 }

@@ -1,13 +1,14 @@
 import { useCallback, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
 import { ApiError, type ModelSnapshot } from '@/api/types';
-import { Button, Card, Chip, Crumbs, ErrorState, LoadingState } from '@/components';
+import { Button, Card, Chip, Crumbs, ErrorState, LoadingState, Segmented } from '@/components';
 import { readableOn } from '@/lib/color';
 import { richText } from '@/lib/richText';
 import { defaultSelection, type Selection } from './graph';
 import { MappingGraph } from './MappingGraph';
+import { docHref, MappingTable } from './MappingTable';
 
 export function claudePrompt(s: ModelSnapshot): string {
   const apis = s.inputs.map((a) => a.shortName).join(', ');
@@ -74,7 +75,11 @@ function MappingDetail({ snap, sel }: { snap: ModelSnapshot; sel: Selection }) {
           {src.evidence?.map((e) => (
             <blockquote key={e.quote} className="evidence">
               <p>“{e.quote}”</p>
-              <cite className="faint small">{[e.docId, e.anchor].filter(Boolean).join(' · ')}</cite>
+              <cite className="faint small">
+                {e.docId ? <Link to={docHref(sel.apiId, e.docId)}>{e.docId}</Link> : null}
+                {e.docId && e.anchor ? ' · ' : ''}
+                {e.anchor}
+              </cite>
             </blockquote>
           ))}
         </>
@@ -93,6 +98,9 @@ function MappingDetail({ snap, sel }: { snap: ModelSnapshot; sel: Selection }) {
   );
 }
 
+/** Above this many fields a model opens as a table, and the graph focuses on one field. */
+export const BIG_MODEL = 12;
+
 export function ModelView() {
   const { snapshotId = '' } = useParams();
   const client = useApiClient();
@@ -102,6 +110,11 @@ export function ModelView() {
   );
   const { state, retry } = useAsync(load);
   const [picked, setPicked] = useState<Selection | null>(null);
+  const [focusNonce, setFocusNonce] = useState(0);
+  const [mapFilter, setMapFilter] = useState('');
+  // null = the default for the model size (a big model opens as a table, with the graph focused on one field)
+  const [viewChoice, setViewChoice] = useState<'table' | 'graph' | null>(null);
+  const [scopeChoice, setScopeChoice] = useState<'field' | 'all' | null>(null);
   const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
 
   const snap = state.status === 'ready' ? state.data : null;
@@ -147,6 +160,29 @@ export function ModelView() {
     snap.inputs
       .filter((a) => f.support[a.id] && f.support[a.id] !== 'unsupported')
       .map((a) => ({ value: `${f.name}|${a.id}`, label: `${f.name} ← ${a.shortName}` })),
+  );
+  const big = snap.fields.length > BIG_MODEL;
+  const view = viewChoice ?? (big ? 'table' : 'graph');
+  const scope = scopeChoice ?? (big ? 'field' : 'all');
+  const focusedField =
+    scope === 'field' && selection
+      ? snap.fields.find((f) => f.name === selection.field)
+      : undefined;
+  const graphSnap = focusedField
+    ? {
+        ...snap,
+        fields: [focusedField],
+        inputs: snap.inputs.filter(
+          (a) => (focusedField.support[a.id] ?? 'unsupported') !== 'unsupported',
+        ),
+      }
+    : snap;
+  const filterText = mapFilter.trim().toLowerCase();
+  const shownOptions = options.filter(
+    (o) =>
+      !filterText ||
+      o.label.toLowerCase().includes(filterText) ||
+      o.value === (selection ? `${selection.field}|${selection.apiId}` : ''),
   );
 
   return (
@@ -206,28 +242,92 @@ export function ModelView() {
         </span>
         <span>no edge = not supported</span>
       </div>
-      <MappingGraph snapshot={snap} selection={selection} onSelect={setPicked} />
-      <div className="model-cols">
-        <Card className="pad">
-          <label className="map-pick">
-            <span className="sr-only">Mapping</span>
-            <select
-              className="input"
-              value={selection ? `${selection.field}|${selection.apiId}` : ''}
-              onChange={(e) => {
-                const [field = '', apiId = ''] = e.target.value.split('|');
-                setPicked({ field, apiId });
-              }}
-            >
-              {options.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          {selection ? <MappingDetail snap={snap} sel={selection} /> : null}
-        </Card>
+      <div className="view-switch">
+        <Segmented
+          label="View"
+          value={view}
+          onChange={setViewChoice}
+          options={[
+            { value: 'table', label: 'Table' },
+            { value: 'graph', label: 'Graph' },
+          ]}
+        />
+        {view === 'graph' && big ? (
+          <Segmented
+            label="Graph shows"
+            variant="pills"
+            value={scope}
+            onChange={setScopeChoice}
+            options={[
+              { value: 'field', label: 'Selected field' },
+              { value: 'all', label: 'Whole model' },
+            ]}
+          />
+        ) : null}
+        <span className="faint small">
+          {view === 'table'
+            ? 'Every field and how each API fills it, with its citations.'
+            : scope === 'field'
+              ? 'Pick a field in the Mapping list below to see it here.'
+              : 'Scroll to pan, Ctrl or ⌘ + scroll to zoom. Pick a mapping below to zoom to it.'}
+        </span>
+      </div>
+      {view === 'table' ? (
+        <MappingTable snapshot={snap} />
+      ) : (scope === 'field' && !focusedField) || graphSnap.inputs.length === 0 ? (
+        <p className="muted state">No API fills this field.</p>
+      ) : (
+        <MappingGraph
+          key={`${scope}:${focusedField?.name ?? 'all'}`}
+          snapshot={graphSnap}
+          selection={selection}
+          onSelect={setPicked}
+          focusNonce={focusNonce}
+          readable={big && scope === 'all'}
+        />
+      )}
+      <div className={`model-cols${view === 'table' ? ' two-up' : ''}`}>
+        {view === 'graph' ? (
+          <Card className="pad">
+            {options.length > 20 ? (
+              <div className="map-filter">
+                <label htmlFor="map-filter" className="sr-only">
+                  Filter mappings
+                </label>
+                <input
+                  id="map-filter"
+                  type="search"
+                  className="input"
+                  placeholder={`Filter ${options.length} mappings by field or API`}
+                  value={mapFilter}
+                  onChange={(e) => setMapFilter(e.target.value)}
+                />
+                <p className="faint small" aria-live="polite">
+                  {shownOptions.length} of {options.length} mappings
+                </p>
+              </div>
+            ) : null}
+            <label className="map-pick">
+              <span className="sr-only">Mapping</span>
+              <select
+                className="input"
+                value={selection ? `${selection.field}|${selection.apiId}` : ''}
+                onChange={(e) => {
+                  const [field = '', apiId = ''] = e.target.value.split('|');
+                  setPicked({ field, apiId });
+                  setFocusNonce((n) => n + 1); // a pick from the list also zooms the graph to it
+                }}
+              >
+                {shownOptions.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {selection ? <MappingDetail snap={snap} sel={selection} /> : null}
+          </Card>
+        ) : null}
         <Card className="pad">
           <h2 className="h2-sm">Open questions</h2>
           {snap.openQuestions.length === 0 ? (
@@ -265,7 +365,10 @@ export function ModelView() {
                     >
                       {a.logo.text}
                     </span>
-                    {a.shortName}
+                    <span className="cov-label">{a.shortName}</span>
+                    <span className="mono small cov-count">
+                      {c.mapped} of {c.total}
+                    </span>
                   </span>
                   <span
                     className="cov-bar"
@@ -278,9 +381,6 @@ export function ModelView() {
                         background: a.logo.color,
                       }}
                     />
-                  </span>
-                  <span className="mono small">
-                    {c.mapped} of {c.total}
                   </span>
                 </li>
               );

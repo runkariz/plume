@@ -32,6 +32,11 @@ const PAGES: { name: string; path: string; ready: (p: Page) => Promise<void> }[]
     ready: (p) => expect(p.getByRole('heading', { name: 'Inventory' })).toBeVisible(),
   },
   {
+    name: 'model-view-big-table',
+    path: '/models/m-38f24111baf1076f44c9cfa7',
+    ready: (p) => expect(p.getByRole('table')).toBeVisible(),
+  },
+  {
     name: 'model-view',
     path: '/models/snap_8f3a21',
     ready: (p) => expect(p.getByRole('heading', { level: 1, name: 'Inventory' })).toBeVisible(),
@@ -65,7 +70,7 @@ for (const theme of THEMES) {
     test('the header is usable: the theme toggle and the links are reachable', async ({ page }) => {
       await page.goto('/');
       await expect(page.getByRole('link', { name: 'Models', exact: true })).toBeVisible();
-      await expect(page.getByRole('link', { name: 'GitHub' })).toBeVisible(); // icon only, name kept for screen readers
+      await expect(page.getByRole('link', { name: 'GitHub', exact: true })).toBeVisible(); // icon only, name kept for screen readers
       await page.getByRole('button', { name: /Switch to (dark|light) theme/ }).click();
       await expect(page.getByRole('link', { name: 'Maintainer' })).toBeVisible();
     });

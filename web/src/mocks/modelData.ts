@@ -1,4 +1,5 @@
 import type { ApiSummary, ApiRef, Concept, ModelSnapshot, SuggestResponse } from '@/api/types';
+import realOrder40 from './fixtures/realOrder40.json';
 
 /** Sample data from the mockups pics/plume-src/09..11. */
 function candidate(
@@ -404,7 +405,11 @@ export const productSnapshot: ModelSnapshot = {
   citations: { checked: 6, found: 5, missing: ['product_title'] },
 };
 
+/** A real 40-field Order model (Shopify + WooCommerce + Mirakl), copied from a live snapshot: the shape of a big model. */
+export const order40Snapshot = realOrder40 as unknown as ModelSnapshot;
+
 export const snapshots: Record<string, ModelSnapshot> = {
+  [order40Snapshot.id]: order40Snapshot,
   [inventorySnapshot.id]: inventorySnapshot,
   [productSnapshot.id]: productSnapshot,
 };

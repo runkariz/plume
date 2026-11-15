@@ -75,7 +75,14 @@ for (const theme of THEMES) {
         '/maintainer/mcp',
       );
       await panel.getByRole('button', { name: 'See what Plume gives Claude' }).click();
-      await expect(panel.getByLabel('Evidence pack')).toContainText('session_id');
+      const pack = panel.getByRole('region', { name: 'Evidence pack' });
+      await expect(pack.getByRole('region', { name: 'Evidence for Shopify' })).toContainText(
+        '3 fields',
+      );
+      await pack.getByRole('button', { name: /^Show Shopify fields/ }).click();
+      await expect(pack.getByText('3 of 5 fields shown').first()).toBeVisible();
+      await pack.getByRole('button', { name: 'Load more fields' }).first().click();
+      await expect(pack.getByText('5 of 5 fields shown').first()).toBeVisible();
 
       // a refused draft shows the server's issue codes and stores nothing
       await panel
@@ -94,6 +101,44 @@ for (const theme of THEMES) {
     });
   });
 }
+
+test('picking a mapping from the list zooms the graph to it, and the wheel scrolls the page', async ({
+  page,
+}) => {
+  await page.goto('/models/snap_8f3a21');
+  await expect(page.getByRole('heading', { level: 1, name: 'Inventory' })).toBeVisible();
+  const scale = () =>
+    page
+      .locator('.react-flow__viewport')
+      .evaluate((el) => new DOMMatrixReadOnly(getComputedStyle(el).transform).a);
+  await expect(page.locator('.react-flow__node').first()).toBeVisible();
+  const overview = await scale();
+
+  await page
+    .getByRole('combobox', { name: 'Mapping' })
+    .selectOption({ label: 'lead_time_days ← Mirakl' });
+  await expect(page.getByRole('heading', { name: 'lead_time_days ← Mirakl' })).toBeVisible();
+  await expect
+    .poll(scale, { message: 'the view zooms to the picked field' })
+    .toBeGreaterThan(overview * 1.05);
+
+  // clicking in the graph selects without moving the view
+  const zoomed = await scale();
+  await page
+    .locator('.react-flow__edge[aria-label="manage_stock from Shopify (derived)"]')
+    .click({ force: true });
+  await expect(page.getByRole('heading', { name: 'manage_stock ← Shopify' })).toBeVisible();
+  expect(Math.abs((await scale()) - zoomed)).toBeLessThan(0.001);
+
+  // the page scrolls over the canvas (zoom is Ctrl/Cmd + wheel, the controls or pinch)
+  const box = await page.locator('.flow').boundingBox();
+  expect(box).toBeTruthy();
+  await page.mouse.move((box?.x ?? 0) + 200, (box?.y ?? 0) + 200);
+  const before = await page.evaluate(() => window.scrollY);
+  await page.mouse.wheel(0, 400);
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
+  expect(await scale()).toBeCloseTo(zoomed, 3);
+});
 
 test('suggestions need two APIs', async ({ page }) => {
   await page.goto('/models/suggest?apis=shopify');

@@ -1,5 +1,5 @@
 import '@xyflow/react/dist/style.css';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import {
   Background,
   Controls,
@@ -7,6 +7,8 @@ import {
   MiniMap,
   Position,
   ReactFlow,
+  ReactFlowProvider,
+  useReactFlow,
   type NodeProps,
   type NodeTypes,
 } from '@xyflow/react';
@@ -91,15 +93,66 @@ const nodeTypes: NodeTypes = {
   canonical: CanonicalNode,
 };
 
-export function MappingGraph({
+/** Width of the whole graph in graph units (left group, canonical column, right groups). */
+const GRAPH_WIDTH = 1500;
+/** Below this zoom node text is smaller than ~12 px: the readable view never goes under it. */
+export const READABLE_MIN_ZOOM = 0.85;
+
+/** The canvas is a fixed window: a readable view of a big model pans vertically inside it. */
+export function graphHeight(readable: boolean): number {
+  return readable ? 820 : 760;
+}
+
+/** Zoom that fits the graph's width, but never below the readable minimum (then it pans sideways too). */
+export function readableZoom(containerWidth: number): number {
+  return Math.min(1, Math.max(READABLE_MIN_ZOOM, containerWidth / GRAPH_WIDTH));
+}
+
+/** Zooms to the picked field and the API fields it maps to, whenever `focusNonce` changes (not on first render). */
+function FocusOnSelection({
+  edges,
+  selection,
+  focusNonce,
+}: {
+  edges: { source: string; target: string; data?: { field: string } }[];
+  selection: Selection | null;
+  focusNonce: number;
+}) {
+  const { fitView } = useReactFlow();
+  useEffect(() => {
+    if (focusNonce === 0 || !selection) return;
+    const ids = new Set<string>([canonNodeId(selection.field)]);
+    for (const e of edges)
+      if (e.data?.field === selection.field) {
+        ids.add(e.source);
+        ids.add(e.target);
+      }
+    void fitView({
+      nodes: [...ids].map((id) => ({ id })),
+      padding: 0.25,
+      maxZoom: 1.1,
+      duration: 400,
+    });
+    // only a pick from the list moves the view; clicking in the graph must not
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusNonce]);
+  return null;
+}
+
+function Graph({
   snapshot,
   selection,
   onSelect,
+  focusNonce,
+  readable,
 }: {
   snapshot: ModelSnapshot;
   selection: Selection | null;
   onSelect: (s: Selection) => void;
+  focusNonce: number;
+  readable: boolean;
 }) {
+  const wrap = useRef<HTMLDivElement>(null);
   const { theme } = useTheme();
   const base = useMemo(() => buildGraph(snapshot), [snapshot]);
 
@@ -131,6 +184,8 @@ export function MappingGraph({
   return (
     <div
       className="flow"
+      ref={wrap}
+      style={{ '--flow-h': `${graphHeight(readable)}px` } as CSSProperties}
       role="group"
       aria-label="Mapping graph (also available as the Mapping list below)"
     >
@@ -139,13 +194,24 @@ export function MappingGraph({
         edges={edges}
         nodeTypes={nodeTypes}
         colorMode={theme}
-        fitView
+        fitView={!readable}
+        onInit={(rf) => {
+          // a big model opens at a readable zoom, at the top, and pans vertically (no "fit everything")
+          if (readable) {
+            const z = readableZoom(wrap.current?.clientWidth ?? 1200);
+            void rf.setViewport({ x: 12 + 20 * z, y: 12, zoom: z });
+          }
+        }}
         fitViewOptions={{ padding: 0.06 }}
         minZoom={0.1}
         maxZoom={1.6}
         nodesConnectable={false}
         nodesDraggable={false}
         elementsSelectable
+        // a long page must scroll over the canvas: zoom with the controls, pinch, or Ctrl/Cmd + wheel
+        zoomOnScroll={false}
+        panOnScroll={readable}
+        preventScrolling={readable}
         proOptions={{ hideAttribution: true }}
         onEdgeClick={(_, edge) => {
           const d = edge.data as EdgeData | undefined;
@@ -162,6 +228,7 @@ export function MappingGraph({
           }
         }}
       >
+        <FocusOnSelection edges={base.edges} selection={selection} focusNonce={focusNonce} />
         <Background gap={22} size={1.5} />
         <MiniMap
           pannable
@@ -173,5 +240,21 @@ export function MappingGraph({
         <Controls showInteractive={false} />
       </ReactFlow>
     </div>
+  );
+}
+
+export function MappingGraph(props: {
+  snapshot: ModelSnapshot;
+  selection: Selection | null;
+  onSelect: (s: Selection) => void;
+  /** Bump to zoom the view to the current selection. */
+  focusNonce?: number;
+  /** Open at a readable zoom and pan vertically, instead of fitting everything (for big models). */
+  readable?: boolean;
+}) {
+  return (
+    <ReactFlowProvider>
+      <Graph {...props} focusNonce={props.focusNonce ?? 0} readable={props.readable ?? false} />
+    </ReactFlowProvider>
   );
 }
