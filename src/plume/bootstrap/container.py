@@ -251,6 +251,7 @@ class Container:
             self.model_job_runner,
             self.clock,
             self.settings.model_max_rounds,
+            evidence_budget=self.settings.evidence_budget_chars,
         )
 
     @cached_property

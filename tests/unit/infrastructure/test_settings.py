@@ -39,3 +39,11 @@ def test_secret_is_never_rendered(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_dotenv_file_is_read(tmp_path: Path) -> None:
     (tmp_path / ".env").write_text("PLUME_MCP_PORT=18482\n", encoding="utf-8")
     assert Settings().mcp_port == 18482
+
+
+def test_evidence_budget_is_a_setting() -> None:
+    from plume.bootstrap.container import Container  # noqa: PLC0415
+
+    assert Settings().evidence_budget_chars == 200_000
+    c = Container(settings=Settings(embedder="hash", evidence_budget_chars=500_000))
+    assert c.generate()._budget == 500_000

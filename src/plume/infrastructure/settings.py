@@ -51,6 +51,13 @@ class Settings(BaseSettings):
         default="gemini-4-argon", description="Gemini model for server-side model generation."
     )
     model_max_rounds: int = Field(default=3, ge=1, le=10)
+    evidence_budget_chars: int = Field(
+        default=200_000,
+        ge=20_000,
+        le=2_000_000,
+        description="Characters of API evidence server generation sends the model, shared "
+        "fairly by the APIs (~4 characters per prompt token).",
+    )
     vertex_project: str | None = Field(
         default=None,
         description="Google Cloud project (id or number) for server-side generation: with it Plume "

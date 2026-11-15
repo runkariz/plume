@@ -657,3 +657,26 @@ def test_the_evidence_budget_is_shared_fairly_between_apis(stack: FakeStack) -> 
     assert all(v["fields"] > 0 for v in small.values())  # every API gets a share
     assert all(v["dropped"] > 0 for v in small.values())
     assert sum(v["chars"] for v in small.values()) <= 3_000
+
+
+def test_discarded_or_superseded_models_are_never_offered_as_existing(stack: FakeStack) -> None:
+    """plume-l2: generate without force answered "ready" with a DISCARDED one-API model."""
+    models = stack.models()
+    sid = models.submit(models.start(APIS, "Order").session_id, _draft("good"), maintainer=True)
+    snap = sid.snapshot
+    assert models.existing(APIS, "Order", maintainer=True) == snap  # unreleased: offered
+    assert models.existing(APIS, "Order") is None  # not to the public
+    models.discard(snap.snapshot_id)
+    assert models.existing(APIS, "Order", maintainer=True) is None
+    old = models.release(
+        models.submit(models.start(APIS, "Order").session_id,
+                      dict(_draft("good"), description="old"), maintainer=True).snapshot.snapshot_id
+    )  # fmt: skip
+    new = models.release(
+        models.submit(models.start(APIS, "Order").session_id,
+                      dict(_draft("good"), description="new"), maintainer=True).snapshot.snapshot_id
+    )  # fmt: skip
+    models.supersede(new.snapshot_id, [old.snapshot_id])
+    found = models.existing(APIS, "Order", maintainer=True)
+    assert found is not None
+    assert found.snapshot_id == new.snapshot_id

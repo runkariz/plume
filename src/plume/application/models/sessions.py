@@ -276,12 +276,14 @@ class ModelSessions:
         self, apis: list[str], concept: str, maintainer: bool = False
     ) -> ModelSnapshot | None:
         """A model the caller may see (official; unreleased too for a maintainer) for the same
-        concept on the APIs' current builds, if any. Never someone's unlisted model."""
+        concept on the APIs' current builds, if any. Never someone's unlisted model, and never
+        a discarded or superseded one (a thrown-away draft must not be offered as "ready")."""
         resolved = resolve_apis(self._resolver, apis)
         pins = {(r.api.api_id.value, r.build.build_id.value) for r in resolved}
         key = concept_key(concept)
-        visible = _visible(maintainer)
-        allowed = tuple(v for v in visible if v != Visibility.UNLISTED)
+        allowed: tuple[str, ...] = (
+            (Visibility.OFFICIAL, Visibility.UNRELEASED) if maintainer else (Visibility.OFFICIAL,)
+        )
         for snap in self._models.list_snapshots(resolved[0].api.api_id.value, 200, allowed):
             if concept_key(snap.concept) == key and {(i.api, i.build) for i in snap.inputs} == pins:
                 return snap
