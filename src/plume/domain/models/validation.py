@@ -48,30 +48,28 @@ def quote_in(quote: str, text: str) -> bool:
 
 def validate(draft: ModelDraft, apis: frozenset[str], oracle: Oracle) -> list[Issue]:
     issues: list[Issue] = []
-    for f in draft.fields:
-        if not f.sources:
-            issues.append(Issue("NO_SOURCES", f.name, None, "the field maps no API"))
+    for path, f in draft.walk():
+        if not f.sources and not f.fields:  # a container may be mapped through its sub-fields
+            issues.append(Issue("NO_SOURCES", path, None, "the field maps no API"))
         for api, src in f.sources:
             if api not in apis:
                 issues.append(
-                    Issue("API_NOT_IN_SESSION", f.name, api, f"{api} is not in this session")
+                    Issue("API_NOT_IN_SESSION", path, api, f"{api} is not in this session")
                 )
                 continue
             if not src.evidence:
-                issues.append(
-                    Issue("MISSING_CITATION", f.name, api, "the mapping cites no evidence")
-                )
+                issues.append(Issue("MISSING_CITATION", path, api, "the mapping cites no evidence"))
             for e in src.evidence:
                 text = oracle.doc_text(api, e.doc_id)
                 if text is None:
                     issues.append(
-                        Issue("DOC_NOT_FOUND", f.name, api, f"{e.doc_id} is not in the build")
+                        Issue("DOC_NOT_FOUND", path, api, f"{e.doc_id} is not in the build")
                     )
                 elif not quote_in(e.quote, text):
                     issues.append(
                         Issue(
                             "QUOTE_NOT_FOUND",
-                            f.name,
+                            path,
                             api,
                             f"the quote is not in {e.doc_id}: {e.quote[:80]!r}",
                         )
@@ -81,7 +79,7 @@ def validate(draft: ModelDraft, apis: frozenset[str], oracle: Oracle) -> list[Is
                     issues.append(
                         Issue(
                             "FIELD_NOT_FOUND",
-                            f.name,
+                            path,
                             api,
                             f"{p.path} is not a documented field of {api}",
                         )
@@ -89,7 +87,7 @@ def validate(draft: ModelDraft, apis: frozenset[str], oracle: Oracle) -> list[Is
             if src.fetch and not oracle.endpoint_exists(api, src.fetch):
                 issues.append(
                     Issue(
-                        "ENDPOINT_NOT_FOUND", f.name, api, f"{src.fetch} is not documented in {api}"
+                        "ENDPOINT_NOT_FOUND", path, api, f"{src.fetch} is not documented in {api}"
                     )
                 )
     return issues

@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from plume.domain.models.canonical_model import ModelDraft
+from plume.domain.models.canonical_model import CanonicalField, ModelDraft
 from plume.domain.shared.hashing import content_hash
 
 PROMPT_VERSION = "plume-models-v1"
@@ -64,49 +64,58 @@ class ModelSnapshot:
         return self.content_key or self.snapshot_id
 
     def support(self, api: str) -> dict[str, str]:
-        """Per canonical field: supported | derived | unsupported for this API."""
-        out = {}
-        for f in self.draft.fields:
+        """Per canonical field (by canonical path, nested ones included): supported | derived |
+        unsupported for this API. A container is supported when it or any sub-field is."""
+        out: dict[str, str] = {}
+        for path, f in reversed(self.draft.walk()):  # children before their parent
             src = f.source(api)
-            out[f.name] = (
-                "unsupported" if src is None else "derived" if src.derived else "supported"
-            )
+            own = "unsupported" if src is None else "derived" if src.derived else "supported"
+            if f.fields and own == "unsupported":
+                kids = [out[f"{f.child_path(path)}.{c.name}"] for c in f.fields]
+                own = "derived" if any(k != "unsupported" for k in kids) else "unsupported"
+            out[path] = own
         return out
 
     def coverage(self) -> dict[str, tuple[int, int]]:
-        total = len(self.draft.fields)
-        return {
-            i.api: (sum(1 for v in self.support(i.api).values() if v != "unsupported"), total)
-            for i in self.inputs
-        }
+        """Mapped leaves / all leaves per API (containers are not counted)."""
+        leaves = [p for p, _ in self.draft.leaves()]
+        total = len(leaves)
+        out = {}
+        for i in self.inputs:
+            support = self.support(i.api)
+            out[i.api] = (sum(1 for p in leaves if support[p] != "unsupported"), total)
+        return out
+
+
+def _field_json(f: CanonicalField) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "name": f.name,
+        "type": f.type,
+        "description": f.description,
+        "required": f.required,
+        "sources": {
+            api: {
+                "paths": [{"path": p.path, "type": p.type} for p in s.paths],
+                "fetch": s.fetch,
+                "join": list(s.join),
+                "transform": s.transform,
+                "evidence": [
+                    {"doc_id": e.doc_id, "quote": e.quote, "anchor": e.anchor} for e in s.evidence
+                ],
+            }
+            for api, s in f.sources
+        },
+    }
+    if f.fields:  # only when present, so models without nesting keep their content hash
+        out["fields"] = [_field_json(c) for c in f.fields]
+    return out
 
 
 def draft_json(draft: ModelDraft) -> dict[str, Any]:
     return {
         "name": draft.name,
         "description": draft.description,
-        "fields": [
-            {
-                "name": f.name,
-                "type": f.type,
-                "description": f.description,
-                "required": f.required,
-                "sources": {
-                    api: {
-                        "paths": [{"path": p.path, "type": p.type} for p in s.paths],
-                        "fetch": s.fetch,
-                        "join": list(s.join),
-                        "transform": s.transform,
-                        "evidence": [
-                            {"doc_id": e.doc_id, "quote": e.quote, "anchor": e.anchor}
-                            for e in s.evidence
-                        ],
-                    }
-                    for api, s in f.sources
-                },
-            }
-            for f in draft.fields
-        ],
+        "fields": [_field_json(f) for f in draft.fields],
         "open_questions": [
             {"question": q.question, "detail": q.detail, "options": list(q.options)}
             for q in draft.open_questions

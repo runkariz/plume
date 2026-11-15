@@ -70,9 +70,17 @@
     const head = document.getElementById("head");
     head.replaceChildren(el("th", "Field"), ...apis.map((a) => el("th", a)));
     const rows = document.getElementById("rows");
-    rows.replaceChildren(...(model.fields || []).map((f) => {
+    const flat = [];
+    const walk = (fields, depth) => (fields || []).forEach((f) => {
+      flat.push([f, depth]);
+      walk(f.fields, depth + 1);
+    });
+    walk(model.fields, 0);
+    rows.replaceChildren(...flat.map(([f, depth]) => {
       const tr = document.createElement("tr");
-      tr.append(el("td", f.name + " : " + f.type));
+      const name = el("td", (f.path || f.name) + " : " + f.type);
+      name.style.paddingLeft = (6 + depth * 14) + "px";
+      tr.append(name);
       for (const a of apis) {
         const src = (f.sources || {})[a];
         const support = (f.support || {})[a] || "unsupported";

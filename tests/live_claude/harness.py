@@ -276,7 +276,7 @@ def check_model(stack: Stack, run: Run, before: set[str], min_coverage: float) -
             checked = found = 0
             invented: list[str] = []
             missing: list[str] = []
-            for f in model["fields"]:
+            for f in _all_fields(model["fields"]):
                 for api, src in f["sources"].items():
                     for p in src["paths"]:
                         query = {"name": p["path"], "kind": "field", "version": _build(model, api)}
@@ -321,6 +321,15 @@ def check_model(stack: Stack, run: Run, before: set[str], min_coverage: float) -
                     )
                 )
     return checks
+
+
+def _all_fields(fields: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Fields with their nested sub-fields (every one is mapped and cited)."""
+    out: list[dict[str, Any]] = []
+    for f in fields:
+        out.append(f)
+        out.extend(_all_fields(f.get("fields") or []))
+    return out
 
 
 def _build(model: dict[str, Any], api: str) -> str | None:

@@ -43,6 +43,7 @@ MAX_OWNER_KEYS = 200
 _SAVE_ATTEMPTS = 5
 _DATA_LOCATIONS = (FieldLocation.MODEL, FieldLocation.RESPONSE, FieldLocation.BODY)
 
+_EVIDENCE = {"doc_id": "model:order", "quote": "exact text copied from the document"}
 DRAFT_FORMAT: dict[str, Any] = {
     "name": "Order",
     "description": "One sentence on what the canonical model represents.",
@@ -66,6 +67,21 @@ DRAFT_FORMAT: dict[str, Any] = {
         }
     ],
     "open_questions": [{"question": "Is total before or after tax?", "options": ["gross", "net"]}],
+    "_nested_field_example": {
+        "name": "line_items",
+        "type": "array",
+        "description": "The order's lines.",
+        "sources": {"<api id>": {"paths": [{"path": "line_items"}], "evidence": [_EVIDENCE]}},
+        "fields": [
+            {
+                "name": "sku",
+                "type": "string",
+                "sources": {
+                    "<api id>": {"paths": [{"path": "line_items[].sku"}], "evidence": [_EVIDENCE]}
+                },
+            }
+        ],
+    },
 }
 
 INSTRUCTIONS = """\
@@ -80,6 +96,10 @@ returns their fields page by page (follow next_cursor). Rules (refused otherwise
 - Leave an API out of a field's sources when it has no such data; never invent fields.
 - Use `transform` / `join` to describe derived values (e.g. "sum of line_items[].price").
 - Put semantic choices you cannot settle from the evidence in open_questions; do not decide them.
+- Nested objects: a field of type "object" or "array" may carry its own "fields" (at most 3
+  levels). Map and cite every sub-field like a top-level one; its source paths are the API's
+  full paths (e.g. "variants[].sku"). A container needs sources only when it is mapped as a
+  whole; coverage counts the sub-fields.
 Refusals come back with codes (MISSING_CITATION, QUOTE_NOT_FOUND, FIELD_NOT_FOUND,
 ENDPOINT_NOT_FOUND, DOC_NOT_FOUND, API_NOT_IN_SESSION); fix those mappings and submit again.
 """
@@ -401,7 +421,7 @@ class ModelSessions:
         issues = validate(draft, apis, self._oracle(session))
         if issues:
             raise ModelDraftRefusedError(issues)
-        checked = sum(len(s.evidence) for f in draft.fields for _, s in f.sources)
+        checked = sum(len(s.evidence) for _, f in draft.walk() for _, s in f.sources)
         content_key = snapshot_id_for(session.inputs, session.concept, draft)
         base_id = based_on or session.based_on
         base = self.visible_snapshot(base_id, maintainer) if base_id else None
