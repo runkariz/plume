@@ -130,6 +130,26 @@ for (const theme of THEMES) {
       await expectNoSeriousA11y(page);
       await shot(page, 'w11-real-trigger-detail', theme);
 
+      // the webhook mechanism: stream endpoint ids resolve to METHOD + path linked to the endpoint page when the
+      // build has the endpoint (shopify-mini has the subscribe endpoint), and stay marked raw ids when it does not
+      const refs = (
+        await json<{
+          endpointRefs: Record<string, { docId: string; method: string; path: string } | null>;
+        }>(request, '/v1/apis/shopify/triggers')
+      ).endpointRefs;
+      const resolved = Object.entries(refs).filter(([, v]) => v);
+      const missing = Object.entries(refs).filter(([, v]) => !v);
+      expect(resolved.length, 'shopify-mini resolves its subscribe endpoint').toBeGreaterThan(0);
+      await page.goto('/apis/shopify?section=triggers');
+      const mech = page.getByRole('region', { name: 'Webhook delivery' });
+      for (const [, ref] of resolved)
+        await expect(mech.getByRole('link', { name: ref?.path ?? '' }).first()).toHaveAttribute(
+          'href',
+          `/apis/shopify/documents/${encodeURIComponent(ref?.docId ?? '')}`,
+        );
+      if (missing.length) await expect(mech.getByText('(not in this build)').first()).toBeVisible();
+      await shot(page, 'w12-real-webhook-endpoints', theme);
+
       const woo = await json<TriggerList>(request, '/v1/apis/woocommerce/triggers');
       expect(woo.present).toBe(false);
       await page.goto('/apis/woocommerce?section=triggers');
