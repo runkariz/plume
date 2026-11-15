@@ -26,17 +26,20 @@ def test_collections_items_legacy_keys_and_merge(repo: CollectionRepo) -> None:
     got = repo.get("c-a")
     assert got is not None
     assert (got.collection_id, got.merged_into) == ("c-a", None)
-    assert repo.add("c-a", "model", "u-1", T) is True
-    assert repo.add("c-a", "model", "u-1", T) is False  # already in it
+    assert repo.add("c-a", "model", "u-1", T, "u-1") is True
+    assert repo.add("c-a", "model", "u-1", T, "u-1b") is False  # already in it: version moves
     assert repo.add("c-a", "set", "us-1", T + timedelta(minutes=1)) is True
-    assert repo.items("c-a") == [("set", "us-1"), ("model", "u-1")]  # newest first
+    assert repo.items("c-a") == [("set", "us-1", None), ("model", "u-1", "u-1b")]
     assert repo.containing("model", "u-1") == ["c-a"]
     assert repo.for_legacy_keys(["hash-1", "nope"]) == ["c-b"]
     assert repo.for_legacy_keys([]) == []
     repo.add("c-b", "model", "u-1", T)
     repo.add("c-b", "model", "u-2", T)
     assert repo.merge("c-a", "c-b", T + timedelta(minutes=2)) == 1  # u-2 is new to c-a
-    assert sorted(repo.items("c-a")) == [("model", "u-1"), ("model", "u-2"), ("set", "us-1")]
+    assert sorted((k, lin) for k, lin, _ in repo.items("c-a")) == [
+        ("model", "u-1"), ("model", "u-2"), ("set", "us-1"),
+    ]  # fmt: skip
+    assert {(k, lin): v for k, lin, v in repo.items("c-a")}[("model", "u-1")] == "u-1b"
     assert repo.items("c-b") == []
     merged = repo.get("c-b")
     assert merged is not None

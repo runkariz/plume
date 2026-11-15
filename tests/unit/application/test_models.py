@@ -12,6 +12,7 @@ from plume.application.models.concepts import (
     concept_label,
 )
 from plume.application.models.sessions import ModelDraftRefusedError
+from plume.domain.models.snapshot import ModelSnapshot
 from tests.fakes.knowledge import WordEmbedder
 from tests.fakes.stack import FakeStack
 
@@ -343,18 +344,20 @@ def test_revisions_make_versions_in_a_lineage(stack: FakeStack) -> None:
     assert revision["based_on"] == v1.snapshot_id
     assert revision["starting_draft"]["name"] == v1.draft.name
     changed = dict(_draft("good"), description="Revised description.")
-    v2 = models.submit(revision["session_id"], changed).snapshot
+    assert first.collection is not None
+    link = first.collection.collection_id
+    v2 = models.submit(revision["session_id"], changed, collection=link).snapshot
     assert (v2.lineage, v2.version, v2.based_on) == (v1.snapshot_id, 2, v1.snapshot_id)
     v3 = models.submit(
         models.revise(v2.snapshot_id)["session_id"],
         dict(changed, description="Third."),
         based_on=v2.snapshot_id,
+        collection=link,
     ).snapshot
     info = models.lineage_info(v3)
     assert (info["version"], info["versions"], info["latest_id"]) == (3, 3, v3.snapshot_id)
     assert [h["version"] for h in info["history"]] == [1, 2, 3]
-    assert first.collection is not None
-    mine = stack.collections().content(first.collection.collection_id).models
+    mine = stack.collections().content(link).models
     assert [m.snapshot_id for m in mine] == [v3.snapshot_id]  # the latest version
     assert models.snapshot(v1.snapshot_id) == v1  # versions never change
 
@@ -613,6 +616,23 @@ def test_a_version_by_someone_else_never_reveals_the_authors_link(stack: FakeSta
     assert stranger.collection is not None
     assert stranger.collection.created
     assert stranger.collection.collection_id != author
-    # the author's link still lists their model (its latest version)
-    mine = stack.collections().content(author).models
-    assert [m.snapshot_id for m in mine] == [stranger.snapshot.snapshot_id]
+    # the author's link lists THEIR version, and says a newer one exists
+    content = stack.collections().content(author)
+    assert [m.snapshot_id for m in content.models] == [first.snapshot.snapshot_id]
+    newer = content.newer[first.snapshot.snapshot_id]
+    assert isinstance(newer, ModelSnapshot)
+    assert (newer.snapshot_id, newer.version) == (stranger.snapshot.snapshot_id, 2)
+    # the stranger's link lists the stranger's version, with nothing newer
+    theirs = stack.collections().content(stranger.collection.collection_id)
+    assert [m.snapshot_id for m in theirs.models] == [stranger.snapshot.snapshot_id]
+    assert theirs.newer == {}
+    # the author saves a version with their link: it is theirs again
+    mine = models.submit(
+        models.revise(stranger.snapshot.snapshot_id)["session_id"],
+        dict(_draft("good"), description="The author's third."),
+        based_on=stranger.snapshot.snapshot_id,
+        collection=author,
+    ).snapshot
+    content = stack.collections().content(author)
+    assert [m.snapshot_id for m in content.models] == [mine.snapshot_id]
+    assert content.newer == {}

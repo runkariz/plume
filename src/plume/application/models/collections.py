@@ -4,8 +4,8 @@ See docs/design/my-models-link.md."""
 
 import hashlib
 import secrets
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
 
 from plume.application.errors import NotFoundError
 from plume.application.models.concepts import ModelInputError
@@ -45,6 +45,24 @@ class CollectionContent:
     merged_into: str | None
     models: list[ModelSnapshot]
     sets: list[ModelSetSnapshot]
+    # listed id -> the lineage's newest version when it is newer than the one saved into this
+    # collection (someone else with the model's link added it): "a newer version exists"
+    newer: dict[str, ModelSnapshot | ModelSetSnapshot] = field(default_factory=dict)
+
+
+DISCARDED = Visibility.DISCARDED
+
+
+def _own[T](versions: list[T], saved: str | None, id_of: Callable[[T], str]) -> T | None:
+    """The version saved into the collection (the lineage's latest when none is recorded:
+    items from old owner keys)."""
+    if not versions:
+        return None
+    if saved:
+        for v in versions:
+            if id_of(v) == saved:
+                return v
+    return versions[-1]
 
 
 class Collections:
@@ -73,19 +91,26 @@ class Collections:
             return self._create(f"{wanted[:40]} is not a My models link here; a new one was made")
         return CollectionRef(c.collection_id, False)
 
-    def save(self, collection_id: str | None, kind: str, lineage_id: str) -> CollectionRef:
+    def save(
+        self,
+        collection_id: str | None,
+        kind: str,
+        lineage_id: str,
+        version_id: str | None = None,
+    ) -> CollectionRef:
         """Put a lineage in the caller's collection, or in a new one. Never answer with a
         collection the caller did not send: a lineage may already sit in its author's link,
         and anyone with a model's link may add a version (that must not reveal the author's
         list). A retry without the link therefore gets a new link too."""
         ref = self.ensure(collection_id)
         items = self._repo.items(ref.collection_id)
-        if (kind, lineage_id) not in items and len(items) >= MAX_COLLECTION_ITEMS:
+        held = {(k, lin) for k, lin, _ in items}
+        if (kind, lineage_id) not in held and len(items) >= MAX_COLLECTION_ITEMS:
             raise ModelInputError(
                 f"this My models link holds {MAX_COLLECTION_ITEMS} models and sets already; "
                 "save without it to start a new one"
             )
-        self._repo.add(ref.collection_id, kind, lineage_id, self._clock.now())
+        self._repo.add(ref.collection_id, kind, lineage_id, self._clock.now(), version_id)
         return ref
 
     def content(self, collection_id: str) -> CollectionContent:
@@ -94,26 +119,25 @@ class Collections:
             raise NotFoundError(f"My models link {collection_id[:40]} not found")
         models: list[ModelSnapshot] = []
         sets: list[ModelSetSnapshot] = []
-        for kind, lineage_id in self._repo.items(c.collection_id):
+        newer: dict[str, ModelSnapshot | ModelSetSnapshot] = {}
+        for kind, lineage_id, saved in self._repo.items(c.collection_id):
             if kind == KIND_MODEL:
-                versions = [
-                    s
-                    for s in self._models.lineage(lineage_id)
-                    if s.visibility != Visibility.DISCARDED
-                ]
-                if versions:
-                    models.append(versions[-1])
+                mv = [s for s in self._models.lineage(lineage_id) if s.visibility != DISCARDED]
+                own_model = _own(mv, saved, lambda s: s.snapshot_id)
+                if own_model is not None:
+                    models.append(own_model)
+                    if mv[-1].version > own_model.version:
+                        newer[own_model.snapshot_id] = mv[-1]
             elif kind == KIND_SET:
-                set_versions = [
-                    s
-                    for s in self._sets.lineage(lineage_id)
-                    if s.visibility != Visibility.DISCARDED
-                ]
-                if set_versions:
-                    sets.append(set_versions[-1])
+                sv = [s for s in self._sets.lineage(lineage_id) if s.visibility != DISCARDED]
+                own_set = _own(sv, saved, lambda s: s.set_id)
+                if own_set is not None:
+                    sets.append(own_set)
+                    if sv[-1].version > own_set.version:
+                        newer[own_set.set_id] = sv[-1]
         models.sort(key=lambda s: s.created_at, reverse=True)
         sets.sort(key=lambda s: s.created_at, reverse=True)
-        return CollectionContent(c.collection_id, c.merged_into, models, sets)
+        return CollectionContent(c.collection_id, c.merged_into, models, sets, newer)
 
     def merge(self, into: str, sources: Sequence[str]) -> CollectionContent:
         """Move every lineage of ``sources`` into ``into``; the sources then point to it."""
@@ -129,8 +153,8 @@ class Collections:
         missing = [s for s, c in zip(wanted, found, strict=True) if c is None]
         if missing:
             raise NotFoundError(f"My models link(s) not found: {', '.join(missing)}")
-        incoming = {i for s in wanted for i in self._repo.items(s)}
-        total = len(set(self._repo.items(target.collection_id)) | incoming)
+        incoming = {(k, lin) for s in wanted for k, lin, _ in self._repo.items(s)}
+        total = len({(k, lin) for k, lin, _ in self._repo.items(target.collection_id)} | incoming)
         if total > MAX_COLLECTION_ITEMS:
             raise ModelInputError(
                 f"the merged link would hold {total} models and sets (at most "

@@ -402,7 +402,9 @@ class ModelSets:
             for prior in self._sets.by_session(session_id):
                 if prior.key == content_key and prior.visibility != Visibility.DISCARDED:
                     return SetSubmitResult(
-                        prior, False, collection=self._collect(collection, prior.lineage)
+                        prior,
+                        False,
+                        collection=self._collect(collection, prior.lineage, prior.set_id),
                     )
         for _ in range(_SAVE_ATTEMPTS):
             lineage = self._sets.lineage(base.lineage) if base and same_lineage else []
@@ -421,15 +423,19 @@ class ModelSets:
                 content_key="" if maintainer else content_key,
             )
             if self._sets.save_set(snap):
-                ref = None if maintainer else self._collect(collection, snap.lineage)
+                ref = None if maintainer else self._collect(collection, snap.lineage, snap.set_id)
                 return SetSubmitResult(snap, True, collection=ref)
             stored = self._sets.get_set(snap.set_id)
             if stored is not None:
                 return SetSubmitResult(stored, False)
         raise ModelStateError("the set was changed concurrently; submit again")
 
-    def _collect(self, collection: str | None, lineage: str) -> CollectionRef | None:
-        return self._collections.save(collection, KIND_SET, lineage) if self._collections else None
+    def _collect(
+        self, collection: str | None, lineage: str, version_id: str
+    ) -> CollectionRef | None:
+        if self._collections is None:
+            return None
+        return self._collections.save(collection, KIND_SET, lineage, version_id)
 
     # -- reading, versions, release ----------------------------------------------------------------
 

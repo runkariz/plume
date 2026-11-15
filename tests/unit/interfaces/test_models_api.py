@@ -193,7 +193,7 @@ def test_maintainer_claude_flow_release(client: TestClient) -> None:  # noqa: PL
     assert client.get("/v1/models/m-nope").status_code == 404
 
 
-def test_user_flow_unlisted_share_mine_and_versions(client: TestClient) -> None:
+def test_user_flow_unlisted_share_mine_and_versions(client: TestClient) -> None:  # noqa: PLR0915
     g = client.post("/v1/models/generate", json={"apis": APIS, "concept": "Order"}).json()
     assert g["status"] == "awaiting_draft"
     sid = g["sessionId"]
@@ -261,6 +261,20 @@ def test_user_flow_unlisted_share_mine_and_versions(client: TestClient) -> None:
     assert [h["version"] for h in lineage["history"]] == [1, 2]
     mine = client.get(f"/v1/collections/{link['id']}").json()["models"]
     assert [(m["id"], m["version"], m["versions"]) for m in mine] == [(v2["model"]["id"], 2, 2)]
+    assert mine[0]["newerVersion"] is None
+    # someone else with the model link adds v3 without a link: the author's list keeps v2
+    # and points to v3
+    rev3 = client.post(f"/v1/models/{v2['model']['id']}/revise").json()
+    v3 = client.post(
+        f"/v1/models/sessions/{rev3['sessionId']}/draft",
+        params={"basedOn": v2["model"]["id"]},
+        json=dict(_draft("good"), description="Someone else's v3."),
+    ).json()
+    mine = client.get(f"/v1/collections/{link['id']}").json()["models"]
+    assert mine[0]["id"] == v2["model"]["id"]
+    nv = mine[0]["newerVersion"]
+    assert (nv["id"], nv["version"]) == (v3["model"]["id"], 3)
+    assert nv["url"].endswith(f"/models/{v3['model']['id']}")
     # a second link (another browser), then merged into the first
     g2 = client.post("/v1/models/generate", json={"apis": APIS, "concept": "Order"}).json()
     other = client.post(f"/v1/models/sessions/{g2['sessionId']}/draft", json=_draft("good"))
