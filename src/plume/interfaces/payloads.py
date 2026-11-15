@@ -135,7 +135,12 @@ def check_call_payload(r: CheckCallResult) -> Json:
 
 
 def _short(name: str) -> str:
-    return name.split(maxsplit=1)[0].capitalize() if name else name
+    """First word of the display name, its casing kept ("WooCommerce", "Shopify Admin" ->
+    "Shopify"); only an all-lowercase word is capitalised."""
+    if not name:
+        return name
+    word = name.split(maxsplit=1)[0]
+    return word if word != word.lower() else word[:1].upper() + word[1:]
 
 
 def api_ref(api: str, name: str) -> Json:
