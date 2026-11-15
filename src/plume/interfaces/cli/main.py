@@ -31,6 +31,9 @@ class CliDependencies:
     diff_builds: Callable[[], DiffBuilds] | None = None
     tag_build: Callable[[], TagBuild] | None = None
     new_job_id: Callable[[], str] = lambda: "job-cli"
+    serve_api: Callable[[str | None, int | None], None] | None = None
+    serve_mcp: Callable[[str | None, int | None], None] | None = None
+    openapi: Callable[[], str] | None = None
 
 
 def _need[T](factory: Callable[[], T] | None, name: str) -> T:
@@ -166,5 +169,40 @@ def create_app(deps: CliDependencies) -> typer.Typer:
             raise fail(exc) from exc
         prev = result.previous.value if result.previous else "<none>"
         typer.echo(f"{result.api_id} {result.tag}: {prev} -> {result.build_id}")
+
+    @app.command()
+    def serve(
+        host: Annotated[str | None, typer.Option(help="Bind address")] = None,
+        port: Annotated[int | None, typer.Option(help="Port (default 18480)")] = None,
+    ) -> None:
+        """Run the HTTP API."""
+        if deps.serve_api is None:
+            raise typer.BadParameter("serve is not available in this build")
+        deps.serve_api(host, port)
+
+    @app.command()
+    def mcp(
+        host: Annotated[str | None, typer.Option(help="Bind address")] = None,
+        port: Annotated[int | None, typer.Option(help="Port (default 18481)")] = None,
+    ) -> None:
+        """Run the reader MCP server (streamable HTTP at /mcp)."""
+        if deps.serve_mcp is None:
+            raise typer.BadParameter("mcp is not available in this build")
+        deps.serve_mcp(host, port)
+
+    @app.command()
+    def openapi(
+        out: Annotated[
+            str | None, typer.Option(help="Write to this file instead of stdout")
+        ] = None,
+    ) -> None:
+        """Print the OpenAPI document of the HTTP API."""
+        doc = _need(deps.openapi, "openapi")
+        if out:
+            with open(out, "w", encoding="utf-8") as fh:
+                fh.write(doc)
+            typer.echo(f"wrote {out}")
+        else:
+            typer.echo(doc, nl=False)
 
     return app

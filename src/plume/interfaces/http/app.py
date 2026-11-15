@@ -1,0 +1,398 @@
+"""The HTTP API. Reader routes are public (rate limited); they call the same use cases as MCP."""
+
+import hashlib
+import json
+from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Annotated
+
+from fastapi import FastAPI, Path, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+
+from plume import __version__
+from plume.application.errors import ApplicationError, NotFoundError
+from plume.application.knowledge.diff_builds import DiffBuilds
+from plume.application.knowledge.list_builds import ListBuilds
+from plume.application.reader.dto import ApiOverview
+from plume.application.reader.resolve import BuildResolver
+from plume.application.reader.use_cases import (
+    BrowseDocuments,
+    CheckCall,
+    FindFact,
+    GetDocument,
+    ListApiOverviews,
+    ReaderInputError,
+    SearchDocs,
+)
+from plume.domain.knowledge.api import ApiId
+from plume.domain.shared.errors import DomainError, InvalidIdentifierError
+from plume.domain.shared.ids import BuildId
+from plume.interfaces import payloads
+from plume.interfaces.http import schemas as s
+from plume.interfaces.http.rate_limit import RateLimitMiddleware
+
+ApiPath = Annotated[str, Path(description="API id, e.g. shopify")]
+Version = Annotated[str | None, Query(description="Tag or build id; default latest")]
+_PALETTE = ("#5b5bd6", "#0d9488", "#d97706", "#db2777", "#2563eb", "#65a30d", "#7c3aed", "#dc2626")
+
+
+@dataclass(frozen=True, slots=True)
+class HttpDependencies:
+    overviews: Callable[[], ListApiOverviews]
+    browse: Callable[[], BrowseDocuments]
+    search: Callable[[], SearchDocs]
+    get_document: Callable[[], GetDocument]
+    find_fact: Callable[[], FindFact]
+    check_call: Callable[[], CheckCall]
+    list_builds: Callable[[], ListBuilds]
+    diff_builds: Callable[[], DiffBuilds]
+    resolver: Callable[[], BuildResolver]
+    mcp_url: str = "http://127.0.0.1:18481/mcp"
+    rate_limit_per_minute: int = 120
+    cors_origins: tuple[str, ...] = ("http://127.0.0.1:18473", "http://localhost:18473")
+
+
+def _logo(api_id: str, name: str, icon_url: str | None) -> s.Logo:
+    words = [w for w in name.replace("-", " ").split() if w]
+    text = "".join(w[0] for w in words[:2]).upper() or api_id[:2].upper()
+    color = _PALETTE[int(hashlib.sha256(api_id.encode()).hexdigest(), 16) % len(_PALETTE)]
+    return s.Logo(text=text, color=color, url=icon_url)
+
+
+def _summary(o: ApiOverview) -> s.ApiSummary:
+    info = o.info
+    return s.ApiSummary(
+        id=info.api_id.value,
+        name=info.name,
+        category=info.category.key if info.category else "other",
+        summary=info.summary,
+        endpoints=o.counts.get("endpoint", 0),
+        models=o.counts.get("model", 0),
+        guides=o.counts.get("guide", 0),
+        docs_as_of=o.ref.docs_as_of if o.ref else None,
+        status=s.ApiStatus(kind="ready" if o.ref else "unpublished"),
+        logo=_logo(info.api_id.value, info.name, info.icon_url),
+    )
+
+
+def _citation(c: payloads.Json) -> s.Citation:
+    return s.Citation(**c)
+
+
+def create_app(deps: HttpDependencies) -> FastAPI:
+    app = FastAPI(
+        title="Plume API",
+        version=__version__,
+        description="Reader API over sealed builds of API documentation. Every response names "
+        "the build it was read from. Retrieval only: clients (Claude) write the answers.",
+    )
+    app.add_middleware(RateLimitMiddleware, per_minute=deps.rate_limit_per_minute)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(deps.cors_origins),
+        allow_methods=["GET", "POST"],
+        allow_headers=["*"],
+    )
+
+    def error(status: int, code: str, message: str) -> JSONResponse:
+        return JSONResponse({"error": code, "message": message}, status_code=status)
+
+    @app.exception_handler(NotFoundError)
+    async def not_found(_: Request, exc: NotFoundError) -> JSONResponse:
+        return error(404, exc.code, str(exc))
+
+    @app.exception_handler(ReaderInputError)
+    async def bad_input(_: Request, exc: ReaderInputError) -> JSONResponse:
+        return error(400, exc.code, str(exc))
+
+    @app.exception_handler(ApplicationError)
+    async def app_error(_: Request, exc: ApplicationError) -> JSONResponse:
+        return error(409, exc.code, str(exc))
+
+    @app.exception_handler(DomainError)
+    async def domain_error(_: Request, exc: DomainError) -> JSONResponse:
+        return error(400, "invalid_input", str(exc))
+
+    responses: dict[int | str, dict[str, object]] = {
+        404: {"model": s.ErrorBody},
+        400: {"model": s.ErrorBody},
+        429: {"model": s.ErrorBody},
+    }
+
+    @app.get("/health", response_model=s.Health, tags=["system"])
+    def health() -> s.Health:
+        return s.Health(status="ok", version=__version__)
+
+    @app.get("/v1/apis", response_model=s.ApiList, tags=["reader"], responses=responses)
+    def list_apis() -> s.ApiList:
+        return s.ApiList(items=[_summary(o) for o in deps.overviews().execute()])
+
+    @app.get("/v1/apis/{api}", response_model=s.ApiDetail, tags=["reader"], responses=responses)
+    def get_api(api: ApiPath, version: Version = None) -> s.ApiDetail:
+        o = deps.overviews().one(api, version)
+        base = _summary(o)
+        if o.ref is None:  # pragma: no cover - one() always resolves a build
+            raise NotFoundError(f"{api} has no published build")
+        return s.ApiDetail(
+            **base.model_dump(),
+            chunks=o.counts.get("chunks", 0),
+            is_live=o.ref.tag is not None,
+            tag=o.ref.tag,
+            tags=list(o.tags),
+            versions=list(o.info.versions),
+            doc_link=o.info.doc_link,
+            index=s.IndexInfo(
+                embedding=o.embed_model,
+                dimensions=o.dims,
+                store="postgres+pgvector (halfvec, hnsw) + tsvector",
+                build=o.ref.build,
+            ),
+            connect=s.Connect(
+                claude_code=f"claude mcp add --transport http plume {deps.mcp_url}",
+                mcp_url=deps.mcp_url,
+            ),
+        )
+
+    @app.get(
+        "/v1/apis/{api}/items", response_model=s.BrowseResult, tags=["reader"], responses=responses
+    )
+    def browse(
+        api: ApiPath,
+        kind: s.KindFilter = "all",
+        q: Annotated[str | None, Query(max_length=200)] = None,
+        limit: Annotated[int, Query(ge=1, le=500)] = 50,
+        offset: Annotated[int, Query(ge=0)] = 0,
+        version: Version = None,
+    ) -> s.BrowseResult:
+        ref, items, total = deps.browse().execute(api, kind, q, limit, offset, version)
+        return s.BrowseResult(
+            build=ref.build,
+            items=[
+                s.BrowseItem(
+                    id=i.doc_id,
+                    kind=i.kind.value,
+                    title=i.title,
+                    method=i.method,
+                    path=i.path,
+                    resource=i.resource,
+                    deprecated=i.deprecated,
+                )
+                for i in items
+            ],
+            total=total,
+        )
+
+    @app.get(
+        "/v1/apis/{api}/documents/{doc_id:path}",
+        response_model=s.DocumentOut,
+        tags=["reader"],
+        responses=responses,
+    )
+    def get_document(api: ApiPath, doc_id: str, version: Version = None) -> s.DocumentOut:
+        r = deps.get_document().execute(api, doc_id, version)
+        d = r.document
+        return s.DocumentOut(
+            api=r.ref.api,
+            build=r.ref.build,
+            docs_as_of=r.ref.docs_as_of,
+            id=d.doc_id,
+            kind=d.kind.value,
+            title=d.title,
+            resource=d.resource,
+            method=d.method,
+            path=d.path,
+            deprecated=d.deprecated,
+            complete=d.complete,
+            source_url=d.source_url,
+            anchor=d.anchor,
+            text=d.text,
+            fields=[
+                s.FieldOut(
+                    name=f.name,
+                    location=f.location.value,
+                    type=f.type,
+                    required=f.required,
+                    description=f.description,
+                )
+                for f in d.fields
+            ],
+            scopes=list(d.scopes),
+        )
+
+    @app.post(
+        "/v1/apis/{api}/search",
+        response_model=s.SearchResponse,
+        tags=["reader"],
+        responses=responses,
+    )
+    def search(api: ApiPath, body: s.SearchRequest) -> s.SearchResponse:
+        r = deps.search().execute(api, body.query, body.mode, body.kind, body.top_k, body.version)
+        return s.SearchResponse(
+            api=r.ref.api,
+            build=r.ref.build,
+            docs_as_of=r.ref.docs_as_of,
+            results=[
+                s.SearchHit(
+                    id=h.doc_id,
+                    kind=h.kind.value,
+                    title=h.title,
+                    subtitle=h.subtitle,
+                    snippet=h.snippet,
+                    source_url=h.source_url,
+                    dense_rank=h.dense_rank,
+                    text_rank=h.text_rank,
+                    dense_score=h.dense_score,
+                    text_score=h.text_score,
+                    fused=h.fused,
+                )
+                for h in r.hits
+            ],
+            trace=[s.TraceStep(source=t.source, label=t.label, ms=t.ms) for t in r.trace],
+            total_ms=r.total_ms,
+            claude_payload=json.dumps(payloads.search_payload(r), indent=2),
+        )
+
+    @app.post(
+        "/v1/apis/{api}/ask", response_model=s.AskResponse, tags=["reader"], responses=responses
+    )
+    def ask(api: ApiPath, body: s.AskRequest) -> s.AskResponse:
+        r = deps.search().execute(api, body.question, "hybrid", None, body.top_k, body.version)
+        return s.AskResponse(
+            api=r.ref.api,
+            build=r.ref.build,
+            docs_as_of=r.ref.docs_as_of,
+            question=body.question,
+            passages=[
+                s.Passage(id=h.doc_id, title=h.title, quote=h.snippet, source_url=h.source_url)
+                for h in r.hits
+            ],
+            trace=[s.TraceStep(source=t.source, label=t.label, ms=t.ms) for t in r.trace],
+            total_ms=r.total_ms,
+        )
+
+    @app.post(
+        "/v1/apis/{api}/check-call",
+        response_model=s.CheckCallResponse,
+        tags=["reader"],
+        responses=responses,
+    )
+    def check_call(api: ApiPath, body: s.CheckCallRequest) -> s.CheckCallResponse:
+        r = deps.check_call().execute(api, body.method, body.path, body.params, body.version)
+        p = payloads.check_call_payload(r)
+        return s.CheckCallResponse(
+            api=r.ref.api,
+            build=r.ref.build,
+            verdict=p["verdict"],
+            complete=r.complete,
+            matched=(
+                s.MatchedEndpoint(
+                    id=r.matched_id, method=r.matched_method or "", path=r.matched_path or ""
+                )
+                if r.matched_id
+                else None
+            ),
+            param_checks=[
+                s.ParamCheck(name=c.name, found=c.found, where=c.where) for c in r.params
+            ],
+            checked=s.Checked(**r.checked),
+            evidence=_citation(p["evidence"]) if p["evidence"] else None,
+        )
+
+    @app.post(
+        "/v1/apis/{api}/find-fact",
+        response_model=s.FindFactResponse,
+        tags=["reader"],
+        responses=responses,
+    )
+    def find_fact(api: ApiPath, body: s.FindFactRequest) -> s.FindFactResponse:
+        r = deps.find_fact().execute(
+            api,
+            body.name,
+            kind=body.kind,
+            owner=body.owner,
+            resource=body.resource,
+            location=body.location,
+            version=body.version,
+        )
+        p = payloads.find_fact_payload(r)
+        return s.FindFactResponse(
+            api=r.ref.api,
+            build=r.ref.build,
+            docs_as_of=r.ref.docs_as_of,
+            name=r.name,
+            found=r.found,
+            complete=r.complete,
+            checked=s.Checked(**r.checked),
+            matches=[
+                s.FactMatch(**{**m, "evidence": _citation(m["evidence"])}) for m in p["matches"]
+            ],
+            incomplete_sources=list(r.incomplete_sources),
+            text_mentions=[
+                s.SearchHit(
+                    id=h.doc_id,
+                    kind=h.kind.value,
+                    title=h.title,
+                    subtitle=h.subtitle,
+                    snippet=h.snippet,
+                    source_url=h.source_url,
+                    dense_rank=None,
+                    text_rank=h.text_rank,
+                    dense_score=0.0,
+                    text_score=0.0,
+                    fused=0.0,
+                )
+                for h in r.text_mentions
+            ],
+            wording=r.wording,
+        )
+
+    @app.get(
+        "/v1/apis/{api}/builds", response_model=s.BuildList, tags=["builds"], responses=responses
+    )
+    def builds(api: ApiPath) -> s.BuildList:
+        try:
+            api_id = ApiId(api)
+        except InvalidIdentifierError as exc:
+            raise NotFoundError(f"unknown api {api!r}") from exc
+        views = deps.list_builds().execute(api_id)
+        if not views:
+            deps.resolver().resolve(api)  # 404 for an unknown api
+        return s.BuildList(
+            api=api,
+            items=[
+                s.BuildOut(
+                    id=v.build.build_id.value,
+                    status=v.build.status.value,
+                    created_at=v.build.created_at.isoformat(),
+                    sealed_at=v.build.sealed_at.isoformat() if v.build.sealed_at else None,
+                    items=len(v.build),
+                    content_hash=v.build.content_hash.value if v.build.content_hash else None,
+                    tags=list(v.tags),
+                    embed_model=v.build.spec.embed_model if v.build.spec else None,
+                    package_hash=v.build.spec.package_hash if v.build.spec else None,
+                )
+                for v in views
+            ],
+        )
+
+    @app.get("/v1/apis/{api}/diff", response_model=s.DiffOut, tags=["builds"], responses=responses)
+    def diff(
+        api: ApiPath,
+        from_build: Annotated[str, Query(alias="from")],
+        to_build: Annotated[str, Query(alias="to")],
+    ) -> s.DiffOut:
+        old = deps.resolver().resolve(api, from_build).build
+        new = deps.resolver().resolve(api, to_build).build
+        d = deps.diff_builds().execute(BuildId(old.build_id.value), new.build_id)
+        return s.DiffOut(
+            api=api,
+            from_build=old.build_id.value,
+            to_build=new.build_id.value,
+            added=list(d.added),
+            changed=list(d.changed),
+            removed=list(d.removed),
+            unchanged=d.unchanged,
+        )
+
+    return app

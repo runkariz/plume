@@ -1,6 +1,14 @@
 # Local stack. Plume's port block is 18400-18499 (Postgres 18432, API 18480, MCP 18481, web 18473).
 name: plume
 
+x-plume-env: &plume-env
+  PLUME_DATABASE_URL: postgresql+psycopg://plume:plume@postgres:5432/plume
+  PLUME_EMBEDDER: ${PLUME_EMBEDDER:-hash}
+  PLUME_VERTEX_API_KEY: ${PLUME_VERTEX_API_KEY:-}
+  PLUME_GEMINI_API_KEY: ${PLUME_GEMINI_API_KEY:-}
+  PLUME_MCP_HOST: 0.0.0.0
+  PLUME_MCP_ALLOWED_HOSTS: '["127.0.0.1:*","localhost:*","mcp:*"]'
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -18,6 +26,41 @@ services:
       timeout: 3s
       retries: 30
       start_period: 5s
+
+  migrate:
+    build: .
+    image: plume:dev
+    environment: *plume-env
+    command: ["migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    image: plume:dev
+    environment: *plume-env
+    command: ["serve", "--host", "0.0.0.0", "--port", "18480"]
+    ports:
+      - "127.0.0.1:18480:18480"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  mcp:
+    image: plume:dev
+    environment: *plume-env
+    command: ["mcp", "--host", "0.0.0.0", "--port", "18481"]
+    ports:
+      - "127.0.0.1:18481:18481"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 18481), 2)"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   pgdata:

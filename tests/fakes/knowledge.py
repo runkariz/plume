@@ -194,3 +194,16 @@ class RecordingEvents:
 
     def steps(self) -> list[tuple[str, str]]:
         return [(e.step, e.status.value) for e in self.events if e.status.value != "progress"]
+
+
+class WordEmbedder(DeterministicEmbedder):
+    """Fake embedder whose vectors share dimensions when texts share words (for ranking tests)."""
+
+    def __init__(self, dims: int = 768) -> None:
+        super().__init__(dims, model="fake-words-v1")
+        from plume.infrastructure.embeddings.hash_embedder import HashEmbedder  # noqa: PLC0415
+
+        self._inner = HashEmbedder(dims)
+
+    def _vector(self, text: str) -> Vector:
+        return self._inner.embed_query(text)

@@ -17,6 +17,15 @@ from plume.application.knowledge.seal_build import SealBuild
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.ports.embedder import Embedder
 from plume.application.ports.job_events import JobEvents
+from plume.application.reader.resolve import BuildResolver
+from plume.application.reader.use_cases import (
+    BrowseDocuments,
+    CheckCall,
+    FindFact,
+    GetDocument,
+    ListApiOverviews,
+    SearchDocs,
+)
 from plume.application.system.migrate_schema import MigrateSchema
 from plume.infrastructure.clock import SystemClock
 from plume.infrastructure.db.alembic_migrator import AlembicMigrator
@@ -30,6 +39,7 @@ from plume.infrastructure.embeddings.hash_embedder import HashEmbedder
 from plume.infrastructure.events.log_events import LoggingJobEvents
 from plume.infrastructure.search.pgvector_index import PgVectorIndex
 from plume.infrastructure.search.postgres_fact_index import PostgresFactIndex
+from plume.infrastructure.search.postgres_search import PostgresFactQuery, PostgresSearchIndex
 from plume.infrastructure.settings import Settings, get_settings
 from plume.infrastructure.sources.stream_package import StreamPackageSource
 
@@ -71,6 +81,14 @@ class Container:
     @cached_property
     def facts(self) -> PostgresFactIndex:
         return PostgresFactIndex(self.engine)
+
+    @cached_property
+    def search_index(self) -> PostgresSearchIndex:
+        return PostgresSearchIndex(self.engine)
+
+    @cached_property
+    def fact_query(self) -> PostgresFactQuery:
+        return PostgresFactQuery(self.engine)
 
     @cached_property
     def embedder(self) -> Embedder:
@@ -127,6 +145,29 @@ class Container:
 
     def tag_build(self) -> TagBuild:
         return TagBuild(self.builds, self.tags)
+
+    # -- reader -------------------------------------------------------------------------------
+
+    def resolver(self) -> BuildResolver:
+        return BuildResolver(self.apis, self.builds, self.tags)
+
+    def overviews(self) -> ListApiOverviews:
+        return ListApiOverviews(self.apis, self.builds, self.tags, self.search_index)
+
+    def browse(self) -> BrowseDocuments:
+        return BrowseDocuments(self.resolver(), self.search_index)
+
+    def search(self) -> SearchDocs:
+        return SearchDocs(self.resolver(), self.search_index, self.embedder, self.documents)
+
+    def get_document(self) -> GetDocument:
+        return GetDocument(self.resolver(), self.documents)
+
+    def find_fact(self) -> FindFact:
+        return FindFact(self.resolver(), self.fact_query, self.search_index)
+
+    def check_call(self) -> CheckCall:
+        return CheckCall(self.resolver(), self.fact_query, self.search_index)
 
     @staticmethod
     def new_job_id() -> str:
