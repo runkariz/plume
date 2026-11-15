@@ -22,6 +22,7 @@ from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
 from plume.application.models.concepts import ModelInputError, SuggestConcepts
 from plume.application.models.generate import GenerateModels
+from plume.application.models.model_sets import ModelSets
 from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import ModelSessions
 from plume.application.ports.model_writer import ModelWriterError, ModelWriterUnavailableError
@@ -43,6 +44,7 @@ from plume.domain.shared.ids import BuildId
 from plume.interfaces import payloads
 from plume.interfaces.http import schemas as s
 from plume.interfaces.http.maintainer import maintainer_router
+from plume.interfaces.http.model_sets_routes import model_sets_router
 from plume.interfaces.http.models_routes import models_router
 from plume.interfaces.http.rate_limit import (
     BodySizeLimitMiddleware,
@@ -78,6 +80,7 @@ class HttpDependencies:
     max_upload_bytes: int = 200 * 1024 * 1024
     generate_models: Callable[[], GenerateModels] | None = None
     suggest_related: Callable[[], SuggestRelated] | None = None
+    model_sets: Callable[[], ModelSets] | None = None
     web_public_url: str | None = None
 
 
@@ -554,6 +557,16 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 deps.generate_models,
                 deps.web_public_url,
                 deps.suggest_related,
+            )
+        )
+    if deps.model_sets is not None:
+        app.include_router(
+            model_sets_router(
+                deps.model_sets,
+                deps.resolver,
+                lambda api, name: _logo(api, name, _icon_url(api)).model_dump(by_alias=True),
+                deps.maintainer_tokens,
+                deps.web_public_url,
             )
         )
     if deps.maintainer is not None:

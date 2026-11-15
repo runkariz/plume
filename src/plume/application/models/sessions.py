@@ -210,6 +210,44 @@ class ModelSessions:
         self._models.save_session(session)
         return session
 
+    def start_pinned(
+        self,
+        inputs: tuple[PinnedInput, ...],
+        concept: str,
+        origin: str = Origin.MAINTAINER,
+        based_on: str | None = None,
+    ) -> ModelSession:
+        """A session on given pins (a model set pins its builds once for all members)."""
+        if not concept_key(concept):
+            raise ModelInputError("concept is empty")
+        session = ModelSession(
+            session_id=f"s-{uuid.uuid4().hex[:16]}",
+            concept=normalize_concept(concept),
+            inputs=inputs,
+            created_at=self._clock.now(),
+            origin=origin,
+            based_on=based_on,
+        )
+        self._models.save_session(session)
+        return session
+
+    def oracle_for(self, inputs: tuple[PinnedInput, ...]) -> Oracle:
+        """Citation checks against these pinned builds (for relation evidence)."""
+        return self._oracle(ModelSession("-", "-", inputs, self._clock.now()))
+
+    def reusable(
+        self, inputs: tuple[PinnedInput, ...], concept: str, maintainer: bool
+    ) -> list[ModelSnapshot]:
+        """Visible models of this concept pinned to exactly these builds (newest first)."""
+        pins = {(i.api, i.build) for i in inputs}
+        key = concept_key(concept)
+        visible = tuple(v for v in _visible(maintainer) if v != Visibility.DISCARDED)
+        out = []
+        for snap in self._models.list_snapshots(inputs[0].api, 200, visible):
+            if concept_key(snap.concept) == key and {(i.api, i.build) for i in snap.inputs} == pins:
+                out.append(snap)
+        return out
+
     def existing(
         self, apis: list[str], concept: str, maintainer: bool = False
     ) -> ModelSnapshot | None:
@@ -246,7 +284,9 @@ class ModelSessions:
             raise NotFoundError(f"model session {session_id} not found")
         return s
 
-    def _concept_docs(self, concept: str, build: BuildId) -> list[DocumentSummary]:
+    def _concept_docs(
+        self, concept: str, build: BuildId, max_docs: int = MAX_DOCS_PER_API
+    ) -> list[DocumentSummary]:
         key = concept_key(concept)
         summaries, _ = self._index.browse(build, (), None, 100_000, 0)
         docs = list(concept_docs(summaries).get(key, []))
@@ -256,7 +296,7 @@ class ModelSessions:
             )
             docs = list(self._index.summaries(build, [h.doc_id for h in hits]).values())
         docs.sort(key=lambda d: (d.kind is not DocumentKind.MODEL, d.method != "GET", d.doc_id))
-        return docs[:MAX_DOCS_PER_API]
+        return docs[:max_docs]
 
     def _pin(self, session: ModelSession, api: str) -> BuildId:
         for p in session.inputs:
@@ -264,7 +304,7 @@ class ModelSessions:
                 return BuildId(p.build)
         raise ModelInputError(f"{api} is not in session {session.session_id}")
 
-    def context(self, session_id: str) -> dict[str, Any]:
+    def context(self, session_id: str, max_docs: int = MAX_DOCS_PER_API) -> dict[str, Any]:
         """A compact index of the evidence (small enough for any client): per API, the
         concept's documents with their field counts. Read the fields with ``evidence``."""
         session = self.get(session_id)
@@ -272,7 +312,7 @@ class ModelSessions:
         for pin in session.inputs:
             build = BuildId(pin.build)
             items = []
-            for d in self._concept_docs(session.concept, build):
+            for d in self._concept_docs(session.concept, build, max_docs):
                 full = self._documents.get_document(build, d.doc_id)
                 if full is None:  # pragma: no cover
                     continue

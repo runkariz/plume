@@ -54,6 +54,7 @@ def http_app(c: Container) -> FastAPI:
             max_upload_bytes=s.max_upload_bytes,
             generate_models=c.generate,
             suggest_related=c.suggest_related,
+            model_sets=c.model_sets,
             web_public_url=s.web_public_url,
         )
     )
@@ -78,6 +79,7 @@ def reader_server(c: Container) -> MCPServer:
             models=c.models,
             sections=c.sections,
             suggest_related=c.suggest_related,
+            model_sets=c.model_sets,
             web_public_url=c.settings.web_public_url,
             mcp_app_html=_app_html(c),
         )
@@ -94,6 +96,7 @@ def maintainer_mcp_server(c: Container) -> MCPServer:
             jobs=c.maintainer,
             generate=c.generate,
             suggest_related=c.suggest_related,
+            model_sets=c.model_sets,
             web_public_url=c.settings.web_public_url,
             mcp_app_html=_app_html(c),
         )

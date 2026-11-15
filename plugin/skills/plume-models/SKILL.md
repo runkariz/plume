@@ -64,3 +64,26 @@ With the `plume-maintainer` MCP server (bearer token) the same tools store model
 **unreleased**. Review them with `list_models(visibility="unreleased")` and `get_model`, then
 `release_model(id)` (official, listed) or `discard_model(id)`. `generate_model(apis, concept)`
 lets Plume write the model with its own LLM (same validation); poll `get_generation(job_id)`.
+
+## Model sets (several models with relations)
+
+When the user wants related models together (Product + Variant + Image, Order + Refund):
+
+1. `suggest_related(apis, concept)` shows the concepts related to one concept, with relation
+   candidates taken from the docs and cited per API. Different names at the same place (Shopify
+   variant / WooCommerce variation) come back as `aliases`: offer them; never merge on your own.
+2. `start_set_session(apis, concepts)` pins the builds once and opens one model session per
+   concept. `get_set_context(set_session_id)` lists, per member, the evidence and the models you
+   can reuse, and the relation candidates between members.
+3. Write or reuse each member model in its member session, as above. Nested objects are allowed:
+   a field of type object or array with its own `fields`.
+4. **Ask the user about every relation.** Offer the candidate's options: embedded
+   (`Product.variants: Variant[]`) or reference (`Variant.product_id -> Product.id`), and the
+   cardinality. Never pick one silently. The fields a design needs must exist in the member
+   models. Keep anything the user hasn't decided as `"confirmed": false` or an open question.
+5. `submit_model_set(set_session_id, draft)`: members by model id, relations with per-API
+   sources from the candidate's evidence. Save the returned `owner_key` with the `set_id` in
+   `~/.plume/models.json` (under `"sets"`), and give the user the link.
+6. To change a set: `revise_model_set(set_id)`, revise any stale members, ask about relation
+   changes, then `submit_model_set(..., based_on=set_id)`. `list_my_model_sets(owner_keys)`
+   lists the user's sets.

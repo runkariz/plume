@@ -1,8 +1,9 @@
 # Design: model sets, relations between models, and nested objects
 
 Status: **approved** by plume coord on 2026-11-16, with decisions D1–D5 below. It's built in
-four cuts, in order. Cut 1 (nested objects) and cut 2 (candidates and
-suggest-related) are done.
+four cuts, in order. Cuts 1 (nested objects), 2 (candidates and suggest-related) and
+3 (model sets) are done. The embedded relation names its field (`embed.field`) without a
+`model:` marker on the field.
 
 ## Goal (the owner's intent)
 

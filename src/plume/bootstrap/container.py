@@ -20,6 +20,7 @@ from plume.application.knowledge.seal_build import SealBuild
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.models.concepts import SuggestConcepts
 from plume.application.models.generate import GenerateModels
+from plume.application.models.model_sets import ModelSets
 from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import ModelSessions
 from plume.application.ports.embedder import Embedder
@@ -46,6 +47,7 @@ from plume.infrastructure.db.repos.build_repo import PostgresBuildRepo
 from plume.infrastructure.db.repos.document_repo import PostgresDocumentRepo
 from plume.infrastructure.db.repos.eval_repo import PostgresEvalRepo
 from plume.infrastructure.db.repos.model_repo import PostgresModelJobRepo, PostgresModelRepo
+from plume.infrastructure.db.repos.model_set_repo import PostgresModelSetRepo
 from plume.infrastructure.db.repos.tag_repo import PostgresTagRepo
 from plume.infrastructure.dumps.local_fs import LocalDumpStore
 from plume.infrastructure.embeddings.gemini import GeminiEmbedder
@@ -156,6 +158,20 @@ class Container:
     @cached_property
     def models_repo(self) -> PostgresModelRepo:
         return PostgresModelRepo(self.engine)
+
+    @cached_property
+    def model_sets_repo(self) -> PostgresModelSetRepo:
+        return PostgresModelSetRepo(self.engine)
+
+    def model_sets(self) -> ModelSets:
+        return ModelSets(
+            self.resolver(),
+            self.models(),
+            self.models_repo,
+            self.model_sets_repo,
+            self.suggest_related(),
+            self.clock,
+        )
 
     def suggest_related(self) -> SuggestRelated:
         return SuggestRelated(self.resolver(), self.search_index, self.facts, self.documents)

@@ -53,6 +53,8 @@
   };
   const render = (result) => {
     const sc = (result && result.structuredContent) || {};
+    const set = (sc.set && sc.set.kind === "model_set") ? sc.set : (sc.kind === "model_set" ? sc : null);
+    if (set) return renderSet(set);
     const model = sc.model || (sc.fields ? sc : null);
     if (!model) {
       document.getElementById("title").textContent = sc.accepted === false
@@ -95,6 +97,31 @@
     document.getElementById("link").textContent = link ? "Open in Plume: " + link : "";
     const height = document.documentElement.scrollHeight;
     send({ method: "ui/notifications/size-changed", params: { height } });
+  };
+  const renderSet = (set) => {
+    const apis = (set.inputs || []).map((i) => i.id);
+    document.getElementById("title").textContent = "Model set " + set.name;
+    const lineage = set.lineage || {};
+    document.getElementById("meta").textContent = [
+      set.visibility, lineage.version ? "v" + lineage.version + " of " + lineage.versions : "",
+      (set.members || []).map((m) => m.concept).join(", "),
+    ].filter(Boolean).join(" · ");
+    document.getElementById("head").replaceChildren(el("th", "Relation"), ...apis.map((a) => el("th", a)));
+    document.getElementById("rows").replaceChildren(...(set.relations || []).map((r) => {
+      const tr = document.createElement("tr");
+      const how = r.embed ? r.from + "." + r.embed.field : r.from + "." + r.ref.field + " -> " + r.to + "." + r.ref.key;
+      tr.append(el("td", r.from + " -> " + r.to + " " + r.cardinality + " (" + r.kind + ", " + how + ")" +
+        (r.confirmed ? "" : " UNDECIDED")));
+      for (const a of apis) {
+        const v = (r.support || {})[a];
+        tr.append(el("td", v || "-", v ? "" : "absent"));
+      }
+      return tr;
+    }));
+    document.getElementById("fields").hidden = false;
+    const link = set.shareUrl || set.sharePath || "";
+    document.getElementById("link").textContent = link ? "Open in Plume: " + link : "";
+    send({ method: "ui/notifications/size-changed", params: { height: document.documentElement.scrollHeight } });
   };
   window.addEventListener("message", (event) => {
     if (event.source !== window.parent) return;
