@@ -1,0 +1,8 @@
+{
+  "name": "plume",
+  "version": "0.1.0",
+  "description": "Answer technical API questions from versioned, cited documentation (Plume MCP reader).",
+  "author": { "name": "Plume contributors" },
+  "license": "MIT",
+  "keywords": ["api", "documentation", "mcp", "rag", "citations"]
+}

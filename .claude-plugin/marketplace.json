@@ -1,0 +1,14 @@
+{
+  "name": "plume",
+  "owner": {
+    "name": "Plume contributors"
+  },
+  "description": "Plume: versioned, cited API documentation for Claude.",
+  "plugins": [
+    {
+      "name": "plume",
+      "source": "./plugin",
+      "description": "Versioned, cited API documentation for Claude via the Plume MCP reader."
+    }
+  ]
+}

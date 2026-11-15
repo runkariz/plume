@@ -10,6 +10,15 @@ from plume.application.knowledge.import_package import ImportPackage
 from plume.application.knowledge.seal_build import SealBuild
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.ports.package_source import PackageSource
+from plume.application.reader.resolve import BuildResolver
+from plume.application.reader.use_cases import (
+    BrowseDocuments,
+    CheckCall,
+    FindFact,
+    GetDocument,
+    ListApiOverviews,
+    SearchDocs,
+)
 from plume.infrastructure.sources.stream_package import StreamPackageSource
 from tests.fakes.knowledge import (
     DeterministicEmbedder,
@@ -22,6 +31,7 @@ from tests.fakes.knowledge import (
     InMemoryVectorIndex,
     RecordingEvents,
 )
+from tests.fakes.search import InMemoryFactQuery, InMemorySearchIndex
 
 
 @dataclass
@@ -40,6 +50,8 @@ class FakeStack:
 
     def __post_init__(self) -> None:
         self.vectors = InMemoryVectorIndex(self.documents)
+        self.search_index = InMemorySearchIndex(self.documents)
+        self.fact_query = InMemoryFactQuery(self.facts, self.documents)
 
     def import_package(self) -> ImportPackage:
         return ImportPackage(
@@ -77,3 +89,30 @@ class FakeStack:
             self.tag(),
             self.events,
         )
+
+    # -- reader --------------------------------------------------------------------------------
+
+    def resolver(self) -> BuildResolver:
+        return BuildResolver(self.apis, self.builds, self.tags)
+
+    def overviews(self) -> ListApiOverviews:
+        return ListApiOverviews(self.apis, self.builds, self.tags, self.search_index)
+
+    def browse(self) -> BrowseDocuments:
+        return BrowseDocuments(self.resolver(), self.search_index)
+
+    def search(self) -> SearchDocs:
+        return SearchDocs(self.resolver(), self.search_index, self.embedder, self.documents)
+
+    def get_document(self) -> GetDocument:
+        return GetDocument(self.resolver(), self.documents)
+
+    def find_fact(self) -> FindFact:
+        return FindFact(self.resolver(), self.fact_query, self.search_index)
+
+    def check_call(self) -> CheckCall:
+        return CheckCall(self.resolver(), self.fact_query, self.search_index)
+
+    def load(self, path: str, tag: str | None = "latest") -> str:
+        """Run the pipeline on a package; returns the build id."""
+        return self.pipeline().execute("job-test", path, tag=tag).build_id.value

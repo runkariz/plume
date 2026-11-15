@@ -14,6 +14,21 @@ def build_app(container: Container | None = None) -> typer.Typer:
             holder.append(Container())
         return holder[0]
 
+    def serve_api(host: str | None, port: int | None) -> None:
+        from plume.bootstrap.servers import serve_api as run  # noqa: PLC0415 - server deps lazily
+
+        run(c(), host, port)
+
+    def serve_mcp(host: str | None, port: int | None) -> None:
+        from plume.bootstrap.servers import serve_mcp as run  # noqa: PLC0415
+
+        run(c(), host, port)
+
+    def openapi() -> str:
+        from plume.bootstrap.servers import openapi_document  # noqa: PLC0415
+
+        return openapi_document(c())
+
     return create_app(
         CliDependencies(
             migrate_schema=lambda: c().migrate_schema(),
@@ -23,6 +38,9 @@ def build_app(container: Container | None = None) -> typer.Typer:
             diff_builds=lambda: c().diff_builds(),
             tag_build=lambda: c().tag_build(),
             new_job_id=Container.new_job_id,
+            serve_api=serve_api,
+            serve_mcp=serve_mcp,
+            openapi=openapi,
         )
     )
 
