@@ -16,6 +16,8 @@ if (/<(script|link|img|iframe|source)[^>]+(src|href)="(?!data:|#)[^"]*"/i.test(h
   problems.push('an element refers to a file or URL');
 if (/url\(\s*(?!["']?(?:data:|#))/i.test(html)) problems.push('a CSS url() is not a data: URL');
 if (/@import/i.test(html)) problems.push('a CSS @import');
+if (/@font-face|font\/woff/i.test(html))
+  problems.push('a font file: the host CSP has no font-src, it would be blocked');
 if (!html.includes('ui/initialize')) problems.push('the handshake is missing');
 if (!/<script type="module">/.test(html)) problems.push('the script is not inline');
 const size = Buffer.byteLength(html);

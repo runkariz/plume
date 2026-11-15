@@ -52,7 +52,14 @@ export function GraphControls({
   const idx = Math.max(0, Math.min(active, visible.length - 1));
   const optId = (i: number) => `${id}-opt-${i}`;
   useEffect(() => {
-    if (open) document.getElementById(optId(idx))?.scrollIntoView?.({ block: 'nearest' });
+    if (!open) return;
+    // keep the highlighted row inside the LIST: scroll the list itself, never the page or the box around it
+    const el = document.getElementById(optId(idx));
+    const list = el?.parentElement;
+    if (!el || !list) return;
+    if (el.offsetTop < list.scrollTop) list.scrollTop = el.offsetTop;
+    else if (el.offsetTop + el.offsetHeight > list.scrollTop + list.clientHeight)
+      list.scrollTop = el.offsetTop + el.offsetHeight - list.clientHeight;
     // the highlighted row stays in view while moving with the arrow keys
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx, open]);

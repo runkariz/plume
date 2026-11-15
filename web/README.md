@@ -121,6 +121,34 @@ Where to change what:
 - **Accessibility.** Inputs have labels, focus is visible, the graph has a keyboard alternative (the Mapping
   list), and both themes pass axe. Small screens: nothing scrolls sideways at 375 px.
 
+## The model view as an MCP App (the widget)
+
+Claude web and Desktop show a canonical model inline through an MCP App: one self-contained HTML file that Plume
+serves as `ui://plume/model-view` (see `docs/mcp-apps.md`). It is the same React mapping view (`ModelWorkbench`:
+graph, control box, detail panel) built as a second entry.
+
+```bash
+npm run build:widget     # builds web/dist-widget/widget.html, checks it, copies it to
+                         # ../src/plume/interfaces/mcp/apps/model-view.html (commit that file)
+```
+
+How it works (`src/widget/`): `protocol.ts` is the host side of the spec (JSON-RPC over `postMessage`:
+`ui/initialize`, `initialized`, `tool-result`, `host-context-changed`, `size-changed`, `ui/open-link`);
+`model.ts` reads the model from `structuredContent.model ?? structuredContent` (and shows a refused draft);
+`WidgetApp.tsx` is the view; it follows the host's theme and reports its height.
+
+Rules it must keep (the host's default CSP is `default-src 'none'`, scripts and styles inline, images `data:`,
+`connect-src 'none'`, and the frame has no storage):
+
+- everything inline in the one file, no remote URL, **no font files** (the CSP has no `font-src`, so even a
+  `data:` font is blocked: the view uses the host's `--font-sans` or the system fonts);
+- no `fetch`, no storage, no router; package text only as React text nodes; icon URLs are dropped (letter tiles);
+- a fixed canvas height (the host sizes the frame from the content, so `vh` would loop).
+
+`scripts/finish-widget.mjs` fails the build if the file refers to anything outside itself. `e2e/widget.spec.ts`
+runs the BUILT file in a sandboxed iframe under that CSP with the network cut, driven by a stand-in host
+(`e2e/widget-host.ts`), and checks axe in both themes: run `npm run build:widget` before it.
+
 ## Troubleshooting
 
 - _The page is blank / "VITE_API_BASE_URL is not set"_: create `.env.local` from `.env.example`.

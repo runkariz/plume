@@ -2027,7 +2027,7 @@ th[scope='row'] {
   flex-direction: column;
   gap: 12px;
   min-height: 0;
-  overflow: hidden;
+  overflow: auto; /* a short canvas (the embedded view): the whole box scrolls, nothing is cut off */
 }
 .wb-controls-body[hidden] {
   display: none;
@@ -2083,6 +2083,7 @@ th[scope='row'] {
   flex: 1 1 auto;
   min-height: 150px;
   max-height: 340px;
+  position: relative; /* the rows' offsetTop is measured from the list */
   border: 1px solid var(--line);
   border-radius: 8px;
 }
