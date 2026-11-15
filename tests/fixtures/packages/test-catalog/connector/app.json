@@ -1,0 +1,86 @@
+{
+  "apiVersioning": {
+    "current": "v1",
+    "format": "number",
+    "scheme": "path",
+    "versions": [
+      "v1"
+    ]
+  },
+  "authIds": [
+    "api-key-x-catalog-key"
+  ],
+  "baseUrls": [
+    "http://127.0.0.1:18091"
+  ],
+  "category": {
+    "bundleVersion": 25,
+    "confidence": 0.95,
+    "key": "e-commerce",
+    "reason": "The API manages a shop's core resources including products and orders, typical of an online store platform."
+  },
+  "conventions": {
+    "casing": "camel"
+  },
+  "defaultAuthId": "api-key-x-catalog-key",
+  "description": "",
+  "environments": [
+    {
+      "baseUrl": "http://127.0.0.1:18091",
+      "isDefault": true,
+      "key": "production",
+      "kind": "other",
+      "name": "production",
+      "notes": "Servers",
+      "provenance": {
+        "evidenceUrl": "file:///uploaded/0162daf229a5/catalog.openapi.json",
+        "source": "docs"
+      },
+      "servers": {
+        "api": "http://127.0.0.1:18091"
+      }
+    }
+  ],
+  "errorFormat": {
+    "envelopeExample": {
+      "error": "string",
+      "message": "string"
+    },
+    "notes": "Returned on 400 and 410 error responses.",
+    "statusCodes": [
+      {
+        "meaning": "Bad page size, or a page token that is invalid or belongs to a different search.",
+        "retryable": false,
+        "status": 400
+      },
+      {
+        "meaning": "Missing or unknown API key.",
+        "retryable": false,
+        "status": 401
+      },
+      {
+        "meaning": "The page token has expired.",
+        "retryable": false,
+        "status": 410
+      }
+    ]
+  },
+  "knowledgeIds": [
+    "context"
+  ],
+  "name": "Test Catalog API",
+  "provenance": {
+    "extractedAt": "2026-10-30T18:24:31Z",
+    "extractorVersion": "1.0.0.0",
+    "rulesBundleVersion": 25,
+    "rulesVersion": "kariz-connector.v2@15add17dc180",
+    "sourceUrl": "file:///uploaded/0162daf229a5/catalog.openapi.json"
+  },
+  "resources": [
+    {
+      "name": "General"
+    }
+  ],
+  "summary": "Retrieve and search shop orders and products using this connector.",
+  "systemName": "testcatalogapi"
+}

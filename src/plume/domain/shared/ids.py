@@ -1,5 +1,6 @@
 """Identifier value objects shared across the domain."""
 
+import hashlib
 import re
 import uuid
 from dataclasses import dataclass
@@ -21,7 +22,14 @@ class BuildId:
 
     @classmethod
     def new(cls) -> "BuildId":
+        """A random id (for builds that are not derived from a source package)."""
         return cls(f"b-{uuid.uuid4().hex}")
+
+    @classmethod
+    def derive(cls, *parts: str) -> "BuildId":
+        """A deterministic id: the same inputs always give the same build id."""
+        digest = hashlib.sha256("\0".join(parts).encode("utf-8")).hexdigest()
+        return cls(f"b-{digest[:32]}")
 
     def __str__(self) -> str:
         return self.value

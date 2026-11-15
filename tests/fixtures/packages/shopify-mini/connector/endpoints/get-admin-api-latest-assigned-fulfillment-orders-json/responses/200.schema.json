@@ -1,0 +1,4 @@
+{
+  "type": "object",
+  "description": "Response payload containing the list of assigned fulfillment orders."
+}

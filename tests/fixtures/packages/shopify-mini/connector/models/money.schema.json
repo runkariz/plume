@@ -1,0 +1,17 @@
+{
+  "title": "Money",
+  "description": "An amount of money in a specified currency.",
+  "x-source-url": "https://shopify.dev/docs/api/admin-rest/latest/resources/draftorder",
+  "x-complete": true,
+  "type": "object",
+  "properties": {
+    "amount": {
+      "type": "string",
+      "description": "The amount of money."
+    },
+    "currency_code": {
+      "type": "string",
+      "description": "The three-letter currency code."
+    }
+  }
+}

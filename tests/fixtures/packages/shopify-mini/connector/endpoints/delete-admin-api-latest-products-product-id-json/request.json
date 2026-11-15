@@ -1,0 +1,57 @@
+{
+  "actionName": "Product",
+  "authorizationType": "OAUTH2",
+  "bodyType": "NONE",
+  "description": "Deletes a product along with all its variants and images.",
+  "docLink": "https://shopify.dev/docs/api/admin-rest/latest/resources/product",
+  "endpointId": "delete-admin-api-latest-products-product-id-json",
+  "examples": [
+    {
+      "request": {
+        "headers": {
+          "X-Shopify-Access-Token": "{token}"
+        }
+      },
+      "source": "https://shopify.dev/docs/api/admin-rest/latest/resources/product",
+      "title": "Example 1"
+    }
+  ],
+  "headersContractRef": "headers.schema.json",
+  "idempotency": {
+    "safeToRetry": true
+  },
+  "isAdvanced": true,
+  "isDataSource": false,
+  "isDeprecated": false,
+  "isPreRelease": false,
+  "method": "DELETE",
+  "name": "Delete product",
+  "operationKind": "delete",
+  "permissionNote": "X-Shopify-Access-Token: {access_token}",
+  "provenance": {
+    "docAnchor": "#delete-products-product-id",
+    "extractedAt": "2026-11-12T14:30:12Z",
+    "sourceUrl": "https://shopify.dev/docs/api/admin-rest/latest/resources/product"
+  },
+  "resource": "Product",
+  "responses": [
+    {
+      "contentContractRef": "responses/200.schema.json",
+      "contentType": "application/json",
+      "statusCode": 200
+    }
+  ],
+  "sideEffects": [
+    "deletes"
+  ],
+  "summary": "Deletes a product along with all its variants and images.",
+  "tags": [
+    {
+      "colorSetId": 30,
+      "kind": "category",
+      "name": "products"
+    }
+  ],
+  "url": "{{app_env.servers.api}}/admin/api/latest/products/{{req_vars.product_id}}.json",
+  "variablesContractRef": "variables.schema.json"
+}

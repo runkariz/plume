@@ -1,0 +1,88 @@
+{
+  "actionName": "Product",
+  "authorizationType": "OAUTH2",
+  "bodyType": "NONE",
+  "description": "Retrieve a single product.",
+  "docLink": "https://shopify.dev/docs/api/admin-rest/latest/resources/product",
+  "endpointId": "get-admin-api-latest-products-product-id-json",
+  "examples": [
+    {
+      "request": {
+        "headers": {
+          "X-Shopify-Access-Token": "{token}"
+        }
+      },
+      "source": "https://shopify.dev/docs/api/admin-rest/latest/resources/product",
+      "title": "Example 1"
+    },
+    {
+      "request": {
+        "headers": {
+          "X-Shopify-Access-Token": "{token}"
+        },
+        "params": {
+          "fields": "id,images,title"
+        }
+      },
+      "source": "https://shopify.dev/docs/api/admin-rest/latest/resources/product",
+      "title": "Example 2"
+    }
+  ],
+  "headersContractRef": "headers.schema.json",
+  "idempotency": {
+    "safeToRetry": true
+  },
+  "isAdvanced": true,
+  "isDataSource": false,
+  "isDeprecated": false,
+  "isPreRelease": false,
+  "method": "GET",
+  "name": "Get product",
+  "operationKind": "get",
+  "paramsContractRef": "params.schema.json",
+  "permissionNote": "X-Shopify-Access-Token header",
+  "provenance": {
+    "docAnchor": "#get-products-product-id",
+    "extractedAt": "2026-11-12T14:30:12Z",
+    "sourceUrl": "https://shopify.dev/docs/api/admin-rest/latest/resources/product"
+  },
+  "relations": [
+    {
+      "kind": "child",
+      "targetEndpointId": "get-admin-api-latest-products-product-id-images-json",
+      "via": {
+        "field": "id",
+        "param": "product_id"
+      }
+    },
+    {
+      "kind": "child",
+      "targetEndpointId": "get-admin-api-latest-products-product-id-resource-feedback-json",
+      "via": {
+        "field": "id",
+        "param": "product_id"
+      }
+    }
+  ],
+  "resource": "Product",
+  "responses": [
+    {
+      "contentContractRef": "responses/200.schema.json",
+      "contentType": "application/json",
+      "statusCode": 200
+    }
+  ],
+  "sideEffects": [
+    "none"
+  ],
+  "summary": "Retrieve a single product.",
+  "tags": [
+    {
+      "colorSetId": 30,
+      "kind": "category",
+      "name": "products"
+    }
+  ],
+  "url": "{{app_env.servers.api}}/admin/api/latest/products/{{req_vars.product_id}}.json",
+  "variablesContractRef": "variables.schema.json"
+}

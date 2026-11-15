@@ -1,0 +1,80 @@
+{
+  "actionName": "Product",
+  "apiVersion": "2026-10",
+  "authorizationType": "OAUTH2",
+  "bodyContentType": "application/json",
+  "bodyContractRef": "body.schema.json",
+  "bodyType": "RAW",
+  "description": "Updates an existing product's details, variants, images, tags, status, or metafields.",
+  "docLink": "https://shopify.dev/docs/api/admin-rest/latest/resources/product",
+  "endpointId": "put-admin-api-latest-products-product-id-json-2026-10",
+  "examples": [
+    {
+      "request": {
+        "body": {
+          "product": {
+            "id": 632910392,
+            "metafields": [
+              {
+                "key": "new",
+                "namespace": "global",
+                "type": "single_line_text_field",
+                "value": "newvalue"
+              }
+            ]
+          }
+        },
+        "headers": {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": "{token}"
+        }
+      },
+      "source": "https://shopify.dev/docs/api/admin-rest/latest/resources/product",
+      "title": "Example 1"
+    }
+  ],
+  "headersContractRef": "headers.schema.json",
+  "idempotency": {
+    "safeToRetry": true
+  },
+  "isAdvanced": true,
+  "isDataSource": false,
+  "isDeprecated": false,
+  "isPreRelease": false,
+  "method": "PUT",
+  "name": "Replace product",
+  "operationKind": "update",
+  "permissionNote": "X-Shopify-Access-Token: {access_token}",
+  "provenance": {
+    "docAnchor": "#put-products-product-id",
+    "extractedAt": "2026-11-12T14:30:12Z",
+    "sourceUrl": "https://shopify.dev/docs/api/admin-rest/latest/resources/product"
+  },
+  "rawBodyType": "JSON",
+  "resource": "Product",
+  "responses": [
+    {
+      "contentContractRef": "responses/200.schema.json",
+      "contentType": "application/json",
+      "statusCode": 200
+    }
+  ],
+  "sideEffects": [
+    "updates"
+  ],
+  "summary": "Updates an existing product's details, variants, images, tags, status, or metafields.",
+  "tags": [
+    {
+      "colorSetId": 43,
+      "kind": "version",
+      "name": "2026-10"
+    },
+    {
+      "colorSetId": 30,
+      "kind": "category",
+      "name": "products"
+    }
+  ],
+  "url": "{{app_env.servers.api}}/admin/api/2026-10/products/{{req_vars.product_id}}.json",
+  "variablesContractRef": "variables.schema.json"
+}

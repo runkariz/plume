@@ -1,0 +1,88 @@
+{
+  "actionName": "Fulfillment order",
+  "apiVersion": "2026-10",
+  "authorizationType": "OAUTH2",
+  "bodyType": "NONE",
+  "description": "Retrieves a specific fulfillment order by its ID.",
+  "docLink": "https://shopify.dev/docs/api/admin-rest/latest/resources/fulfillmentorder",
+  "endpointId": "get-admin-api-latest-fulfillment-orders-fulfillment-order-id-json-2026-10",
+  "examples": [
+    {
+      "request": {
+        "headers": {
+          "X-Shopify-Access-Token": "{token}"
+        }
+      },
+      "source": "https://shopify.dev/docs/api/admin-rest/latest/resources/fulfillmentorder",
+      "title": "Example 1"
+    },
+    {
+      "request": {
+        "headers": {
+          "X-Shopify-Access-Token": "{token}"
+        },
+        "params": {
+          "include_financial_summaries": "true"
+        }
+      },
+      "source": "https://shopify.dev/docs/api/admin-rest/latest/resources/fulfillmentorder",
+      "title": "Example 2"
+    },
+    {
+      "request": {
+        "headers": {
+          "X-Shopify-Access-Token": "{token}"
+        },
+        "params": {
+          "include_order_reference_fields": "true"
+        }
+      },
+      "source": "https://shopify.dev/docs/api/admin-rest/latest/resources/fulfillmentorder",
+      "title": "Example 3"
+    }
+  ],
+  "headersContractRef": "headers.schema.json",
+  "idempotency": {
+    "safeToRetry": true
+  },
+  "isAdvanced": true,
+  "isDataSource": false,
+  "isDeprecated": false,
+  "isPreRelease": false,
+  "method": "GET",
+  "name": "Get fulfillment order",
+  "operationKind": "get",
+  "paramsContractRef": "params.schema.json",
+  "permissionNote": "X-Shopify-Access-Token: {access_token}",
+  "provenance": {
+    "docAnchor": "#get-fulfillment-orders-fulfillment-order-id",
+    "extractedAt": "2026-11-12T14:30:12Z",
+    "sourceUrl": "https://shopify.dev/docs/api/admin-rest/latest/resources/fulfillmentorder"
+  },
+  "resource": "FulfillmentOrder",
+  "responses": [
+    {
+      "contentContractRef": "responses/200.schema.json",
+      "contentType": "application/json",
+      "statusCode": 200
+    }
+  ],
+  "sideEffects": [
+    "none"
+  ],
+  "summary": "Retrieves a specific fulfillment order by its ID.",
+  "tags": [
+    {
+      "colorSetId": 43,
+      "kind": "version",
+      "name": "2026-10"
+    },
+    {
+      "colorSetId": 30,
+      "kind": "category",
+      "name": "fulfillment_orders"
+    }
+  ],
+  "url": "{{app_env.servers.api}}/admin/api/2026-10/fulfillment_orders/{{req_vars.fulfillment_order_id}}.json",
+  "variablesContractRef": "variables.schema.json"
+}

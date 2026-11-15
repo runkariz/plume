@@ -1,0 +1,61 @@
+{
+  "title": "Customer",
+  "description": "Represents a customer profile associated with a draft order.",
+  "x-source-url": "https://shopify.dev/docs/api/admin-rest/latest/resources/draftorder",
+  "x-complete": false,
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "The unique identifier of the customer."
+    },
+    "created_at": {
+      "type": "string",
+      "description": "The date and time when the customer was created."
+    },
+    "updated_at": {
+      "type": "string",
+      "description": "The date and time when the customer was last updated."
+    },
+    "first_name": {
+      "type": "string",
+      "description": "The customer's first name."
+    },
+    "last_name": {
+      "type": "string",
+      "description": "The customer's last name."
+    },
+    "state": {
+      "type": "string",
+      "description": "The state of the customer account."
+    },
+    "verified_email": {
+      "type": "boolean",
+      "description": "Whether the customer's email is verified."
+    },
+    "tax_exempt": {
+      "type": "boolean",
+      "description": "Whether the customer is exempt from taxes."
+    },
+    "email": {
+      "type": "string",
+      "description": "The customer's email address."
+    },
+    "phone": {
+      "type": "string",
+      "description": "The customer's phone number."
+    },
+    "currency": {
+      "type": "string",
+      "description": "The customer's preferred currency."
+    },
+    "admin_graphql_api_id": {
+      "type": "string",
+      "description": "The GraphQL API ID for the customer."
+    },
+    "default_address": {
+      "$ref": "address.schema.json",
+      "description": "The default address for the customer."
+    }
+  }
+}

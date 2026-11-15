@@ -1,0 +1,12 @@
+{
+  "authorizationType": "API_KEY",
+  "headerName": "X-Catalog-Key",
+  "id": "api-key-x-catalog-key",
+  "name": "API key (X-Catalog-Key header)",
+  "testSuccess": {
+    "status": 200
+  },
+  "testUrl": "{{app_env.servers.api}}/api/v1/orders",
+  "testUrlMethod": "GET",
+  "variableContractRef": "auth/api-key-x-catalog-key.variables.schema.json"
+}

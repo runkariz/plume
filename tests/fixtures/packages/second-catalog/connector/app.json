@@ -1,0 +1,84 @@
+{
+  "apiVersioning": {
+    "current": "v1",
+    "format": "number",
+    "scheme": "path",
+    "versions": [
+      "v1"
+    ]
+  },
+  "authIds": [
+    "api-key-x-catalog-key"
+  ],
+  "baseUrls": [
+    "http://127.0.0.1:18091"
+  ],
+  "category": {
+    "bundleVersion": 26,
+    "confidence": 0.95,
+    "key": "e-commerce",
+    "reason": "The API manages core online store resources such as shop products and orders."
+  },
+  "conventions": {
+    "casing": "camel"
+  },
+  "defaultAuthId": "api-key-x-catalog-key",
+  "description": "",
+  "environments": [
+    {
+      "baseUrl": "http://127.0.0.1:18091",
+      "isDefault": true,
+      "key": "production",
+      "kind": "production",
+      "name": "production",
+      "provenance": {
+        "source": "derived"
+      },
+      "servers": {
+        "api": "http://127.0.0.1:18091"
+      }
+    }
+  ],
+  "errorFormat": {
+    "envelopeExample": {
+      "error": "string",
+      "message": "string"
+    },
+    "notes": "Error responses (400, 410) carry error and message fields.",
+    "statusCodes": [
+      {
+        "meaning": "Bad page size, or a page token that is invalid or belongs to a different search.",
+        "retryable": false,
+        "status": 400
+      },
+      {
+        "meaning": "Missing or unknown API key.",
+        "retryable": false,
+        "status": 401
+      },
+      {
+        "meaning": "The page token has expired.",
+        "retryable": false,
+        "status": 410
+      }
+    ]
+  },
+  "knowledgeIds": [
+    "context"
+  ],
+  "name": "Second Catalog API",
+  "provenance": {
+    "extractedAt": "2026-10-30T21:38:39Z",
+    "extractorVersion": "1.0.0.0",
+    "rulesBundleVersion": 26,
+    "rulesVersion": "kariz-connector.v2@7c5342b8da8a",
+    "sourceUrl": "file:///uploaded/4c3034da5bd5/catalog-b.openapi.json"
+  },
+  "resources": [
+    {
+      "name": "General"
+    }
+  ],
+  "summary": "This connector allows callers to list and search shop orders and products.",
+  "systemName": "secondcatalogapi"
+}

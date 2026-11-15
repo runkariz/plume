@@ -1,0 +1,27 @@
+{
+  "title": "Parameters",
+  "type": "object",
+  "properties": {
+    "q": {
+      "type": "string",
+      "description": "Search term. Case-insensitive match inside the product name (products) or the order number or customer name (orders). Leave out for everything.",
+      "x-on-pagination": "keep",
+      "title": "Search Query"
+    },
+    "pageSize": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Rows per page. The server allows at most maxPageSize rows (see the response); a larger value is capped.",
+      "default": 5,
+      "x-on-pagination": "keep",
+      "title": "Page Size"
+    },
+    "pageToken": {
+      "type": "string",
+      "description": "Cursor for the next page: the nextPageToken of the previous response (products) or the pageToken in its Link header (orders). Tokens are opaque and expire after 15 minutes.",
+      "x-on-pagination": "setCursor",
+      "title": "Page Token"
+    }
+  },
+  "description": "Query parameters for filtering and paginating the product list."
+}

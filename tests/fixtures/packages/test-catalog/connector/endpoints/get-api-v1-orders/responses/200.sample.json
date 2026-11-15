@@ -1,0 +1,16 @@
+{
+  "maxPageSize": 0,
+  "orders": [
+    {
+      "currency": "<currency>",
+      "customer": "<customer>",
+      "id": "<id>",
+      "number": "<number>",
+      "shop": "<shop>",
+      "total": "<total>"
+    }
+  ],
+  "pageSize": 0,
+  "pageSizeCapped": false,
+  "query": "<query>"
+}

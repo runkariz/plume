@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "errors": {
+      "type": "object",
+      "description": "A mapping of invalid fields to their respective validation error messages."
+    }
+  },
+  "description": "Response returned when product creation fails due to semantic validation errors."
+}

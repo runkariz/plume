@@ -1,0 +1,11 @@
+{
+  "schemaVersion": "2.0",
+  "runId": "r_c19c62c634b48863c352379276",
+  "source": {
+    "url": "https://shopify.dev/docs/api/admin-rest",
+    "ref": null,
+    "commit": null
+  },
+  "reader": "docs",
+  "note": "trimmed test fixture (7 endpoints, 4 models, 3 guides) of the Shopify Admin REST run"
+}

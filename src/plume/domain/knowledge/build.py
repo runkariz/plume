@@ -23,7 +23,24 @@ from plume.domain.shared.errors import (
 from plume.domain.shared.hashing import ContentHash, digest_of_items
 from plume.domain.shared.ids import BuildId
 
-_ITEM_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,254}$")
+_ITEM_ID = re.compile(r"^[A-Za-z0-9][^\s]{0,511}$")
+
+
+@dataclass(frozen=True, slots=True)
+class BuildSpec:
+    """What a build was made from and how. Equal specs of the same API give the same build id."""
+
+    package_hash: str
+    chunker_version: str
+    embed_model: str
+    dims: int
+    source_ref: str | None = None
+    run_id: str | None = None
+
+    def build_id_for(self, api_id: ApiId) -> BuildId:
+        return BuildId.derive(
+            api_id.value, self.package_hash, self.chunker_version, self.embed_model, str(self.dims)
+        )
 
 
 class BuildStatus(StrEnum):
@@ -50,6 +67,7 @@ class Build:
     _items: Mapping[str, ContentHash] = field(default_factory=lambda: MappingProxyType({}))
     content_hash: ContentHash | None = None
     sealed_at: datetime | None = None
+    spec: BuildSpec | None = None
 
     def __post_init__(self) -> None:
         _require_aware(self.created_at, "created_at")
@@ -72,9 +90,17 @@ class Build:
     # -- construction ---------------------------------------------------------------------------
 
     @classmethod
-    def start(cls, api_id: ApiId, created_at: datetime, build_id: BuildId | None = None) -> "Build":
-        """A new, empty draft."""
-        return cls(api_id=api_id, build_id=build_id or BuildId.new(), created_at=created_at)
+    def start(
+        cls,
+        api_id: ApiId,
+        created_at: datetime,
+        build_id: BuildId | None = None,
+        spec: BuildSpec | None = None,
+    ) -> "Build":
+        """A new, empty draft. With a ``spec`` and no ``build_id``, the id is derived from it."""
+        if build_id is None:
+            build_id = spec.build_id_for(api_id) if spec is not None else BuildId.new()
+        return cls(api_id=api_id, build_id=build_id, created_at=created_at, spec=spec)
 
     # -- queries --------------------------------------------------------------------------------
 

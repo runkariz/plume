@@ -1,0 +1,14 @@
+{
+  "collection_id": "841564295",
+  "created_at_max": "2014-04-25T16:15:47-04:00",
+  "created_at_min": "2014-04-25T16:15:47-04:00",
+  "fields": "id,images,title",
+  "handle": "ipod-nano",
+  "ids": "632910392,921728736",
+  "limit": 50,
+  "presentment_currencies": "USD",
+  "product_type": "Cult Products",
+  "published_at_max": "2014-04-25T16:15:47-04:00",
+  "published_at_min": "2014-04-25T16:15:47-04:00",
+  "since_id": "632910392"
+}

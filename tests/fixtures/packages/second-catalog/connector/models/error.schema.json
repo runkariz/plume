@@ -1,0 +1,17 @@
+{
+  "title": "Error",
+  "x-source-url": "file:///uploaded/4c3034da5bd5/catalog-b.openapi.json",
+  "x-complete": true,
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "string",
+      "description": "Short code or name identifying the error."
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable message detailing the error."
+    }
+  },
+  "description": "Standard error response payload containing failure details."
+}
