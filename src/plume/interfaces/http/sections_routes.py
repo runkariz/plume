@@ -172,6 +172,9 @@ def sections_router(sections: Callable[[], PackageSections]) -> APIRouter:
             "Cache-Control": "public, max-age=86400",
             "X-Content-Type-Options": "nosniff",
             "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'",
+            # A public, static image loaded by <img> (a no-cors request) from the web UI's own
+            # origin: browsers treat another port as another site, so same-site would block it.
+            "Cross-Origin-Resource-Policy": "cross-origin",
         }
         if request.headers.get("if-none-match") == etag:
             return Response(status_code=304, headers=headers)
