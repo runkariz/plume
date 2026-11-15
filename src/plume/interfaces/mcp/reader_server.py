@@ -43,6 +43,8 @@ Rules:
 4. Before writing code that calls the API, check it with check_call(api, method, path, params).
 5. Results carry build and docs_as_of; mention them when precision matters. version defaults
    to the "latest" tag; pass a build id to pin one.
+6. Canonical models (get_model, list_models): if stale=true, the model was built on older
+   builds; say so and regenerate it (or ask) before relying on it.
 """
 
 READ_ONLY = ToolAnnotations(read_only_hint=True, idempotent_hint=True, open_world_hint=False)
@@ -213,26 +215,24 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
                         names[i.api] = deps.resolver().resolve(i.api).api.name
                     except ApplicationError:
                         names[i.api] = i.api
-                return payloads.snapshot_payload(snap, names)
+                return payloads.snapshot_payload(snap, names, models().stale_inputs(snap))
 
             return await _run(run)
 
         @server.tool(annotations=READ_ONLY, structured_output=True)
         async def list_models(api: str | None = None) -> dict[str, Any]:
             """Stored canonical models, newest first (reuse one instead of regenerating)."""
-            return await _run(
-                lambda: {
+
+            def run() -> dict[str, Any]:
+                service = models()
+                return {
                     "models": [
-                        {
-                            "snapshot_id": m.snapshot_id,
-                            "name": m.draft.name,
-                            "concept": m.concept,
-                            "apis": [i.api for i in m.inputs],
-                            "created_at": m.created_at.isoformat(),
-                        }
-                        for m in models().list(api)
-                    ]
+                        payloads.model_list_item(m, service.stale_inputs(m))
+                        for m in service.list(api)
+                    ],
+                    "note": payloads.STALE_HINT,
                 }
-            )
+
+            return await _run(run)
 
     return server

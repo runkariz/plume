@@ -1861,6 +1861,18 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "stale": {
+            "description": "A pinned build is no longer the API's latest.",
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "staleInputs": {
+            "items": {
+              "$ref": "#/components/schemas/StaleInput"
+            },
+            "title": "Staleinputs",
+            "type": "array"
           }
         },
         "required": [
@@ -1868,7 +1880,8 @@
           "name",
           "concept",
           "apis",
-          "generatedAt"
+          "generatedAt",
+          "stale"
         ],
         "title": "ModelListItem",
         "type": "object"
@@ -2257,6 +2270,36 @@
           "claudePayload"
         ],
         "title": "SearchResponse",
+        "type": "object"
+      },
+      "StaleInput": {
+        "properties": {
+          "api": {
+            "title": "Api",
+            "type": "string"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "pinned": {
+            "title": "Pinned",
+            "type": "string"
+          }
+        },
+        "required": [
+          "api",
+          "pinned",
+          "current"
+        ],
+        "title": "StaleInput",
         "type": "object"
       },
       "SuggestRequest": {

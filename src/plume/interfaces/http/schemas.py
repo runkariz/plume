@@ -415,12 +415,20 @@ class DraftRefused(Schema):
     issues: list[DraftIssue]
 
 
+class StaleInput(Schema):
+    api: str
+    pinned: str
+    current: str | None
+
+
 class ModelListItem(Schema):
     id: str
     name: str
     concept: str
     apis: list[str]
     generated_at: str
+    stale: bool = Field(description="A pinned build is no longer the API's latest.")
+    stale_inputs: list[StaleInput] = Field(default_factory=list)
 
 
 class ModelList(Schema):

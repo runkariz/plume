@@ -164,3 +164,23 @@ def test_bundled_models_suggest_by_leaf_name(packages: Path) -> None:
     assert (counts["model"], counts["model_shapes"]) == (12, 11)
     # billing info, boolean, date, link, address, customer, orders (the 2 roots are no names)
     assert counts["model_names"] == 7
+
+
+def test_snapshots_go_stale_when_a_pinned_build_moves(stack: FakeStack, tmp_path: Path) -> None:
+    import shutil  # noqa: PLC0415
+
+    models = stack.models()
+    session = models.start(APIS, "Order")
+    snap = models.submit(session.session_id, _draft("good")).snapshot
+    assert models.stale_inputs(snap) == []
+    assert models.existing(APIS, "Order") == snap
+
+    copy = tmp_path / "catalog-v2"
+    shutil.copytree(Path(__file__).resolve().parents[2] / "fixtures/packages/test-catalog", copy)
+    (copy / "connector" / "models" / "error.schema.json").unlink()
+    new_build = stack.load(str(copy))
+    stale = models.stale_inputs(snap)
+    assert stale == [
+        {"api": "test-catalog-api", "pinned": snap.inputs[0].build, "current": new_build}
+    ]
+    assert models.existing(APIS, "Order") is None  # generate opens a new session instead

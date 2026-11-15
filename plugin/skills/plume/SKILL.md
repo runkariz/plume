@@ -23,5 +23,7 @@ you write the answer, **only from what Plume returns**.
      `incomplete_reasons`.
    - Read `text_mentions` before concluding: the name may appear only in prose.
 5. Before writing code that calls the API, `check_call(api, method, path, params)`.
-6. When the user cares about a version, pass `version` (a tag or a build id) and say which
+6. A stored canonical model (`get_model`, `list_models`) with `stale: true` was built on older
+   builds: say so before using it, and suggest regenerating it.
+7. When the user cares about a version, pass `version` (a tag or a build id) and say which
    build you used.
