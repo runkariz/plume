@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from plume.application.errors import ApplicationError, IncompleteBuildError, NotFoundError
 from plume.application.knowledge._builds import require_build
 from plume.application.ports.api_repo import ApiRepo
+from plume.application.ports.asset_repo import AssetRepo
 from plume.application.ports.build_repo import BuildRepo
 from plume.application.ports.document_repo import DocumentRepo
 from plume.application.ports.dump_store import BuildImporter, BuildSnapshot, DumpStore, VectorReader
@@ -39,6 +40,7 @@ def snapshot_of(
     vectors: VectorReader,
     facts: FactIndex,
     evals: EvalRepo | None,
+    assets: AssetRepo | None = None,
 ) -> BuildSnapshot:
     build = require_build(builds, build_id)
     if not build.is_sealed:
@@ -54,6 +56,7 @@ def snapshot_of(
         vectors=vectors.vectors_of(build_id),
         facts=tuple(facts.list_facts(build_id)),
         eval=evals.get(build_id) if evals else None,
+        assets=tuple(assets.list(build_id)) if assets else (),
     )
 
 
@@ -98,8 +101,9 @@ class ExportDump:
         facts: FactIndex,
         evals: EvalRepo | None,
         store: DumpStore,
+        assets: AssetRepo | None = None,
     ) -> None:
-        self._args = (apis, builds, documents, vectors, facts, evals)
+        self._args = (apis, builds, documents, vectors, facts, evals, assets)
         self._store = store
 
     def snapshot(self, build_id: BuildId) -> BuildSnapshot:

@@ -23,6 +23,7 @@ from plume.application.models.sessions import ModelSessions
 from plume.application.ports.embedder import Embedder
 from plume.application.ports.job_events import JobEvents
 from plume.application.reader.resolve import BuildResolver
+from plume.application.reader.sections import PackageSections
 from plume.application.reader.use_cases import (
     BrowseDocuments,
     CheckCall,
@@ -38,6 +39,7 @@ from plume.infrastructure.db.alembic_migrator import AlembicMigrator
 from plume.infrastructure.db.archive import PostgresBuildImporter
 from plume.infrastructure.db.engine import make_engine
 from plume.infrastructure.db.repos.api_repo import PostgresApiRepo
+from plume.infrastructure.db.repos.asset_repo import PostgresAssetRepo
 from plume.infrastructure.db.repos.build_repo import PostgresBuildRepo
 from plume.infrastructure.db.repos.document_repo import PostgresDocumentRepo
 from plume.infrastructure.db.repos.eval_repo import PostgresEvalRepo
@@ -145,6 +147,10 @@ class Container:
         return MigrateSchema(AlembicMigrator(self.engine))
 
     @cached_property
+    def assets(self) -> PostgresAssetRepo:
+        return PostgresAssetRepo(self.engine)
+
+    @cached_property
     def models_repo(self) -> PostgresModelRepo:
         return PostgresModelRepo(self.engine)
 
@@ -203,6 +209,7 @@ class Container:
                 self.clock,
                 embed_model=embedder.model,
                 dims=embedder.dims,
+                assets=self.assets,
             ),
             chunk=ChunkDocuments(self.builds, self.documents, self.settings.chunk_max_chars),
             embed=EmbedBuild(self.builds, self.documents, self.vectors, embedder),
@@ -249,6 +256,7 @@ class Container:
             self.facts,
             self.evals,
             self.dumps,
+            self.assets,
         )
 
     def restore_dump(self) -> RestoreDump:
@@ -260,7 +268,12 @@ class Container:
         return BuildResolver(self.apis, self.builds, self.tags)
 
     def overviews(self) -> ListApiOverviews:
-        return ListApiOverviews(self.apis, self.builds, self.tags, self.search_index, self.evals)
+        return ListApiOverviews(
+            self.apis, self.builds, self.tags, self.search_index, self.evals, self.assets
+        )
+
+    def sections(self) -> PackageSections:
+        return PackageSections(self.resolver(), self.search_index, self.documents, self.assets)
 
     def browse(self) -> BrowseDocuments:
         return BrowseDocuments(self.resolver(), self.search_index)

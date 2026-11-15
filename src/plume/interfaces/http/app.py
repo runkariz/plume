@@ -4,7 +4,7 @@ import hashlib
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import FastAPI, HTTPException, Path, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,6 +24,7 @@ from plume.application.models.concepts import SuggestConcepts
 from plume.application.models.sessions import ModelSessions
 from plume.application.reader.dto import ApiOverview
 from plume.application.reader.resolve import BuildResolver
+from plume.application.reader.sections import PackageSections
 from plume.application.reader.use_cases import (
     BrowseDocuments,
     CheckCall,
@@ -45,6 +46,7 @@ from plume.interfaces.http.rate_limit import (
     RateLimitMiddleware,
     SecurityHeadersMiddleware,
 )
+from plume.interfaces.http.sections_routes import sections_router
 
 ApiPath = Annotated[str, Path(description="API id, e.g. shopify")]
 Version = Annotated[str | None, Query(description="Tag or build id; default latest")]
@@ -62,6 +64,7 @@ class HttpDependencies:
     list_builds: Callable[[], ListBuilds]
     diff_builds: Callable[[], DiffBuilds]
     resolver: Callable[[], BuildResolver]
+    sections: Callable[[], PackageSections] | None = None
     mcp_url: str = "http://127.0.0.1:18481/mcp"
     rate_limit_per_minute: int = 120
     cors_origins: tuple[str, ...] = ("http://127.0.0.1:18473", "http://localhost:18473")
@@ -70,6 +73,14 @@ class HttpDependencies:
     models: Callable[[], ModelSessions] | None = None
     maintainer_tokens: tuple[str, ...] = ()
     max_upload_bytes: int = 200 * 1024 * 1024
+
+
+MAX_RAW_BYTES = 256 * 1024
+
+
+def _list_of_dicts(raw: Any, key: str) -> list[dict[str, Any]]:
+    value = raw.get(key) if isinstance(raw, dict) else None
+    return [x for x in value if isinstance(x, dict)] if isinstance(value, list) else []
 
 
 def _logo(api_id: str, name: str, icon_url: str | None) -> s.Logo:
@@ -96,7 +107,12 @@ def _summary(o: ApiOverview) -> s.ApiSummary:
             kind="ready" if o.ref else "unpublished",
             recall_at5=o.eval.metrics.recall_at_k if o.eval else None,
         ),
-        logo=_logo(info.api_id.value, info.name, info.icon_url),
+        # Only the package's own icon, served by Plume; never a remote URL.
+        logo=_logo(
+            info.api_id.value,
+            info.name,
+            f"/v1/apis/{info.api_id.value}/icon" if o.has_icon else None,
+        ),
     )
 
 
@@ -178,6 +194,14 @@ def create_app(deps: HttpDependencies) -> FastAPI:
         429: {"model": s.ErrorBody},
     }
 
+    def _section_counts(api: str, version: str | None) -> s.SectionCounts | None:
+        if deps.sections is None:
+            return None
+        c = deps.sections().counts(api, version)
+        return s.SectionCounts(
+            auth=c.auth, triggers=c.triggers, webhook_endpoints=c.webhook_endpoints
+        )
+
     @app.get("/health", response_model=s.Health, tags=["system"])
     def health() -> s.Health:
         return s.Health(status="ok", version=__version__)
@@ -224,6 +248,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 claude_code=f"claude mcp add --transport http plume {deps.mcp_url}",
                 mcp_url=deps.mcp_url,
             ),
+            sections=_section_counts(api, version),
         )
 
     @app.get(
@@ -232,12 +257,13 @@ def create_app(deps: HttpDependencies) -> FastAPI:
     def browse(
         api: ApiPath,
         kind: s.KindFilter = "all",
+        tag: Annotated[str | None, Query(max_length=100, description="Package tag")] = None,
         q: Annotated[str | None, Query(max_length=200)] = None,
         limit: Annotated[int, Query(ge=1, le=500)] = 50,
         offset: Annotated[int, Query(ge=0)] = 0,
         version: Version = None,
     ) -> s.BrowseResult:
-        ref, items, total = deps.browse().execute(api, kind, q, limit, offset, version)
+        ref, items, total = deps.browse().execute(api, kind, q, limit, offset, version, tag)
         return s.BrowseResult(
             build=ref.build,
             items=[
@@ -249,6 +275,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                     path=i.path,
                     resource=i.resource,
                     deprecated=i.deprecated,
+                    tags=list(i.tags),
                 )
                 for i in items
             ],
@@ -264,6 +291,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
     def get_document(api: ApiPath, doc_id: str, version: Version = None) -> s.DocumentOut:
         r = deps.get_document().execute(api, doc_id, version)
         d = r.document
+        raw_too_big = d.raw is not None and len(json.dumps(d.raw)) > MAX_RAW_BYTES
         return s.DocumentOut(
             api=r.ref.api,
             build=r.ref.build,
@@ -290,6 +318,11 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 for f in d.fields
             ],
             scopes=list(d.scopes),
+            tags=list(d.tags),
+            responses=_list_of_dicts(d.raw, "responses") if d.kind.value == "endpoint" else [],
+            errors=_list_of_dicts(d.raw, "errors") if d.kind.value == "endpoint" else [],
+            raw=None if raw_too_big else (dict(d.raw) if d.raw is not None else None),
+            raw_truncated=raw_too_big,
         )
 
     @app.post(
@@ -468,6 +501,8 @@ def create_app(deps: HttpDependencies) -> FastAPI:
             unchanged=d.unchanged,
         )
 
+    if deps.sections is not None:
+        app.include_router(sections_router(deps.sections))
     if deps.suggest is not None and deps.models is not None:
         app.include_router(
             models_router(

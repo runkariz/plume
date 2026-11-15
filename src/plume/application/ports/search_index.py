@@ -29,6 +29,7 @@ class DocumentSummary:
     method: str | None
     path: str | None
     deprecated: bool
+    tags: tuple[str, ...] = ()
 
 
 class SearchIndex(Protocol):
@@ -51,8 +52,10 @@ class SearchIndex(Protocol):
         query: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        tag: str | None = None,
     ) -> tuple[list[DocumentSummary], int]:
-        """Documents ordered by kind then id (``query`` filters title/path, case-insensitive)."""
+        """Documents ordered by kind then id (``query`` filters title/path, case-insensitive;
+        ``tag`` keeps documents carrying that package tag)."""
         ...
 
     def summaries(self, build_id: BuildId, doc_ids: Sequence[str]) -> dict[str, DocumentSummary]:

@@ -1,0 +1,11 @@
+{
+  "delivery": "webhook",
+  "description": "Occurs whenever the access scopes of any installation are modified. Allows apps to keep track of the granted access scopes of their installations.",
+  "key": "app/scopes_update",
+  "provenance": {
+    "evidenceUrl": "https://shopify.dev/docs/api/admin-rest/latest/resources/webhook",
+    "source": "docs"
+  },
+  "resource": "shop",
+  "title": "app/scopes_update"
+}

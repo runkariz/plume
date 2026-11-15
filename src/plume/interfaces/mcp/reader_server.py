@@ -15,6 +15,7 @@ from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
 from plume.application.models.sessions import ModelSessions
 from plume.application.reader.resolve import BuildResolver
+from plume.application.reader.sections import PackageSections, scheme_view, trigger_view
 from plume.application.reader.use_cases import (
     CheckCall,
     FindFact,
@@ -61,6 +62,7 @@ class McpReaderDependencies:
     diff_builds: Callable[[], DiffBuilds]
     resolver: Callable[[], BuildResolver]
     models: Callable[[], ModelSessions] | None = None
+    sections: Callable[[], PackageSections] | None = None
 
 
 async def _run(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
@@ -199,6 +201,80 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
             }
 
         return await _run(run)
+
+    if deps.sections is not None:
+        sections = deps.sections
+
+        @server.tool(annotations=READ_ONLY, structured_output=True)
+        async def list_auth_schemes(api: str, version: str | None = None) -> dict[str, Any]:
+            """Auth schemes as the package states them (type, header/query parameter, scopes,
+            variables). present=false when the package documents none."""
+
+            def run() -> dict[str, Any]:
+                ref, docs = sections().auth_schemes(api, version)
+                views = [scheme_view(d) for d in docs]
+                return {
+                    **payloads.ref_payload(ref),
+                    "present": bool(views),
+                    "schemes": [
+                        {
+                            k: v[k]
+                            for k in (
+                                "id",
+                                "doc_id",
+                                "name",
+                                "type",
+                                "grant_type",
+                                "header_name",
+                                "query_param",
+                                "scopes",
+                                "variables",
+                            )
+                        }
+                        for v in views
+                    ],
+                }
+
+            return await _run(run)
+
+        @server.tool(annotations=READ_ONLY, structured_output=True)
+        async def get_auth_scheme(
+            api: str, scheme_id: str, version: str | None = None
+        ) -> dict[str, Any]:
+            """One auth scheme: the package's auth JSON and variables schema verbatim."""
+
+            def run() -> dict[str, Any]:
+                ref, doc = sections().auth_scheme(api, scheme_id, version)
+                return {**payloads.ref_payload(ref), **scheme_view(doc)}
+
+            return await _run(run)
+
+        @server.tool(annotations=READ_ONLY, structured_output=True)
+        async def list_triggers(api: str, version: str | None = None) -> dict[str, Any]:
+            """Trigger events / webhook topics the package lists. present=false means the package
+            has no triggers section (say so; do not guess topics). Webhook-management endpoints
+            are endpoints tagged "webhooks" (search_docs)."""
+
+            def run() -> dict[str, Any]:
+                ref, docs = sections().triggers(api, version)
+                views = [trigger_view(d) for d in docs]
+                return {
+                    **payloads.ref_payload(ref),
+                    "present": bool(views),
+                    "triggers": [{k: v for k, v in x.items() if k != "event"} for x in views],
+                }
+
+            return await _run(run)
+
+        @server.tool(annotations=READ_ONLY, structured_output=True)
+        async def get_trigger(api: str, key: str, version: str | None = None) -> dict[str, Any]:
+            """One trigger by key (e.g. "orders/create") or document id; event JSON verbatim."""
+
+            def run() -> dict[str, Any]:
+                ref, doc = sections().trigger(api, key, version)
+                return {**payloads.ref_payload(ref), **trigger_view(doc)}
+
+            return await _run(run)
 
     if deps.models is not None:
         models = deps.models

@@ -87,6 +87,17 @@
             ],
             "description": "Null until the eval gate runs."
           },
+          "sections": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SectionCounts"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the package contains: auth schemes, triggers, webhooks."
+          },
           "status": {
             "$ref": "#/components/schemas/ApiStatus"
           },
@@ -385,6 +396,374 @@
         "title": "AskResponse",
         "type": "object"
       },
+      "AuthList": {
+        "properties": {
+          "api": {
+            "title": "Api",
+            "type": "string"
+          },
+          "build": {
+            "title": "Build",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "present": {
+            "title": "Present",
+            "type": "boolean"
+          },
+          "schemes": {
+            "items": {
+              "$ref": "#/components/schemas/AuthSchemeSummary"
+            },
+            "title": "Schemes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "api",
+          "build",
+          "present",
+          "note",
+          "schemes"
+        ],
+        "title": "AuthList",
+        "type": "object"
+      },
+      "AuthSchemeDetail": {
+        "properties": {
+          "api": {
+            "title": "Api",
+            "type": "string"
+          },
+          "build": {
+            "title": "Build",
+            "type": "string"
+          },
+          "docId": {
+            "title": "Docid",
+            "type": "string"
+          },
+          "file": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File"
+          },
+          "grantType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Granttype"
+          },
+          "headerName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headername"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "queryParam": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queryparam"
+          },
+          "scheme": {
+            "additionalProperties": true,
+            "description": "The auth JSON from the package, verbatim.",
+            "title": "Scheme",
+            "type": "object"
+          },
+          "scopes": {
+            "items": {
+              "$ref": "#/components/schemas/AuthScope"
+            },
+            "title": "Scopes",
+            "type": "array"
+          },
+          "setupSteps": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "setupSteps verbatim (objects as given).",
+            "title": "Setupsteps"
+          },
+          "testUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Testurl"
+          },
+          "tokenLifetime": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tokenlifetime"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          },
+          "variables": {
+            "items": {
+              "$ref": "#/components/schemas/AuthVariable"
+            },
+            "title": "Variables",
+            "type": "array"
+          },
+          "variablesSchema": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The scheme's .variables.schema.json (JSON Schema), verbatim.",
+            "title": "Variablesschema"
+          }
+        },
+        "required": [
+          "api",
+          "build",
+          "id",
+          "docId",
+          "name",
+          "type",
+          "grantType",
+          "headerName",
+          "queryParam",
+          "scopes",
+          "variables",
+          "setupSteps",
+          "tokenLifetime",
+          "testUrl",
+          "scheme",
+          "variablesSchema",
+          "file"
+        ],
+        "title": "AuthSchemeDetail",
+        "type": "object"
+      },
+      "AuthSchemeSummary": {
+        "properties": {
+          "docId": {
+            "title": "Docid",
+            "type": "string"
+          },
+          "grantType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Granttype"
+          },
+          "headerName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headername"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "queryParam": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queryparam"
+          },
+          "scopes": {
+            "title": "Scopes",
+            "type": "integer"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "authorizationType from the package, verbatim.",
+            "title": "Type"
+          },
+          "variables": {
+            "title": "Variables",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "docId",
+          "name",
+          "type",
+          "grantType",
+          "headerName",
+          "queryParam",
+          "scopes",
+          "variables"
+        ],
+        "title": "AuthSchemeSummary",
+        "type": "object"
+      },
+      "AuthScope": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          }
+        },
+        "required": [
+          "scope",
+          "description"
+        ],
+        "title": "AuthScope",
+        "type": "object"
+      },
+      "AuthVariable": {
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          }
+        },
+        "required": [
+          "name",
+          "description",
+          "type",
+          "required"
+        ],
+        "title": "AuthVariable",
+        "type": "object"
+      },
       "Body_upload_v1_packages_post": {
         "properties": {
           "file": {
@@ -416,6 +795,7 @@
               "model",
               "guide",
               "auth",
+              "trigger",
               "app"
             ],
             "title": "Kind",
@@ -453,6 +833,14 @@
               }
             ],
             "title": "Resource"
+          },
+          "tags": {
+            "description": "The package's tags, verbatim.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
           },
           "title": {
             "title": "Title",
@@ -977,6 +1365,15 @@
             "title": "Docsasof",
             "type": "string"
           },
+          "errors": {
+            "description": "Endpoint errors[] from the package, verbatim.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
           "fields": {
             "items": {
               "$ref": "#/components/schemas/FieldOut"
@@ -994,6 +1391,7 @@
               "model",
               "guide",
               "auth",
+              "trigger",
               "app"
             ],
             "title": "Kind",
@@ -1021,6 +1419,25 @@
             ],
             "title": "Path"
           },
+          "raw": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The package's source JSON for this item, verbatim.",
+            "title": "Raw"
+          },
+          "rawTruncated": {
+            "default": false,
+            "description": "True when raw was over 256 KB and is omitted.",
+            "title": "Rawtruncated",
+            "type": "boolean"
+          },
           "resource": {
             "anyOf": [
               {
@@ -1031,6 +1448,15 @@
               }
             ],
             "title": "Resource"
+          },
+          "responses": {
+            "description": "Endpoint responses[] from the package, verbatim.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Responses",
+            "type": "array"
           },
           "scopes": {
             "items": {
@@ -1049,6 +1475,13 @@
               }
             ],
             "title": "Sourceurl"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
           },
           "text": {
             "title": "Text",
@@ -2106,6 +2539,7 @@
               "model",
               "guide",
               "auth",
+              "trigger",
               "app"
             ],
             "title": "Kind",
@@ -2176,6 +2610,7 @@
               "model",
               "guide",
               "auth",
+              "trigger",
               "app"
             ],
             "title": "Kind",
@@ -2270,6 +2705,29 @@
           "claudePayload"
         ],
         "title": "SearchResponse",
+        "type": "object"
+      },
+      "SectionCounts": {
+        "properties": {
+          "auth": {
+            "title": "Auth",
+            "type": "integer"
+          },
+          "triggers": {
+            "title": "Triggers",
+            "type": "integer"
+          },
+          "webhookEndpoints": {
+            "title": "Webhookendpoints",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "auth",
+          "triggers",
+          "webhookEndpoints"
+        ],
+        "title": "SectionCounts",
         "type": "object"
       },
       "StaleInput": {
@@ -2369,6 +2827,215 @@
           "ms"
         ],
         "title": "TraceStep",
+        "type": "object"
+      },
+      "TriggerDetail": {
+        "properties": {
+          "api": {
+            "title": "Api",
+            "type": "string"
+          },
+          "build": {
+            "title": "Build",
+            "type": "string"
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "docId": {
+            "title": "Docid",
+            "type": "string"
+          },
+          "event": {
+            "additionalProperties": true,
+            "description": "The event JSON from the package, verbatim.",
+            "title": "Event",
+            "type": "object"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "resource": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource"
+          },
+          "sourceUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourceurl"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "docId",
+          "title",
+          "description",
+          "resource",
+          "delivery",
+          "api",
+          "build",
+          "sourceUrl",
+          "event"
+        ],
+        "title": "TriggerDetail",
+        "type": "object"
+      },
+      "TriggerList": {
+        "properties": {
+          "api": {
+            "title": "Api",
+            "type": "string"
+          },
+          "build": {
+            "title": "Build",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TriggerSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "present": {
+            "title": "Present",
+            "type": "boolean"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "api",
+          "build",
+          "present",
+          "note",
+          "total",
+          "items"
+        ],
+        "title": "TriggerList",
+        "type": "object"
+      },
+      "TriggerSummary": {
+        "properties": {
+          "delivery": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivery"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "docId": {
+            "title": "Docid",
+            "type": "string"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "resource": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "docId",
+          "title",
+          "description",
+          "resource",
+          "delivery"
+        ],
+        "title": "TriggerSummary",
         "type": "object"
       },
       "ValidationError": {
@@ -2663,6 +3330,157 @@
           }
         },
         "summary": "Ask",
+        "tags": [
+          "reader"
+        ]
+      }
+    },
+    "/v1/apis/{api}/auth": {
+      "get": {
+        "description": "Auth schemes as the package states them (empty + note when it has none).",
+        "operationId": "auth_v1_apis__api__auth_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "api",
+            "required": true,
+            "schema": {
+              "title": "Api",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tag or build id; default latest",
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tag or build id; default latest",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Auth",
+        "tags": [
+          "reader"
+        ]
+      }
+    },
+    "/v1/apis/{api}/auth/{scheme_id}": {
+      "get": {
+        "description": "One auth scheme: its JSON and variables schema verbatim, plus fields read from them.",
+        "operationId": "auth_scheme_v1_apis__api__auth__scheme_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "api",
+            "required": true,
+            "schema": {
+              "title": "Api",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scheme_id",
+            "required": true,
+            "schema": {
+              "title": "Scheme Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tag or build id; default latest",
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tag or build id; default latest",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthSchemeDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Auth Scheme",
         "tags": [
           "reader"
         ]
@@ -3103,6 +3921,74 @@
         ]
       }
     },
+    "/v1/apis/{api}/icon": {
+      "get": {
+        "description": "The package's own icon, stored with the build (no third-party fetch).",
+        "operationId": "icon_v1_apis__api__icon_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "api",
+            "required": true,
+            "schema": {
+              "title": "Api",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tag or build id; default latest",
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tag or build id; default latest",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {},
+              "image/svg+xml": {}
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Icon",
+        "tags": [
+          "reader"
+        ]
+      }
+    },
     "/v1/apis/{api}/items": {
       "get": {
         "operationId": "browse_v1_apis__api__items_get",
@@ -3130,10 +4016,30 @@
                 "model",
                 "guide",
                 "auth",
+                "trigger",
                 "app"
               ],
               "title": "Kind",
               "type": "string"
+            }
+          },
+          {
+            "description": "Package tag",
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Package tag",
+              "title": "Tag"
             }
           },
           {
@@ -3332,6 +4238,180 @@
           }
         },
         "summary": "Search",
+        "tags": [
+          "reader"
+        ]
+      }
+    },
+    "/v1/apis/{api}/triggers": {
+      "get": {
+        "description": "Trigger events (webhook topics) as the package lists them; present=false + note when\nthe package has none.",
+        "operationId": "triggers_v1_apis__api__triggers_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "api",
+            "required": true,
+            "schema": {
+              "title": "Api",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tag or build id; default latest",
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tag or build id; default latest",
+              "title": "Version"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Triggers",
+        "tags": [
+          "reader"
+        ]
+      }
+    },
+    "/v1/apis/{api}/triggers/{key}": {
+      "get": {
+        "description": "One trigger by its key (e.g. app/scopes_update) or document id; the event JSON\nverbatim.",
+        "operationId": "trigger_v1_apis__api__triggers__key__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "api",
+            "required": true,
+            "schema": {
+              "title": "Api",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tag or build id; default latest",
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tag or build id; default latest",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TriggerDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Trigger",
         "tags": [
           "reader"
         ]

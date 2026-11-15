@@ -19,7 +19,9 @@ def _words(text: str) -> set[str]:
 
 
 def _summary(d: Document) -> DocumentSummary:
-    return DocumentSummary(d.doc_id, d.kind, d.title, d.resource, d.method, d.path, d.deprecated)
+    return DocumentSummary(
+        d.doc_id, d.kind, d.title, d.resource, d.method, d.path, d.deprecated, d.tags
+    )
 
 
 class InMemorySearchIndex:
@@ -71,11 +73,13 @@ class InMemorySearchIndex:
         query: str | None = None,
         limit: int = 50,
         offset: int = 0,
+        tag: str | None = None,
     ) -> tuple[list[DocumentSummary], int]:
         docs = [
             d
             for d in self._docs.list_documents(build_id)
             if (not kinds or d.kind in kinds)
+            and (tag is None or tag in d.tags)
             and (
                 not query
                 or any(query.lower() in (x or "").lower() for x in (d.title, d.path, d.doc_id))

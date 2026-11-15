@@ -33,6 +33,7 @@ class ApiOverview:
     embed_model: str | None
     dims: int | None
     eval: EvalRecord | None = None
+    has_icon: bool = False
 
 
 @dataclass(frozen=True, slots=True)
