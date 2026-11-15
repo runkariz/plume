@@ -262,7 +262,9 @@ export function Suggestions() {
             <Card className="pad">
               <h2 className="h2-sm">Not modeled</h2>
               <p className="muted">
-                {data.notModeled.count} {data.notModeled.summary}
+                {data.notModeled.count === 0
+                  ? 'Every resource found in these APIs is part of a suggested concept.'
+                  : `${data.notModeled.count} ${data.notModeled.summary}`}
               </p>
             </Card>
           </div>

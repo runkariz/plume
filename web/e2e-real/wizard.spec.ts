@@ -9,8 +9,8 @@ import { expectNoSeriousA11y, settle, shot, test, THEMES } from '../e2e/helpers'
  * The maintainer wizard against the real API (P4): sign in, upload a zipped fixture package,
  * review the diff, watch the real SSE build, publish, and download the dump.
  *
- * Needs the stack started with a maintainer token (PLUME_MAINTAINER_TOKENS='["pl_dev_local"]' make up)
- * and the same token in PLUME_E2E_TOKEN (default pl_dev_local). The fixture packages are zipped here,
+ * Needs the stack started with a maintainer token (PLUME_MAINTAINER_TOKENS='["pl_dev_local_web_e2e"]' make up)
+ * and the same token in PLUME_E2E_TOKEN (default pl_dev_local_web_e2e). The fixture packages are zipped here,
  * from the repo's tests/fixtures/packages, so the API under test receives a real upload.
  *
  * The specs run one after the other (they publish and change the live build of the same API).

@@ -108,6 +108,19 @@ describe('Suggested models', () => {
     );
   });
 
+  it('says so when nothing is left out of the suggestions', async () => {
+    server.use(
+      http.post(`${TEST_API_BASE}/v1/models/suggest`, async () => {
+        const { sampleSuggestions } = await import('@/mocks/modelData');
+        const r = sampleSuggestions(['shopify', 'woocommerce', 'mirakl']);
+        return HttpResponse.json({ ...r, notModeled: { count: 0, summary: 'none' } });
+      }),
+    );
+    renderApp(url);
+    expect(await screen.findByText(/Every resource found in these APIs/)).toBeInTheDocument();
+    expect(screen.queryByText(/0 none/)).not.toBeInTheDocument();
+  });
+
   it('filters: in all 3 APIs, can write', async () => {
     renderApp(url);
     await screen.findByRole('heading', { name: 'Customer' });
