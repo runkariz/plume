@@ -50,12 +50,21 @@ class InMemoryJobEventLog:
     def __init__(self) -> None:
         self.events: list[tuple[int, str, JsonObj]] = []
         self._lock = threading.Lock()
+        self._changed = threading.Condition(self._lock)
 
     def append(self, job_id: str, payload: JsonObj) -> int:
-        with self._lock:
+        with self._changed:
             seq = len(self.events) + 1
             self.events.append((seq, job_id, dict(payload)))
+            self._changed.notify_all()
             return seq
+
+    def wait(self, job_id: str, seq: int, timeout: float) -> bool:
+        def ready() -> bool:
+            return any(j == job_id and s > seq for s, j, _ in self.events)
+
+        with self._changed:
+            return self._changed.wait_for(ready, timeout=timeout)
 
     def after(self, job_id: str, seq: int, limit: int = 500) -> list[StoredEvent]:
         return [StoredEvent(s, p) for s, j, p in self.events if j == job_id and s > seq][:limit]

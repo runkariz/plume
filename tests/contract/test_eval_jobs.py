@@ -72,3 +72,32 @@ def test_jobs_and_events(jobs: tuple[JobRepo, JobEventLog]) -> None:
     assert [e.payload["type"] for e in log.after("job-1", 0)] == ["log", "done"]
     assert [e.seq for e in log.after("job-1", s1)] == [s2]
     assert log.after("job-1", s2) == []
+
+
+def test_event_wait_wakes_on_append_and_times_out(jobs: tuple[JobRepo, JobEventLog]) -> None:
+    import threading  # noqa: PLC0415
+    import time  # noqa: PLC0415
+
+    repo, log = jobs
+    repo.create(Job("job-w", JobStatus.BUILDING, "/p", {}))
+    repo.create(Job("job-o", JobStatus.BUILDING, "/p", {}))
+    start = time.monotonic()
+    assert log.wait("job-w", 0, 0.3) is False
+    assert time.monotonic() - start >= 0.25
+
+    s1 = log.append("job-w", {"type": "log"})
+    assert log.wait("job-w", 0, 5) is True  # already there: immediate
+
+    def later() -> None:
+        time.sleep(0.3)
+        log.append("job-o", {"type": "log"})  # another job: must not count
+        time.sleep(0.3)
+        log.append("job-w", {"type": "done"})
+
+    t = threading.Thread(target=later)
+    start = time.monotonic()
+    t.start()
+    assert log.wait("job-w", s1, 10) is True
+    waited = time.monotonic() - start
+    t.join()
+    assert 0.5 <= waited < 5, waited
