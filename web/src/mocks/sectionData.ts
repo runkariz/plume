@@ -219,6 +219,16 @@ export function triggersFor(api: string, limit = 50, offset = 0): TriggerList {
     total: SHOPIFY_EVENTS.length,
     items: SHOPIFY_EVENTS.slice(offset, offset + limit),
     webhooks: [SHOPIFY_WEBHOOK_MECHANISM],
+    // the subscribe endpoint is in this build (resolves to a document), unsubscribe and list are not (null)
+    endpointRefs: {
+      'post-admin-api-latest-webhooks-json-2026-10': {
+        docId: 'endpoint:create-order',
+        method: 'POST',
+        path: '/admin/api/latest/orders.json',
+      },
+      'delete-admin-api-latest-webhooks-webhook-id-json-2026-10': null,
+      'get-admin-api-latest-webhooks-json': null,
+    },
   };
 }
 

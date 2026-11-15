@@ -326,12 +326,21 @@ describe('webhook delivery mechanism', () => {
     expect(within(card).getByText('Callback URL')).toBeInTheDocument();
     expect(within(card).getByText('in body at /webhook/address')).toBeInTheDocument();
     expect(within(card).getByText('in body at /webhook/topic (array)')).toBeInTheDocument();
+    // unsubscribe is not in this build: the raw id stays, with the id variable beside it
     expect(
-      within(card).getByText(
-        /delete-admin-api-latest-webhooks-webhook-id-json-2026-10 \(id variable webhook_id\)/,
-      ),
+      within(card).getByText('delete-admin-api-latest-webhooks-webhook-id-json-2026-10'),
     ).toBeInTheDocument();
+    expect(within(card).getByText(/id variable webhook_id/)).toBeInTheDocument();
+    // the stream ids are resolved by the API: the subscribe endpoint shows METHOD + path as a link to its page,
+    // the ones that are not in this build keep their raw id, marked
+    const subscribe = within(within(card).getByText('Subscribe').closest('div') as HTMLElement);
+    expect(subscribe.getByText('POST')).toBeInTheDocument();
+    expect(subscribe.getByRole('link', { name: '/admin/api/latest/orders.json' })).toHaveAttribute(
+      'href',
+      `/apis/shopify/documents/${encodeURIComponent('endpoint:create-order')}`,
+    );
     expect(within(card).getByText('get-admin-api-latest-webhooks-json')).toBeInTheDocument();
+    expect(within(card).getAllByText('(not in this build)')).toHaveLength(2);
     // the events available and the evidence stay collapsed
     expect(within(card).getByText('events available').closest('details')).not.toHaveAttribute(
       'open',
@@ -418,6 +427,70 @@ describe('webhook delivery mechanism', () => {
     renderApp('/apis/shopify?section=triggers');
     const chip = await screen.findByText('polled');
     expect(chip.parentElement?.getAttribute('title')).toBe('get-orders');
+  });
+});
+
+describe('webhook endpoint references', () => {
+  it('an older server without endpointRefs shows the raw ids and no "not in this build" mark', async () => {
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/:id/triggers`, async () => {
+        const { triggersFor } = await import('@/mocks/sectionData');
+        const { endpointRefs, ...rest } = triggersFor('shopify');
+        void endpointRefs;
+        return HttpResponse.json(rest);
+      }),
+    );
+    renderApp('/apis/shopify?section=triggers');
+    const card = await screen.findByRole('region', { name: 'Webhook delivery' });
+    expect(
+      within(card).getByText('post-admin-api-latest-webhooks-json-2026-10'),
+    ).toBeInTheDocument();
+    expect(within(card).queryByText('(not in this build)')).not.toBeInTheDocument();
+    expect(within(card).queryByRole('link', { name: /orders\.json/ })).not.toBeInTheDocument();
+  });
+
+  it('a polled event says which endpoint it is polled through, resolved when the API can', async () => {
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/:id/triggers`, () =>
+        HttpResponse.json({
+          api: 'shopify',
+          build: 'b-1',
+          present: true,
+          note: null,
+          total: 1,
+          webhooks: [],
+          endpointRefs: {
+            'get-orders-poll': {
+              docId: 'endpoint:get-orders',
+              method: 'GET',
+              path: '/admin/api/latest/orders.json',
+            },
+          },
+          items: [
+            {
+              key: 'orders/poll',
+              docId: 'trigger:orders-poll',
+              title: 'orders/poll',
+              description: null,
+              resource: null,
+              delivery: 'polling',
+              syncEndpointId: 'get-orders-poll',
+            },
+          ],
+        }),
+      ),
+    );
+    renderApp('/apis/shopify?section=triggers');
+    const row = (await screen.findByRole('link', { name: 'orders/poll' })).closest(
+      'li',
+    ) as HTMLElement;
+    expect(within(row).getByText(/Polled via/)).toBeInTheDocument();
+    expect(
+      within(row).getByRole('link', { name: '/admin/api/latest/orders.json' }),
+    ).toHaveAttribute(
+      'href',
+      `/apis/shopify/documents/${encodeURIComponent('endpoint:get-orders')}`,
+    );
   });
 });
 
