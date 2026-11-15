@@ -57,6 +57,7 @@ def job_payload(job: ModelJob) -> dict[str, Any]:
         "snapshot_id": job.snapshot_id,
         "error": job.error,
         "generator": job.generator,
+        "usage": job.usage,
     }
 
 

@@ -475,6 +475,9 @@ class ModelJobOut(Schema):
     events_url: str
     kind: Literal["model", "model_set"] = "model"
     set_id: str | None = None
+    usage: dict[str, int] | None = Field(
+        default=None, description="LLM tokens so far: {prompt, response, thoughts?, total}."
+    )
 
 
 class SessionStatus(Schema):

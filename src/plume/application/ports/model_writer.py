@@ -31,6 +31,11 @@ class ModelWriter(Protocol):
 
     def available(self) -> bool: ...
 
+    @property
+    def last_usage(self) -> dict[str, int] | None:
+        """Token counts of the last call ({prompt, response, total, thoughts?}), if reported."""
+        ...
+
     def write(self, system: str, turns: Sequence[Turn]) -> str:
         """The model's reply (expected: one JSON object). Raises ``ModelWriterUnavailableError``
         or ``ModelWriterError``."""

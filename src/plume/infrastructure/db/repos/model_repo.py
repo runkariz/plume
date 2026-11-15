@@ -40,6 +40,7 @@ def _snapshot(r: Any) -> ModelSnapshot:
         based_on=r.based_on,
         content_key="" if r.content_key == r.snapshot_id else r.content_key,
         released_at=r.released_at,
+        generator_usage=_j(r.generator_usage) if r.generator_usage is not None else None,
     )
 
 
@@ -89,9 +90,10 @@ class PostgresModelRepo:
                 text(
                     "INSERT INTO model_snapshots (snapshot_id, session_id, concept, apis, inputs, "
                     "model, citations_checked, prompt_version, created_at, visibility, origin, "
-                    "generator, lineage_id, version, based_on, content_key, released_at) VALUES "
+                    "generator, lineage_id, version, based_on, content_key, released_at, "
+                    "generator_usage) VALUES "
                     "(:id, :s, :c, :apis, CAST(:i AS jsonb), CAST(:m AS jsonb), :n, :pv, :t, :vis, "
-                    ":o, :g, :l, :v, :b, :k, :r) ON CONFLICT DO NOTHING"
+                    ":o, :g, :l, :v, :b, :k, :r, CAST(:u AS jsonb)) ON CONFLICT DO NOTHING"
                 ),
                 {
                     "id": snapshot.snapshot_id,
@@ -111,6 +113,9 @@ class PostgresModelRepo:
                     "b": snapshot.based_on,
                     "k": snapshot.key,
                     "r": snapshot.released_at,
+                    "u": json.dumps(snapshot.generator_usage)
+                    if snapshot.generator_usage is not None
+                    else None,
                 },
             )
             created = bool(result.rowcount)
@@ -208,6 +213,7 @@ def _job(r: Any) -> ModelJob:
         snapshot_id=r.snapshot_id,
         error=r.error,
         generator=r.generator,
+        usage=_j(r.usage) if r.usage is not None else None,
     )
 
 
@@ -229,6 +235,7 @@ class PostgresModelJobRepo:
             "g": job.generator,
             "ct": job.created_at,
             "ut": job.updated_at,
+            "u": json.dumps(job.usage) if job.usage is not None else None,
         }
 
     def create(self, job: ModelJob) -> None:
@@ -236,8 +243,9 @@ class PostgresModelJobRepo:
             conn.execute(
                 text(
                     "INSERT INTO model_jobs (job_id, status, apis, concept, session_id, round, "
-                    "max_rounds, snapshot_id, error, generator, created_at, updated_at) VALUES "
-                    "(:id, :st, :apis, :c, :s, :r, :mr, :snap, :e, :g, :ct, :ut)"
+                    "max_rounds, snapshot_id, error, generator, created_at, updated_at, usage) "
+                    "VALUES (:id, :st, :apis, :c, :s, :r, :mr, :snap, :e, :g, :ct, :ut, "
+                    "CAST(:u AS jsonb))"
                 ),
                 self._params(job),
             )
@@ -255,7 +263,7 @@ class PostgresModelJobRepo:
                 text(
                     "UPDATE model_jobs SET status = :st, session_id = :s, round = :r, "
                     "max_rounds = :mr, snapshot_id = :snap, error = :e, generator = :g, "
-                    "updated_at = :ut WHERE job_id = :id"
+                    "updated_at = :ut, usage = CAST(:u AS jsonb) WHERE job_id = :id"
                 ),
                 self._params(job),
             )

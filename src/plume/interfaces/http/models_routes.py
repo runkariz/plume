@@ -77,6 +77,7 @@ def job_out(job: ModelJob) -> s.ModelJobOut:
         events_url=f"/v1/models/jobs/{job.job_id}/events",
         kind="model_set" if _is_set(job) else "model",
         set_id=job.snapshot_id if _is_set(job) else None,
+        usage=job.usage,
     )
 
 

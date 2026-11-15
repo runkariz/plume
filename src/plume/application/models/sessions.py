@@ -95,6 +95,8 @@ returns their fields page by page (follow next_cursor). Rules (refused otherwise
 - `fetch` (optional) must be a documented endpoint, written "METHOD /path" as listed.
 - Leave an API out of a field's sources when it has no such data; never invent fields.
 - Use `transform` / `join` to describe derived values (e.g. "sum of line_items[].price").
+- Prefer fields from a model or a response for what the API returns; cite a request body only
+  for what a client sends (e.g. the order's status as read, not as written).
 - Put semantic choices you cannot settle from the evidence in open_questions; do not decide them.
 - Nested objects: a field of type "object" or "array" may carry its own "fields" (at most 3
   levels). Map and cite every sub-field like a top-level one; its source paths are the API's
@@ -467,6 +469,7 @@ class ModelSessions:
         based_on: str | None = None,
         maintainer: bool = False,
         generator: str = "claude",
+        generator_usage: dict[str, int] | None = None,
     ) -> SubmitResult:
         """Validate and store a draft. A maintainer's model is stored unreleased (official only
         after ``release``); a user's is unlisted (readable by anyone with its id). ``based_on``
@@ -529,6 +532,7 @@ class ModelSessions:
                 version=(max(s.version for s in lineage) + 1) if lineage else 1,
                 based_on=base.snapshot_id if base else None,
                 content_key="" if maintainer else content_key,
+                generator_usage=generator_usage,
             )
             created = self._models.save_snapshot(
                 snapshot, owner_key_hash(owner_key) if owner_key else None

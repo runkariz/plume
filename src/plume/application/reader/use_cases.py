@@ -25,6 +25,7 @@ from plume.application.reader.dto import (
     SearchResult,
     TraceStep,
 )
+from plume.application.reader.ranking import is_page, pair_pages_with_endpoints
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
 from plume.domain.knowledge.asset import ICON
 from plume.domain.knowledge.call_check import normalize_call_path, path_matches, specificity
@@ -187,6 +188,16 @@ def fuse_hits(
     return out
 
 
+def page_endpoints(documents: DocumentRepo, build_id: BuildId, doc_id: str) -> list[str]:
+    """The endpoints a knowledge-export page documents (recorded on the page guide)."""
+    if not is_page(doc_id):
+        return []
+    doc = documents.get_document(build_id, doc_id)
+    raw = doc.raw if doc is not None and isinstance(doc.raw, dict) else {}
+    endpoints = raw.get("endpoints")
+    return [e for e in endpoints if isinstance(e, str)] if isinstance(endpoints, list) else []
+
+
 class SearchDocs:
     """Hybrid search: dense (embedding) + full text, fused with RRF, one hit per document."""
 
@@ -249,7 +260,12 @@ class SearchDocs:
                 "full-text search",
                 lambda: self._index.text(build_id, query, pool, kinds),
             )
-        hits = _timed(trace, "plume", "fuse (RRF)", lambda: fuse_hits(dense, text, query, top_k))
+        fused = _timed(trace, "plume", "fuse (RRF)", lambda: fuse_hits(dense, text, query, pool))
+        order = pair_pages_with_endpoints(
+            [h.doc_id for h in fused], top_k, lambda d: page_endpoints(self._documents, build_id, d)
+        )
+        by_id = {h.doc_id: h for h in fused}
+        hits = [by_id[d] for d in order[:top_k]]
         summaries = self._index.summaries(build_id, [h.doc_id for h in hits])
         enriched = []
         for h in hits:

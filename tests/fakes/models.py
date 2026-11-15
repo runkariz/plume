@@ -110,10 +110,15 @@ class ScriptedModelWriter:
         self.replies = list(replies)
         self.calls: list[tuple[str, list[Turn]]] = []
         self._available = available
+        self._last_usage: dict[str, int] | None = None
 
     @property
     def name(self) -> str:
         return "fake:scripted"
+
+    @property
+    def last_usage(self) -> dict[str, int] | None:
+        return self._last_usage
 
     def available(self) -> bool:
         return self._available
@@ -125,7 +130,11 @@ class ScriptedModelWriter:
         if not self.replies:
             raise ModelWriterError("no scripted reply left")
         reply = self.replies.pop(0)
-        return reply if isinstance(reply, str) else json.dumps(reply)
+        text = reply if isinstance(reply, str) else json.dumps(reply)
+        prompt = sum(len(t.text) for t in turns) // 4  # a rough, deterministic count
+        self._last_usage = {"prompt": prompt, "response": len(text) // 4,
+                            "total": prompt + len(text) // 4}  # fmt: skip
+        return text
 
 
 class InMemoryModelSetRepo:

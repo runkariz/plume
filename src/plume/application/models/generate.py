@@ -49,6 +49,18 @@ def _issues(issues: list[Issue]) -> list[dict[str, Any]]:
     return [{"code": i.code, "field": i.field, "api": i.api, "message": i.message} for i in issues]
 
 
+def _add_usage(total: dict[str, int] | None, more: dict[str, int]) -> dict[str, int]:
+    out = dict(total or {})
+    for k, v in more.items():
+        out[k] = out.get(k, 0) + v
+    return out
+
+
+def _camel_usage(usage: dict[str, int]) -> dict[str, int]:
+    """{prompt, response, thoughts, total} -> {promptTokens, responseTokens, ...} for events."""
+    return {f"{k}Tokens": v for k, v in usage.items()}
+
+
 def parse_reply(text: str) -> Any:
     """The JSON object in an LLM reply (tolerates a code fence around it)."""
     body = text.strip()
@@ -184,8 +196,9 @@ class GenerateModels:
                 )
             set_id = result.snapshot.set_id
             self._save(self.get(job_id), status="succeeded", snapshot_id=set_id)
-            self._emit(job_id, "accepted", setId=set_id, kind="model_set")
-            self._emit(job_id, "done", status="succeeded", snapshotId=None, setId=set_id)
+            usage = _camel_usage(self.get(job_id).usage or {})
+            self._emit(job_id, "accepted", setId=set_id, kind="model_set", **usage)
+            self._emit(job_id, "done", status="succeeded", snapshotId=None, setId=set_id, **usage)
         except (ModelWriterUnavailableError, ModelWriterError) as exc:
             self._fail(job, exc.code, str(exc))
         except Exception as exc:
@@ -264,15 +277,25 @@ class GenerateModels:
                 + json.dumps(pack, ensure_ascii=False),
             )
         ]
+        spent: dict[str, int] | None = None  # tokens for this model (all its rounds)
         for n in range(1, self._max_rounds + 1):
             job = self._save(job, round=n)
             self._emit(job.job_id, "round", n=n, of=self._max_rounds, **tag)
             reply = self._writer.write(SYSTEM, turns)
+            used = self._writer.last_usage
+            if used:
+                spent = _add_usage(spent, used)
+                job = self._save(job, usage=_add_usage(job.usage, used))
+                self._emit(job.job_id, "usage", round=n, **_camel_usage(used), **tag)
             turns.append(Turn("model", reply))
             try:
                 draft = parse_reply(reply)
                 result = self._sessions.submit(
-                    session_id, draft, maintainer=True, generator=self._writer.name
+                    session_id,
+                    draft,
+                    maintainer=True,
+                    generator=self._writer.name,
+                    generator_usage=spent,
                 )
             except (json.JSONDecodeError, ModelDraftRefusedError) as exc:
                 issues = (
@@ -309,8 +332,9 @@ class GenerateModels:
                 )
                 return
             self._save(self.get(job_id), status="succeeded", snapshot_id=sid)
-            self._emit(job_id, "accepted", snapshotId=sid, round=self.get(job_id).round)
-            self._emit(job_id, "done", status="succeeded", snapshotId=sid)
+            usage = _camel_usage(self.get(job_id).usage or {})
+            self._emit(job_id, "accepted", snapshotId=sid, round=self.get(job_id).round, **usage)
+            self._emit(job_id, "done", status="succeeded", snapshotId=sid, **usage)
         except (ModelWriterUnavailableError, ModelWriterError) as exc:
             self._fail(job, exc.code, str(exc))
         except Exception as exc:
