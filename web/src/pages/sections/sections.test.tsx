@@ -230,7 +230,11 @@ describe('Environments card', () => {
     expect(within(card).getByText('default')).toBeInTheDocument();
     expect(within(card).getByText('https://{{app_env.vars.host}}')).toBeInTheDocument();
     expect(within(card).getByText(/API versions \(path\)/)).toBeInTheDocument();
-    expect(within(card).getAllByText('2026-10').length).toBeGreaterThan(0);
+    // the current version is said once, the others follow
+    expect(within(card).getByText(/current/).textContent).toBe(
+      'API versions (path): current 2026-10 · also 2026-07',
+    );
+    expect(within(card).getAllByText('2026-10')).toHaveLength(1);
   });
 
   it('renders nothing when the package has no environments (no empty state)', async () => {
@@ -238,6 +242,26 @@ describe('Environments card', () => {
     await screen.findByRole('heading', { level: 1 });
     await new Promise((r) => setTimeout(r, 100));
     expect(screen.queryByRole('region', { name: 'Environments' })).not.toBeInTheDocument();
+  });
+});
+
+describe('Environments versions', () => {
+  it('does not repeat the current version when it is the only one', async () => {
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/:id/environments`, async () => {
+        const { environmentsFor } = await import('@/mocks/sectionData');
+        const e = environmentsFor('shopify');
+        return HttpResponse.json({
+          ...e,
+          versioning: { format: 'date', scheme: 'path', current: '2026-10', versions: ['2026-10'] },
+        });
+      }),
+    );
+    renderApp('/apis/shopify');
+    const card = await screen.findByRole('region', { name: 'Environments' });
+    expect(within(card).getByText(/API versions/).textContent).toBe(
+      'API versions (path): current 2026-10',
+    );
   });
 });
 

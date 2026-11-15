@@ -292,7 +292,12 @@ export function environmentsFor(api: string): EnvironmentsOut {
           isDefault: true,
         },
       ],
-      versioning: { format: 'date', scheme: 'path', current: '2026-10', versions: ['2026-10'] },
+      versioning: {
+        format: 'date',
+        scheme: 'path',
+        current: '2026-10',
+        versions: ['2026-10', '2026-07'],
+      },
       baseUrls: ['https://{{app_env.vars.host}}'],
       variablesSchema: null,
     };
