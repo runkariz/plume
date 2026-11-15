@@ -1,6 +1,7 @@
 """Plain-JSON payloads of reader results. MCP tools return exactly these; the HTTP API shows
 the same JSON as ``claudePayload`` so the web can display what Claude receives."""
 
+import hashlib
 from typing import Any
 
 from plume.application.models.concepts import Suggestions
@@ -151,9 +152,23 @@ def _short(name: str) -> str:
     return word if word != word.lower() else word[:1].upper() + word[1:]
 
 
+LOGO_PALETTE = (
+    "#5b5bd6", "#0d9488", "#d97706", "#db2777", "#2563eb", "#65a30d", "#7c3aed", "#dc2626",
+)  # fmt: skip
+
+
+def letter_logo(api_id: str, name: str, icon_url: str | None = None) -> Json:
+    """The letter tile every client can draw ({text, color, url}); `url` is the package icon's
+    path when there is one."""
+    words = [w for w in name.replace("-", " ").split() if w]
+    text = "".join(w[0] for w in words[:2]).upper() or api_id[:2].upper()
+    color = LOGO_PALETTE[int(hashlib.sha256(api_id.encode()).hexdigest(), 16) % len(LOGO_PALETTE)]
+    return {"text": text, "color": color, "url": icon_url}
+
+
 def api_ref(api: str, name: str) -> Json:
-    """ApiRef without the logo (HTTP adds it)."""
-    return {"id": api, "name": name, "shortName": _short(name)}
+    """ApiRef with the letter-tile logo (HTTP replaces it with one carrying the icon URL)."""
+    return {"id": api, "name": name, "shortName": _short(name), "logo": letter_logo(api, name)}
 
 
 def suggestions_payload(s: Suggestions) -> Json:

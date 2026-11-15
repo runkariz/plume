@@ -114,6 +114,10 @@ async def test_results_have_structured_model_and_text_with_the_link(stack: FakeS
         assert "Model JSON" not in text  # Claude just wrote it
         got = await client.call_tool("get_model", {"snapshot_id": model["id"]})
         assert (got.structured_content or {})["id"] == model["id"]
+        logo = (got.structured_content or {})["inputs"][0]["logo"]  # the view draws the tile
+        assert logo["color"].startswith("#")
+        assert logo["text"]
+        assert logo["url"] is None
         full = _text(got)
         assert f"Link: {link}" in full
         assert json.loads(full.split("Model JSON: ", 1)[1])["id"] == model["id"]

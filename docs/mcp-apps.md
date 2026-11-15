@@ -43,9 +43,9 @@ marked **summary**; they are consistent with the SDK but were not read word for 
   registered through the SDK's `Apps` extension. That also advertises
   `io.modelcontextprotocol/ui` in the server capabilities.
 - **Bundle**: one self-contained HTML file, `src/plume/interfaces/mcp/apps/model-view.html`,
-  packaged with Plume and in the image. `PLUME_MCP_APP_HTML=<file>` serves another file. Today
-  it's a placeholder: a vanilla script doing the handshake and a plain table rendered with
-  `textContent`. The web app's mapping view, built as one inlined file, replaces it.
+  packaged with Plume and in the image. `PLUME_MCP_APP_HTML=<file>` serves another file. Since W15
+  (develop 76ff7e3) it's the web app's React mapping view, built as one inlined file by
+  `npm run build:widget` in `web/`. The build is deterministic and plume-9a owns it.
 - **Tools with the view** (`_meta.ui.resourceUri`):
 
   | Tool | Server |
@@ -83,6 +83,10 @@ marked **summary**; they are consistent with the SDK but were not read word for 
 - One HTML file with everything inlined. Load nothing remote: the host default CSP blocks it
   anyway. No `fetch`/XHR: data arrives only through `ui/notifications/tool-result` and
   `tools/call`.
+- **No fonts of your own, not even `data:` ones.** The default CSP has no `font-src`, so fonts
+  fall back to `default-src 'none'`. Use the host's `--font-sans` (from `styles.variables`) or
+  system fonts. Found by plume-9a, who saw the CSP violation in Chromium; the bundle test checks
+  there's no `@font-face`.
 - Render every package or evidence string as text (React text nodes; no
   `dangerouslySetInnerHTML`, no `innerHTML`).
 - Follow the handshake above. Apply `hostContext.theme` and `styles.variables`, and listen for
@@ -125,6 +129,14 @@ screenshot is in the session scratchpad, `basic-host-get_model.png`.
    - Headless: this machine lacks Chromium's system libraries. Use
      `mcr.microsoft.com/playwright:v1.62.1-noble` with `--network host`.
 
+Repeated with the real bundle (W15, develop 76ff7e3) on 2026-11-16: `get_model` renders the
+mapping view (field graph, evidence panel, coverage) in basic-host with no console errors.
+The screenshot is in the session scratchpad, `basic-host-get_model-real.png`. The first try
+crashed in the view: MCP results had no `inputs[].logo`, so the view read
+`logo.color.trim()` on `undefined`. Fixed on the server: every `ApiRef` now carries the
+letter-tile `logo {text, color, url}`; in MCP results `url` is null, because the iframe can't
+load server paths.
+
 ### Claude Desktop (local connector through `mcp-remote`)
 
 The owner's path: Claude Desktop starts a stdio bridge to Plume's HTTP MCP (over the port
@@ -158,7 +170,8 @@ What the sources say about local / stdio servers:
 - Unit (`tests/unit/interfaces/test_mcp_app.py`): the resource is listed and readable with the
   MIME type; the capability is advertised; tools carry `resourceUri` / `visibility`; results
   carry the structured model and a text fallback with the link; the bundle override works; the
-  placeholder loads nothing remote and uses `textContent`.
+  bundle loads nothing remote, makes no requests and has no `@font-face`. Text-node rendering is
+  tested in `web/src/widget/widget.test.tsx`.
 - e2e (`tests/e2e/test_models_stack.py`): the same resource and tool metadata over Streamable
   HTTP from the Docker image.
 - Local render (offline, 2026-11-16): a stand-in host checks the handshake end to end. It puts
