@@ -22,7 +22,12 @@ async function start() {
   if (!root) throw new Error('#root missing');
   createRoot(root).render(
     <StrictMode>
-      <App client={createApiClient(undefined, { maintainerKey: authStore.getKey })} />
+      <App
+        client={createApiClient(undefined, {
+          maintainerKey: authStore.getKey,
+          onUnauthorized: authStore.expire,
+        })}
+      />
     </StrictMode>,
   );
 }

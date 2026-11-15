@@ -43,3 +43,9 @@ export function useTheme() {
   if (!ctx) throw new Error('useTheme must be used inside ThemeProvider');
   return ctx;
 }
+
+/** A theme that something else decides (the host of an embedded view): no toggle, nothing stored. */
+export function FixedThemeProvider({ theme, children }: { theme: Theme; children: ReactNode }) {
+  const value = useMemo(() => ({ theme, toggle: () => undefined }), [theme]);
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}

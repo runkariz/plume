@@ -14,7 +14,8 @@ export function SignInPage() {
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const next = (location.state as { next?: string } | null)?.next ?? '/maintainer';
+  const state = location.state as { next?: string; expired?: boolean } | null;
+  const next = state?.next ?? '/maintainer';
 
   if (signedIn) return <Navigate to={next} replace />;
 
@@ -55,6 +56,11 @@ export function SignInPage() {
           Maintainer sign-in. Everyone can read; only maintainers upload packages and publish
           knowledge.
         </p>
+        {state?.expired ? (
+          <p role="alert" className="form-error login-expired">
+            Your session ended: the server no longer accepts your token. Sign in again.
+          </p>
+        ) : null}
         <form onSubmit={submit} noValidate>
           <Field
             label="Email"
@@ -70,7 +76,7 @@ export function SignInPage() {
             mono
             autoComplete="current-password"
             placeholder="pl_…"
-            hint="Tokens are issued by project maintainers. It is kept in memory only."
+            hint="Tokens are issued by project maintainers. It stays in this browser tab until you sign out or close the tab."
             value={token}
             onChange={(e) => setToken(e.target.value)}
             aria-invalid={error ? true : undefined}

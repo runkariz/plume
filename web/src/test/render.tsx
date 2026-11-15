@@ -8,7 +8,11 @@ import { ThemeProvider } from '@/app/theme';
 import { TEST_API_BASE } from './server';
 
 export function testClient() {
-  return createApiClient(TEST_API_BASE, { maintainerKey: authStore.getKey, retryDelayMs: () => 0 });
+  return createApiClient(TEST_API_BASE, {
+    maintainerKey: authStore.getKey,
+    onUnauthorized: authStore.expire,
+    retryDelayMs: () => 0,
+  });
 }
 
 export function renderApp(path = '/', client: PlumeApi = testClient()) {

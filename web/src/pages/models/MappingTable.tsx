@@ -1,3 +1,4 @@
+import { docHref } from '@/lib/docHref';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { FieldSupport, ModelField, ModelSnapshot } from '@/api/types';
@@ -10,8 +11,7 @@ const SUPPORT_LABEL: Record<FieldSupport, string> = {
 };
 const SUPPORT_TONE = { supported: 'ok', derived: 'warn', unsupported: 'neutral' } as const;
 
-export const docHref = (api: string, docId: string) =>
-  `/apis/${encodeURIComponent(api)}/documents/${encodeURIComponent(docId)}`;
+export { docHref };
 
 function matches(f: ModelField, q: string): boolean {
   if (!q) return true;

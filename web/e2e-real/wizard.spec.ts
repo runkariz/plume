@@ -44,7 +44,7 @@ async function signIn(page: Page) {
   await expect(page.getByRole('heading', { name: 'Maintainer', exact: true })).toBeVisible();
 }
 
-/** The key lives in memory only, so after sign-in navigate inside the app (page.goto would sign out). */
+/** After sign-in, navigate inside the app (the session survives a reload too, but this is the way people use it). */
 async function openUpdate(page: Page, apiId: string) {
   await page.locator(`a[href="/maintainer/apis/${apiId}/update"]`).click();
   await expect(page.getByRole('heading', { name: /^Update / })).toBeVisible();
@@ -98,9 +98,11 @@ for (const theme of THEMES) {
       await shot(page, 'w6-real-sign-in', theme);
 
       await signIn(page);
-      expect(
-        await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage })),
-      ).not.toContain(TOKEN);
+      // the token is kept for this tab only (sessionStorage, one key), never in localStorage
+      expect(await page.evaluate(() => JSON.stringify({ ...localStorage }))).not.toContain(TOKEN);
+      expect(await page.evaluate(() => Object.keys(sessionStorage))).toEqual([
+        'plume-maintainer-session',
+      ]);
 
       // 1 upload: the real server validates the zip
       await upload(page, 'test-catalog-api', 'test-catalog');

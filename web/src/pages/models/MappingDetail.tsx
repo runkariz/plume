@@ -1,11 +1,19 @@
-import { Link } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import type { ModelSnapshot } from '@/api/types';
 import { Chip } from '@/components';
 import type { Selection } from './graph';
-import { docHref } from './MappingTable';
 
 /** One mapping in full: where the data is fetched, the source path, how it is transformed, and the evidence. */
-export function MappingDetail({ snap, sel }: { snap: ModelSnapshot; sel: Selection }) {
+export function MappingDetail({
+  snap,
+  sel,
+  renderDocLink,
+}: {
+  snap: ModelSnapshot;
+  sel: Selection;
+  /** How a cited document is shown: a link in the web app. Without it, plain text (the embedded view has no pages). */
+  renderDocLink?: (apiId: string, docId: string) => ReactNode;
+}) {
   const field = snap.fields.find((f) => f.name === sel.field);
   const api = snap.inputs.find((a) => a.id === sel.apiId);
   const src = field?.sources[sel.apiId];
@@ -62,7 +70,13 @@ export function MappingDetail({ snap, sel }: { snap: ModelSnapshot; sel: Selecti
             <blockquote key={e.quote} className="evidence">
               <p>“{e.quote}”</p>
               <cite className="faint small">
-                {e.docId ? <Link to={docHref(sel.apiId, e.docId)}>{e.docId}</Link> : null}
+                {e.docId ? (
+                  renderDocLink ? (
+                    renderDocLink(sel.apiId, e.docId)
+                  ) : (
+                    <span>{e.docId}</span>
+                  )
+                ) : null}
                 {e.docId && e.anchor ? ' · ' : ''}
                 {e.anchor}
               </cite>

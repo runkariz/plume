@@ -151,7 +151,7 @@ describe('where the result of a click on Generate appears', () => {
   it('a server that says it has no model key: Generate goes straight to Claude and says so', async () => {
     authStore.signIn('pl_ok', 'maintainer', false); // the sign-in check said generation: false
     renderApp(suggest);
-    const generate = await screen.findByRole('button', { name: 'Generate Refund with Claude' });
+    const generate = await screen.findByRole('button', { name: 'Generate with Claude: Refund' });
     expect(generate).toHaveTextContent('Generate with Claude');
     expect(
       screen.queryByRole('button', { name: /^Use Claude instead to generate/ }),

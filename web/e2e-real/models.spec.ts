@@ -148,25 +148,35 @@ test('a maintainer who generates on the server sees clearly when the server has 
   expect((await probe.json()).error).toBe('llm_unavailable');
   const idx = await conceptIndex(request, 'order');
 
-  await signInThenModels(page);
-  await goToSuggestions(page);
-  // signed in: Generate is the server action, and Claude is offered beside it
-  await expect(
-    orderRow(page, idx).getByRole('button', { name: 'Use Claude instead to generate Order' }),
-  ).toBeVisible();
-  // the server may say up front that it cannot generate (me.generation === false): then the button already says
-  // so and goes straight to Claude; otherwise the failed request is explained under the concept that was clicked
+  // the server says at sign-in whether it can generate (me.generation): with no key it is false, and the button
+  // already says "Generate with Claude" and opens the Claude session; with an older server (no flag) the failed
+  // request is explained under the concept that was clicked
   const me = (await (await request.get(`${API}/v1/maintainer/me`, { headers: auth })).json()) as {
     generation?: boolean;
   };
+  await signInThenModels(page);
+  await goToSuggestions(page);
   if (me.generation === false) {
     await expect(
-      orderRow(page, idx).getByRole('button', { name: 'Generate Order with Claude' }),
+      orderRow(page, idx).getByRole('button', { name: 'Generate with Claude: Order' }),
     ).toBeVisible();
+    await expect(
+      orderRow(page, idx).getByRole('button', { name: /^Use Claude instead to generate/ }),
+    ).toHaveCount(0);
+    await expect(page.getByText(/This server has no model key/)).toBeVisible();
+    await settle(page);
+    await expectNoSeriousA11y(page);
+    await shot(page, 'w12-real-generate-claude-only', 'light');
+    await toggleDark(page, 'w12-real-generate-claude-only');
     await generate(page, idx).click();
-    await expect(page.getByRole('region', { name: 'Generation session' })).toBeVisible();
+    const session = page.getByRole('region', { name: 'Generation session' });
+    await expect(session.getByText('Stored unreleased.')).toBeVisible();
+    await expect(page.getByRole('alert')).toHaveCount(0); // no failed request first
     return;
   }
+  await expect(
+    orderRow(page, idx).getByRole('button', { name: 'Use Claude instead to generate Order' }),
+  ).toBeVisible();
   await generate(page, idx).click();
   const alert = page.getByRole('alert').filter({ hasText: 'not configured' });
   await expect(alert).toContainText('Server-side generation is not configured on this Plume');

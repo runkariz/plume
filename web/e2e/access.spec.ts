@@ -136,3 +136,36 @@ test('a failed server generation is announced next to the concept that was click
   expect(Math.abs((a?.y ?? 0) - ((r?.y ?? 0) + (r?.height ?? 0)))).toBeLessThan(400);
   await expect(alert.getByRole('button', { name: 'Use Claude instead' })).toBeVisible();
 });
+
+test('a page refresh keeps the maintainer signed in; Sign out ends it; it stays out of the URL and localStorage', async ({
+  page,
+}) => {
+  await page.goto('/maintainer');
+  await page.getByLabel('Email').fill('maintainer@example.com');
+  await page.getByLabel('Access token').fill(TOKEN);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Maintainer', exact: true })).toBeVisible();
+  // a refresh (a full page load) does not sign the person out
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Maintainer', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+  // a new page in the same tab too, and maintainer pages open without the sign-in form
+  await page.goto('/models');
+  await expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible();
+  // where the token is: sessionStorage only
+  const stored = await page.evaluate(() => ({
+    local: JSON.stringify({ ...localStorage }),
+    session: Object.keys(sessionStorage),
+    url: window.location.href,
+  }));
+  expect(stored.local).not.toContain(TOKEN);
+  expect(stored.url).not.toContain(TOKEN);
+  expect(stored.session).toContain('plume-maintainer-session');
+  // Sign out ends it, also after a refresh
+  await page.getByRole('button', { name: 'Sign out' }).click();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Sign out' })).toHaveCount(0);
+  expect(await page.evaluate(() => Object.keys(sessionStorage))).not.toContain(
+    'plume-maintainer-session',
+  );
+});

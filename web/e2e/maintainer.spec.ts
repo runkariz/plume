@@ -36,9 +36,11 @@ for (const theme of THEMES) {
       await shot(page, 'w3-03-sign-in', theme);
 
       await signIn(page);
-      expect(
-        await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage })),
-      ).not.toContain(TOKEN);
+      // for this tab only (sessionStorage, one key), never in localStorage
+      expect(await page.evaluate(() => JSON.stringify({ ...localStorage }))).not.toContain(TOKEN);
+      expect(await page.evaluate(() => Object.keys(sessionStorage))).toEqual([
+        'plume-maintainer-session',
+      ]);
 
       // 1 Upload
       await uploadShopify(page);

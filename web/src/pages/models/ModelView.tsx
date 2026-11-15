@@ -17,6 +17,7 @@ import {
 import { shortBuild } from '@/lib/format';
 import { apiLabel } from '@/lib/names';
 import { richText } from '@/lib/richText';
+import { docHref } from '@/lib/docHref';
 import { MappingTable } from './MappingTable';
 import { ModelWorkbench } from './ModelWorkbench';
 import {
@@ -285,6 +286,7 @@ export function ModelView() {
             update((s0) => ({ ...s0, show: toggleApi(snap, s0.show, id, on) }))
           }
           onSelect={(sel) => update((s0) => ({ ...s0, selection: sel }))}
+          renderDocLink={(apiId, docId) => <Link to={docHref(apiId, docId)}>{docId}</Link>}
         />
       )}
       <div className={`model-cols${view === 'table' ? ' two-up' : ''}`}>
