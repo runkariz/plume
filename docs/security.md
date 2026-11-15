@@ -91,6 +91,19 @@ this review and have tests in `tests/unit/interfaces/test_hardening.py`.
   (Workload Identity on GKE): a Bearer token refreshed 5 minutes before expiry, sent only in
   the `Authorization` header, never logged; errors name only the exception type. Grant the
   workload's service account `roles/aiplatform.user`, nothing more.
+- **Outbound hosts** (egress allowlist; HTTPS 443 only, nothing else is called):
+
+  | Mode | Embeddings | Generation |
+  |---|---|---|
+  | key, no `PLUME_VERTEX_PROJECT` | `aiplatform.googleapis.com` (express URL) | `aiplatform.googleapis.com` (express URL) |
+  | key + project | `{EMBED_LOCATION}-aiplatform.googleapis.com` (`aiplatform.googleapis.com` for `global`) | `{VERTEX_LOCATION}-aiplatform.googleapis.com` (`aiplatform.googleapis.com` for `global`) |
+  | ADC (+ project) | as key + project | as key + project; plus `oauth2.googleapis.com` / the GKE metadata server (`169.254.169.254`) for tokens |
+  | `PLUME_EMBEDDER=gemini` | `generativelanguage.googleapis.com` | – |
+  | `PLUME_EMBEDDER=hash` | none | – |
+
+  Example (EU): key + project, `PLUME_VERTEX_EMBED_LOCATION=europe-west3` →
+  `europe-west3-aiplatform.googleapis.com` for embeddings; generation with `gemini-4-argon`
+  needs `PLUME_VERTEX_LOCATION=global` → `aiplatform.googleapis.com`.
 - **LLM key**: server-side generation reads the Vertex key from `PLUME_VERTEX_KEY_FILE` on each
   call and sends it only in the `x-goog-api-key` header; errors carry the HTTP status, never the
   key or the provider's body. Without a readable key file generation answers 503.

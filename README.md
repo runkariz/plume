@@ -199,7 +199,7 @@ Reader routes are public and rate limited; maintainer routes need `Authorization
 | `PLUME_MAX_UPLOAD_BYTES` | 200 MiB | package uploads |
 | `PLUME_VERTEX_AUTH` | `auto` | `key` (`PLUME_VERTEX_API_KEY` / `PLUME_VERTEX_KEY_FILE`), `adc` (Application Default Credentials, e.g. Workload Identity on GKE; needs `PLUME_VERTEX_PROJECT`), `auto` = a key if one is set, else ADC with a project. With ADC also set `PLUME_EMBEDDER=vertex` |
 | `PLUME_EVIDENCE_BUDGET_CHARS` | `200000` | API evidence server generation sends the model, shared fairly by the APIs (~4 characters per prompt token); raise it for big models (e.g. `500000`) |
-| `PLUME_VERTEX_EMBED_LOCATION` | `us-central1` | the embedding model's location when Vertex is reached through ADC |
+| `PLUME_VERTEX_EMBED_LOCATION` | `global` | the embedding model's location on the project path (whenever `PLUME_VERTEX_PROJECT` is set, key or ADC), e.g. `europe-west3` to keep query text in the EU |
 | `PLUME_VERTEX_PROJECT` / `PLUME_VERTEX_LOCATION` | – / `global` | with a project, generation calls the model at that location (gemini-4-argon answers only at `global`); without one, the location-less express URL |
 | `PLUME_MODEL_LLM` / `PLUME_MODEL_MAX_ROUNDS` | `gemini-4-argon` / `3` | the generation model and its repair rounds |
 | `PLUME_MCP_APP_HTML` | the packaged file | the MCP App bundle (model view) served as `ui://plume/model-view`; see [docs/mcp-apps.md](docs/mcp-apps.md) |

@@ -73,10 +73,11 @@ class Settings(BaseSettings):
         "when a project is set.",
     )
     vertex_embed_location: str = Field(
-        default="us-central1",
+        default="global",
         pattern=r"^[a-z0-9-]{2,40}$",
-        description="Location of the embedding model when Vertex is reached through ADC (the "
-        "project URL); a key uses the express URL and ignores it.",
+        description="Location of the embedding model on the project URL (used whenever "
+        "PLUME_VERTEX_PROJECT is set, with a key or ADC), e.g. europe-west3 to keep query text "
+        "in the EU. Without a project a key uses the location-less express URL.",
     )
     trusted_proxy_hops: int = Field(
         default=0,
