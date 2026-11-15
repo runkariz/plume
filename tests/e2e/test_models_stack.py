@@ -81,7 +81,14 @@ async def test_canonical_model_over_maintainer_mcp(token: str) -> None:
         assert accepted["accepted"] is True
         snapshot_id = accepted["snapshot_id"]
 
+    auth = {"Authorization": f"Bearer {token}"}
+    assert httpx.get(f"{API}/v1/models/{snapshot_id}", timeout=10).status_code == 404
+    pending = httpx.get(f"{API}/v1/models/{snapshot_id}", headers=auth, timeout=10).json()
+    assert pending["visibility"] == "unreleased"
+    released = httpx.post(f"{API}/v1/models/{snapshot_id}/release", headers=auth, timeout=10)
+    assert released.status_code == 200
     model = httpx.get(f"{API}/v1/models/{snapshot_id}", timeout=10).json()
+    assert (model["visibility"], model["official"]) == ("official", True)
     assert model["status"] == "generated_unverified"
     assert [i["id"] for i in model["inputs"]] == APIS
     assert model["coverage"] == {a: {"mapped": 5, "total": 5} for a in APIS}
@@ -94,3 +101,31 @@ async def test_canonical_model_over_maintainer_mcp(token: str) -> None:
     evidence = by_name["id"]["sources"]["test-catalog-api"]["evidence"][0]
     assert evidence["quote"] == "Unique identifier of the order."
     assert len(model["openQuestions"]) == 2
+
+
+def test_anonymous_model_is_unlisted_and_versioned() -> None:
+    g = httpx.post(
+        f"{API}/v1/models/generate", json={"apis": APIS, "concept": "Order"}, timeout=10
+    ).json()
+    sid = g["sessionId"]
+    r = httpx.post(f"{API}/v1/models/sessions/{sid}/draft", json=_draft("good"), timeout=30)
+    assert r.status_code == 201
+    body = r.json()
+    mid = body["model"]["id"]
+    assert mid.startswith("u-")
+    assert body["visibility"] == "unlisted"
+    assert httpx.get(f"{API}/v1/models/{mid}", timeout=10).json()["id"] == mid
+    listed = httpx.get(f"{API}/v1/models", timeout=10).json()["items"]
+    assert mid not in {m["id"] for m in listed}
+    rev = httpx.post(f"{API}/v1/models/{mid}/revise", timeout=10).json()
+    v2 = httpx.post(
+        f"{API}/v1/models/sessions/{rev['sessionId']}/draft",
+        params={"basedOn": mid},
+        json=dict(_draft("good"), description="Second version."),
+        timeout=30,
+    ).json()
+    assert v2["model"]["lineage"]["version"] == 2
+    mine = httpx.post(
+        f"{API}/v1/models/mine", json={"ownerKeys": [body["ownerKey"]]}, timeout=10
+    ).json()
+    assert [m["id"] for m in mine["items"]] == [v2["model"]["id"]]

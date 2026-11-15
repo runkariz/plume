@@ -11,6 +11,24 @@ from plume.domain.shared.hashing import content_hash
 PROMPT_VERSION = "plume-models-v1"
 
 
+class Visibility:
+    """official = released by a maintainer, listed publicly; unreleased = written for (or by) a
+    maintainer, waiting for review; unlisted = a user's model, readable by anyone with its id;
+    discarded = an unreleased model the maintainer threw away."""
+
+    OFFICIAL = "official"
+    UNRELEASED = "unreleased"
+    UNLISTED = "unlisted"
+    DISCARDED = "discarded"
+    ALL = (OFFICIAL, UNRELEASED, UNLISTED, DISCARDED)
+    PUBLIC = (OFFICIAL, UNLISTED)  # readable without the maintainer token (by id)
+
+
+class Origin:
+    USER = "user"
+    MAINTAINER = "maintainer"
+
+
 @dataclass(frozen=True, slots=True)
 class PinnedInput:
     api: str
@@ -28,6 +46,22 @@ class ModelSnapshot:
     citations_checked: int
     prompt_version: str = PROMPT_VERSION
     status: str = "generated_unverified"
+    visibility: str = Visibility.OFFICIAL
+    origin: str = Origin.MAINTAINER
+    generator: str = "claude"
+    lineage_id: str = ""  # "" = this snapshot starts its own lineage
+    version: int = 1
+    based_on: str | None = None
+    content_key: str = ""  # snapshot_id_for(...) of the content ("" = the snapshot id)
+    released_at: datetime | None = None
+
+    @property
+    def lineage(self) -> str:
+        return self.lineage_id or self.snapshot_id
+
+    @property
+    def key(self) -> str:
+        return self.content_key or self.snapshot_id
 
     def support(self, api: str) -> dict[str, str]:
         """Per canonical field: supported | derived | unsupported for this API."""

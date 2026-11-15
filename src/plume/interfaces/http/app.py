@@ -21,7 +21,9 @@ from plume.application.jobs.maintainer import JobStateError, MaintainerJobs
 from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
 from plume.application.models.concepts import SuggestConcepts
+from plume.application.models.generate import GenerateModels
 from plume.application.models.sessions import ModelSessions
+from plume.application.ports.model_writer import ModelWriterError, ModelWriterUnavailableError
 from plume.application.reader.dto import ApiOverview
 from plume.application.reader.resolve import BuildResolver
 from plume.application.reader.sections import PackageSections
@@ -73,6 +75,8 @@ class HttpDependencies:
     models: Callable[[], ModelSessions] | None = None
     maintainer_tokens: tuple[str, ...] = ()
     max_upload_bytes: int = 200 * 1024 * 1024
+    generate_models: Callable[[], GenerateModels] | None = None
+    web_public_url: str | None = None
 
 
 MAX_RAW_BYTES = 256 * 1024
@@ -179,6 +183,14 @@ def create_app(deps: HttpDependencies) -> FastAPI:
     @app.exception_handler(JobStateError)
     async def job_state(_: Request, exc: JobStateError) -> JSONResponse:
         return error(409, exc.code, str(exc))
+
+    @app.exception_handler(ModelWriterUnavailableError)
+    async def llm_unavailable(_: Request, exc: ModelWriterUnavailableError) -> JSONResponse:
+        return error(503, exc.code, str(exc))
+
+    @app.exception_handler(ModelWriterError)
+    async def llm_failed(_: Request, exc: ModelWriterError) -> JSONResponse:
+        return error(502, exc.code, str(exc))
 
     @app.exception_handler(ApplicationError)
     async def app_error(_: Request, exc: ApplicationError) -> JSONResponse:
@@ -514,6 +526,8 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 lambda api, name: _logo(api, name, None).model_dump(by_alias=True),
                 deps.maintainer_tokens,
                 deps.mcp_url,
+                deps.generate_models,
+                deps.web_public_url,
             )
         )
     if deps.maintainer is not None:
