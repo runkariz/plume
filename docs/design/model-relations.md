@@ -211,8 +211,8 @@ WooCommerce), Image, Option. Same paging and filters style as suggest-v2.
 |---|---|
 | `suggest_related(apis, concept)` | concepts related to one concept |
 | `start_set_session(apis, concepts)` | pins the builds; returns the member sessions |
-| `get_set_context(set_session_id)` | the bounded evidence index and relation candidates |
-| `submit_model_set(set_session_id, draft, based_on?)` | validated, then stored; `owner_key` once for a new lineage |
+| `get_set_context(set_session)` | the bounded evidence index and relation candidates |
+| `submit_model_set(set_session, draft, based_on?)` | validated, then stored; `owner_key` once for a new lineage |
 | `get_model_set(id)` | the set (view-bound, `ui://plume/model-view`) |
 | `revise_model_set(id)` | a set session on the current builds, the set as the starting draft |
 | `list_model_sets(api?)` | official sets |

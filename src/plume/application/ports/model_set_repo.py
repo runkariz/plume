@@ -18,6 +18,11 @@ class SetSession:
     created_at: datetime
     origin: str = "user"
     based_on: str | None = None
+    # accepted aliases: (concept, ((api, name in that api), ...)), design D2
+    aliases: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = ()
+
+    def aliases_json(self) -> list[dict[str, object]]:
+        return [{"concept": c, "names": dict(n)} for c, n in self.aliases]
 
 
 class ModelSetRepo(Protocol):

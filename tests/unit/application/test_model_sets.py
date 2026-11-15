@@ -231,3 +231,29 @@ def test_maintainer_release_needs_decisions_and_releases_members(stack: FakeStac
     with pytest.raises(ModelStateError):
         sets.release(decided.set_id)
     assert sets.discard(undecided.set_id).visibility == "discarded"
+
+
+def test_accepted_aliases_are_validated_stored_and_passed_to_members(stack: FakeStack) -> None:
+    from plume.application.models.concepts import ModelInputError  # noqa: PLC0415
+
+    sets = stack.model_sets()
+    alias = [{"concept": "product", "names": {APIS[1]: "items"}}]
+    session = sets.start(APIS, ["Order", "Product"], aliases=alias)
+    assert session.aliases_json() == [{"concept": "Product", "names": {APIS[1]: "items"}}]
+    member = stack.models_repo.get_session(dict(session.member_sessions)["Product"])
+    assert member is not None
+    assert member.name_in(APIS[1]) == "items"
+    assert member.name_in(APIS[0]) == "Product"
+    ctx = sets.context(session.session_id)
+    assert ctx["accepted_aliases"] == session.aliases_json()
+    product = next(m for m in ctx["members"] if m["concept"] == "Product")
+    second = next(a for a in product["apis"] if a["api"] == APIS[1])
+    assert second["searched_as"] == "items"
+    assert sets.session_status(session.session_id)["aliases"] == session.aliases_json()
+    for bad in (
+        [{"concept": "Nope", "names": {APIS[0]: "x"}}],
+        [{"concept": "Product", "names": {"shopify": "x"}}],
+        [{"concept": "Product"}],
+    ):
+        with pytest.raises(ModelInputError):
+            sets.start(APIS, ["Order", "Product"], aliases=bad)

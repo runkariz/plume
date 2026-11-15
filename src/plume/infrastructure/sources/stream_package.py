@@ -169,6 +169,34 @@ def _obj(value: object) -> JsonObj:
     return value if isinstance(value, dict) else {}
 
 
+# Include/partial tags a docs site expands when it renders a page (Markdoc, Liquid/Jekyll, Hugo,
+# MDX): left in a package they mean the included content is missing.
+_UNRESOLVED_INCLUDE = re.compile(
+    r"\{%-?\s*(?:partial|include|include_relative|render)\b[^%]*%\}"
+    r"|\{\{<\s*(?:include|readfile)\b[^>]*>\}\}"
+    r"|<(?:Partial|Snippet|Include)\s+[^>]*/>"
+)
+
+
+def _flag_unresolved_includes(documents: list[Document], warnings: list[str]) -> list[Document]:
+    """Flag documents that still contain include tags instead of the included content: marked
+    incomplete (absence is then not proven) with a visible note, and a load warning."""
+    out = []
+    for d in documents:
+        tags = _UNRESOLVED_INCLUDE.findall(d.text)
+        if not tags:
+            out.append(d)
+            continue
+        shown = ", ".join(t[:120] for t in tags[:3])
+        warnings.append(f"{d.doc_id}: {len(tags)} unresolved include tag(s) ({shown})")
+        note = (
+            f"> Plume: this page contains {len(tags)} unresolved include tag(s) ({shown}); "
+            "the included content is not in the package."
+        )
+        out.append(replace(d, text=f"{note}\n\n{d.text}", complete=False))
+    return out
+
+
 def _json_files(folder: Path) -> list[JsonObj]:
     """Every *.json in a folder, verbatim, in name order ([] when the folder is absent)."""
     return [_read_json(p) for p in sorted(folder.glob("*.json"))] if folder.is_dir() else []
@@ -361,6 +389,7 @@ class StreamPackageSource:
             for path in sorted(export.rglob("*.md")):
                 add(self._export_page(path, export), str(path.relative_to(export)))
 
+        documents = _flag_unresolved_includes(documents, warnings)
         manifest = _opt_json(package_root / "manifest.json") or {}
         return SourcePackage(
             api=info,

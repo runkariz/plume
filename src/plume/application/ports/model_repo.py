@@ -17,6 +17,11 @@ class ModelSession:
     created_at: datetime
     origin: str = "maintainer"
     based_on: str | None = None
+    aliases: tuple[tuple[str, str], ...] = ()  # (api, the concept's name in that API)
+
+    def name_in(self, api: str) -> str:
+        """The name to search the concept under in one API (an accepted alias, or the concept)."""
+        return dict(self.aliases).get(api, self.concept)
 
 
 class ModelRepo(Protocol):

@@ -514,7 +514,7 @@ def set_payload(
         "revisePrompt": (
             f'Use the Plume MCP: revise_model_set("{s.set_id}") opens a set session on the '
             "current docs with this set as the starting draft. Ask me about every relation you "
-            f'change, then submit_model_set(set_session_id, draft, based_on="{s.set_id}").'
+            f'change, then submit_model_set(set_session, draft, based_on="{s.set_id}").'
         ),
     }
 

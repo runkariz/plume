@@ -45,6 +45,15 @@ version; Plume's document ids are built from the method and the version-stripped
 not change between a 1.1 and a 1.2 render of the same API (checked on Shopify: 292 of 292 endpoint
 ids identical).
 
+**Unresolved include tags.** Markdoc `{% partial … %}`, Liquid `{% include … %}`, Hugo
+`{{< include … >}}` and MDX `<Snippet … />` left in a page mean the included content is missing.
+Plume flags them at load:
+- a warning naming the tags;
+- the document is marked incomplete, so absence isn't proven;
+- a visible note opens the text.
+
+Expanding them is the producer's job.
+
 ## Ignored
 
 - The root `manifest.json` `schemaVersion` (stream's run manifest; it says 2.0 while

@@ -58,13 +58,19 @@ def model_view_apps(html: str) -> Apps:
     return apps
 
 
+# The client declared MCP Apps at initialize: the host shows the view.
+VIEW_HINT_SHOWN = (
+    "The user sees this result as an interactive view: refer to it instead of redrawing it as a "
+    "chart or table."
+)
+# No declaration seen (other hosts, or a stateless request): conditional wording.
 VIEW_HINT = (
-    "If your host shows this result as an interactive view (MCP App), the user already sees "
-    "it: refer to it instead of redrawing it as a chart or table."
+    "If an interactive view of this result is shown, the user already sees it: refer to it "
+    "instead of redrawing it as a chart or table."
 )
 
 
-def ui_result(structured: dict[str, Any], text: str) -> CallToolResult:
+def ui_result(structured: dict[str, Any], text: str, apps: bool = False) -> CallToolResult:
     """A result for UI-bound tools: ``text`` for the model and text-only hosts, the data for
     the view in ``structuredContent``."""
     lines = text.split("\n")
@@ -72,7 +78,7 @@ def ui_result(structured: dict[str, Any], text: str) -> CallToolResult:
         (i for i, line in enumerate(lines) if line.startswith(("Model JSON: ", "Set JSON: "))),
         len(lines),
     )  # the hint goes before a trailing JSON dump, so the JSON stays the last line
-    lines.insert(at, VIEW_HINT)
+    lines.insert(at, VIEW_HINT_SHOWN if apps else VIEW_HINT)
     return CallToolResult(
         content=[TextContent(type="text", text="\n".join(lines))],
         structured_content=structured,

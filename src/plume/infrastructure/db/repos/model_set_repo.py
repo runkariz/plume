@@ -50,8 +50,8 @@ class PostgresModelSetRepo:
             conn.execute(
                 text(
                     "INSERT INTO model_set_sessions (session_id, inputs, concepts, "
-                    "member_sessions, origin, based_on, created_at) "
-                    "VALUES (:s, CAST(:i AS jsonb), :c, CAST(:m AS jsonb), :o, :b, :t)"
+                    "member_sessions, origin, based_on, created_at, aliases) VALUES (:s, "
+                    "CAST(:i AS jsonb), :c, CAST(:m AS jsonb), :o, :b, :t, CAST(:a AS jsonb))"
                 ),
                 {
                     "s": session.session_id,
@@ -61,6 +61,7 @@ class PostgresModelSetRepo:
                     "o": session.origin,
                     "b": session.based_on,
                     "t": session.created_at,
+                    "a": json.dumps(session.aliases_json()),
                 },
             )
 
@@ -79,6 +80,7 @@ class PostgresModelSetRepo:
             r.created_at,
             r.origin,
             r.based_on,
+            tuple((str(a["concept"]), tuple(sorted(a["names"].items()))) for a in _j(r.aliases)),
         )
 
     def save_set(self, snapshot: ModelSetSnapshot, owner_key_hash: str | None = None) -> bool:

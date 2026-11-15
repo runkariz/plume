@@ -8,6 +8,7 @@ for `tools/call` the tool name. Never arguments, results, headers or tokens.
 
 import json
 import logging
+import sys
 from typing import Any
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -51,8 +52,21 @@ def describe(message: Any) -> str:
         uri = str(params.get("uri", ""))
         return f"resources/read {uri[:120] if uri.startswith('ui://') else '(non-ui resource)'}"
     if method == "tools/call":
-        return f"tools/call {str(params.get('name'))[:80]}{ui_meta}"
+        args = params.get("arguments")
+        names = ",".join(sorted(str(k)[:40] for k in args)) if isinstance(args, dict) else "-"
+        return f"tools/call {str(params.get('name'))[:80]} args=[{names}]{ui_meta}"
     return f"{method[:80]}{ui_meta}"
+
+
+def enable() -> None:
+    """Route the debug log to stderr: under uvicorn only uvicorn's own loggers have handlers, so
+    a plain module logger would print nothing."""
+    logger.setLevel(logging.INFO)
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(logging.Formatter("%(asctime)s %(name)s %(message)s"))
+        logger.addHandler(handler)
+    logger.propagate = False
 
 
 class McpDebugLog:

@@ -11,6 +11,7 @@ from dataclasses import replace
 from typing import Any
 
 from plume.application.errors import NotFoundError
+from plume.application.models.concepts import concept_key
 from plume.application.models.model_sets import ModelSets
 from plume.application.models.sessions import (
     DRAFT_FORMAT,
@@ -104,14 +105,20 @@ class GenerateModels:
         self._runner.submit(lambda: self._run(job.job_id))
         return job
 
-    def start_set(self, sets: ModelSets, apis: list[str], concepts: list[str]) -> ModelJob:
+    def start_set(
+        self,
+        sets: ModelSets,
+        apis: list[str],
+        concepts: list[str],
+        aliases: list[dict[str, Any]] | None = None,
+    ) -> ModelJob:
         """Plume writes every member model, then PROPOSES relations from the documented
         candidates (confirmed: false: the maintainer decides them before release)."""
         if not self._writer.available():
             raise ModelWriterUnavailableError(
                 "server-side generation is not configured (PLUME_VERTEX_KEY_FILE)"
             )
-        session = sets.start(apis, concepts, Origin.MAINTAINER)
+        session = sets.start(apis, concepts, Origin.MAINTAINER, aliases=aliases or ())
         now = self._clock.now()
         job = ModelJob(
             job_id=f"mj-{uuid.uuid4().hex[:16]}",
@@ -154,6 +161,10 @@ class GenerateModels:
                 "members": members,
                 "relations": relations,
                 "open_questions": questions,
+                "aliases": [
+                    {"concept": c, "names": {api: concept_key(n) for api, n in names}}
+                    for c, names in session.aliases
+                ],
             }
             try:
                 result = sets.submit(

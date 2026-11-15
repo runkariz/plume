@@ -39,7 +39,8 @@ def test_noise_is_gone_and_core_concepts_remain(stack: FakeStack) -> None:
     assert {"Order", "Customer", "Product"} <= names
     assert "Taxes" not in names  # one concept per singular name
     top = [c.name for c in result.concepts[:3]]
-    assert top == ["Order", "Customer", "Product"]
+    assert top[0] == "Order"
+    assert set(top) == {"Order", "Customer", "Product"}  # their order follows the packages' counts
 
 
 def test_no_cap_and_single_api_concepts_are_browsable(stack: FakeStack) -> None:

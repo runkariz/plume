@@ -208,3 +208,17 @@ def test_absence_without_model_schemas_is_not_proven(packages: Path, tmp_path: P
     # Endpoint-level names (query/path/header) are still decided by the endpoint schemas.
     q = stack.find_fact().execute("test-catalog-api", "nope", location="query")
     assert q.complete
+
+
+def test_find_fact_owner_accepts_method_and_path(shop: FakeStack) -> None:
+    ff = shop.find_fact()
+    doc = "endpoint:GET~/api/{version}/orders"
+    by_id = ff.execute("test-catalog-api", "orders[].total", owner=doc)
+    for owner in ("GET /api/{version}/orders", "get /api/v1/orders", "GET /api/v2/orders?page=2"):
+        r = ff.execute("test-catalog-api", "orders[].total", owner=owner)
+        assert r.found, owner
+        assert [m.owner_id for m in r.matches] == [m.owner_id for m in by_id.matches]
+    from plume.application.errors import NotFoundError  # noqa: PLC0415
+
+    with pytest.raises(NotFoundError):
+        ff.execute("test-catalog-api", "orders[].total", owner="GET /nope")

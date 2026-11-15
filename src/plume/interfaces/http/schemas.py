@@ -686,9 +686,22 @@ class SuggestRelatedRequest(Schema):
     offset: int = Field(default=0, ge=0)
 
 
+class SetAlias(Schema):
+    concept: str = Field(description="One of `concepts`.")
+    names: dict[str, str] = Field(
+        description="api id -> the concept's name in that API (e.g. woocommerce: variation)."
+    )
+
+
 class SetSessionRequest(Schema):
     apis: list[str] = Field(min_length=2, max_length=6)
     concepts: list[str] = Field(min_length=1, max_length=8)
+    aliases: list[SetAlias] = Field(
+        default_factory=list,
+        max_length=8,
+        description="Aliases the user ACCEPTED (from suggest-related): the member's evidence in "
+        "that API is searched under the alias name; recorded on the set.",
+    )
 
 
 class RelationEditRequest(Schema):
