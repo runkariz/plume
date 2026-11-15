@@ -10,3 +10,5 @@ export { MethodBadge } from './Method';
 export { Kv, Logo, Metric, ScoreBar } from './Misc';
 export { Segmented } from './Segmented';
 export type { SegOption } from './Segmented';
+export { Stepper } from './Stepper';
+export { Banner } from './Banner';

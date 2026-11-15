@@ -128,3 +128,100 @@ export interface CheckCallResponse {
   paramChecks: { name: string; found: boolean; where: string | null }[];
   checked: { endpoints: number; models: number };
 }
+
+// ---- maintainer: packages, jobs, build events (W3) ----
+
+export interface MaintainerIdentity {
+  name: string;
+}
+
+export interface ValidationCheck {
+  key: string;
+  title: string;
+  detail: string;
+  status: 'ok' | 'warn' | 'fail';
+}
+
+export interface PackageInfo {
+  filename: string;
+  sizeBytes: number;
+  files: number;
+  contents: { endpoints: number; models: number; guides: number };
+  validation: ValidationCheck[];
+  suggested: { apiId: string; displayName: string; tag: string };
+}
+
+export interface DiffItem {
+  change: 'new' | 'changed' | 'removed';
+  kind: ItemKind;
+  title: string;
+  method?: HttpMethod;
+  path?: string;
+  note: string;
+}
+
+export interface JobDiff {
+  since: string;
+  counts: { new: number; changed: number; removed: number; unchanged: number };
+  items: DiffItem[];
+  totalItems: number;
+}
+
+export interface EmbeddingPlan {
+  toEmbed: number;
+  total: number;
+  model: string;
+  dimensions: number;
+  estimatedTokens: string;
+  estimatedCost: string;
+}
+
+export interface EvalMetric {
+  key: string;
+  label: string;
+  live: string;
+  staged: string;
+  delta: string;
+  tone: 'ok' | 'neutral' | 'bad';
+}
+
+export interface JobEval {
+  gate: { passed: boolean; message: string };
+  metrics: EvalMetric[];
+  release: { version: string; knowledgeFile: string; notes: string };
+}
+
+export type JobStatus =
+  'uploaded' | 'reviewed' | 'building' | 'staged' | 'failed' | 'published' | 'discarded';
+
+export interface Job {
+  id: string;
+  apiId: string;
+  displayName: string;
+  status: JobStatus;
+  liveBuild: string | null;
+  stagedBuild: string;
+  package: PackageInfo;
+  diff: JobDiff | null;
+  plan: EmbeddingPlan | null;
+  eval: JobEval | null;
+}
+
+export interface ReviewRequest {
+  apiId: string;
+  displayName: string;
+  tag: string;
+}
+
+export const STEP_KEYS = ['validate', 'chunk', 'diff', 'embed', 'store', 'evaluate'] as const;
+export type StepKey = (typeof STEP_KEYS)[number];
+export type StepStatus = 'pending' | 'running' | 'done' | 'failed';
+export type EventSource = 'plume' | 'postgres' | 'gemini';
+
+/** One build event from GET /v1/jobs/{id}/events (SSE). `id` is the SSE id, used to resume. */
+export type JobEvent =
+  | { type: 'log'; id: string; t: string; source: EventSource; message: string }
+  | { type: 'step'; id: string; key: StepKey; status: StepStatus; detail: string }
+  | { type: 'progress'; id: string; done: number; total: number; etaSeconds: number | null }
+  | { type: 'service'; id: string; service: 'postgres' | 'gemini'; detail: string }
+  | { type: 'done'; id: string; status: 'staged' | 'failed'; message?: string };
