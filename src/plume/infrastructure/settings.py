@@ -85,6 +85,12 @@ class Settings(BaseSettings):
         default=(), description="Bearer tokens of maintainers (comma list in JSON). Never logged."
     )
     max_upload_bytes: int = Field(default=200 * 1024 * 1024, ge=1024)
+    mcp_cors_origins: tuple[str, ...] = Field(
+        default=(),
+        description="Browser origins allowed to call the MCP endpoints (for browser-based MCP "
+        "clients such as the ext-apps basic-host). Empty = no CORS (Claude web/Desktop/Code "
+        "connect without it).",
+    )
     cors_origins: tuple[str, ...] = ("http://127.0.0.1:18473", "http://localhost:18473")
 
     @field_validator("maintainer_tokens")

@@ -92,6 +92,67 @@ marked **summary**; they are consistent with the SDK but were not read word for 
 - "Open in Plume": `ui/open-link` with `shareUrl`, only when the host offers `openLinks`;
   otherwise show the link as text.
 
+## How to test locally
+
+### The reference host (ext-apps `basic-host`)
+
+Tested 2026-11-16 with ext-apps **v2.1.0** (commit `ea3e9d0e624a20bc1c51310292f09d9b8ed17161`),
+cloned outside the repository. `get_model` rendered the view. The
+screenshot is in the session scratchpad, `basic-host-get_model.png`.
+
+1. Get the host. Its `serve.ts` takes `HOST_PORT` / `SANDBOX_PORT`, but `src/implementation.ts`
+   hard-codes the sandbox URL `http://localhost:8081/sandbox.html`. Replace that line to use
+   your sandbox port (Plume's block is 18400-18499; 8080/8081 are not allowed here). Install it
+   on its own rather than as part of the ext-apps workspace (which builds with `bun`):
+
+   ```bash
+   git clone https://github.com/modelcontextprotocol/ext-apps.git && cd ext-apps && git checkout v2.1.0
+   cp -r examples/basic-host ../basic-host && cd ../basic-host
+   sed -i 's|"@modelcontextprotocol/ext-apps": "^2.1.0"|"@modelcontextprotocol/ext-apps": "2.1.0"|' package.json
+   # src/implementation.ts: SANDBOX_PROXY_BASE_URL -> http://localhost:18461/sandbox.html
+   npm install
+   NODE_ENV=development INPUT=index.html npx vite build
+   NODE_ENV=development INPUT=sandbox.html npx vite build   # (tsc needs @types/cors; skipped)
+   ```
+
+2. Run a Plume stack whose MCP allows the host's browser origin. basic-host's MCP client runs
+   **in the browser**, so it needs CORS. Set `PLUME_MCP_CORS_ORIGINS='["http://localhost:18460"]'`
+   on the `mcp` service; it's off by default, and real hosts don't need it. Set
+   `PLUME_WEB_PUBLIC_URL` for real share links. Then load packages and save a model.
+3. `HOST_PORT=18460 SANDBOX_PORT=18461 SERVERS='["http://localhost:<mcp port>/mcp"]' npx tsx serve.ts`,
+   open `http://localhost:18460/index.html`, pick server `plume`, tool `get_model`, input
+   `{"snapshot_id": "<id>"}`, then **Call Tool**.
+   - Headless: this machine lacks Chromium's system libraries. Use
+     `mcr.microsoft.com/playwright:v1.62.1-noble` with `--network host`.
+
+### Claude Desktop (local connector through `mcp-remote`)
+
+The owner's path: Claude Desktop starts a stdio bridge to Plume's HTTP MCP (over the port
+forward):
+
+```json
+{
+  "mcpServers": {
+    "plume": { "command": "npx", "args": ["-y", "mcp-remote", "http://127.0.0.1:18491/mcp"] }
+  }
+}
+```
+
+What the sources say about local / stdio servers:
+- The spec sets no transport condition for MCP Apps. The view is fetched with ordinary
+  `resources/read`, and its tool calls are ordinary `tools/call`; the iframe ↔ host leg is
+  `postMessage` inside the host.
+- The ext-apps testing guide (`docs/testing-mcp-apps.md` at v2.1.0) lists Claude with both
+  "Remote MCP servers (over HTTP)" and "Local MCP servers (over stdio)" as MCP Apps hosts. The
+  README configures its example App servers in "an MCP client that supports stdio (Claude
+  Desktop, VS Code, etc.)".
+- Not stated anywhere, and **untested here**: whether `mcp-remote` passes through the Apps
+  negotiation (`capabilities.extensions["io.modelcontextprotocol/ui"]` in `initialize`, both
+  directions) and `_meta` on tools and resources. If Claude Desktop shows only text for
+  `get_model`, check that first. The text fallback (summary + link) still works.
+- Claude web (claude.ai) cannot reach `127.0.0.1`. It needs a public HTTPS URL for the MCP; the
+  guide suggests a `cloudflared` tunnel. That's the owner's decision; Plume opens none.
+
 ## Testing
 
 - Unit (`tests/unit/interfaces/test_mcp_app.py`): the resource is listed and readable with the
@@ -108,6 +169,5 @@ marked **summary**; they are consistent with the SDK but were not read word for 
   `ui/initialize` → `ui/notifications/initialized` → render → `ui/notifications/size-changed`,
   made no requests, logged no console errors, and followed the theme.
 - Not done yet:
-  - A run in the spec's `basic-host`, which needs a clone and `npm install` from the internet.
   - Claude web, which can't reach `127.0.0.1` and needs a public HTTPS MCP URL; that's the
     owner's decision.

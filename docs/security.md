@@ -47,6 +47,8 @@ this review and have tests in `tests/unit/interfaces/test_hardening.py`.
 - **CORS**: explicit origins (`PLUME_CORS_ORIGINS`, default the web dev server on 18473),
   methods GET/POST, headers Authorization/Content-Type/Last-Event-ID/Accept, no credentials
   (cookies are not used).
+- **MCP CORS**: none by default. `PLUME_MCP_CORS_ORIGINS` opts in explicit origins for
+  browser-based MCP clients (testing with the ext-apps basic-host); never `*`.
 - **MCP host check**: DNS-rebinding protection on both MCP endpoints with
   `PLUME_MCP_ALLOWED_HOSTS` (default loopback names); a foreign `Host` is refused (tested in
   e2e).

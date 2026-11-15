@@ -99,6 +99,26 @@ def test_mcp_is_rate_limited() -> None:
     assert all(c != 429 for c in codes[:2])
 
 
+def test_mcp_cors_is_off_by_default_and_opt_in() -> None:
+    preflight = {
+        "Origin": "http://localhost:18460",
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "content-type,mcp-protocol-version",
+    }
+    off = Container(settings=Settings(embedder="hash"))
+    with TestClient(mcp_app(off), base_url="http://127.0.0.1:18481") as client:
+        r = client.options("/mcp", headers=preflight)
+    assert "access-control-allow-origin" not in r.headers
+    on = Container(settings=Settings(embedder="hash", mcp_cors_origins=("http://localhost:18460",)))
+    with TestClient(mcp_app(on), base_url="http://127.0.0.1:18481") as client:
+        ok = client.options("/mcp", headers=preflight)
+        other = client.options("/mcp", headers={**preflight, "Origin": "http://evil.test"})
+    assert ok.status_code == 200
+    assert ok.headers["access-control-allow-origin"] == "http://localhost:18460"
+    assert "mcp-protocol-version" in ok.headers["access-control-allow-headers"].lower()
+    assert "access-control-allow-origin" not in other.headers
+
+
 def test_valid_maintainer_token_is_not_rate_limited(stack: FakeStack) -> None:
     from plume.application.knowledge.diff_builds import DiffBuilds  # noqa: PLC0415
     from plume.application.knowledge.list_builds import ListBuilds  # noqa: PLC0415
