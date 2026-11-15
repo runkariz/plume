@@ -200,6 +200,63 @@ describe('the model of a tool result', () => {
   });
 });
 
+describe('a result that is not shaped like the HTTP routes', () => {
+  it('falls back to a letter on a neutral tile when the server sent no logo (older MCP results)', () => {
+    const noLogo = {
+      ...inventorySnapshot,
+      inputs: inventorySnapshot.inputs.map(({ id, shortName, name, build }) => ({
+        id,
+        shortName,
+        name,
+        build,
+      })),
+    };
+    const shown = extractModel(result(noLogo));
+    expect(shown.kind).toBe('model');
+    if (shown.kind !== 'model') return;
+    for (const a of shown.model.inputs) {
+      expect(a.logo.text).toBe(a.shortName.slice(0, 1).toUpperCase());
+      expect(a.logo.color).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(a.logo.url).toBeNull();
+    }
+  });
+
+  it('ignores a colour that is not a hex colour and a logo that is not an object', () => {
+    for (const logo of [{ text: 'S', color: 'red' }, { text: 5, color: null }, 'x', null, {}]) {
+      const m = {
+        ...inventorySnapshot,
+        inputs: inventorySnapshot.inputs.map((a) => ({ ...a, logo })),
+      };
+      const shown = extractModel(result(m));
+      expect(shown.kind, JSON.stringify(logo)).toBe('model');
+      if (shown.kind === 'model')
+        expect(shown.model.inputs[0]?.logo.color).toMatch(/^#[0-9a-f]{6}$/i);
+    }
+  });
+
+  it('keeps a valid logo and renders the whole view without one', async () => {
+    const noLogo = {
+      ...inventorySnapshot,
+      inputs: inventorySnapshot.inputs.map(({ id, shortName, name, build }) => ({
+        id,
+        shortName,
+        name,
+        build,
+      })),
+    };
+    const h = fakeHost();
+    render(<WidgetApp connection={h.conn} />);
+    await h.reply(h.sent[0]?.id, { hostCapabilities: {}, hostContext: { theme: 'light' } });
+    await h.push({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/tool-result',
+      params: result(noLogo),
+    });
+    expect(await screen.findByRole('heading', { name: 'Inventory' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /Mapping graph/ })).toBeInTheDocument();
+  });
+});
+
 describe('the view', () => {
   async function shown(structured: unknown, caps: object = {}) {
     const h = fakeHost();

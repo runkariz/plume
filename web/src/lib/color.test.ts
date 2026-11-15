@@ -31,3 +31,12 @@ describe('color helpers', () => {
     }
   });
 });
+
+describe('data that is not a colour', () => {
+  it('never throws: a missing colour is just "no luminance", and text on it is white', () => {
+    expect(luminance(undefined as unknown as string)).toBeNull();
+    expect(luminance(null as unknown as string)).toBeNull();
+    expect(readableOn(undefined as unknown as string)).toBe('#ffffff');
+    expect(contrastRatio('#fff', undefined as unknown as string)).toBeNull();
+  });
+});

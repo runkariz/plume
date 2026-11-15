@@ -376,6 +376,10 @@ export interface FieldSource {
 
 export interface ModelField {
   name: string;
+  /** The canonical path ("lines[].price.amount"); the name for a top-level field. */
+  path?: string;
+  /** The sub-fields of an object or array field (up to 3 levels). Absent on flat fields. */
+  fields?: ModelField[];
   type: string;
   description?: string | null;
   required: boolean;

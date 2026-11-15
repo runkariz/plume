@@ -18,6 +18,7 @@ import { shortBuild } from '@/lib/format';
 import { apiLabel } from '@/lib/names';
 import { richText } from '@/lib/richText';
 import { docHref } from '@/lib/docHref';
+import { countLeaves } from './fields';
 import { MappingTable } from './MappingTable';
 import { ModelWorkbench } from './ModelWorkbench';
 import {
@@ -135,7 +136,7 @@ export function ModelView() {
     );
 
   const prompt = claudePrompt(snap);
-  const big = snap.fields.length > BIG_MODEL;
+  const big = countLeaves(snap) > BIG_MODEL;
   // null in the URL = the default for the model size (a big model opens as a table, with the graph on one field)
   const view = mv?.view ?? (big ? 'table' : 'graph');
   const scope = mv?.scope ?? (big ? 'field' : 'all');
@@ -151,7 +152,7 @@ export function ModelView() {
             <Chip tone="warn">Generated, unverified</Chip>
             {snap.stale ? <StaleChip inputs={snap.staleInputs} /> : null}
             <Chip>{snap.inputs.length} APIs</Chip>
-            <Chip>{snap.fields.length} fields</Chip>
+            <Chip>{countLeaves(snap)} fields</Chip>
             <Chip>snapshot {snap.id}</Chip>
           </div>
           <LineageLine snap={snap} />
@@ -318,7 +319,7 @@ export function ModelView() {
           <h2 className="h2-sm">Coverage</h2>
           <ul className="cov">
             {snap.inputs.map((a) => {
-              const c = snap.coverage[a.id] ?? { mapped: 0, total: snap.fields.length };
+              const c = snap.coverage[a.id] ?? { mapped: 0, total: countLeaves(snap) };
               return (
                 <li key={a.id}>
                   <span className="cov-name">

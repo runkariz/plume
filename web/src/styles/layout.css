@@ -2163,3 +2163,25 @@ th[scope='row'] {
 .concept-panels:focus {
   outline: none;
 }
+
+/* nested fields: a container's toggle, and the canonical path under a sub-field's name */
+.mtable-toggle {
+  all: unset;
+  cursor: pointer;
+  display: inline-block;
+  width: 18px;
+  margin-right: 2px;
+  color: var(--muted);
+  text-align: center;
+}
+.mtable-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  border-radius: 4px;
+}
+.mtable-toggle:disabled {
+  cursor: default;
+}
+.mtable-path-line {
+  display: block;
+  overflow-wrap: anywhere;
+}

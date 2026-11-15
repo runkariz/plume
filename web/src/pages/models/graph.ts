@@ -1,5 +1,6 @@
 import type { Edge, Node } from '@xyflow/react';
 import type { ModelSnapshot } from '@/api/types';
+import { fieldPath, mappedFields } from './fields';
 
 export const NODE = {
   // narrower than the first version (1500 units): with the control box and the detail panel the canvas is about
@@ -88,9 +89,10 @@ export function buildGraph(
   const canonY = (i: number) => 24 + i * (NODE.canonH + NODE.canonGap);
 
   // canonical column
-  snap.fields.forEach((f, i) => {
+  const mapped = mappedFields(snap);
+  mapped.forEach(({ field: f }, i) => {
     nodes.push({
-      id: canonNodeId(f.name),
+      id: canonNodeId(fieldPath(f)),
       type: 'canonical',
       position: { x: L.centerX, y: canonY(i) + NODE.groupPadTop - 24 },
       width: L.canonW,
@@ -98,7 +100,7 @@ export function buildGraph(
       draggable: false,
       data: {
         kind: 'canonical',
-        field: f.name,
+        field: fieldPath(f),
         type: f.type,
         required: f.required,
         support: snap.inputs.map((a) => ({
@@ -120,7 +122,7 @@ export function buildGraph(
     const x = left ? 0 : L.rightX;
     // unique source paths in order of first use, each aligned to its first canonical row when on the left
     const used: { path: string; type: string; row: number }[] = [];
-    snap.fields.forEach((f, row) => {
+    mapped.forEach(({ field: f }, row) => {
       for (const p of f.sources[api.id]?.paths ?? []) {
         if (!used.some((u) => u.path === p.path)) used.push({ path: p.path, type: p.type, row });
       }
@@ -177,7 +179,7 @@ export function buildGraph(
   });
 
   // edges: one per (canonical field, api, source path)
-  snap.fields.forEach((f) => {
+  mapped.forEach(({ field: f }) => {
     snap.inputs.forEach((api, apiIndex) => {
       const support = f.support[api.id];
       const src = f.sources[api.id];
@@ -187,12 +189,12 @@ export function buildGraph(
         const left = apiIndex === 0;
         const apiNode = fieldNodeId(api.id, p.path);
         edges.push({
-          id: `${f.name}__${api.id}__${p.path}`,
-          source: left ? apiNode : canonNodeId(f.name),
-          target: left ? canonNodeId(f.name) : apiNode,
+          id: `${fieldPath(f)}__${api.id}__${p.path}`,
+          source: left ? apiNode : canonNodeId(fieldPath(f)),
+          target: left ? canonNodeId(fieldPath(f)) : apiNode,
           type: 'default',
           label: derived && !opts.compact ? edgeLabel(src.transform, src.join) : undefined,
-          data: { field: f.name, apiId: api.id, path: p.path, derived },
+          data: { field: fieldPath(f), apiId: api.id, path: p.path, derived },
           style: {
             stroke: api.logo.color,
             strokeWidth: 1.8,
@@ -202,7 +204,7 @@ export function buildGraph(
           labelBgBorderRadius: 10,
           labelStyle: { fontSize: 12, fontWeight: 500 },
           interactionWidth: 24,
-          ariaLabel: `${f.name} ${left ? 'from' : 'to'} ${api.shortName}${derived ? ' (derived)' : ''}`,
+          ariaLabel: `${fieldPath(f)} ${left ? 'from' : 'to'} ${api.shortName}${derived ? ' (derived)' : ''}`,
         });
       }
     });
@@ -219,11 +221,11 @@ export interface Selection {
 /** The mapping the detail panel opens with: the first derived one, else the first one. */
 export function defaultSelection(snap: ModelSnapshot): Selection | null {
   let first: Selection | null = null;
-  for (const f of snap.fields) {
+  for (const { field: f } of mappedFields(snap)) {
     for (const api of snap.inputs) {
       const s = f.support[api.id];
-      if (s === 'derived') return { field: f.name, apiId: api.id };
-      if (s === 'supported' && !first) first = { field: f.name, apiId: api.id };
+      if (s === 'derived') return { field: fieldPath(f), apiId: api.id };
+      if (s === 'supported' && !first) first = { field: fieldPath(f), apiId: api.id };
     }
   }
   return first;
@@ -279,7 +281,10 @@ export function dimming(
 
 /** One row of the mapping list: a canonical field and one API that fills it. */
 export interface MappingRow {
+  /** The canonical path. */
   field: string;
+  /** How deep the field sits (0 = top level): the list indents by it. */
+  depth: number;
   apiId: string;
   apiName: string;
   kind: 'supported' | 'derived';
@@ -287,17 +292,18 @@ export interface MappingRow {
 }
 
 export function mappingRows(snap: ModelSnapshot): MappingRow[] {
-  return snap.fields.flatMap((f) =>
+  return mappedFields(snap).flatMap(({ field: f, depth }) =>
     snap.inputs.flatMap((a) => {
-      const support = f.support[a.id];
+      const support = f.support?.[a.id];
       if (support !== 'supported' && support !== 'derived') return [];
       return [
         {
-          field: f.name,
+          field: fieldPath(f),
+          depth,
           apiId: a.id,
           apiName: a.shortName,
           kind: support,
-          paths: (f.sources[a.id]?.paths ?? []).map((p) => p.path),
+          paths: (f.sources?.[a.id]?.paths ?? []).map((p) => p.path),
         },
       ];
     }),

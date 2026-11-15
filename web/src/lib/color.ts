@@ -3,8 +3,9 @@ function channel(c: number): number {
   return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
 }
 
-/** WCAG relative luminance of #rgb / #rrggbb; null when the value is not a hex colour. */
+/** WCAG relative luminance of #rgb / #rrggbb; null when the value is not a hex colour (or not a string at all). */
 export function luminance(hex: string): number | null {
+  if (typeof hex !== 'string') return null; // server data: a missing colour must not crash the page
   const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
   if (!m || !m[1]) return null;
   const h = m[1].length === 3 ? [...m[1]].map((c) => c + c).join('') : m[1];

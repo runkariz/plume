@@ -7,7 +7,7 @@ import type {
   ModelSnapshot,
   ModelVisibility,
 } from '@/api/types';
-import { inventorySnapshot, order40Snapshot, productSnapshot } from './modelData';
+import { inventorySnapshot, nestedSnapshot, order40Snapshot, productSnapshot } from './modelData';
 import { iconApis } from './sectionData';
 
 /** What the mock server keeps for a model: the snapshot plus the access fields plume-6f's API adds. */
@@ -39,6 +39,8 @@ export interface MockJob {
 const ALL = ['shopify', 'woocommerce', 'mirakl'];
 
 /** A fixed unlisted model (its link is its id) with a 3-version lineage, for the share and lineage pages. */
+/** A model with nested fields (objects and arrays), unlisted. */
+export const NESTED = 'u-nested0000000000000000000000001';
 export const UNLISTED_V3 = 'u-3f9a0c71d2e84b5f9a6c1d7e8b2a4c60';
 const UNLISTED_V1 = 'u-1a7e5d93c04b48d2b8f6e0a39c1d7f52';
 const UNLISTED_V2 = 'u-2b8c6e04d15c59e3c9a7f1b40d2e8a63';
@@ -77,6 +79,13 @@ export function seedModels(): StoredModel[] {
     seed(inventorySnapshot, 'inventory', { visibility: 'official', lineageId: 'L-inventory' }),
     seed(productSnapshot, 'product', { visibility: 'official', lineageId: 'L-product' }),
     seed(order40Snapshot, 'Order', { visibility: 'official', lineageId: 'L-order' }),
+    // a model with nested objects and arrays, reachable by its link only (not in the official list)
+    seed(nestedSnapshot, 'order-nested', {
+      visibility: 'unlisted',
+      lineageId: 'L-nested',
+      origin: 'user',
+      apis: ['shopify', 'woocommerce'],
+    }),
     unlisted(UNLISTED_V1, 'Inventory, with a returns count', '2026-11-14T15:00:00Z', 'snap_8f3a21'),
     unlisted(UNLISTED_V2, 'Inventory, with a returns count', '2026-11-14T16:00:00Z', UNLISTED_V1),
     unlisted(UNLISTED_V3, 'Inventory, with a returns count', '2026-11-14T17:00:00Z', UNLISTED_V2),
