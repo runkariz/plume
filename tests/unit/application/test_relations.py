@@ -123,3 +123,22 @@ def test_real_alias_brings_woocommerce_variations_to_the_variant_member(
     with_alias = woo_docs([{"concept": "Variant", "names": {"woocommerce": "variation"}}])
     assert not any("variations" in d for d in without)
     assert any("/variations" in d for d in with_alias)
+
+
+@real
+def test_real_find_fact_owner_as_method_and_path(real_stack: FakeStack) -> None:
+    """The tester's call: owner "GET /api/products" (as endpoints are shown) on Mirakl."""
+    cases = [
+        ("mirakl", "shop_id", "GET /api/products"),
+        ("shopify", "limit", "GET /admin/api/2026-10/products.json"),
+        ("woocommerce", "per_page", "GET /wp-json/wc/v3/products"),
+    ]
+    for api, name, owner in cases:
+        r = real_stack.find_fact().execute(api, name, kind="field", location="query", owner=owner)
+        assert r.found, (api, owner)
+        assert all(m.owner_id.startswith("endpoint:GET~") for m in r.matches), api
+    # the tester's exact call: no longer "not in build"; offset just isn't documented there
+    r = real_stack.find_fact().execute(
+        "mirakl", "offset", kind="field", location="query", owner="GET /api/products"
+    )
+    assert not r.found

@@ -85,8 +85,8 @@ DRAFT_FORMAT: dict[str, Any] = {
 }
 
 INSTRUCTIONS = """\
-Write ONE canonical model for the concept, then submit it with submit_model_draft(session_id,
-draft). get_model_context lists the documents per API; get_model_evidence(session_id, api)
+Write ONE canonical model for the concept, then submit it with submit_model_draft(model_session,
+draft). get_model_context lists the documents per API; get_model_evidence(model_session, api)
 returns their fields page by page (follow next_cursor). Rules (refused otherwise):
 - Map an API under fields[].sources only with fields that appear in that API's evidence: copy
   `paths[].path` exactly as listed (dotted names, [] for arrays).
@@ -110,6 +110,21 @@ def normalize_concept(concept: str) -> str:
     typed it all lower case ("order" -> "Order"; "Product/Offer" and "SKU" stay as typed)."""
     text = " ".join(concept.split())
     return text[:1].upper() + text[1:] if text == text.lower() else text
+
+
+def _evidence_rank(d: DocumentSummary, key: str) -> tuple[bool, bool, bool, int, str]:
+    """Models first, then reads, the concept's OWN endpoints (/orders, /orders/{id}: the full
+    object) before its sub-resources (/orders/{id}/notes), shorter paths first."""
+    own = d.path is not None and concept_key(_last_literal_of(d.path)) == key
+    depth = len((d.path or "").strip("/").split("/"))
+    return (d.kind is not DocumentKind.MODEL, d.method != "GET", not own, depth, d.doc_id)
+
+
+def _last_literal_of(path: str) -> str:
+    for seg in reversed(path.strip("/").split("/")):
+        if seg and "{" not in seg:
+            return seg.split(".", 1)[0]
+    return ""
 
 
 class ModelStateError(ApplicationError):
@@ -149,7 +164,7 @@ def revise_prompt(snapshot_id: str) -> str:
     return (
         f'Use the Plume MCP: revise_model("{snapshot_id}") opens a session on the current docs '
         "with this model as the starting draft. Make the changes I ask for, keep every citation "
-        "verbatim, then submit_model_draft(session_id, draft, "
+        "verbatim, then submit_model_draft(model_session, draft, "
         f'based_on="{snapshot_id}") to save a new version.'
     )
 
@@ -272,6 +287,7 @@ class ModelSessions:
         done = [s for s in self._models.by_session(session_id) if s.visibility in Visibility.ALL]
         latest = done[0] if done else None
         return {
+            "model_session": session.session_id,
             "session_id": session.session_id,
             "status": "submitted" if latest else "open",
             "snapshot_id": latest.snapshot_id if latest else None,
@@ -298,7 +314,7 @@ class ModelSessions:
                 build, concept, MAX_DOCS_PER_API, (DocumentKind.ENDPOINT, DocumentKind.MODEL)
             )
             docs = list(self._index.summaries(build, [h.doc_id for h in hits]).values())
-        docs.sort(key=lambda d: (d.kind is not DocumentKind.MODEL, d.method != "GET", d.doc_id))
+        docs.sort(key=lambda d: _evidence_rank(d, key))
         return docs[:max_docs]
 
     def _pin(self, session: ModelSession, api: str) -> BuildId:
@@ -334,10 +350,11 @@ class ModelSessions:
                 entry["searched_as"] = session.name_in(pin.api)  # an accepted alias
             per_api.append(entry)
         return {
+            "model_session": session.session_id,
             "session_id": session.session_id,
             "concept": session.concept,
             "apis": per_api,
-            "next": "Call get_model_evidence(session_id, api) for each API (follow next_cursor) "
+            "next": "Call get_model_evidence(model_session, api) for each API (follow next_cursor) "
             "to read the fields with their descriptions, then write the draft.",
             "instructions": INSTRUCTIONS,
             "draft_format": DRAFT_FORMAT,
@@ -407,6 +424,7 @@ class ModelSessions:
             used += cost
             position += 1
         return {
+            "model_session": session.session_id,
             "session_id": session.session_id,
             "api": api,
             "build": build.value,
@@ -575,14 +593,15 @@ class ModelSessions:
             based_on=base.snapshot_id,
         )
         return {
+            "model_session": session.session_id,
             "session_id": session.session_id,
             "based_on": base.snapshot_id,
             "concept": session.concept,
             "inputs": [{"api": i.api, "build": i.build} for i in session.inputs],
             "starting_draft": draft_json(base.draft),
             "claude_prompt": claude_prompt(session, maintainer),
-            "next": "Call get_model_context(session_id), edit starting_draft, then "
-            f'submit_model_draft(session_id, draft, based_on="{base.snapshot_id}").',
+            "next": "Call get_model_context(model_session), edit starting_draft, then "
+            f'submit_model_draft(model_session, draft, based_on="{base.snapshot_id}").',
         }
 
     def release(self, snapshot_id: str) -> ModelSnapshot:

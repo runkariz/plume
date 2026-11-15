@@ -32,6 +32,7 @@ from plume.domain.knowledge.citation import Citation
 from plume.domain.knowledge.document import HTTP_METHODS, DocumentKind, FieldLocation
 from plume.domain.knowledge.fact import Fact, FactKind
 from plume.domain.knowledge.ranking import reciprocal_rank_fusion
+from plume.domain.shared.ids import BuildId
 
 SearchMode = Literal["hybrid", "dense", "text"]
 MAX_TOP_K = 50
@@ -313,6 +314,33 @@ class FindFact:
         self._facts = facts
         self._index = index
 
+    def _owner_id(self, build_id: BuildId, owner: str | None) -> str | None:
+        """A document id as is; "GET /api/products" (how endpoints are shown everywhere) maps to
+        the endpoint's document, matching path templates the same way check_call does."""
+        if owner is None or not owner.strip():
+            return None
+        owner = owner.strip()
+        if self._index.summaries(build_id, [owner]):
+            return owner
+        method, _, path = owner.partition(" ")
+        if method.upper() in HTTP_METHODS and path.strip().startswith("/"):
+            path = path.strip().split("?", 1)[0]
+            exact = [
+                f
+                for f in self._facts.endpoints(build_id)
+                if f.name.partition(" ")[0] == method.upper()
+                and f.name.partition(" ")[2] in (path, path.rstrip("/"))
+            ]
+            matches = exact or [
+                f
+                for f in self._facts.endpoints(build_id)
+                if f.name.partition(" ")[0] == method.upper()
+                and path_matches(f.name.partition(" ")[2], path)
+            ]
+            if len({f.owner_id for f in matches}) == 1:
+                return matches[0].owner_id
+        return owner  # unknown: reported as not in the build below
+
     def execute(
         self,
         api: str,
@@ -334,6 +362,7 @@ class FindFact:
             raise ReaderInputError(str(exc)) from exc
         r = self._resolver.resolve(api, version)
         build_id = r.build.build_id
+        owner = self._owner_id(build_id, owner)
         found = self._facts.find(
             build_id, name, kind=fact_kind, owner_id=owner, resource=resource, location=loc
         )

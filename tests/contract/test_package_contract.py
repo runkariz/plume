@@ -100,4 +100,6 @@ def test_reader_reads_every_endpoint(connector: Path) -> None:
     pkg = StreamPackageSource().load(str(connector))
     endpoints = [d for d in pkg.documents if d.kind.value == "endpoint"]
     assert len(endpoints) == len(list((connector / "endpoints").glob("*/request.json")))
-    assert pkg.warnings == ()
+    # Unresolved include tags are a content gap in the package (flagged on the document, reported
+    # to the producer), not a reading failure; every other warning fails the contract.
+    assert [w for w in pkg.warnings if "unresolved include" not in w] == []

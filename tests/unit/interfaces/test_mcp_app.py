@@ -177,3 +177,41 @@ def test_bundle_loads_nothing_remote_and_makes_no_requests() -> None:
     assert "@font-face" not in html  # the host's default CSP has no font-src
     for method in ("ui/initialize", "ui/notifications/initialized", "ui/notifications/tool-result"):
         assert method in html
+
+
+@pytest.mark.anyio
+async def test_session_tools_take_model_session_and_the_old_name(stack: FakeStack) -> None:
+    """Claude's desktop bridge drops arguments named `session_id`: the tools take
+    `model_session` / `set_session`, and still accept the old names."""
+    async with Client(_reader(stack)) as client:
+        tools = {t.name: t for t in (await client.list_tools()).tools}
+        for name in ("get_model_context", "get_model_evidence", "submit_model_draft"):
+            schema = tools[name].input_schema
+            assert "model_session" in schema["properties"], name
+            assert "session_id" not in schema.get("required", []), name
+        started = await client.call_tool("start_model_session", {"apis": APIS, "concept": "Order"})
+        sid = (started.structured_content or {})["model_session"]
+        new = await client.call_tool("get_model_context", {"model_session": sid})
+        old = await client.call_tool("get_model_context", {"session_id": sid})
+        assert not new.is_error
+        assert not old.is_error
+        assert (new.structured_content or {})["model_session"] == sid
+        missing = await client.call_tool("get_model_context", {})
+        assert missing.is_error
+        assert "model_session is required" in "".join(
+            getattr(c, "text", "") for c in missing.content
+        )
+
+
+def test_view_hint_depends_on_the_client_declaring_apps() -> None:
+    from plume.interfaces.mcp.apps.model_view import ui_result  # noqa: PLC0415
+
+    def text(apps: bool) -> str:
+        return "".join(
+            getattr(c, "text", "") for c in ui_result({}, "Summary.\nModel JSON: {}", apps).content
+        )
+
+    shown, unknown = text(True), text(False)
+    assert "The user sees this result as an interactive view" in shown
+    assert unknown.startswith("Summary.\nIf an interactive view of this result is shown")
+    assert unknown.endswith("Model JSON: {}")  # the summary stays first, the JSON last

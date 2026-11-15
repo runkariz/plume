@@ -17,14 +17,14 @@ DNS-rebinding protection (allowed hosts from `PLUME_MCP_ALLOWED_HOSTS`). Every r
 | `list_triggers` / `get_trigger` | `api[, key], version?` | trigger events / webhook topics; `present: false` when the package has none |
 | `get_environments` | `api, version?` | environments, base URLs, versioning and the variables schema, verbatim |
 | `get_vendor_mcp` | `api, version?` | the vendor's own MCP server(s) and tools when the package lists them; `present: false` otherwise |
-| `start_set_session` / `get_set_context` / `get_set_session` | `apis, concepts` / `set_session_id` | a model set: pinned builds, one model session per member, relation candidates. **Ask the user about every relation** |
-| `submit_model_set` / `get_model_set` / `revise_model_set` | `set_session_id, draft, based_on?` / `set_id` | the set (members + relations, validated); `get_model_set` renders the view |
+| `start_set_session` / `get_set_context` / `get_set_session` | `apis, concepts, aliases?` / `set_session` | a model set: pinned builds, one model session per member, relation candidates. **Ask the user about every relation** |
+| `submit_model_set` / `get_model_set` / `revise_model_set` | `set_session, draft, based_on?` / `set_id` | the set (members + relations, validated); `get_model_set` renders the view |
 | `list_model_sets` / `list_my_model_sets` | `api?` / `owner_keys` | official sets / the user's own |
 | `suggest_related` | `apis, concept, limit?, offset?` | related concepts with relation candidates (documented evidence only, cited per API) and the designs it supports; `aliases` for differently named concepts at the same position. The user decides |
 | `start_model_session` | `apis, concept` | a session pinned to the current builds (2..6 APIs) |
-| `get_model_context` / `get_model_evidence` | `session_id[, api, doc_ids?, cursor?]` | the evidence index; the fields, paged |
-| `submit_model_draft` | `session_id, draft, based_on?` | validated → stored **unlisted** (`share_url`, `owner_key` once for a new model, `version`) or refused with issue codes |
-| `get_model_session` | `session_id` | `open` / `submitted` + `snapshot_id` |
+| `get_model_context` / `get_model_evidence` | `model_session[, api, doc_ids?, cursor?]` | the evidence index; the fields, paged |
+| `submit_model_draft` | `model_session, draft, based_on?` | validated → stored **unlisted** (`share_url`, `owner_key` once for a new model, `version`) or refused with issue codes |
+| `get_model_session` | `model_session` | `open` / `submitted` + `snapshot_id` |
 | `revise_model` | `snapshot_id` | a new session on the current builds with the model as `starting_draft` |
 | `get_model` | `snapshot_id` | a model (official or unlisted) with `lineage`, `shareUrl`, `revisePrompt` |
 | `list_models` | `api?` | official models (latest version of each), newest first |
@@ -54,3 +54,7 @@ Both servers serve `ui://plume/model-view` (`text/html;profile=mcp-app`). `get_m
 `get_generation`) point at it with `_meta.ui.resourceUri`, so Claude web/Desktop show the model
 inline; text-only hosts get a summary and the link. Write tools are `visibility: ["model"]`.
 See [mcp-apps.md](mcp-apps.md).
+
+**Session parameters** are `model_session` and `set_session`. The old names `session_id` and
+`set_session_id` are still accepted. They were renamed because Claude's desktop bridge (through
+`mcp-remote`) delivered tool arguments named `session_id` empty. Results carry both keys.

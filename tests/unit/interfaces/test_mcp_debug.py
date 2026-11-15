@@ -1,7 +1,5 @@
 """The opt-in MCP debug log: methods and the Apps negotiation, never arguments or tokens."""
 
-import logging
-
 import pytest
 from fastapi.testclient import TestClient
 
@@ -26,7 +24,7 @@ def test_describe_logs_safe_fields_only() -> None:
     assert describe(plain).endswith("ui_extension=False")
     call = {"method": "tools/call", "params": {"name": "get_model",
             "arguments": {"snapshot_id": "u-secret"}}}  # fmt: skip
-    assert describe(call) == "tools/call get_model"
+    assert describe(call) == "tools/call get_model args=[snapshot_id]"  # names, never values
     assert "u-secret" not in describe(call)
     per_request = {"method": "tools/list", "params": {"_meta": {
         "io.modelcontextprotocol/clientCapabilities": {"extensions": UI}}}}  # fmt: skip
@@ -40,21 +38,35 @@ def test_describe_logs_safe_fields_only() -> None:
     assert describe({"id": 1, "result": {}}) == "response"
 
 
-def test_debug_log_is_opt_in_and_requests_still_work(caplog: pytest.LogCaptureFixture) -> None:
+def test_enabled_log_reaches_stderr_without_root_config(capfd: pytest.CaptureFixture[str]) -> None:
+    from plume.bootstrap.mcp_debug import enable, logger  # noqa: PLC0415
+
+    enable()
+    try:
+        logger.info("mcp /mcp ping")
+        assert "plume.mcp.debug mcp /mcp ping" in capfd.readouterr().err
+    finally:
+        logger.handlers.clear()
+        logger.propagate = True
+
+
+def test_debug_log_is_opt_in_and_requests_still_work(capfd: pytest.CaptureFixture[str]) -> None:
+    from plume.bootstrap.mcp_debug import logger  # noqa: PLC0415
+
     headers = {"Accept": "application/json, text/event-stream"}
     body = {"jsonrpc": "2.0", "id": 1, "method": "ping"}
-    for debug, expected in ((False, []), (True, ["mcp /mcp ping"])):
-        caplog.clear()
-        settings = Settings(embedder="hash", mcp_debug=debug, reader_rate_limit_per_minute=0)
-        with (
-            caplog.at_level(logging.INFO, logger="plume.mcp.debug"),
-            TestClient(
+    try:
+        for debug in (False, True):
+            capfd.readouterr()
+            settings = Settings(embedder="hash", mcp_debug=debug, reader_rate_limit_per_minute=0)
+            with TestClient(
                 mcp_app(Container(settings=settings)), base_url="http://127.0.0.1:18481"
-            ) as client,
-        ):
-            r = client.post("/mcp", json=body, headers=headers)
-        assert r.status_code == 200
-        assert '"result"' in r.text
-        assert [rec.getMessage() for rec in caplog.records if rec.name == "plume.mcp.debug"] == (
-            expected
-        )
+            ) as client:
+                r = client.post("/mcp", json=body, headers=headers)
+            assert r.status_code == 200
+            assert '"result"' in r.text
+            logged = "plume.mcp.debug mcp /mcp ping" in capfd.readouterr().err
+            assert logged is debug
+    finally:
+        logger.handlers.clear()
+        logger.propagate = True

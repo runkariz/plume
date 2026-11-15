@@ -11,9 +11,9 @@ Claude.
 suggest_concepts(apis, q?, only?, require?, limit?, offset?)
                                     deterministic: concepts, coverage per API, a factual reason
 start_model_session(apis, concept)  pins the current build of each API
-get_model_context(session_id)       index of the evidence, the draft format and the rules
-get_model_evidence(session_id, api) the fields with descriptions, paged (next_cursor)
-submit_model_draft(session_id, d[, based_on])  validated -> snapshot | refused with codes
+get_model_context(model_session)       index of the evidence, the draft format and the rules
+get_model_evidence(model_session, api) the fields with descriptions, paged (next_cursor)
+submit_model_draft(model_session, d[, based_on])  validated -> snapshot | refused with codes
 revise_model(snapshot_id)           a session on the current builds, the model as starting draft
 get_model(snapshot_id)              the stored model with its versions and link
 ```

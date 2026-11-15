@@ -55,7 +55,7 @@ A model set is several canonical models (members) with relations between them. S
    API documents it (sources.<api>: {as, paths, fetch, evidence}), from the candidate's evidence.
 4. Aliases (different names at the same documented position, e.g. Shopify variant / WooCommerce
    variation) are offers: include one under "aliases" only if the user accepts it.
-5. submit_model_set(set_session_id, draft). Refusals come back with codes; fix and resubmit.
+5. submit_model_set(set_session, draft). Refusals come back with codes; fix and resubmit.
 """
 
 SET_DRAFT_FORMAT: dict[str, Any] = {
@@ -222,6 +222,7 @@ class ModelSets:
             members.append(
                 {
                     "concept": concept,
+                    "model_session": member_session,
                     "session_id": member_session,
                     "apis": ctx["apis"],
                     "reusable_models": [
@@ -239,6 +240,7 @@ class ModelSets:
         relevant = [c for c in candidates if c.parent in keys and c.child in keys]
         alias_list = [a for a in aliases if a.parent in keys]
         return {
+            "set_session": s.session_id,
             "set_session_id": s.session_id,
             "inputs": [{"api": i.api, "build": i.build} for i in s.inputs],
             "accepted_aliases": s.aliases_json(),
@@ -288,6 +290,7 @@ class ModelSets:
         done = self._sets.by_session(session_id)
         latest = done[0] if done else None
         return {
+            "set_session": s.session_id,
             "set_session_id": s.session_id,
             "status": "submitted" if latest else "open",
             "set_id": latest.set_id if latest else None,
@@ -667,6 +670,7 @@ class ModelSets:
             snap = self._models.get_snapshot(m.model_id)
             current[m.concept] = bool(snap and {(i.api, i.build) for i in snap.inputs} == pins)
         return {
+            "set_session": session.session_id,
             "set_session_id": session.session_id,
             "based_on": base.set_id,
             "member_sessions": dict(session.member_sessions),
@@ -674,7 +678,7 @@ class ModelSets:
             "members_current": current,
             "next": "Members pinned to older builds (members_current false) must be revised "
             "(revise_model, then submit in this set session's member session). Ask the user "
-            "about any relation change, then submit_model_set(set_session_id, draft, "
+            "about any relation change, then submit_model_set(set_session, draft, "
             f'based_on="{set_id}").',
         }
 
