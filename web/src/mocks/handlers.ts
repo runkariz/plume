@@ -610,7 +610,19 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
       return HttpResponse.json({
         setSessionId: id,
         inputs: body.apis.map((api) => ({ api, build: `b-${api}` })),
-        memberSessions: Object.fromEntries(body.concepts.map((c) => [c, `s-${id}-${c}`])),
+        memberSessions: Object.fromEntries(
+          body.concepts.map((c) => {
+            // a member's own model session: a model draft pasted there is stored like any other
+            const member = `s-${id}-${c}`;
+            modelSessions.set(member, {
+              apis: body.apis,
+              concept: c,
+              basedOn: null,
+              snapshotId: null,
+            });
+            return [c, member];
+          }),
+        ),
         contextUrl: `/v1/model-sets/sessions/${id}/context`,
         claudePrompt: `Use the Plume MCP: get_set_context("${id}"), write or reuse a model for each of ${body.concepts.join(', ')}, ask me how each relation should be designed, then submit_model_set("${id}", draft).${
           body.aliases?.length
@@ -646,13 +658,48 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
       });
     }),
     // a stand-in for Claude's submit_model_set (tests call it from the page to finish a session)
-    http.post(`${base}/v1/model-sets/sessions/:id/draft`, ({ params, request }) => {
+    http.post(`${base}/v1/model-sets/sessions/:id/draft`, async ({ params, request }) => {
       const x = setSessions.get(String(params.id));
       if (!x)
         return HttpResponse.json(
           { error: 'not_found', message: 'No such session' },
           { status: 404 },
         );
+      // Refused like the server does: `refuse: "relation"` (a relation that does not validate) or a bad `members`
+      const draft = (await request.json().catch(() => ({}))) as {
+        refuse?: unknown;
+        members?: unknown;
+      };
+      if (
+        draft.refuse === 'relation' ||
+        (draft.members !== undefined && typeof draft.members !== 'object')
+      ) {
+        const issues = [
+          draft.refuse === 'relation'
+            ? {
+                code: 'RELATION_INVALID',
+                field: 'order-items',
+                api: null,
+                message: 'Order has no field "items" that can hold Product',
+              }
+            : {
+                code: 'INVALID_FORMAT',
+                field: 'members',
+                api: null,
+                message: 'members must map each concept to a stored model id',
+              },
+        ];
+        return HttpResponse.json(
+          {
+            error: 'draft_refused',
+            message: `${issues.length} issue(s): ${issues[0]?.code}`,
+            detail: 'refused',
+            accepted: false,
+            issues,
+          },
+          { status: 422 },
+        );
+      }
       const maintainer = isMaintainer(request);
       const id = maintainer ? `set_mock${sets.size + 1}` : `u-set-mock${sets.size + 1}`;
       const s = newSet(id, x.concepts, x.apis, maintainer ? 'unreleased' : 'unlisted', {

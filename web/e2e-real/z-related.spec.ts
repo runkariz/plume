@@ -87,6 +87,50 @@ for (const theme of THEMES) {
   });
 }
 
+test('a pasted draft the real server refuses is shown with its issues, and nothing is stored', async ({
+  page,
+}) => {
+  await page.goto(RELATED);
+  await expect(bar(page)).toBeVisible();
+  await page.getByRole('checkbox', { name: 'Variant', exact: true }).click();
+  await bar(page).getByRole('button', { name: 'Create with Claude' }).click();
+  const panel = page.getByRole('region', { name: 'Create the set with Claude' });
+  await expect(panel).toBeVisible();
+  // a model draft with a quote that is in no document
+  await panel.getByLabel('This draft is').selectOption('Variant');
+  await panel.getByLabel('Draft JSON').fill(
+    JSON.stringify({
+      name: 'Variant',
+      description: 'x',
+      fields: [
+        {
+          name: 'id',
+          type: 'string',
+          description: 'x',
+          sources: {
+            shopify: {
+              paths: [{ path: 'nope' }],
+              evidence: [{ doc_id: 'model:nope', quote: 'nothing' }],
+            },
+          },
+        },
+      ],
+    }),
+  );
+  await panel.getByRole('button', { name: 'Submit draft' }).click();
+  await expect(panel.getByRole('alert')).toContainText('The draft was refused, nothing was stored');
+  await expect(panel.getByRole('list', { name: 'Stored member models' })).toHaveCount(0);
+  // a set draft that names no stored model
+  await panel.getByLabel('This draft is').selectOption('set');
+  await panel
+    .getByLabel('Draft JSON')
+    .fill('{"name":"x","members":{"Product":"m-nope","Variant":"m-nope2"},"relations":[]}');
+  await panel.getByRole('button', { name: 'Submit draft' }).click();
+  await expect(panel.getByRole('alert')).toBeVisible();
+  await expect(page).toHaveURL(/\/models\/related/);
+  await shot(page, 'w17-real-set-paste-refused', 'light');
+});
+
 test('an accepted alias reaches the server in the shape it takes, and comes back in the prompt', async ({
   request,
 }) => {

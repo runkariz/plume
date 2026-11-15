@@ -154,6 +154,20 @@ export interface PlumeApi {
   ): Promise<RelatedConcepts>;
   /** For Claude: one model session per member (anyone; the set is stored unlisted without the token). */
   startSetSession(req: SetSessionRequest, signal?: AbortSignal): Promise<SetSessionResponse>;
+  /**
+   * Open to everyone, like a model draft: unlisted without the token (a new lineage returns an `ownerKey`, shown
+   * once), unreleased with it. A refused draft rejects with an ApiError carrying `issues`.
+   */
+  submitSetDraft(
+    sessionId: string,
+    draft: unknown,
+    signal?: AbortSignal,
+  ): Promise<{
+    created: boolean;
+    visibility?: ModelVisibility;
+    ownerKey: string | null;
+    set: ModelSet;
+  }>;
   /** Public poll: has the set been stored for this session yet? */
   getSetSession(id: string, signal?: AbortSignal): Promise<SetSessionStatus>;
   /** Maintainer token: Plume writes the members and proposes the relations (undecided). 202 with the job. */
@@ -500,6 +514,13 @@ export function createApiClient(
         concepts: Array.isArray(r.concepts) ? (r.concepts as string[]) : [],
       };
     },
+    submitSetDraft: (sessionId, body, signal) =>
+      call<{
+        created: boolean;
+        visibility?: ModelVisibility;
+        ownerKey: string | null;
+        set: ModelSet;
+      }>(`/v1/model-sets/sessions/${enc(sessionId)}/draft`, { method: 'POST', body, signal }),
     generateModelSet: (req, signal) =>
       call<GenerateJobResponse>('/v1/model-sets/generate', { method: 'POST', body: req, signal }),
     saveSetRelations: (id, relations, signal) =>

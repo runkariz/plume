@@ -28,6 +28,10 @@ for (const theme of THEMES) {
       await expect(
         page.getByRole('list', { name: 'Related concepts' }).getByRole('checkbox'),
       ).toHaveCount(4);
+      // the API chips under the title sit in one row
+      const chips = page.getByRole('list', { name: 'Selected APIs' }).getByRole('listitem');
+      const [c1, c2] = [await chips.nth(0).boundingBox(), await chips.nth(1).boundingBox()];
+      expect(Math.abs((c1?.y ?? 0) - (c2?.y ?? 99))).toBeLessThan(4);
       await page.getByText('Evidence in the docs (3)').click(); // Variant: nested, sub-resource, id field
       await expect(
         page
@@ -78,6 +82,39 @@ for (const theme of THEMES) {
         page.getByRole('heading', { level: 1, name: /Product \+ Variant \+ Image/ }),
       ).toBeVisible();
       await expect(page.getByText('Unlisted: anyone with the link').first()).toBeVisible();
+    });
+
+    test('paste a draft yourself: a refused one shows its issues, a member model is stored, then the set opens', async ({
+      page,
+    }) => {
+      await page.goto(RELATED);
+      await expect(bar(page)).toBeVisible();
+      await page.getByRole('checkbox', { name: 'Image', exact: true }).click();
+      await bar(page).getByRole('button', { name: 'Create with Claude' }).click();
+      const panel = page.getByRole('region', { name: 'Create the set with Claude' });
+      await expect(panel).toBeVisible();
+      const box = panel.getByLabel('Draft JSON');
+      // a refused set draft: the issues, nothing stored
+      await box.fill('{"refuse":"relation"}');
+      await panel.getByRole('button', { name: 'Submit draft' }).click();
+      await expect(panel.getByRole('alert')).toContainText('RELATION_INVALID');
+      await settle(page);
+      await expectNoSeriousA11y(page);
+      await shot(page, 'w17-set-paste-refused', theme);
+      // a member's model first
+      await panel.getByLabel('This draft is').selectOption('Image');
+      await box.fill('{"name":"Image","fields":[{"name":"url"}]}');
+      await panel.getByRole('button', { name: 'Submit draft' }).click();
+      await expect(panel.getByRole('list', { name: 'Stored member models' })).toContainText(
+        'Image',
+      );
+      // then the set that names it
+      await box.fill(
+        '{"name":"Product + Image","members":{"Product":"u-1","Image":"u-2"},"relations":[]}',
+      );
+      await panel.getByRole('button', { name: 'Submit draft' }).click();
+      await expect(page).toHaveURL(/\/model-sets\/u-set-mock/);
+      await expect(page.getByText('Your model set is saved, and unlisted')).toBeVisible();
     });
 
     test('a maintainer generates the set on the server and lands on the unreleased set to decide', async ({
