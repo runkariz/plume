@@ -148,9 +148,16 @@ class Container:
                 location=s.vertex_embed_location,
             )
         if kind == "vertex":
-            api_key = s.vertex_key() or ""
-        else:
-            api_key = s.gemini_api_key.get_secret_value() if s.gemini_api_key is not None else ""
+            return GeminiEmbedder(
+                api_key=s.vertex_key() or "",
+                backend="vertex",
+                model=s.embed_model,
+                dims=s.embed_dims,
+                batch_size=s.embed_batch_size,
+                project=s.vertex_project,  # set: the project path at the embedding location
+                location=s.vertex_embed_location,
+            )
+        api_key = s.gemini_api_key.get_secret_value() if s.gemini_api_key is not None else ""
         return GeminiEmbedder(
             api_key=api_key,
             backend=kind,

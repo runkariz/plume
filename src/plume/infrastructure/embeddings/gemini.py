@@ -4,8 +4,10 @@
 - ``vertex``: ``POST aiplatform.googleapis.com/v1/publishers/google/models/<model>:predict``
 
 Both take the key in the ``x-goog-api-key`` header (never in the URL, so it can't reach logs).
-Vertex can instead use Application Default Credentials (Workload Identity): a Bearer token on
-the project URL ``{location}-aiplatform.googleapis.com/v1/projects/<p>/locations/<l>/...``.
+With a project (PLUME_VERTEX_PROJECT), Vertex is called on the project URL
+``{location}-aiplatform.googleapis.com/v1/projects/<p>/locations/<l>/...`` (``global`` ->
+``aiplatform.googleapis.com``), with the key or, without one, Application Default Credentials
+(Workload Identity) as a Bearer token.
 Vectors are requested at ``dims`` and re-normalised to unit length (reduced-size Gemini
 embeddings are not normalised). 429 and 5xx are retried with exponential backoff.
 """
@@ -59,12 +61,14 @@ class GeminiEmbedder:
         sleep: Callable[[float], None] = time.sleep,
         token_source: TokenSource | None = None,
         project: str | None = None,
-        location: str = "us-central1",
+        location: str = "global",
     ) -> None:
         if not api_key and token_source is None:
             raise EmbeddingError("an API key (or Vertex ADC) is required for the Gemini embedder")
         if token_source is not None and not api_key and (backend != "vertex" or not project):
             raise EmbeddingError("Vertex ADC needs PLUME_VERTEX_PROJECT (and backend vertex)")
+        if project and backend != "vertex":
+            raise EmbeddingError("a project applies to the vertex backend only")
         self._key = api_key
         self._tokens = None if api_key else token_source
         self._project = project
@@ -121,7 +125,9 @@ class GeminiEmbedder:
         raise EmbeddingError("retries exhausted")  # pragma: no cover
 
     def _vertex_url(self) -> str:
-        if self._tokens is None:  # a key: express mode, as before
+        """With a project (key or ADC): the project path at the embedding location, so the
+        region can be pinned (e.g. europe-west3). Without one (a key only): express mode."""
+        if not self._project:
             return VERTEX_URL.format(model=self._model)
         return VERTEX_PROJECT_URL.format(
             host=vertex_host(self._location),

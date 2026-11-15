@@ -137,3 +137,52 @@ def test_writer_uses_adc_without_a_key_file_and_a_key_file_otherwise(tmp_path: P
 )
 def test_settings_choose_adc(env: dict[str, Any], adc: bool) -> None:
     assert Settings(**env).vertex_uses_adc() is adc
+
+
+@pytest.mark.parametrize(
+    ("project", "location", "url"),
+    [
+        (None, "europe-west3",  # no project: the express URL, location ignored
+         "https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-embedding-001:predict"),
+        ("proj", "europe-west3",
+         "https://europe-west3-aiplatform.googleapis.com/v1/projects/proj/locations/europe-west3/"
+         "publishers/google/models/gemini-embedding-001:predict"),
+        ("proj", "global",
+         "https://aiplatform.googleapis.com/v1/projects/proj/locations/global/"
+         "publishers/google/models/gemini-embedding-001:predict"),
+    ],
+)  # fmt: skip
+def test_a_key_with_a_project_pins_the_embedding_location(
+    project: str | None, location: str, url: str
+) -> None:
+    seen: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"predictions": [{"embeddings": {"values": [1.0, 0.0]}}]})
+
+    embedder = GeminiEmbedder(
+        api_key="k-secret",
+        dims=2,
+        client=httpx.Client(transport=httpx.MockTransport(handle)),
+        project=project,
+        location=location,
+    )
+    embedder.embed_query("hi")
+    assert str(seen[0].url) == url
+    assert seen[0].headers["x-goog-api-key"] == "k-secret"
+    assert "authorization" not in seen[0].headers
+
+
+def test_the_container_passes_project_and_embed_location_in_key_mode() -> None:
+    from plume.bootstrap.container import Container  # noqa: PLC0415
+
+    settings = Settings(
+        embedder="vertex",
+        vertex_api_key="k-secret",
+        vertex_project="proj",
+        vertex_embed_location="europe-west4",
+    )
+    c = Container(settings=settings)
+    url = c.embedder._vertex_url()  # type: ignore[attr-defined]
+    assert url.startswith("https://europe-west4-aiplatform.googleapis.com/v1/projects/proj/")
