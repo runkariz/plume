@@ -5,10 +5,11 @@ import {
   type DraftIssue,
   type ModelJobEvent,
   type SetSessionResponse,
+  type CollectionRef,
 } from '@/api/types';
 import { useIsMaintainer } from '@/app/authStore';
 import { Banner, Button, Card, Chip } from '@/components';
-import { saveOwnerKey } from '@/lib/ownerKeys';
+import { readCollectionId, rememberCollection } from '@/lib/collection';
 import { Issues } from '@/pages/models/GenerateSession';
 import { BeatLine, JobClock, type Beat } from '@/pages/models/JobClock';
 
@@ -29,7 +30,7 @@ export function SetSessionPanel({
 }: {
   session: SetSessionResponse;
   concepts: string[];
-  onOpen: (setId: string, extra?: { ownerKey?: string }) => void;
+  onOpen: (setId: string, extra?: { collection?: CollectionRef | null }) => void;
   onCancel: () => void;
 }) {
   const client = useApiClient();
@@ -81,15 +82,22 @@ export function SetSessionPanel({
     submitting.current = true;
     try {
       if (kind === 'set') {
-        const { set, ownerKey } = await client.submitSetDraft(id, parsed);
-        // a new lineage of someone without a token: the key lists "Your model sets" in this browser
-        if (ownerKey) saveOwnerKey(ownerKey);
-        onOpen(set.id, ownerKey ? { ownerKey } : undefined);
+        const { set, collection } = await client.submitSetDraft(id, parsed, undefined, {
+          collection: readCollectionId(),
+        });
+        rememberCollection(collection);
+        onOpen(set.id, collection ? { collection } : undefined);
       } else {
         const memberSession = session.memberSessions[kind];
         if (!memberSession) throw new Error(`There is no session for ${kind}.`);
-        const { model, ownerKey } = await client.submitModelDraft(memberSession, parsed);
-        if (ownerKey) saveOwnerKey(ownerKey);
+        // each member joins the collection the first one started (remembered here), so the set and its models are one list
+        const { model, collection } = await client.submitModelDraft(
+          memberSession,
+          parsed,
+          undefined,
+          { collection: readCollectionId() },
+        );
+        rememberCollection(collection);
         setStored((s) => ({ ...s, [kind]: model.id }));
         setDraft('');
         setKind('set');

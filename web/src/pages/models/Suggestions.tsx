@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
+import { collectionArrival } from '@/lib/collection';
 import { useIsMaintainer, useServerGeneration } from '@/app/authStore';
 import { GenerateSession } from './GenerateSession';
 import { ModelJobProgress } from './ModelJobProgress';
@@ -23,6 +24,7 @@ import {
   isGenerateJob,
   type SuggestQuery,
   type SuggestResponse,
+  type CollectionRef,
 } from '@/api/types';
 import {
   ApiAvatar,
@@ -233,11 +235,8 @@ export function Suggestions() {
   const panelRef = useRef<HTMLDivElement>(null);
   const ctrl = useRef<AbortController | null>(null);
   const openModel = useCallback(
-    (id: string, extra?: { ownerKey?: string }) =>
-      navigate(
-        `/models/${id}`,
-        extra?.ownerKey ? { state: { ownerKey: extra.ownerKey } } : undefined,
-      ),
+    (id: string, extra?: { collection?: CollectionRef | null }) =>
+      navigate(`/models/${id}`, collectionArrival(extra?.collection)),
     [navigate],
   );
   // "Regenerate" on a stale model lands here with ?regenerate=<concept>: open that concept's session once

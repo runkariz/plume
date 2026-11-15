@@ -7,10 +7,10 @@ import { useIsMaintainer } from '@/app/authStore';
 import { Card, Chip } from '@/components';
 import { formatDate } from '@/lib/format';
 import { apiLabel } from '@/lib/names';
-import { readOwnerKeys } from '@/lib/ownerKeys';
 import { StaleChip } from './StaleChip';
 
-function Rows({ items }: { items: ModelListItem[] }) {
+/** The rows of a list of models (also used by the My models pages). */
+export function ModelRows({ items }: { items: ModelListItem[] }) {
   return (
     <ul>
       {items.map((m) => (
@@ -64,7 +64,7 @@ export function ModelList({
   return (
     <Card className="pad model-list" role="region" aria-label={title}>
       <h2 className="h2-sm">{title}</h2>
-      <Rows items={state.data.items} />
+      <ModelRows items={state.data.items} />
     </Card>
   );
 }
@@ -73,31 +73,4 @@ export function ModelList({
 export function UnreleasedModels() {
   const maintainer = useIsMaintainer();
   return maintainer ? <ModelList title="Waiting for review" visibility="unreleased" /> : null;
-}
-
-/**
- * "Your models": the unlisted models created with the owner keys this browser holds (the server lists them with
- * POST so the keys never reach a URL). Nothing is shown without keys or models.
- */
-export function MyModels() {
-  const client = useApiClient();
-  const load = useCallback(
-    async (signal: AbortSignal) => {
-      const keys = readOwnerKeys();
-      return keys.length ? client.listMyModels(keys, signal) : { items: [] };
-    },
-    [client],
-  );
-  const { state } = useAsync(load);
-  if (state.status !== 'ready' || state.data.items.length === 0) return null;
-  return (
-    <Card className="pad model-list" role="region" aria-label="Your models">
-      <h2 className="h2-sm">Your models</h2>
-      <p className="muted small">
-        Listed by the owner keys this browser holds: made here, or added by key. Only people with a
-        model's link can open it.
-      </p>
-      <Rows items={state.data.items} />
-    </Card>
-  );
 }

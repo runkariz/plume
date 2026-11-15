@@ -9,6 +9,7 @@ import { NotFound } from '@/pages/NotFound';
 import { TryItPage } from '@/pages/TryItPage';
 import { PickApps } from '@/pages/models/PickApps';
 import { Suggestions } from '@/pages/models/Suggestions';
+import { CollectionPage } from '@/pages/mine/CollectionPage';
 import { RelatedConcepts } from '@/pages/sets/RelatedConcepts';
 import { BuildStep } from '@/pages/maintainer/BuildStep';
 import { RequireMaintainer } from '@/pages/maintainer/Guard';
@@ -47,6 +48,7 @@ export const routes: RouteObject[] = [
           { path: 'models', element: <PickApps /> },
           { path: 'models/suggest', element: <Suggestions /> },
           { path: 'models/related', element: <RelatedConcepts /> },
+          { path: 'mine/:collectionId', element: <CollectionPage /> },
           {
             path: 'models/:snapshotId',
             // React Flow is large: load it only when a model is opened

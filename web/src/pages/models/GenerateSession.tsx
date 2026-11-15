@@ -6,10 +6,11 @@ import {
   type Concept,
   type DraftIssue,
   type GenerateResponse,
+  type CollectionRef,
 } from '@/api/types';
 import { useIsMaintainer } from '@/app/authStore';
 import { Button, Card, Chip } from '@/components';
-import { saveOwnerKey } from '@/lib/ownerKeys';
+import { readCollectionId, rememberCollection } from '@/lib/collection';
 import { shortBuild } from '@/lib/format';
 import { EvidencePack } from './EvidencePack';
 
@@ -52,7 +53,7 @@ export function GenerateSession({
   concept: Concept;
   apis: ApiRef[];
   session: GenerateResponse;
-  onOpen: (snapshotId: string, extra?: { ownerKey?: string }) => void;
+  onOpen: (snapshotId: string, extra?: { collection?: CollectionRef | null }) => void;
   onCancel: () => void;
 }) {
   const client = useApiClient();
@@ -136,10 +137,15 @@ export function GenerateSession({
     setBusy(true);
     submitting.current = true;
     try {
-      const { model, ownerKey } = await client.submitModelDraft(session.sessionId, parsed);
-      // a new lineage of someone without a token: the key lists "Your models" in this browser
-      if (ownerKey) saveOwnerKey(ownerKey);
-      onOpen(model.id, ownerKey ? { ownerKey } : undefined);
+      // someone without a token: the model joins the My models collection this browser holds, or starts one
+      const { model, collection } = await client.submitModelDraft(
+        session.sessionId,
+        parsed,
+        undefined,
+        { collection: readCollectionId() },
+      );
+      rememberCollection(collection);
+      onOpen(model.id, collection ? { collection } : undefined);
     } catch (err) {
       submitting.current = false;
       if (err instanceof ApiError && err.issues?.length) setIssues(err.issues);

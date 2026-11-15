@@ -2,16 +2,16 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
-import { ApiError, type DraftIssue, type ModelSet } from '@/api/types';
+import { ApiError, type CollectionRef, type DraftIssue, type ModelSet } from '@/api/types';
 import { useIsMaintainer } from '@/app/authStore';
 import { Banner, Button, Card, Chip, Crumbs, ErrorState, LoadingState } from '@/components';
 import { docHref } from '@/lib/docHref';
 import { richText } from '@/lib/richText';
-import { saveOwnerKey } from '@/lib/ownerKeys';
+import { collectionArrival, readCollectionId, rememberCollection } from '@/lib/collection';
 import {
   LineageHistory,
   LineageLine,
-  OwnerKeyNotice,
+  CollectionNotice,
   ReviseCard,
   ShareCard,
   VisibilityChip,
@@ -75,11 +75,11 @@ function SetPage({
   const location = useLocation();
   const maintainer = useIsMaintainer();
 
-  // arriving after a save: the new version's notice and, for a new lineage, the owner key (shown once)
+  // arriving after a save: the new version's notice and, for a new collection, the My models link (shown once)
   const [arrival] = useState(
-    () => (location.state as { ownerKey?: string | null; saved?: boolean } | null) ?? null,
+    () => (location.state as { collection?: CollectionRef | null; saved?: boolean } | null) ?? null,
   );
-  const [keyOpen, setKeyOpen] = useState(Boolean(arrival?.ownerKey));
+  const [keyOpen, setKeyOpen] = useState(Boolean(arrival?.collection));
   useEffect(() => {
     if (arrival) navigate(location.pathname + location.search, { replace: true, state: null });
     // once, on arrival
@@ -129,9 +129,13 @@ function SetPage({
     setSaving(true);
     setSaveError(null);
     try {
-      const r = await client.saveSetRelations(set.id, edits);
-      if (r.ownerKey) saveOwnerKey(r.ownerKey);
-      navigate(`/model-sets/${r.set.id}`, { state: { ownerKey: r.ownerKey, saved: true } });
+      const r = await client.saveSetRelations(set.id, edits, undefined, {
+        collection: readCollectionId(),
+      });
+      rememberCollection(r.collection);
+      navigate(`/model-sets/${r.set.id}`, {
+        state: { saved: true, ...(collectionArrival(r.collection)?.state ?? {}) },
+      });
     } catch (e) {
       if (e instanceof ApiError)
         setSaveError({
@@ -222,9 +226,9 @@ function SetPage({
             {set.lineage ? ` (v${set.lineage.version} of ${set.lineage.versions})` : ''}.
           </Banner>
         ) : null}
-        {arrival?.ownerKey && keyOpen ? (
-          <OwnerKeyNotice
-            ownerKey={arrival.ownerKey}
+        {arrival?.collection && keyOpen ? (
+          <CollectionNotice
+            collection={arrival.collection}
             onClose={() => setKeyOpen(false)}
             what="model set"
           />

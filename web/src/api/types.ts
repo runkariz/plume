@@ -892,6 +892,29 @@ export interface RelationEdit {
   confirmed?: boolean;
 }
 
+// ---- "My models": a link per person (collections replace owner keys) ----
+
+/** What a save without a maintainer token answers instead of an owner key: the link of the person's collection. */
+export interface CollectionRef {
+  id: string;
+  /** "<web address>/mine/<id>", or just "/mine/<id>" when the server does not know the web's address. */
+  url: string;
+  /** True when the save started a new collection (none was sent, or the one sent is unknown: see `note`). */
+  created: boolean;
+  note?: string | null;
+}
+
+/** GET /v1/collections/{id}: the latest non-discarded version of each model and set in it, newest first. */
+export interface Collection {
+  id: string;
+  url: string;
+  /** Set when this link was merged into another: it then lists nothing. */
+  mergedInto: string | null;
+  count: number;
+  models: ModelListItem[];
+  sets: SetListItem[];
+}
+
 // ---- related concepts (POST /v1/models/suggest-related) and creating a set ----
 
 /** One place in an API's docs that connects two concepts. Deterministic: no LLM. */
