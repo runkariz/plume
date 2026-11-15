@@ -33,6 +33,24 @@ describe('Home', () => {
     expect(within(notion).getByText('Updating · 62%')).toBeInTheDocument();
   });
 
+  it('shows distinct model names when the server sends them (not the raw document count)', async () => {
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis`, async () => {
+        const { sampleApis } = await import('@/mocks/data');
+        const [first, ...rest] = sampleApis;
+        return HttpResponse.json({
+          items: [{ ...first, models: 1343, modelNames: 319, modelShapes: 717 }, ...rest],
+        });
+      }),
+    );
+    renderApp('/');
+    const card = (await screen.findByRole('link', { name: 'Shopify Admin REST' })).closest(
+      'article',
+    ) as HTMLElement;
+    expect(within(card).getByText('319')).toBeInTheDocument();
+    expect(within(card).queryByText('1343')).not.toBeInTheDocument();
+  });
+
   it('shows category chips with counts and filters by them', async () => {
     renderApp('/');
     await screen.findByRole('link', { name: 'Shopify Admin REST' });

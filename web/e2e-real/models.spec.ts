@@ -114,6 +114,10 @@ for (const theme of THEMES) {
       const prompt = (await panel.getByLabel('Prompt for Claude').textContent()) ?? '';
       const sessionId = /get_model_context\("(s-[0-9a-f]+)"\)/.exec(prompt)?.[1];
       expect(sessionId).toBeTruthy();
+      // the copy-ready connect line carries a placeholder, never a real token
+      const connect = panel.getByLabel('Command to add the maintainer connector');
+      await expect(connect).toContainText('/maintainer/mcp');
+      await expect(connect).not.toContainText(TOKEN);
       await expect(
         panel.getByRole('list', { name: 'Pinned builds' }).getByText(/^b-[0-9a-f]{12}$/),
       ).toHaveCount(2);

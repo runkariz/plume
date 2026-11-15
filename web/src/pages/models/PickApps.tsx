@@ -5,7 +5,7 @@ import { useAsync } from '@/api/useAsync';
 import type { ApiSummary } from '@/api/types';
 import { ApiAvatar, Button, EmptyState, ErrorState, LoadingState } from '@/components';
 import { CheckIcon } from '@/icons';
-import { categoryLabel } from '@/lib/format';
+import { categoryLabel, modelCount } from '@/lib/format';
 
 function PickCard({
   api,
@@ -36,7 +36,7 @@ function PickCard({
           <b>{api.endpoints}</b> endpoints
         </span>
         <span>
-          <b>{api.models}</b> models
+          <b>{modelCount(api)}</b> models
         </span>
         <span>
           <b>{api.guides}</b> guides

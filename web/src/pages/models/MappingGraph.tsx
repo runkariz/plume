@@ -141,7 +141,7 @@ export function MappingGraph({
         colorMode={theme}
         fitView
         fitViewOptions={{ padding: 0.06 }}
-        minZoom={0.3}
+        minZoom={0.1}
         maxZoom={1.6}
         nodesConnectable={false}
         nodesDraggable={false}

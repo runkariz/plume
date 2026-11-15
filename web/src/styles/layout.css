@@ -196,7 +196,7 @@
   min-width: 0;
 }
 .ep-path {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .kind-tag {
   font: 700 11px var(--font-mono);
@@ -1282,4 +1282,124 @@ th {
 }
 .session-actions {
   padding-bottom: 0;
+}
+
+/* ---- small screens (375 px): nothing may scroll sideways ---- */
+.try-cols > *,
+.cols > *,
+.two > *,
+.model-cols > *,
+.build > * {
+  min-width: 0;
+}
+.login {
+  width: min(420px, 100%);
+}
+@media (max-width: 640px) {
+  .site-header {
+    height: auto;
+  }
+  .site-header .wrap {
+    height: auto;
+    min-height: 64px;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    padding-block: 8px;
+  }
+  .brand {
+    font-size: 19px;
+  }
+  .site-nav {
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: flex-end;
+  }
+  .nav-link {
+    padding: 8px;
+  }
+  .nav-text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .hero {
+    padding: 36px 0 24px;
+  }
+  .lead {
+    font-size: 16px;
+  }
+  .h1-sm {
+    font-size: 30px;
+  }
+  .titlerow {
+    gap: 12px;
+  }
+  .title-left {
+    flex-wrap: wrap;
+  }
+  .tiles {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .qbox {
+    flex-wrap: wrap;
+    padding: 8px 12px;
+  }
+  .qbox .q {
+    flex-basis: 100%;
+  }
+  .params-input {
+    max-width: none;
+    border-left: 0;
+    padding-left: 0 !important;
+  }
+  .opts {
+    gap: 12px;
+  }
+  .legend {
+    flex-wrap: wrap;
+  }
+  .flow {
+    height: 560px;
+  }
+  .stepper .step span:not(.bar):not(.sr-only) {
+    display: none;
+  }
+  .stepper .step.on span:not(.bar):not(.sr-only) {
+    display: inline;
+  }
+  .step .bar {
+    margin: 0 8px;
+    min-width: 12px;
+  }
+  .selbar {
+    bottom: 12px;
+    padding: 12px;
+    gap: 10px;
+  }
+  .selbar-chips {
+    display: none;
+  }
+  .actions {
+    flex-wrap: wrap;
+  }
+  .drop {
+    flex-wrap: wrap;
+  }
+  pre.code {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .concept {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .concept .btn {
+    width: 100%;
+    justify-content: center;
+  }
 }

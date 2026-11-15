@@ -5,7 +5,7 @@ import { useAsync } from '@/api/useAsync';
 import type { ApiSummary } from '@/api/types';
 import { Card, Chip, EmptyState, ErrorState, Logo } from '@/components';
 import { SearchIcon } from '@/icons';
-import { categoryLabel, formatDate, formatScore } from '@/lib/format';
+import { categoryLabel, formatDate, formatScore, modelCount } from '@/lib/format';
 
 /** Matches the mockup: 0.89 is green, 0.88 is amber. */
 const RECALL_OK_MIN = 0.89;
@@ -46,7 +46,7 @@ export function ApiCard({ api }: { api: ApiSummary }) {
           <b>{api.endpoints}</b> endpoints
         </span>
         <span>
-          <b>{api.models}</b> models
+          <b>{modelCount(api)}</b> models
         </span>
         <span>
           <b>{api.guides}</b> guides

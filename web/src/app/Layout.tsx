@@ -35,7 +35,7 @@ export function Layout() {
               Models
             </NavLink>
             <a className="nav-link" href={GITHUB_URL} rel="noreferrer">
-              <GitHubIcon /> GitHub
+              <GitHubIcon /> <span className="nav-text">GitHub</span>
             </a>
             {maintainer ? (
               <>
@@ -44,7 +44,7 @@ export function Layout() {
                   <span className="avatar" aria-hidden>
                     {name.charAt(0).toUpperCase()}
                   </span>
-                  {name}
+                  <span className="nav-text">{name}</span>
                 </span>
                 <button
                   type="button"

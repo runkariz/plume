@@ -41,6 +41,24 @@ describe('Generate: waiting for a draft (P5 sessions)', () => {
     expect(screen.getByRole('button', { name: 'Generate Product' })).toBeDisabled();
   });
 
+  it('shows a copy-ready connect line for the maintainer connector, with a token placeholder', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    authStore.signIn('pl_secret_do_not_print', 'maintainer');
+    const panel = await openSession();
+    const line = within(panel).getByLabelText('Command to add the maintainer connector');
+    expect(line).toHaveTextContent(
+      'claude mcp add --transport http plume-maintainer http://127.0.0.1:18481/maintainer/mcp --header "Authorization: Bearer <your maintainer token>"',
+    );
+    expect(line.textContent).not.toContain('pl_secret_do_not_print');
+    await userEvent.click(within(panel).getByRole('button', { name: 'Copy command' }));
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith(expect.stringContaining('plume-maintainer')),
+    );
+    expect(writeText.mock.calls[0]?.[0]).not.toContain('pl_secret_do_not_print');
+    expect(await within(panel).findByText(/Command copied/)).toBeInTheDocument();
+  });
+
   it('copies the prompt', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });

@@ -15,7 +15,12 @@ export interface ApiSummary {
   category: string;
   summary: string;
   endpoints: number;
+  /** Model documents. Big APIs repeat the same schema many times: prefer modelNames to show a count. */
   models: number;
+  /** Distinct model names (bundle roots excluded). */
+  modelNames?: number;
+  /** Distinct model structures (the same schema counts once). */
+  modelShapes?: number;
   guides: number;
   docsAsOf: string | null; // ISO date; null while unpublished
   status: ApiStatus;
@@ -365,7 +370,10 @@ export interface GenerateResponse {
   inputs: { api: string; build: string }[];
   contextUrl: string;
   claudePrompt: string;
+  /** The public reader MCP. */
   mcpUrl: string;
+  /** The maintainer MCP the prompt needs (bearer token). */
+  maintainerMcpUrl?: string;
 }
 
 export interface ModelListItem {

@@ -24,7 +24,8 @@ import {
   Tile,
 } from '@/components';
 import { SearchIcon } from '@/icons';
-import { categoryLabel, formatDate, formatScore } from '@/lib/format';
+import { breakable } from '@/lib/breakable';
+import { categoryLabel, formatDate, formatScore, modelCount } from '@/lib/format';
 
 type Tab = 'all' | ItemKind;
 const TABS: { value: Tab; label: string }[] = [
@@ -57,15 +58,6 @@ function Browse({ api }: { api: ApiSummary }) {
     [client, api.id, tab, debounced, limit],
   );
   const { state, retry } = useAsync(load);
-
-  const totalOfKind =
-    tab === 'endpoint'
-      ? api.endpoints
-      : tab === 'model'
-        ? api.models
-        : tab === 'guide'
-          ? api.guides
-          : api.endpoints + api.models + api.guides;
 
   return (
     <Card className="pad browse">
@@ -101,7 +93,9 @@ function Browse({ api }: { api: ApiSummary }) {
                   <span className="kind-tag">{it.kind}</span>
                 )}
                 <div className="ep-main">
-                  <div className={it.path ? 'mono ep-path' : 'ep-path'}>{it.path ?? it.title}</div>
+                  <div className={it.path ? 'mono ep-path' : 'ep-path'}>
+                    {it.path ? breakable(it.path) : it.title}
+                  </div>
                   {it.path ? <div className="muted small">{it.title}</div> : null}
                 </div>
                 {it.resource ? <Chip>{it.resource}</Chip> : null}
@@ -111,7 +105,7 @@ function Browse({ api }: { api: ApiSummary }) {
           {!showAll && state.data.total > state.data.items.length ? (
             <div className="show-all">
               <button type="button" className="linkbtn" onClick={() => setShowAll(true)}>
-                Show all {debounced ? state.data.total : totalOfKind}{' '}
+                Show all {state.data.total}{' '}
                 {tab === 'all' ? 'items' : TABS.find((t) => t.value === tab)?.label.toLowerCase()}
               </button>
             </div>
@@ -170,7 +164,15 @@ function Detail({ api }: { api: ApiDetail }) {
       </div>
       <div className="tiles">
         <Tile value={api.endpoints} label="Endpoints" />
-        <Tile value={api.models} label="Models" />
+        <Tile
+          value={modelCount(api)}
+          label="Models"
+          hint={
+            api.modelNames !== undefined && api.models !== api.modelNames
+              ? `${api.models} model files${api.modelShapes ? ` · ${api.modelShapes} structures` : ''}`
+              : undefined
+          }
+        />
         <Tile value={api.guides} label="Guides" />
         <Tile value={api.chunks} label="Searchable chunks" />
       </div>
