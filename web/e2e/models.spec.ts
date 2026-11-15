@@ -25,7 +25,7 @@ for (const theme of THEMES) {
       await shot(page, 'w4-10-suggested-models', theme);
 
       // 3 generate → mapping view with the stored snapshot's nodes and edges
-      await page.getByRole('button', { name: 'Generate Inventory' }).click();
+      await page.getByRole('button', { name: 'Generate Inventory', exact: true }).click();
       await expect(page.getByRole('heading', { level: 1, name: 'Inventory' })).toBeVisible();
       await expect(page.locator('.react-flow__node')).toHaveCount(7 + 14 + 3); // canonical + api fields + groups
       await expect(page.locator('.react-flow__edge')).toHaveCount(14);
@@ -64,7 +64,8 @@ for (const theme of THEMES) {
       for (const name of [/Shopify Admin REST/, /WooCommerce REST/, /Mirakl Seller API/])
         await page.getByRole('checkbox', { name }).check({ force: true });
       await page.getByRole('button', { name: 'Suggest models →' }).click();
-      await page.getByRole('button', { name: 'Generate Order' }).click();
+      // signed in, "Generate" runs on the server: the Claude session is the explicit alternative
+      await page.getByRole('button', { name: 'Use Claude instead to generate Order' }).click();
 
       const panel = page.getByRole('region', { name: 'Generation session' });
       await expect(
@@ -98,6 +99,7 @@ for (const theme of THEMES) {
       await panel.getByRole('button', { name: 'Submit draft' }).click();
       await expect(page.getByRole('heading', { level: 1, name: 'Order' })).toBeVisible();
       await expect(page.getByText('Generated, unverified')).toBeVisible();
+      await expect(page.getByText('Unreleased: waiting for your review')).toBeVisible(); // a maintainer's draft
     });
   });
 }

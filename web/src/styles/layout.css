@@ -1834,3 +1834,8 @@ th[scope='row'] {
   gap: 6px;
   justify-items: center;
 }
+/* the link and the prompt are the point of these cards: give them the full width of the model page */
+.model-cols > .share-card,
+.model-cols > .revise-card {
+  grid-column: 1 / -1;
+}

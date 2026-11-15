@@ -73,7 +73,9 @@ describe('Generate on the server (signed-in maintainer)', () => {
     expect(
       screen.queryByRole('region', { name: 'Generation on the server' }),
     ).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /with Claude instead/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /^Use Claude instead to generate/ }),
+    ).not.toBeInTheDocument();
   });
 
   it('reduces the events: refused rounds keep their issues, accepted names the model', () => {

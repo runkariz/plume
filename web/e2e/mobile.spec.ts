@@ -52,6 +52,11 @@ const PAGES: { name: string; path: string; ready: (p: Page) => Promise<void> }[]
     ready: (p) => expect(p.getByLabel('Event JSON')).toBeVisible(),
   },
   {
+    name: 'unlisted-model',
+    path: '/models/u-3f9a0c71d2e84b5f9a6c1d7e8b2a4c60',
+    ready: (p) => expect(p.getByRole('region', { name: 'Share this model' })).toBeVisible(),
+  },
+  {
     name: 'model-view-big-table',
     path: '/models/m-38f24111baf1076f44c9cfa7',
     ready: (p) => expect(p.getByRole('table')).toBeVisible(),

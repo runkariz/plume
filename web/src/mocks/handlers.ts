@@ -419,9 +419,7 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
       const all = allModels();
       // the public list is the latest official version of each lineage; the token can ask for the others
       const vis = maintainer && want ? want : 'official';
-      let rows = all.filter((m) =>
-        vis === 'all' ? m.visibility !== 'discarded' : m.visibility === vis,
-      );
+      let rows = all.filter((m) => vis === 'all' || m.visibility === vis);
       if (vis === 'official')
         rows = rows.filter(
           (m) => !rows.some((o) => o.lineageId === m.lineageId && o.createdAt > m.createdAt),

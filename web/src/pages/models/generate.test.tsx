@@ -17,7 +17,7 @@ async function openSession() {
   const maintainer = authStore.getKey() !== null;
   await userEvent.click(
     await screen.findByRole('button', {
-      name: maintainer ? 'Generate Order with Claude instead' : 'Generate Order',
+      name: maintainer ? 'Use Claude instead to generate Order' : 'Generate Order',
     }),
   );
   return screen.findByRole('region', { name: 'Generation session' });
@@ -153,10 +153,34 @@ describe('Generate: waiting for a draft (P5 sessions)', () => {
     ).toBeInTheDocument();
     expect(within(panel).queryByText('Maintainers can paste a draft')).not.toBeInTheDocument();
     // without a token the reader connector is enough (no maintainer token needed)
-    expect(
-      within(panel).getByLabelText('Command to add the maintainer connector'),
-    ).toHaveTextContent('claude mcp add --transport http plume http://127.0.0.1:18481/mcp');
+    expect(within(panel).getByLabelText('Command to add the Plume connector')).toHaveTextContent(
+      'claude mcp add --transport http plume http://127.0.0.1:18481/mcp',
+    );
     expect(within(panel).getByText('unlisted', { selector: 'b' })).toBeInTheDocument();
+  });
+
+  it('shows the reader connector to a signed-out visitor even if the server sends the maintainer URL', async () => {
+    server.use(
+      http.post(`${TEST_API_BASE}/v1/models/generate`, () =>
+        HttpResponse.json({
+          sessionId: 's-x1',
+          status: 'awaiting_draft',
+          snapshotId: null,
+          inputs: [{ api: 'shopify', build: 'b-1' }],
+          contextUrl: '/v1/models/sessions/s-x1/context',
+          claudePrompt: 'Use the connector.',
+          mcpUrl: 'http://127.0.0.1:18481/mcp',
+          maintainerMcpUrl: 'http://127.0.0.1:18481/maintainer/mcp',
+        }),
+      ),
+    );
+    const panel = await openSession();
+    const line = within(panel).getByLabelText('Command to add the Plume connector');
+    expect(line).toHaveTextContent(
+      'claude mcp add --transport http plume http://127.0.0.1:18481/mcp',
+    );
+    expect(line.textContent).not.toContain('Bearer');
+    expect(within(panel).queryByText(/It needs a maintainer token/)).not.toBeInTheDocument();
   });
 
   it('says a signed-in maintainer gets an unreleased model', async () => {

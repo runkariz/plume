@@ -99,7 +99,10 @@ export function GenerateSession({
   }
 
   // A copy-ready connect line. The token is a placeholder: the web app never writes a real token into text.
-  const connectLine = session.maintainerMcpUrl
+  // Signed in: the maintainer connector (needs the token). Otherwise the reader connector, whatever the server
+  // sent: it returns the maintainer URL to everyone.
+  const maintainerConnector = maintainer && Boolean(session.maintainerMcpUrl);
+  const connectLine = maintainerConnector
     ? `claude mcp add --transport http plume-maintainer ${session.maintainerMcpUrl} --header "Authorization: Bearer <your maintainer token>"`
     : session.mcpUrl
       ? `claude mcp add --transport http plume ${session.mcpUrl}`
@@ -171,10 +174,17 @@ export function GenerateSession({
         <ol className="session-steps">
           <li>
             <b>Add the Plume connector to Claude</b> (once).
-            {session.maintainerMcpUrl ? ' It needs a maintainer token.' : null}
+            {maintainerConnector ? ' It needs a maintainer token.' : null}
             {connectLine ? (
               <>
-                <pre className="code prompt" aria-label="Command to add the maintainer connector">
+                <pre
+                  className="code prompt"
+                  aria-label={
+                    maintainerConnector
+                      ? 'Command to add the maintainer connector'
+                      : 'Command to add the Plume connector'
+                  }
+                >
                   {connectLine}
                 </pre>
                 <div className="row">

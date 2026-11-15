@@ -85,7 +85,7 @@ function ConceptRow({
             className="linkbtn small"
             disabled={disabled}
             onClick={onGenerateWithClaude}
-            aria-label={`Generate ${concept.name} with Claude instead`}
+            aria-label={`Use Claude instead to generate ${concept.name}`}
           >
             Use Claude instead
           </button>
