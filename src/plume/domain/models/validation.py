@@ -9,6 +9,12 @@ Issue codes (stable; clients key on them):
 - ``FIELD_NOT_FOUND``: a source path is not a documented field of that API.
 - ``ENDPOINT_NOT_FOUND``: the fetch endpoint is not documented in that API.
 - ``NO_SOURCES``: a canonical field maps no API at all.
+
+Warning codes (stored with the model, never a refusal):
+
+- ``WRITE_ONLY_SOURCE``: a mapping cites only write operations (a request body, or what a
+  POST/PUT/PATCH/DELETE echoes); a model or a GET response says what the API returns. When the
+  docs have no read source, it is the only evidence and stays.
 """
 
 import re
@@ -35,6 +41,7 @@ class Oracle:
     doc_text: Callable[[str, str], str | None]  # (api, doc_id) -> text
     field_exists: Callable[[str, str], bool]  # (api, path) -> documented?
     endpoint_exists: Callable[[str, str], bool]  # (api, "GET /path") -> documented?
+    write_only: Callable[[str, str], bool] = lambda _api, _doc: False  # (api, doc_id) -> a write?
 
 
 def _norm(text: str) -> str:
@@ -91,3 +98,25 @@ def validate(draft: ModelDraft, apis: frozenset[str], oracle: Oracle) -> list[Is
                     )
                 )
     return issues
+
+
+def warnings(draft: ModelDraft, apis: frozenset[str], oracle: Oracle) -> list[Issue]:
+    """Mappings that hold but are weak (see the warning codes above)."""
+    out: list[Issue] = []
+    for path, f in draft.walk():
+        for api, src in f.sources:
+            if api not in apis or not src.evidence:
+                continue
+            fetch_read = (src.fetch or "").strip().upper().startswith("GET ")
+            if not fetch_read and all(oracle.write_only(api, e.doc_id) for e in src.evidence):
+                cited = ", ".join(sorted({e.doc_id for e in src.evidence}))
+                out.append(
+                    Issue(
+                        "WRITE_ONLY_SOURCE",
+                        path,
+                        api,
+                        f"cites only write operations ({cited}); for what the API returns, "
+                        "prefer a model or a GET response field when the docs have one",
+                    )
+                )
+    return out

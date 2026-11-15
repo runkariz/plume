@@ -104,6 +104,17 @@ def model_text(model: dict[str, Any], full: bool = False) -> str:
     ]
     if model.get("stale"):
         lines.append("STALE: a pinned build is no longer the API's latest (see staleInputs).")
+    if model.get("supersededBy"):
+        lines.append(f"SUPERSEDED by {model['supersededBy']} (kept readable; not listed).")
+    warned = model.get("warnings") or []
+    if warned:
+        lines.append(
+            f"{len(warned)} warning(s): "
+            + "; ".join(f"{w['field']} ({w['api']}): {w['code']}" for w in warned[:10])
+            + (" …" if len(warned) > 10 else "")
+            + ". WRITE_ONLY_SOURCE: the mapping cites only a request/write; check whether the "
+            "docs have a read source."
+        )
     if link:
         lines.append(f"Link: {link}")
     if full:
@@ -318,11 +329,30 @@ def register_model_tools(  # noqa: PLR0915
 
         @server.tool(annotations=WRITE, structured_output=True, meta=UI_WRITE_META)
         async def release_model(
-            ctx: Context, snapshot_id: str
+            ctx: Context, snapshot_id: str, supersedes: list[str] | None = None
         ) -> Annotated[CallToolResult, dict[str, Any]]:
-            """Make an unreleased model official (listed publicly)."""
-            model = await run(lambda: model_json(models().release(snapshot_id)))
-            return ui_result(model, model_text(model), apps_shown(ctx))
+            """Make an unreleased model official (listed publicly). supersedes: ids of official
+            models of the same concept this one replaces (see list_supersedable_models; ASK
+            the maintainer, never decide): they stay readable by id but leave the lists."""
+            wanted = list(dict.fromkeys(supersedes or []))
+            model = await run(lambda: model_json(models().release(snapshot_id, wanted)))
+            model["supersedes"] = wanted
+            text = model_text(model)
+            if wanted:
+                text += f"\nSuperseded: {', '.join(wanted)}."
+            return ui_result(model, text, apps_shown(ctx))
+
+        @server.tool(annotations=READ, structured_output=True)
+        async def list_supersedable_models(snapshot_id: str) -> dict[str, Any]:
+            """Official models of the same concept (any API set) that releasing this model may
+            supersede; covered = their APIs are a subset of this model's. Offer them to the
+            maintainer before release_model(..., supersedes=[...])."""
+
+            def go() -> dict[str, Any]:
+                service = models()
+                return {"items": service.supersedable(service.snapshot(snapshot_id))}
+
+            return await run(go)
 
         @server.tool(annotations=WRITE, structured_output=True, meta=UI_WRITE_META)
         async def discard_model(

@@ -73,11 +73,34 @@ def _subtitle(summary: DocumentSummary | None, kind: DocumentKind) -> str:
     return kind.value
 
 
-def _snippet(text: str, query: str) -> str:
+_PARAM_HINTS = ("param", "query", "argument", "=", "pagination", "paginate")
+
+
+def _term_use(text: str, name: str) -> tuple[int, int]:
+    """(score, position) of the best use of ``name`` as a parameter in ``text``: in backticks
+    or quotes, next to "parameter" / "query" / "=" ("offset from UTC" in a date-format passage
+    scores lower than "the `offset` query parameter"). (-1, -1) when it is not there."""
+    flat = " ".join(text.split())
+    best = (-1, -1)
+    for m in re.finditer(rf"(?<![\w.]){re.escape(name)}(?![\w])", flat, re.IGNORECASE):
+        around = flat[max(0, m.start() - 60) : m.end() + 60].lower()
+        score = 1 + sum(2 for h in _PARAM_HINTS if h in around)
+        if flat[max(0, m.start() - 1) : m.start()] in ("`", "'", '"'):
+            score += 3
+        if score > best[0]:
+            best = (score, m.start())
+    return best
+
+
+def _snippet(text: str, query: str, exact: str | None = None) -> str:
     flat = " ".join(text.split())
     words = [w for w in query.lower().split() if len(w) > 2]
     lower = flat.lower()
     pos = min((lower.find(w) for w in words if lower.find(w) >= 0), default=0)
+    if exact:
+        score, at = _term_use(flat, exact)
+        if score >= 0:
+            pos = at
     start = max(0, pos - 80)
     piece = flat[start : start + SNIPPET_CHARS]
     return ("…" if start else "") + piece + ("…" if start + SNIPPET_CHARS < len(flat) else "")
@@ -342,11 +365,11 @@ class FindFact:
         """Prose mentions, the API's own guides first: those general notes (pagination, rate
         limits) are easily outranked by many pages that use the word."""
         query = name.replace(".", " ").replace("_", " ")
-        guides = [
-            h
-            for h in self._index.text(build_id, query, 20, (DocumentKind.GUIDE,))
-            if _general_guide(h)
-        ]
+        guides = sorted(  # per guide, the chunk using the name most like a parameter
+            (h for h in self._index.text(build_id, query, 20, (DocumentKind.GUIDE,))
+             if _general_guide(h)),
+            key=lambda h: -_term_use(h.text, name)[0],
+        )  # fmt: skip
         out: list[ChunkHit] = []
         for h in guides[:2] + self._index.text(build_id, query, self.MENTIONS, ()):
             if h.doc_id not in {x.doc_id for x in out}:
@@ -441,19 +464,16 @@ class FindFact:
         mentions: tuple[SearchHit, ...] = ()
         if not found:
             hits = self._mentions(build_id, name)
-            general = [  # the exact name, not just its words
-                h.doc_id
-                for h in hits
-                if _general_guide(h)
-                and re.search(rf"(?<![\w.]){re.escape(name)}(?![\w])", h.text, re.IGNORECASE)
-            ]
+            general = [h for h in hits if _general_guide(h) and _term_use(h.text, name)[0] >= 0]
             if general and fact_kind in (None, FactKind.FIELD) and loc is not FieldLocation.PATH:
-                # Mirakl: max / offset / page_token are described once in the general notes
-                # ("Pagination is enabled by default" on each list endpoint), not per endpoint.
+                # A name the API's own guide describes once for many endpoints (Mirakl paging
+                # parameters, Shopify currency rules): absence on one endpoint is not proven.
+                g = general[0]
                 complete = False
                 reasons.append(
-                    f"{general[0]} describes {name!r} as general guidance (e.g. a pagination "
-                    "parameter that applies to many endpoints); endpoint schemas do not list it"
+                    f"{g.doc_id} describes {name!r} in general guidance that may apply to many "
+                    f'endpoints: "{_snippet(g.text, name, name)}"; endpoint schemas do not '
+                    "list it"
                 )
             mentions = tuple(
                 SearchHit(
@@ -461,7 +481,7 @@ class FindFact:
                     kind=h.kind,
                     title=h.title,
                     subtitle="",
-                    snippet=_snippet(h.text, name),
+                    snippet=_snippet(h.text, name, name),
                     source_url=None,
                     dense_rank=None,
                     text_rank=i + 1,

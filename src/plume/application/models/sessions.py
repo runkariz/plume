@@ -22,7 +22,7 @@ from plume.application.ports.search_index import DocumentSummary, FactQuery, Sea
 from plume.application.reader.resolve import BuildResolver
 from plume.domain.knowledge.call_check import path_matches
 from plume.domain.knowledge.document import Document, DocumentKind, FieldLocation
-from plume.domain.models.canonical_model import DraftFormatError, parse_draft
+from plume.domain.models.canonical_model import DraftFormatError, ModelDraft, parse_draft
 from plume.domain.models.snapshot import (
     ModelSnapshot,
     Origin,
@@ -31,7 +31,7 @@ from plume.domain.models.snapshot import (
     draft_json,
     snapshot_id_for,
 )
-from plume.domain.models.validation import Issue, Oracle, validate
+from plume.domain.models.validation import Issue, Oracle, validate, warnings
 from plume.domain.shared.clock import Clock
 from plume.domain.shared.ids import BuildId
 
@@ -465,11 +465,17 @@ class ModelSessions:
         same documents, paths and endpoints many times (each was a database round trip)."""
         builds = {p.api: BuildId(p.build) for p in session.inputs}
         texts: dict[tuple[str, str], str | None] = {}
+        writes: dict[tuple[str, str], bool] = {}
         endpoints: dict[str, list[tuple[str, str]]] = {}
 
         def doc_text(api: str, doc_id: str) -> str | None:
             if (api, doc_id) not in texts:
                 d = self._documents.get_document(builds[api], doc_id)
+                writes[(api, doc_id)] = (
+                    d is not None
+                    and d.kind is DocumentKind.ENDPOINT
+                    and (d.method or "GET").upper() != "GET"
+                )
                 texts[(api, doc_id)] = (
                     None
                     if d is None
@@ -503,7 +509,32 @@ class ModelSessions:
                 for m, p in endpoints[api]
             )
 
-        return Oracle(doc_text, field_exists, endpoint_exists)
+        def write_only(api: str, doc_id: str) -> bool:
+            doc_text(api, doc_id)
+            return writes.get((api, doc_id), False)
+
+        return Oracle(doc_text, field_exists, endpoint_exists, write_only)
+
+    def _validated(self, session: ModelSession, raw: Any) -> tuple[ModelDraft, list[Issue]]:
+        """Parse and validate (refusals raise); returns the draft and its warnings."""
+        if len(json.dumps(raw, default=str)) > MAX_DRAFT_CHARS:
+            raise ModelDraftRefusedError(
+                [Issue("INVALID_FORMAT", "", None, f"draft over {MAX_DRAFT_CHARS} characters")]
+            )
+        try:
+            draft = parse_draft(raw)
+        except DraftFormatError as exc:
+            raise ModelDraftRefusedError([Issue("INVALID_FORMAT", "", None, str(exc))]) from exc
+        apis = frozenset(p.api for p in session.inputs)
+        oracle = self._oracle(session)
+        issues = validate(draft, apis, oracle)
+        if issues:
+            raise ModelDraftRefusedError(issues)
+        return draft, warnings(draft, apis, oracle)
+
+    def check(self, session_id: str, raw: Any) -> list[Issue]:
+        """Validate without storing: raises on refusal, returns the warnings."""
+        return self._validated(self.get(session_id), raw)[1]
 
     def submit(
         self,
@@ -519,18 +550,7 @@ class ModelSessions:
         (or the session's) makes it the next version of that model's lineage when the caller may
         add to it; otherwise a new lineage that records where it came from."""
         session = self.get(session_id)
-        if len(json.dumps(raw, default=str)) > MAX_DRAFT_CHARS:
-            raise ModelDraftRefusedError(
-                [Issue("INVALID_FORMAT", "", None, f"draft over {MAX_DRAFT_CHARS} characters")]
-            )
-        try:
-            draft = parse_draft(raw)
-        except DraftFormatError as exc:
-            raise ModelDraftRefusedError([Issue("INVALID_FORMAT", "", None, str(exc))]) from exc
-        apis = frozenset(p.api for p in session.inputs)
-        issues = validate(draft, apis, self._oracle(session))
-        if issues:
-            raise ModelDraftRefusedError(issues)
+        draft, found_warnings = self._validated(session, raw)
         checked = sum(len(s.evidence) for _, f in draft.walk() for _, s in f.sources)
         content_key = snapshot_id_for(session.inputs, session.concept, draft)
         base_id = based_on or session.based_on
@@ -576,6 +596,7 @@ class ModelSessions:
                 based_on=base.snapshot_id if base else None,
                 content_key="" if maintainer else content_key,
                 generator_usage=generator_usage,
+                warnings=tuple(found_warnings),
             )
             created = self._models.save_snapshot(
                 snapshot, owner_key_hash(owner_key) if owner_key else None
@@ -660,12 +681,54 @@ class ModelSessions:
             f'submit_model_draft(model_session, draft, based_on="{base.snapshot_id}").',
         }
 
-    def release(self, snapshot_id: str) -> ModelSnapshot:
+    def release(self, snapshot_id: str, supersedes: Sequence[str] = ()) -> ModelSnapshot:
+        """Make an unreleased model official. ``supersedes``: official models of the same concept
+        (case-insensitive, any API set) the maintainer chose to replace: they become superseded
+        (readable by id, not listed, superseded_by this one). Never automatic."""
         s = self.snapshot(snapshot_id)
         if s.visibility != Visibility.UNRELEASED:
             raise ModelStateError(f"model {snapshot_id} is {s.visibility}, not unreleased")
-        self._models.set_visibility(snapshot_id, Visibility.OFFICIAL, self._clock.now())
+        wanted = list(dict.fromkeys(supersedes))
+        allowed = {c["id"] for c in self.supersedable(s)}
+        bad = [i for i in wanted if i not in allowed]
+        if bad:
+            raise ModelStateError(
+                f"not an official {normalize_concept(s.concept)} model that this one can "
+                f"supersede: {', '.join(bad)}"
+            )
+        now = self._clock.now()
+        self._models.set_visibility(snapshot_id, Visibility.OFFICIAL, now)
+        for old in wanted:
+            self._models.supersede(old, snapshot_id, now)
         return self.snapshot(snapshot_id)
+
+    def supersedable(self, snap: ModelSnapshot) -> list[dict[str, Any]]:
+        """Official models of the same concept (case-insensitive) over ANY API set, other than
+        this lineage, newest first; ``covered`` = its APIs are a subset of this model's."""
+        mine = {i.api for i in snap.inputs}
+        key = concept_key(snap.concept)
+        seen: set[str] = set()
+        out: list[dict[str, Any]] = []
+        for api in sorted(mine):
+            for o in self._models.list_snapshots(api, 200, (Visibility.OFFICIAL,)):
+                if concept_key(o.concept) != key or o.lineage == snap.lineage:
+                    continue
+                if o.snapshot_id in seen:
+                    continue
+                seen.add(o.snapshot_id)
+                apis = [i.api for i in o.inputs]
+                out.append(
+                    {
+                        "id": o.snapshot_id,
+                        "concept": normalize_concept(o.concept),
+                        "apis": apis,
+                        "version": o.version,
+                        "stale": bool(self.stale_inputs(o)),
+                        "covered": set(apis) <= mine,
+                        "createdAt": o.created_at.isoformat(),
+                    }
+                )
+        return sorted(out, key=lambda c: c["createdAt"], reverse=True)
 
     def discard(self, snapshot_id: str) -> ModelSnapshot:
         s = self.snapshot(snapshot_id)
