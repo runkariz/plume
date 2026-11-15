@@ -1,6 +1,5 @@
 """Maintainer API: bearer-token auth, package upload, jobs, live events (SSE), publish, dump."""
 
-import asyncio
 import functools
 import hmac
 import json
@@ -17,7 +16,7 @@ from plume.interfaces.http import schemas as s
 
 # A stream of a job in one of these states ends once its events are drained (no `done` follows).
 ENDED = {JobStatus.PUBLISHED, JobStatus.DISCARDED}
-POLL_SECONDS = 0.25
+WAIT_SECONDS = 5.0  # max time one wait blocks (then disconnects and job state are rechecked)
 KEEPALIVE_SECONDS = 15.0
 
 
@@ -138,8 +137,11 @@ def maintainer_router(
                 job = await anyio.to_thread.run_sync(functools.partial(service.get, job_id))
                 if job.status in ENDED or await request.is_disconnected():
                     return
-                await asyncio.sleep(POLL_SECONDS)
-                idle += POLL_SECONDS
+                # Wait for a NOTIFY (or the fallback poll) instead of sleeping in a loop.
+                woke = await anyio.to_thread.run_sync(
+                    functools.partial(service.wait_events, job_id, seq, WAIT_SECONDS)
+                )
+                idle = 0.0 if woke else idle + WAIT_SECONDS
                 if idle >= KEEPALIVE_SECONDS:
                     idle = 0.0
                     yield ": keepalive\n\n"
