@@ -66,3 +66,14 @@ class PgVectorIndex:
                     {"b": build_id.value},
                 ).scalars()
             )
+
+    def vectors_of(self, build_id: BuildId) -> dict[str, Vector]:
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT chunk_id, embedding::text AS v FROM chunks "
+                    "WHERE build_id = :b AND embedding IS NOT NULL"
+                ),
+                {"b": build_id.value},
+            ).all()
+        return {r.chunk_id: parse_vector(r.v) for r in rows}

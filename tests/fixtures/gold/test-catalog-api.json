@@ -1,0 +1,14 @@
+{
+  "api": "test-catalog-api",
+  "version": "1",
+  "questions": [
+    {"id": "orders-list", "kind": "search", "question": "How do I list or search the shop's orders?", "expect": ["endpoint:GET~/api/{version}/orders"]},
+    {"id": "products-list", "kind": "search", "question": "list products in the catalog", "expect": ["endpoint:GET~/api/{version}/products"]},
+    {"id": "order-model", "kind": "search", "question": "What fields does an order have, like total and currency?", "expect": ["model:order", "endpoint:GET~/api/{version}/orders"]},
+    {"id": "auth-header", "kind": "search", "question": "Which header carries the API key?", "expect": ["auth:api-key-x-catalog-key", "guide:context"]},
+    {"id": "error-shape", "kind": "search", "question": "error response format message", "expect": ["model:error", "guide:context", "app:test-catalog-api"]},
+    {"id": "has-currency", "kind": "present", "name": "currency"},
+    {"id": "no-loyalty", "kind": "absent", "name": "loyalty_points"},
+    {"id": "no-gift-card", "kind": "absent", "name": "gift_card_code"}
+  ]
+}

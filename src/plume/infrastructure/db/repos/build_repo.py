@@ -14,6 +14,51 @@ FROM builds
 """
 
 
+def save_build(conn: Connection, build: Build) -> None:
+    spec = build.spec
+    current = conn.execute(
+        text("SELECT status FROM builds WHERE build_id = :b FOR UPDATE"),
+        {"b": build.build_id.value},
+    ).scalar_one_or_none()
+    if current == BuildStatus.SEALED.value:
+        if build.is_sealed:
+            return  # sealed builds never change; saving the same build is a no-op
+        raise ValueError(f"build {build.build_id} is sealed in storage")
+    conn.execute(
+        text(
+            """
+            INSERT INTO builds (build_id, api_id, status, created_at, sealed_at,
+                content_hash, package_hash, chunker_version, embed_model, dims,
+                source_ref, run_id)
+            VALUES (:b, :a, :s, :c, :sa, :h, :ph, :cv, :em, :d, :sr, :r)
+            ON CONFLICT (build_id) DO UPDATE SET
+                status = EXCLUDED.status, sealed_at = EXCLUDED.sealed_at,
+                content_hash = EXCLUDED.content_hash
+            """
+        ),
+        {
+            "b": build.build_id.value,
+            "a": build.api_id.value,
+            "s": build.status.value,
+            "c": build.created_at,
+            "sa": build.sealed_at,
+            "h": build.content_hash.value if build.content_hash else None,
+            "ph": spec.package_hash if spec else None,
+            "cv": spec.chunker_version if spec else None,
+            "em": spec.embed_model if spec else None,
+            "d": spec.dims if spec else None,
+            "sr": spec.source_ref if spec else None,
+            "r": spec.run_id if spec else None,
+        },
+    )
+    conn.execute(text("DELETE FROM build_items WHERE build_id = :b"), {"b": build.build_id.value})
+    if build.items:
+        conn.execute(
+            text("INSERT INTO build_items (build_id, item_id, content_hash) VALUES (:b, :i, :h)"),
+            [{"b": build.build_id.value, "i": k, "h": v.value} for k, v in build.items.items()],
+        )
+
+
 class PostgresBuildRepo:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
@@ -61,54 +106,5 @@ class PostgresBuildRepo:
             return [self._load(conn, r) for r in rows]
 
     def save(self, build: Build) -> None:
-        spec = build.spec
         with self._engine.begin() as conn:
-            current = conn.execute(
-                text("SELECT status FROM builds WHERE build_id = :b FOR UPDATE"),
-                {"b": build.build_id.value},
-            ).scalar_one_or_none()
-            if current == BuildStatus.SEALED.value:
-                if build.is_sealed:
-                    return  # sealed builds never change; saving the same build is a no-op
-                raise ValueError(f"build {build.build_id} is sealed in storage")
-            conn.execute(
-                text(
-                    """
-                    INSERT INTO builds (build_id, api_id, status, created_at, sealed_at,
-                        content_hash, package_hash, chunker_version, embed_model, dims,
-                        source_ref, run_id)
-                    VALUES (:b, :a, :s, :c, :sa, :h, :ph, :cv, :em, :d, :sr, :r)
-                    ON CONFLICT (build_id) DO UPDATE SET
-                        status = EXCLUDED.status, sealed_at = EXCLUDED.sealed_at,
-                        content_hash = EXCLUDED.content_hash
-                    """
-                ),
-                {
-                    "b": build.build_id.value,
-                    "a": build.api_id.value,
-                    "s": build.status.value,
-                    "c": build.created_at,
-                    "sa": build.sealed_at,
-                    "h": build.content_hash.value if build.content_hash else None,
-                    "ph": spec.package_hash if spec else None,
-                    "cv": spec.chunker_version if spec else None,
-                    "em": spec.embed_model if spec else None,
-                    "d": spec.dims if spec else None,
-                    "sr": spec.source_ref if spec else None,
-                    "r": spec.run_id if spec else None,
-                },
-            )
-            conn.execute(
-                text("DELETE FROM build_items WHERE build_id = :b"), {"b": build.build_id.value}
-            )
-            if build.items:
-                conn.execute(
-                    text(
-                        "INSERT INTO build_items (build_id, item_id, content_hash) "
-                        "VALUES (:b, :i, :h)"
-                    ),
-                    [
-                        {"b": build.build_id.value, "i": k, "h": v.value}
-                        for k, v in build.items.items()
-                    ],
-                )
+            save_build(conn, build)

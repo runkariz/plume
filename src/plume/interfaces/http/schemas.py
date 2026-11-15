@@ -19,6 +19,7 @@ HttpMethod = Literal["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 class ErrorBody(Schema):
     error: str
     message: str
+    detail: str
 
 
 class ApiStatus(Schema):
@@ -299,3 +300,33 @@ class Health(Schema):
 
 def dump(model: BaseModel) -> dict[str, Any]:
     return model.model_dump(by_alias=True)
+
+
+class Me(Schema):
+    name: str
+
+
+class ReviewRequest(Schema):
+    api_id: str = Field(min_length=1, max_length=64)
+    display_name: str = Field(default="", max_length=200)
+    tag: str = Field(default="latest", min_length=1, max_length=64)
+
+
+class JobOut(BaseModel):
+    """A maintainer job (keys are camelCase as listed)."""
+
+    model_config = ConfigDict(extra="allow")
+    id: str
+    apiId: str  # noqa: N815 - wire name
+    displayName: str  # noqa: N815
+    status: Literal[
+        "uploaded", "reviewed", "building", "staged", "failed", "published", "discarded"
+    ]
+    tag: str
+    liveBuild: str | None  # noqa: N815
+    stagedBuild: str | None  # noqa: N815
+    package: dict[str, Any]
+    diff: dict[str, Any] | None
+    plan: dict[str, Any] | None
+    eval: dict[str, Any] | None
+    error: str | None

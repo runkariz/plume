@@ -50,9 +50,10 @@ select = ["E", "W", "F", "I", "B", "UP", "SIM", "RUF", "N", "PT", "TID", "S", "C
 ignore = ["PLR2004", "PLR0913", "PLR0917"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S603", "PLR2004"]
+"tests/**" = ["S101", "S105", "S106", "S603", "PLR2004"]
 "src/plume/infrastructure/db/migrations/**" = ["N999"]
 "src/plume/interfaces/cli/main.py" = ["PLR0915"]  # one Typer app factory with nested commands
+"src/plume/interfaces/http/app.py" = ["PLR0915"]  # one FastAPI app factory with nested routes
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"

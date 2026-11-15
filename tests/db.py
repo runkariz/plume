@@ -10,7 +10,10 @@ from plume.infrastructure.db.alembic_migrator import AlembicMigrator
 from plume.infrastructure.db.engine import make_engine
 
 PGVECTOR_IMAGE = "pgvector/pgvector:pg16"
-TABLES = ("facts", "chunks", "documents", "tags", "build_items", "builds", "apis", "embed_cache")
+TABLES = (
+    "job_events", "jobs", "evals", "facts", "chunks", "documents", "tags", "build_items",
+    "builds", "apis", "embed_cache",
+)  # fmt: skip
 
 
 @pytest.fixture(scope="session")

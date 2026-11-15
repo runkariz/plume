@@ -6,12 +6,18 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Annotated
 
-from fastapi import FastAPI, Path, Query, Request
+from fastapi import FastAPI, HTTPException, Path, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from plume import __version__
-from plume.application.errors import ApplicationError, NotFoundError
+from plume.application.errors import (
+    ApplicationError,
+    GateFailedError,
+    NotFoundError,
+    SourcePackageError,
+)
+from plume.application.jobs.maintainer import JobStateError, MaintainerJobs
 from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
 from plume.application.reader.dto import ApiOverview
@@ -30,6 +36,7 @@ from plume.domain.shared.errors import DomainError, InvalidIdentifierError
 from plume.domain.shared.ids import BuildId
 from plume.interfaces import payloads
 from plume.interfaces.http import schemas as s
+from plume.interfaces.http.maintainer import maintainer_router
 from plume.interfaces.http.rate_limit import RateLimitMiddleware
 
 ApiPath = Annotated[str, Path(description="API id, e.g. shopify")]
@@ -51,6 +58,9 @@ class HttpDependencies:
     mcp_url: str = "http://127.0.0.1:18481/mcp"
     rate_limit_per_minute: int = 120
     cors_origins: tuple[str, ...] = ("http://127.0.0.1:18473", "http://localhost:18473")
+    maintainer: Callable[[], MaintainerJobs] | None = None
+    maintainer_tokens: tuple[str, ...] = ()
+    max_upload_bytes: int = 200 * 1024 * 1024
 
 
 def _logo(api_id: str, name: str, icon_url: str | None) -> s.Logo:
@@ -92,11 +102,27 @@ def create_app(deps: HttpDependencies) -> FastAPI:
         CORSMiddleware,
         allow_origins=list(deps.cors_origins),
         allow_methods=["GET", "POST"],
-        allow_headers=["*"],
+        allow_headers=["Authorization", "Content-Type", "Last-Event-ID", "Accept"],
+        expose_headers=["Content-Disposition", "Retry-After"],
     )
 
     def error(status: int, code: str, message: str) -> JSONResponse:
-        return JSONResponse({"error": code, "message": message}, status_code=status)
+        return JSONResponse(
+            {"error": code, "message": message, "detail": message}, status_code=status
+        )
+
+    @app.exception_handler(HTTPException)
+    async def http_error(_: Request, exc: HTTPException) -> JSONResponse:
+        codes = {
+            401: "unauthorized",
+            413: "too_large",
+            415: "unsupported_media_type",
+            503: "unavailable",
+        }
+        r = error(exc.status_code, codes.get(exc.status_code, "error"), str(exc.detail))
+        for k, v in (exc.headers or {}).items():
+            r.headers[k] = v
+        return r
 
     @app.exception_handler(NotFoundError)
     async def not_found(_: Request, exc: NotFoundError) -> JSONResponse:
@@ -105,6 +131,18 @@ def create_app(deps: HttpDependencies) -> FastAPI:
     @app.exception_handler(ReaderInputError)
     async def bad_input(_: Request, exc: ReaderInputError) -> JSONResponse:
         return error(400, exc.code, str(exc))
+
+    @app.exception_handler(SourcePackageError)
+    async def bad_package(_: Request, exc: SourcePackageError) -> JSONResponse:
+        return error(400, exc.code, str(exc))
+
+    @app.exception_handler(GateFailedError)
+    async def gate_failed(_: Request, exc: GateFailedError) -> JSONResponse:
+        return error(409, exc.code, str(exc))
+
+    @app.exception_handler(JobStateError)
+    async def job_state(_: Request, exc: JobStateError) -> JSONResponse:
+        return error(409, exc.code, str(exc))
 
     @app.exception_handler(ApplicationError)
     async def app_error(_: Request, exc: ApplicationError) -> JSONResponse:
@@ -250,7 +288,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
             ],
             trace=[s.TraceStep(source=t.source, label=t.label, ms=t.ms) for t in r.trace],
             total_ms=r.total_ms,
-            claude_payload=json.dumps(payloads.search_payload(r), indent=2),
+            claude_payload=json.dumps(payloads.search_payload(r), indent=2, ensure_ascii=False),
         )
 
     @app.post(
@@ -395,4 +433,8 @@ def create_app(deps: HttpDependencies) -> FastAPI:
             unchanged=d.unchanged,
         )
 
+    if deps.maintainer is not None:
+        app.include_router(
+            maintainer_router(deps.maintainer, deps.maintainer_tokens, deps.max_upload_bytes)
+        )
     return app

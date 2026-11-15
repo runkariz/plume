@@ -32,6 +32,14 @@ class TagResult:
 
 
 @dataclass(frozen=True, slots=True)
+class GateSummary:
+    passed: bool
+    message: str
+    metrics: dict[str, float | int]
+    baseline: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class PipelineResult:
     api_id: ApiId
     build_id: BuildId
@@ -42,3 +50,4 @@ class PipelineResult:
     from_cache: int
     facts: int
     tag: TagResult | None
+    gate: GateSummary | None = None

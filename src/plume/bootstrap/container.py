@@ -6,10 +6,13 @@ from functools import cached_property
 
 from sqlalchemy import Engine
 
+from plume.application.eval.run_eval_gate import RunEvalGate
 from plume.application.jobs.build_pipeline import BuildPipeline
+from plume.application.jobs.maintainer import MaintainerJobs
 from plume.application.knowledge.chunk_documents import ChunkDocuments
 from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.embed_build import EmbedBuild
+from plume.application.knowledge.export_dump import ExportDump, RestoreDump
 from plume.application.knowledge.extract_facts import ExtractFacts
 from plume.application.knowledge.import_package import ImportPackage
 from plume.application.knowledge.list_builds import ListApis, ListBuilds
@@ -27,20 +30,28 @@ from plume.application.reader.use_cases import (
     SearchDocs,
 )
 from plume.application.system.migrate_schema import MigrateSchema
+from plume.domain.eval.gate import GatePolicy
 from plume.infrastructure.clock import SystemClock
 from plume.infrastructure.db.alembic_migrator import AlembicMigrator
+from plume.infrastructure.db.archive import PostgresBuildImporter
 from plume.infrastructure.db.engine import make_engine
 from plume.infrastructure.db.repos.api_repo import PostgresApiRepo
 from plume.infrastructure.db.repos.build_repo import PostgresBuildRepo
 from plume.infrastructure.db.repos.document_repo import PostgresDocumentRepo
+from plume.infrastructure.db.repos.eval_repo import PostgresEvalRepo
 from plume.infrastructure.db.repos.tag_repo import PostgresTagRepo
+from plume.infrastructure.dumps.local_fs import LocalDumpStore
 from plume.infrastructure.embeddings.gemini import GeminiEmbedder
 from plume.infrastructure.embeddings.hash_embedder import HashEmbedder
 from plume.infrastructure.events.log_events import LoggingJobEvents
+from plume.infrastructure.jobs.package_storage import LocalPackageStorage
+from plume.infrastructure.jobs.postgres_jobs import PostgresJobEventLog, PostgresJobRepo
+from plume.infrastructure.jobs.thread_runner import ThreadJobRunner
 from plume.infrastructure.search.pgvector_index import PgVectorIndex
 from plume.infrastructure.search.postgres_fact_index import PostgresFactIndex
 from plume.infrastructure.search.postgres_search import PostgresFactQuery, PostgresSearchIndex
 from plume.infrastructure.settings import Settings, get_settings
+from plume.infrastructure.sources.gold_file import JsonGoldSource
 from plume.infrastructure.sources.stream_package import StreamPackageSource
 
 
@@ -83,6 +94,22 @@ class Container:
         return PostgresFactIndex(self.engine)
 
     @cached_property
+    def evals(self) -> PostgresEvalRepo:
+        return PostgresEvalRepo(self.engine)
+
+    @cached_property
+    def gold(self) -> JsonGoldSource:
+        return JsonGoldSource(self.settings.gold_dirs)
+
+    @cached_property
+    def dumps(self) -> LocalDumpStore:
+        return LocalDumpStore(self.settings.data_dir / "dumps")
+
+    @cached_property
+    def importer(self) -> PostgresBuildImporter:
+        return PostgresBuildImporter(self.engine)
+
+    @cached_property
     def search_index(self) -> PostgresSearchIndex:
         return PostgresSearchIndex(self.engine)
 
@@ -114,7 +141,38 @@ class Container:
     def migrate_schema(self) -> MigrateSchema:
         return MigrateSchema(AlembicMigrator(self.engine))
 
-    def build_pipeline(self) -> BuildPipeline:
+    @cached_property
+    def jobs(self) -> PostgresJobRepo:
+        return PostgresJobRepo(self.engine)
+
+    @cached_property
+    def job_events(self) -> PostgresJobEventLog:
+        return PostgresJobEventLog(self.engine)
+
+    @cached_property
+    def job_runner(self) -> ThreadJobRunner:
+        return ThreadJobRunner()
+
+    def maintainer(self) -> MaintainerJobs:
+        s = self.settings
+        return MaintainerJobs(
+            jobs=self.jobs,
+            events=self.job_events,
+            storage=LocalPackageStorage(s.data_dir, s.max_upload_bytes),
+            source=StreamPackageSource(),
+            builds=self.builds,
+            tags=self.tags,
+            vectors=self.vectors,
+            evals=self.evals,
+            embedder=self.embedder,
+            pipeline=self.build_pipeline,
+            tag_build=self.tag_build(),
+            export=self.export_dump(),
+            runner=self.job_runner,
+            max_chars=s.chunk_max_chars,
+        )
+
+    def build_pipeline(self, events: JobEvents | None = None) -> BuildPipeline:
         embedder = self.embedder
         return BuildPipeline(
             import_package=ImportPackage(
@@ -130,8 +188,10 @@ class Container:
             embed=EmbedBuild(self.builds, self.documents, self.vectors, embedder),
             facts=ExtractFacts(self.builds, self.documents, self.facts),
             seal=SealBuild(self.builds, self.vectors, self.clock),
-            tag=TagBuild(self.builds, self.tags),
-            events=self.events,
+            tag=self.tag_build(),
+            events=events or self.events,
+            evaluate=self.run_eval(),
+            gold=self.gold,
         )
 
     def list_apis(self) -> ListApis:
@@ -144,7 +204,35 @@ class Container:
         return DiffBuilds(self.builds)
 
     def tag_build(self) -> TagBuild:
-        return TagBuild(self.builds, self.tags)
+        return TagBuild(self.builds, self.tags, self.evals)
+
+    def run_eval(self) -> RunEvalGate:
+        s = self.settings
+        return RunEvalGate(
+            self.builds,
+            self.tags,
+            self.documents,
+            self.search_index,
+            self.fact_query,
+            self.embedder,
+            self.evals,
+            self.clock,
+            GatePolicy(min_recall=s.gate_min_recall, max_drop=s.gate_max_drop),
+        )
+
+    def export_dump(self) -> ExportDump:
+        return ExportDump(
+            self.apis,
+            self.builds,
+            self.documents,
+            self.vectors,
+            self.facts,
+            self.evals,
+            self.dumps,
+        )
+
+    def restore_dump(self) -> RestoreDump:
+        return RestoreDump(self.dumps, self.importer)
 
     # -- reader -------------------------------------------------------------------------------
 

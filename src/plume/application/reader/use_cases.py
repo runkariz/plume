@@ -130,6 +130,44 @@ class BrowseDocuments:
         return _ref(r), items, total
 
 
+def fuse_hits(
+    dense: Sequence[ChunkHit], text: Sequence[ChunkHit], query: str, top_k: int
+) -> list[SearchHit]:
+    def best_per_doc(hits: Sequence[ChunkHit]) -> list[ChunkHit]:
+        seen: dict[str, ChunkHit] = {}
+        for h in hits:
+            seen.setdefault(h.doc_id, h)
+        return list(seen.values())
+
+    d, t = best_per_doc(dense), best_per_doc(text)
+    by_doc_d = {h.doc_id: h for h in d}
+    by_doc_t = {h.doc_id: h for h in t}
+    max_text = max((h.score for h in t), default=0.0) or 1.0
+    fused = reciprocal_rank_fusion([[h.doc_id for h in d], [h.doc_id for h in t]])
+    out = []
+    for f in fused[:top_k]:
+        hd, ht = by_doc_d.get(f.key), by_doc_t.get(f.key)
+        best = ht if ht is not None else hd
+        if best is None:  # pragma: no cover - every fused key comes from one of the lists
+            continue
+        out.append(
+            SearchHit(
+                doc_id=f.key,
+                kind=best.kind,
+                title=best.title,
+                subtitle="",
+                snippet=_snippet(best.text, query),
+                source_url=None,
+                dense_rank=f.ranks[0],
+                text_rank=f.ranks[1],
+                dense_score=round(max(0.0, hd.score), 4) if hd else 0.0,
+                text_score=round(ht.score / max_text, 4) if ht else 0.0,
+                fused=round(f.score, 6),
+            )
+        )
+    return out
+
+
 class SearchDocs:
     """Hybrid search: dense (embedding) + full text, fused with RRF, one hit per document."""
 
@@ -192,7 +230,7 @@ class SearchDocs:
                 "full-text search",
                 lambda: self._index.text(build_id, query, pool, kinds),
             )
-        hits = _timed(trace, "plume", "fuse (RRF)", lambda: self._fuse(dense, text, query, top_k))
+        hits = _timed(trace, "plume", "fuse (RRF)", lambda: fuse_hits(dense, text, query, top_k))
         summaries = self._index.summaries(build_id, [h.doc_id for h in hits])
         enriched = []
         for h in hits:
@@ -214,44 +252,6 @@ class SearchDocs:
             )
         total = round((time.perf_counter() - started) * 1000, 2)
         return SearchResult(_ref(r), query, mode, tuple(enriched), tuple(trace), total)
-
-    @staticmethod
-    def _fuse(
-        dense: Sequence[ChunkHit], text: Sequence[ChunkHit], query: str, top_k: int
-    ) -> list[SearchHit]:
-        def best_per_doc(hits: Sequence[ChunkHit]) -> list[ChunkHit]:
-            seen: dict[str, ChunkHit] = {}
-            for h in hits:
-                seen.setdefault(h.doc_id, h)
-            return list(seen.values())
-
-        d, t = best_per_doc(dense), best_per_doc(text)
-        by_doc_d = {h.doc_id: h for h in d}
-        by_doc_t = {h.doc_id: h for h in t}
-        max_text = max((h.score for h in t), default=0.0) or 1.0
-        fused = reciprocal_rank_fusion([[h.doc_id for h in d], [h.doc_id for h in t]])
-        out = []
-        for f in fused[:top_k]:
-            hd, ht = by_doc_d.get(f.key), by_doc_t.get(f.key)
-            best = ht if ht is not None else hd
-            if best is None:  # pragma: no cover - every fused key comes from one of the lists
-                continue
-            out.append(
-                SearchHit(
-                    doc_id=f.key,
-                    kind=best.kind,
-                    title=best.title,
-                    subtitle="",
-                    snippet=_snippet(best.text, query),
-                    source_url=None,
-                    dense_rank=f.ranks[0],
-                    text_rank=f.ranks[1],
-                    dense_score=round(max(0.0, hd.score), 4) if hd else 0.0,
-                    text_score=round(ht.score / max_text, 4) if ht else 0.0,
-                    fused=round(f.score, 6),
-                )
-            )
-        return out
 
 
 class GetDocument:

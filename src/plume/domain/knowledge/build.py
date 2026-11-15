@@ -34,7 +34,8 @@ class BuildSpec:
     chunker_version: str
     embed_model: str
     dims: int
-    source_ref: str | None = None
+    # Where the package was read from: informational, not identity (dumps leave it out).
+    source_ref: str | None = field(default=None, compare=False)
     run_id: str | None = None
 
     def build_id_for(self, api_id: ApiId) -> BuildId:

@@ -8,6 +8,10 @@ x-plume-env: &plume-env
   PLUME_GEMINI_API_KEY: ${PLUME_GEMINI_API_KEY:-}
   PLUME_MCP_HOST: 0.0.0.0
   PLUME_MCP_ALLOWED_HOSTS: '["127.0.0.1:*","localhost:*","mcp:*"]'
+  # Maintainer API tokens as a JSON list; empty = maintainer API answers 503.
+  PLUME_MAINTAINER_TOKENS: ${PLUME_MAINTAINER_TOKENS:-[]}
+  PLUME_GOLD_DIRS: '["/gold"]'
+  PLUME_DATA_DIR: /data
 
 services:
   postgres:
@@ -43,6 +47,9 @@ services:
     command: ["serve", "--host", "0.0.0.0", "--port", "18480"]
     ports:
       - "127.0.0.1:18480:18480"
+    volumes:
+      - plumedata:/data
+      - ${PLUME_GOLD_DIR:-./tests/fixtures/gold}:/gold:ro
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -64,3 +71,4 @@ services:
 
 volumes:
   pgdata:
+  plumedata:

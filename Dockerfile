@@ -12,7 +12,9 @@ RUN uv sync --frozen --no-dev
 
 FROM python:3.12-slim AS runtime
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PATH="/app/.venv/bin:$PATH"
-RUN useradd --system --uid 10001 --home /app plume
+RUN useradd --system --uid 10001 --home /app plume \
+ && mkdir -p /data && chown plume:plume /data
+ENV PLUME_DATA_DIR=/data
 WORKDIR /app
 COPY --from=build --chown=plume:plume /app /app
 USER plume

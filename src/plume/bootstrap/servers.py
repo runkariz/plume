@@ -30,6 +30,9 @@ def http_app(c: Container) -> FastAPI:
             mcp_url=s.mcp_public_url,
             rate_limit_per_minute=s.reader_rate_limit_per_minute,
             cors_origins=s.cors_origins,
+            maintainer=c.maintainer,
+            maintainer_tokens=tuple(t.get_secret_value() for t in s.maintainer_tokens),
+            max_upload_bytes=s.max_upload_bytes,
         )
     )
 
