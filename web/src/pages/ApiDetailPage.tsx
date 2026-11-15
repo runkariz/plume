@@ -24,6 +24,7 @@ import {
   Tile,
 } from '@/components';
 import { SearchIcon } from '@/icons';
+import { breakable } from '@/lib/breakable';
 import { categoryLabel, formatDate, formatScore } from '@/lib/format';
 
 type Tab = 'all' | ItemKind;
@@ -101,7 +102,9 @@ function Browse({ api }: { api: ApiSummary }) {
                   <span className="kind-tag">{it.kind}</span>
                 )}
                 <div className="ep-main">
-                  <div className={it.path ? 'mono ep-path' : 'ep-path'}>{it.path ?? it.title}</div>
+                  <div className={it.path ? 'mono ep-path' : 'ep-path'}>
+                    {it.path ? breakable(it.path) : it.title}
+                  </div>
                   {it.path ? <div className="muted small">{it.title}</div> : null}
                 </div>
                 {it.resource ? <Chip>{it.resource}</Chip> : null}
