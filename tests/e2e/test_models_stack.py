@@ -13,8 +13,8 @@ from mcp.client.streamable_http import streamable_http_client
 from mcp.shared._httpx_utils import create_mcp_http_client
 
 pytestmark = pytest.mark.e2e
-API = "http://127.0.0.1:18480"
-MAINTAINER_MCP = "http://127.0.0.1:18481/maintainer/mcp"
+API = os.environ.get("PLUME_E2E_API", "http://127.0.0.1:18480")
+MAINTAINER_MCP = os.environ.get("PLUME_E2E_MCP", "http://127.0.0.1:18481") + "/maintainer/mcp"
 DRAFTS = Path(__file__).resolve().parents[1] / "fixtures" / "drafts"
 APIS = ["test-catalog-api", "second-catalog-api"]
 BAD = [

@@ -171,7 +171,7 @@ class FakeStack:
         return BuildResolver(self.apis, self.builds, self.tags)
 
     def overviews(self) -> ListApiOverviews:
-        return ListApiOverviews(self.apis, self.builds, self.tags, self.search_index)
+        return ListApiOverviews(self.apis, self.builds, self.tags, self.search_index, self.evals)
 
     def browse(self) -> BrowseDocuments:
         return BrowseDocuments(self.resolver(), self.search_index)

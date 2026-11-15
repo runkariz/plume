@@ -135,3 +135,22 @@ def test_cors_allows_maintainer_headers(stack: FakeStack) -> None:
     allowed = r.headers["access-control-allow-headers"].lower()
     assert "authorization" in allowed
     assert "last-event-id" in allowed
+
+
+def test_quality_after_publish(stack: FakeStack, packages: Path) -> None:
+    client = _client(stack)
+    data = zip_dir(packages / "test-catalog")
+    jid = client.post(
+        "/v1/packages", headers=AUTH, files={"file": ("c.zip", data, "application/zip")}
+    ).json()["id"]
+    client.post(
+        f"/v1/jobs/{jid}/review", headers=AUTH, json={"apiId": "test-catalog-api", "tag": "latest"}
+    )
+    client.post(f"/v1/jobs/{jid}/build", headers=AUTH)
+    client.post(f"/v1/jobs/{jid}/publish", headers=AUTH)
+    item = client.get("/v1/apis").json()["items"][0]
+    assert item["status"] == {"kind": "ready", "recallAt5": 1.0}
+    q = client.get("/v1/apis/test-catalog-api").json()["quality"]
+    assert q["goldQuestions"] == 8
+    assert q["gatePassed"] is True
+    assert q["inventedEndpoints"] is None
