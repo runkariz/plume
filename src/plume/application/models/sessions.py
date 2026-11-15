@@ -688,6 +688,28 @@ class ModelSessions:
         s = self.snapshot(snapshot_id)
         if s.visibility != Visibility.UNRELEASED:
             raise ModelStateError(f"model {snapshot_id} is {s.visibility}, not unreleased")
+        wanted = self._check_supersedes(s, supersedes)
+        now = self._clock.now()
+        self._models.set_visibility(snapshot_id, Visibility.OFFICIAL, now)
+        for old in wanted:
+            self._models.supersede(old, snapshot_id, now)
+        return self.snapshot(snapshot_id)
+
+    def supersede(self, snapshot_id: str, supersedes: Sequence[str]) -> ModelSnapshot:
+        """An already official model retires older official models of its concept (the same
+        rules as release; maintainer only, never automatic)."""
+        s = self.snapshot(snapshot_id)
+        if s.visibility != Visibility.OFFICIAL:
+            raise ModelStateError(f"model {snapshot_id} is {s.visibility}, not official")
+        wanted = self._check_supersedes(s, supersedes)
+        if not wanted:
+            raise ModelInputError("supersedes is empty")
+        now = self._clock.now()
+        for old in wanted:
+            self._models.supersede(old, snapshot_id, now)
+        return s
+
+    def _check_supersedes(self, s: ModelSnapshot, supersedes: Sequence[str]) -> list[str]:
         wanted = list(dict.fromkeys(supersedes))
         allowed = {c["id"] for c in self.supersedable(s)}
         bad = [i for i in wanted if i not in allowed]
@@ -696,11 +718,7 @@ class ModelSessions:
                 f"not an official {normalize_concept(s.concept)} model that this one can "
                 f"supersede: {', '.join(bad)}"
             )
-        now = self._clock.now()
-        self._models.set_visibility(snapshot_id, Visibility.OFFICIAL, now)
-        for old in wanted:
-            self._models.supersede(old, snapshot_id, now)
-        return self.snapshot(snapshot_id)
+        return wanted
 
     def supersedable(self, snap: ModelSnapshot) -> list[dict[str, Any]]:
         """Official models of the same concept (case-insensitive) over ANY API set, other than
