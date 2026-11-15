@@ -330,6 +330,36 @@ describe('a model set result', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('has the control box and the detail: pick a relation and read how each API documents it, read only', async () => {
+    await shownSet(set);
+    const detail = await screen.findByRole('region', { name: 'Selected model or relation' });
+    expect(detail).toHaveTextContent('Pick a model or a relation');
+    const list = screen.getByRole('listbox', { name: 'Models and relations' });
+    await userEvent.click(within(list).getByRole('option', { name: /Order → Product/ }));
+    expect(within(detail).getByRole('heading', { name: 'Order → Product' })).toBeInTheDocument();
+    expect(within(detail).getByRole('list', { name: 'Sources' })).toBeInTheDocument();
+    expect(within(detail).getAllByText('line_items[].product_id').length).toBeGreaterThan(0);
+    // no editor in the chat, and no router link: the way on is "Open in Plume"
+    expect(within(detail).queryByRole('radio')).not.toBeInTheDocument();
+    expect(within(detail).queryByRole('link')).not.toBeInTheDocument();
+    await userEvent.click(within(list).getByRole('option', { name: /^Product\s+\d+ fields/ }));
+    expect(within(detail).getByRole('list', { name: 'Coverage' })).toBeInTheDocument();
+    expect(within(detail).queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('an undecided relation says it is decided in Plume, not here', async () => {
+    const draft = setJson(
+      all,
+      all.find((x) => x.set.visibility === 'unreleased') ?? (stored as never),
+    );
+    await shownSet(draft);
+    const list = await screen.findByRole('listbox', { name: 'Models and relations' });
+    await userEvent.click(within(list).getByRole('option', { name: /Order → Product/ }));
+    const detail = screen.getByRole('region', { name: 'Selected model or relation' });
+    expect(detail).toHaveTextContent('Not decided yet: open the set in Plume');
+    expect(within(detail).queryByRole('radio')).not.toBeInTheDocument();
+  });
+
   it('says what is still to decide, and opens the set in Plume through the host', async () => {
     const draft = setJson(
       all,

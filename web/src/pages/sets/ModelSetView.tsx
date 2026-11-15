@@ -5,10 +5,9 @@ import { useAsync } from '@/api/useAsync';
 import { ApiError, type DraftIssue, type ModelSet } from '@/api/types';
 import { useIsMaintainer } from '@/app/authStore';
 import { Banner, Button, Card, Chip, Crumbs, ErrorState, LoadingState } from '@/components';
+import { docHref } from '@/lib/docHref';
 import { richText } from '@/lib/richText';
-import { useMedia } from '@/lib/useMedia';
 import { saveOwnerKey } from '@/lib/ownerKeys';
-import { ControlBox, CONTROLS_W, type ControlItem } from '@/pages/models/ControlBox';
 import {
   LineageHistory,
   LineageLine,
@@ -19,21 +18,8 @@ import {
 } from '@/pages/models/ModelAccess';
 import { StaleChip } from '@/pages/models/StaleChip';
 import { SetDetail, editsFor, optionText, type Staged } from './SetDetail';
-import { SetDiagram } from './SetDiagram';
-import {
-  memberId,
-  memberMatches,
-  parseSetView,
-  relationActive,
-  relationId,
-  relationLabel,
-  relationMatches,
-  withSetView,
-  type SetViewState,
-} from './setGraph';
-
-const WIDE = '(min-width: 721px)';
-const OPEN_FROM = '(min-width: 1400px)';
+import { SetWorkbench } from './SetWorkbench';
+import { parseSetView, relationId, toggleShow, withSetView, type SetViewState } from './setGraph';
 
 export function ModelSetView() {
   const { setId = '' } = useParams();
@@ -115,38 +101,6 @@ function SetPage({
     },
     [set, setParams],
   );
-  const checked = useMemo(() => (view.show ? new Set(view.show) : null), [view.show]);
-
-  const wide = useMedia(WIDE, true);
-  const roomy = useMedia(OPEN_FROM, true);
-  const [openChoice, setOpenChoice] = useState<boolean | null>(null);
-  const open = openChoice ?? roomy;
-  const inset = open && wide ? CONTROLS_W + 12 : 0;
-  const [focusNonce, setFocusNonce] = useState(0);
-
-  // the control box: models first, then relations
-  const items: ControlItem[] = useMemo(() => {
-    const t = view.f;
-    const ms = set.members
-      .filter((m) => memberMatches(m, t))
-      .map((m) => ({
-        id: memberId(m.concept),
-        name: m.name ?? m.concept,
-        detail: m.missing ? 'not available' : `${m.fieldCount ?? 0} fields`,
-        selected: view.sel === memberId(m.concept),
-      }));
-    const rs = set.relations
-      .filter((r) => relationMatches(r, t))
-      .map((r) => ({
-        id: relationId(r.id),
-        name: `${r.from} → ${r.to}`,
-        detail: relationLabel(r),
-        selected: view.sel === relationId(r.id),
-        off: !relationActive(r, checked, ''),
-      }));
-    return [...ms, ...rs];
-  }, [set, view.f, view.sel, checked]);
-
   const [staged, setStaged] = useState<Staged>({});
   const edits = useMemo(() => editsFor(set, staged), [set, staged]);
   const onChoose = useCallback(
@@ -398,67 +352,35 @@ function SetPage({
         </Card>
       ) : null}
 
-      <div className="workbench" style={{ '--wb-h': height } as React.CSSProperties}>
-        <div className="wb-canvas">
-          <SetDiagram
-            set={set}
-            selection={view.sel}
-            onSelect={(sel) => update((v) => ({ ...v, sel }))}
-            checked={checked}
-            text={view.f}
-            inset={inset}
-            height="var(--wb-h)"
-            focusNonce={focusNonce}
-          />
-          <ControlBox
-            label="Diagram controls"
-            toggleLabel="Filter models and relations"
-            listLabel="Models and relations"
-            filterPlaceholder="Model or relation"
-            note="Unchecked APIs stay in the diagram, greyed out."
-            noun="model or relation"
-            apis={set.inputs}
-            items={items}
-            total={set.members.length + set.relations.length}
-            text={view.f}
-            checked={checked}
-            open={open}
-            onOpenChange={setOpenChoice}
-            onText={(f) => update((v) => ({ ...v, f }))}
-            onToggleApi={(id, on) =>
-              update((v) => {
-                const all = set.inputs.map((a) => a.id);
-                const current = v.show ?? all;
-                const next = on
-                  ? all.filter((x) => current.includes(x) || x === id)
-                  : current.filter((x) => x !== id);
-                return {
-                  ...v,
-                  show: next.length === 0 ? v.show : next.length === all.length ? null : next,
-                };
-              })
-            }
-            onPick={(sel) => {
-              update((v) => ({ ...v, sel }));
-              setFocusNonce((n) => n + 1);
-            }}
-          />
-        </div>
-        <Card className="pad wb-detail" role="region" aria-label="Selected model or relation">
-          <SetDetail
-            set={set}
-            selection={view.sel}
-            staged={staged}
-            canEdit={canEdit}
-            onChoose={onChoose}
-          />
-          {!canEdit && set.visibility !== 'discarded' ? (
-            <p className="small muted">
-              This is not the latest version: open the latest to change relations.
-            </p>
-          ) : null}
-        </Card>
-      </div>
+      <SetWorkbench
+        set={set}
+        text={view.f}
+        show={view.show}
+        selection={view.sel}
+        onText={(f) => update((s) => ({ ...s, f }))}
+        onToggleApi={(id, on) => update((s) => ({ ...s, show: toggleShow(set, s.show, id, on) }))}
+        onSelect={(sel) => update((s) => ({ ...s, sel }))}
+        canvasHeight={height}
+      >
+        <SetDetail
+          set={set}
+          selection={view.sel}
+          staged={staged}
+          canEdit={canEdit}
+          onChoose={onChoose}
+          renderMemberLink={(m) => (
+            <Link className="btn primary" to={`/models/${m.modelId}`}>
+              Open the field mapping
+            </Link>
+          )}
+          renderDocLink={(apiId, docId) => <Link to={docHref(apiId, docId)}>{docId}</Link>}
+        />
+        {!canEdit && set.visibility !== 'discarded' ? (
+          <p className="small muted">
+            This is not the latest version: open the latest to change relations.
+          </p>
+        ) : null}
+      </SetWorkbench>
 
       <div className="model-cols two-up">
         <ShareCard snap={set} what="model set" />

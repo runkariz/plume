@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import type { ModelSet } from '@/api/types';
 import { ApiAvatar, Button, Chip } from '@/components';
-import { SetDiagram } from '@/pages/sets/SetDiagram';
-import { findMember, relationLabel, SUPPORT_TEXT } from '@/pages/sets/setGraph';
+import { SetDetail } from '@/pages/sets/SetDetail';
+import { SetWorkbench } from '@/pages/sets/SetWorkbench';
+import { findMember, relationLabel, SUPPORT_TEXT, toggleShow } from '@/pages/sets/setGraph';
 import type { HostConnection } from './protocol';
 
 const VISIBILITY: Record<string, { label: string; tone: 'ok' | 'info' | 'warn' | 'bad' }> = {
@@ -27,6 +28,8 @@ export function SetPanel({
   connection: HostConnection | null;
 }) {
   const [selection, setSelection] = useState<string | null>(null);
+  const [text, setText] = useState('');
+  const [show, setShow] = useState<string[] | null>(null);
   const vis = VISIBILITY[set.visibility];
   const canOpen = Boolean(link && connection?.hostCapabilities.openLinks);
   const undecided = useMemo(() => new Set(set.undecided), [set.undecided]);
@@ -82,18 +85,28 @@ export function SetPanel({
       </div>
       {set.description ? <p className="muted">{set.description}</p> : null}
       {set.members.length > 0 ? (
-        <SetDiagram
+        <SetWorkbench
           set={set}
+          text={text}
+          show={show}
           selection={selection}
+          onText={setText}
+          onToggleApi={(id, on) => setShow((s) => toggleShow(set, s, id, on))}
           onSelect={setSelection}
-          checked={null}
-          text=""
-          inset={0}
-          height="320px"
-          focusNonce={0}
-        />
+          canvasHeight="400px"
+        >
+          <SetDetail
+            set={set}
+            selection={selection}
+            staged={{}}
+            canEdit={false}
+            readOnly
+            onChoose={() => undefined}
+          />
+        </SetWorkbench>
       ) : null}
-      <div className="widget-summary">
+      <details className="widget-summary widget-text">
+        <summary>The models and relations as text</summary>
         <section aria-label="Models">
           <h2 className="h3-sm">Models</h2>
           <ul className="plain">
@@ -141,6 +154,8 @@ export function SetPanel({
             ))}
           </ul>
         </section>
+      </details>
+      <div className="widget-summary">
         {set.openQuestions.length > 0 ? (
           <details className="widget-questions">
             <summary>Open questions ({set.openQuestions.length})</summary>

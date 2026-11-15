@@ -236,6 +236,37 @@ export function seedSets(): StoredSet[] {
   ];
 }
 
+/** A set the mock server stores after a submit or a server generation: its relations are proposals. */
+export function newSet(
+  id: string,
+  concepts: string[],
+  apis: string[],
+  visibility: ModelVisibility,
+  opts: { aliases?: ModelSet['aliases']; generator?: string } = {},
+): StoredSet {
+  const proposals = [orderItems(false, 'embedded'), productVariants(false)].filter(
+    (r) => concepts.includes(r.from) && concepts.includes(r.to),
+  );
+  const set = build(id, concepts.join(' + '), visibility, proposals, {
+    description: null,
+    generator: opts.generator ?? 'claude',
+    generatedAt: '2026-11-16T14:00:00Z',
+    inputs: inputs(apis),
+    aliases: opts.aliases ?? [],
+    openQuestions: [],
+    members: concepts.map((c, i) => ({
+      ...member(c, 10 + i, Object.fromEntries(apis.map((a, j) => [a, 10 + i - j]))),
+      visibility: visibility === 'unlisted' ? 'unlisted' : 'unreleased',
+    })),
+  });
+  return {
+    set,
+    lineageId: `L-${id}`,
+    ownerKey: visibility === 'unlisted' ? `pk_${id}` : undefined,
+    createdAt: '2026-11-16T14:00:00Z',
+  };
+}
+
 export function lineageOf(all: StoredSet[], x: StoredSet): ModelLineage {
   const same = all
     .filter((y) => y.lineageId === x.lineageId && y.set.visibility !== 'discarded')

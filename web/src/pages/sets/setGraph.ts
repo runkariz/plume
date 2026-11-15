@@ -1,4 +1,5 @@
 import { MarkerType, type Edge, type Node } from '@xyflow/react';
+import type { ControlItem } from '@/pages/models/ControlBox';
 import type { ApiRef, ModelSet, RelationSupport, SetMember, SetRelation } from '@/api/types';
 
 // narrower boxes and gaps: with the control box and the detail panel the canvas is about 700 px wide
@@ -195,4 +196,46 @@ export function withSetView(base: URLSearchParams, v: SetViewState): URLSearchPa
   if (v.show) p.set('show', v.show.join(','));
   if (v.sel) p.set('sel', v.sel);
   return p;
+}
+
+/** The control box list of a set: the models first, then the relations (the filter applies to both). */
+export function controlItems(
+  set: ModelSet,
+  text: string,
+  selection: string | null,
+  checked: ReadonlySet<string> | null,
+): ControlItem[] {
+  const ms = set.members
+    .filter((m) => memberMatches(m, text))
+    .map((m) => ({
+      id: memberId(m.concept),
+      name: m.name ?? m.concept,
+      detail: m.missing ? 'not available' : `${m.fieldCount ?? 0} fields`,
+      selected: selection === memberId(m.concept),
+    }));
+  const rs = set.relations
+    .filter((r) => relationMatches(r, text))
+    .map((r) => ({
+      id: relationId(r.id),
+      name: `${r.from} → ${r.to}`,
+      detail: relationLabel(r),
+      selected: selection === relationId(r.id),
+      off: !relationActive(r, checked, ''),
+    }));
+  return [...ms, ...rs];
+}
+
+/** The APIs to show after (un)checking one: null = all of them; the last one cannot be unchecked. */
+export function toggleShow(
+  set: ModelSet,
+  show: string[] | null,
+  id: string,
+  on: boolean,
+): string[] | null {
+  const all = set.inputs.map((a) => a.id);
+  const current = show ?? all;
+  const next = on
+    ? all.filter((x) => current.includes(x) || x === id)
+    : current.filter((x) => x !== id);
+  return next.length === 0 ? show : next.length === all.length ? null : next;
 }

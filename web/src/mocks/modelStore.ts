@@ -160,6 +160,48 @@ export function listItem(all: StoredModel[], m: StoredModel): ModelListItem {
   };
 }
 
+/** The scripted server-side generation of a set: every member, then the proposals; `Customer` fails. */
+export function setJobScript(
+  jobId: string,
+  apis: string[],
+  concepts: string[],
+  setId: string,
+): { events: ModelJobEvent[]; status: ModelJob['status'] } {
+  const name = concepts.join('+');
+  const head: ModelJobEvent[] = [
+    { type: 'queued', jobId },
+    { type: 'started', apis, concept: name },
+  ];
+  const members = concepts.flatMap((concept, i): ModelJobEvent[] =>
+    concept.toLowerCase() === 'customer'
+      ? []
+      : [
+          { type: 'round', n: 1, of: 3 },
+          { type: 'member', concept, snapshotId: `m-${jobId}-${i}`, round: 1 },
+        ],
+  );
+  if (concepts.some((c) => c.toLowerCase() === 'customer'))
+    return {
+      status: 'failed',
+      events: [
+        ...head,
+        ...members,
+        { type: 'failed', code: 'draft_refused', message: 'no valid Customer model' },
+        { type: 'done', status: 'failed', snapshotId: null, setId: null },
+      ],
+    };
+  return {
+    status: 'succeeded',
+    events: [
+      ...head,
+      ...members,
+      { type: 'proposals', relations: ['order-items', 'product-variants'], openQuestions: 1 },
+      { type: 'accepted', setId },
+      { type: 'done', status: 'succeeded', snapshotId: null, setId },
+    ],
+  };
+}
+
 /** The scripted server-side generation. `shipment` is refused once first; `customer` ends in a failure. */
 export function jobScript(
   jobId: string,
