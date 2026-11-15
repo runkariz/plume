@@ -1,0 +1,62 @@
+{
+  "schema": "plume.rules.v1",
+  "source": "https://developer.woocommerce.com/docs/apis/rest-api/v3/",
+  "rules": [
+    {
+      "id": "r-d1bb813122",
+      "scope": "resource",
+      "type": "effect",
+      "text": "If individual_use is enabled on a coupon, any other coupons already applied will be removed from the cart.",
+      "quote": "individual_usebooleanIf true, the coupon can only be used individually. Other applied coupons will be removed from the cart. Default is false.",
+      "sourceUrl": "https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons/",
+      "confidence": 0.9,
+      "resource": "Coupon"
+    },
+    {
+      "id": "r-c6d0bec8a8",
+      "scope": "resource",
+      "type": "effect",
+      "text": "If free_shipping is true and the free shipping method requires a coupon, applying this coupon will enable free shipping.",
+      "quote": "free_shippingbooleanIf true and if the free shipping method requires a coupon, this coupon will enable free shipping. Default is false.",
+      "sourceUrl": "https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons/",
+      "confidence": 0.9,
+      "resource": "Coupon"
+    },
+    {
+      "id": "r-b74d2dd08a",
+      "scope": "resource",
+      "type": "constraint",
+      "text": "The coupon code is mandatory.",
+      "quote": "codestringCoupon code. MANDATORY",
+      "sourceUrl": "https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons/",
+      "confidence": 0.95,
+      "resource": "Coupon"
+    },
+    {
+      "id": "r-a1d501f62c",
+      "scope": "delete-wp-json-wc-v3-coupons-id",
+      "type": "precondition",
+      "text": "To remove an applied coupon from an order without deleting the coupon itself, you must update the order's coupon lines instead.",
+      "quote": "To remove an applied coupon from an order without deleting the coupon itself, update the order's coupon lines.",
+      "anchor": "#delete-a-coupon",
+      "sourceUrl": "https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons/",
+      "confidence": 0.85,
+      "resource": "Coupon"
+    },
+    {
+      "id": "r-2532b5b012",
+      "scope": "post-wp-json-wc-v3-coupons-batch",
+      "type": "constraint",
+      "text": "Batch operations are restricted by default to at most 100 objects created, updated, or deleted.",
+      "quote": "Note: By default it's limited to up to 100 objects to be created, updated or deleted.",
+      "anchor": "#batch-update-coupons",
+      "sourceUrl": "https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons/",
+      "confidence": 0.95,
+      "resource": "Coupon"
+    }
+  ],
+  "stats": {
+    "unverified": 0,
+    "invalid": 4
+  }
+}

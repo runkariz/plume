@@ -1,0 +1,22 @@
+{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "slug": {
+        "type": "string",
+        "description": "An alphanumeric identifier for the resource. READ-ONLY"
+      },
+      "name": {
+        "type": "string",
+        "description": "Coupon type name. READ-ONLY"
+      },
+      "total": {
+        "type": "string",
+        "description": "Amount of coupons. READ-ONLY"
+      }
+    },
+    "description": "Aggregated metrics for a specific coupon reporting category."
+  },
+  "description": "Collection of summarized coupon usage statistics and totals."
+}

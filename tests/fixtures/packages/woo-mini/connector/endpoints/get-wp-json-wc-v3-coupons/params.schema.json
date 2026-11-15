@@ -1,0 +1,151 @@
+{
+  "title": "Parameters",
+  "type": "object",
+  "properties": {
+    "context": {
+      "type": "string",
+      "description": "Scope under which the request is made; determines fields present in response. Options: view and edit. Default is view.",
+      "enum": [
+        "view",
+        "edit"
+      ],
+      "default": "view",
+      "examples": [
+        "view"
+      ],
+      "x-on-pagination": "keep",
+      "title": "Context",
+      "x-ui-advanced": "Advanced"
+    },
+    "page": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Current page of the collection. Default is 1.",
+      "default": 1,
+      "examples": [1
+      ],
+      "x-on-pagination": "keep",
+      "title": "Page"
+    },
+    "per_page": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Maximum number of items to be returned in result set. Default is 10.",
+      "default": 10,
+      "examples": [10
+      ],
+      "x-on-pagination": "keep",
+      "title": "Per Page"
+    },
+    "search": {
+      "type": "string",
+      "description": "Limit results to those matching a string.",
+      "examples": [
+        "10off"
+      ],
+      "x-on-pagination": "keep",
+      "title": "Search Query"
+    },
+    "after": {
+      "type": "string",
+      "description": "Limit response to resources published after a given ISO8601 compliant date.",
+      "x-on-pagination": "setCursor",
+      "title": "Published After",
+      "x-ui-advanced": "Date Filters"
+    },
+    "before": {
+      "type": "string",
+      "description": "Limit response to resources published before a given ISO8601 compliant date.",
+      "x-on-pagination": "keep",
+      "title": "Published Before",
+      "x-ui-advanced": "Date Filters"
+    },
+    "modified_after": {
+      "type": "string",
+      "description": "Limit response to resources modified after a given ISO8601 compliant date.",
+      "x-on-pagination": "keep",
+      "title": "Modified After",
+      "x-ui-advanced": "Date Filters"
+    },
+    "modified_before": {
+      "type": "string",
+      "description": "Limit response to resources modified after a given ISO8601 compliant date.",
+      "x-on-pagination": "keep",
+      "title": "Modified Before",
+      "x-ui-advanced": "Date Filters"
+    },
+    "dates_are_gmt": {
+      "type": "boolean",
+      "description": "Whether to interpret dates as GMT when limiting response by published or modified date.",
+      "x-on-pagination": "keep",
+      "title": "Dates Are GMT",
+      "x-ui-advanced": "Date Filters"
+    },
+    "exclude": {
+      "type": "array",
+      "description": "Ensure result set excludes specific IDs.",
+      "x-on-pagination": "keep",
+      "title": "Exclude IDs",
+      "x-ui-advanced": "Advanced"
+    },
+    "include": {
+      "type": "array",
+      "description": "Limit result set to specific ids.",
+      "x-on-pagination": "keep",
+      "title": "Include IDs",
+      "x-ui-advanced": "Advanced"
+    },
+    "offset": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Offset the result set by a specific number of items.",
+      "x-on-pagination": "keep",
+      "title": "Offset",
+      "x-ui-advanced": "Pagination"
+    },
+    "order": {
+      "type": "string",
+      "description": "Order sort attribute ascending or descending. Options: asc and desc. Default is desc.",
+      "enum": [
+        "asc",
+        "desc"
+      ],
+      "default": "desc",
+      "examples": [
+        "desc"
+      ],
+      "x-on-pagination": "keep",
+      "title": "Sort Order",
+      "x-ui-advanced": "Sorting"
+    },
+    "orderby": {
+      "type": "string",
+      "description": "Sort collection by object attribute. Options: date, modified, id, include, title and slug. Default is date.",
+      "enum": [
+        "date",
+        "modified",
+        "id",
+        "include",
+        "title",
+        "slug"
+      ],
+      "default": "date",
+      "examples": [
+        "date"
+      ],
+      "x-on-pagination": "keep",
+      "title": "Order By",
+      "x-ui-advanced": "Sorting"
+    },
+    "code": {
+      "type": "string",
+      "description": "Limit result set to resources with a specific code.",
+      "examples": [
+        "free shipping"
+      ],
+      "x-on-pagination": "keep",
+      "title": "Coupon Code"
+    }
+  },
+  "description": "Query parameters for filtering, sorting, and paginating the list of coupons."
+}

@@ -1,0 +1,32 @@
+{
+  "title": "Headers",
+  "type": "object",
+  "properties": {
+    "Content-Type": {
+      "type": "string",
+      "description": "Request content type",
+      "enum": [
+        "application/json"
+      ],
+      "default": "application/json",
+      "examples": [
+        "application/json"
+      ],
+      "title": "Content Type"
+    },
+    "Authorization": {
+      "type": "string",
+      "description": "Credentials of the connected authorization: API key or Basic (username:password)",
+      "default": "{{ auth?.apikey?.access_token ? auth.apikey.access_token : auth?.basic?.token }}",
+      "examples": [
+        "{{ auth?.apikey?.access_token ? auth.apikey.access_token : auth?.basic?.token }}"
+      ],
+      "title": "Authorization"
+    }
+  },
+  "required": [
+    "Content-Type",
+    "Authorization"
+  ],
+  "description": "HTTP headers required for request authentication and content negotiation."
+}

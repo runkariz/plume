@@ -1,0 +1,14 @@
+{
+  "configJson": {
+    "ConfigType": 1,
+    "CursorPaginationEnabled": false,
+    "GetAllPages": false,
+    "HeaderContractData": "{\"Authorization\":\"{{ auth?.apikey?.access_token ? auth.apikey.access_token : auth?.basic?.token }}\"}",
+    "InheritsAuth": false,
+    "ParamsContractData": "{\"per_page\":10}",
+    "VariableContractData": "{\"host\":\"{{ auth?.apikey?.host }}\"}"
+  },
+  "description": "Init the datasource",
+  "isPublicEntity": true,
+  "name": "Bootstrap"
+}

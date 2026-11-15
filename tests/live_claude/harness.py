@@ -186,6 +186,51 @@ def run_claude(stack: Stack, prompt: str, budget_usd: float, timeout: int = 900)
     return run
 
 
+# -- HTTP to the stack: retries 429, never reads an error body as data --------------------------
+
+MAX_TRIES = 6
+MAX_WAIT = 30.0
+
+
+class StackHTTPError(RuntimeError):
+    pass
+
+
+def stack_client(stack: Stack) -> httpx.Client:
+    """A client for the stack; with the maintainer token it is exempt from the reader limit."""
+    headers = {}
+    if stack.token_file is not None:
+        token = stack.token_file.read_text(encoding="utf-8").strip()
+        headers["Authorization"] = f"Bearer {token}"
+    return httpx.Client(base_url=stack.api, timeout=30, headers=headers)
+
+
+def request_json(
+    http: httpx.Client,
+    method: str,
+    url: str,
+    *,
+    sleep: Any = time.sleep,
+    ok: tuple[int, ...] = (200,),
+    **kwargs: Any,
+) -> Any:
+    """JSON of a successful response. 429/503 are retried (Retry-After honoured, capped); any
+    other status in ``ok`` is returned as ``None``-safe JSON; everything else raises."""
+    delay = 1.0
+    for attempt in range(MAX_TRIES):
+        response = http.request(method, url, **kwargs)
+        if response.status_code in ok:
+            return response.json()
+        if response.status_code in (429, 503) and attempt < MAX_TRIES - 1:
+            retry_after = response.headers.get("retry-after", "")
+            wait = float(retry_after) if retry_after.isdigit() else delay
+            sleep(min(wait, MAX_WAIT))
+            delay = min(delay * 2, MAX_WAIT)
+            continue
+        raise StackHTTPError(f"{method} {url} -> HTTP {response.status_code}")
+    raise StackHTTPError(f"{method} {url}: retries exhausted")  # pragma: no cover
+
+
 # -- invariants (checked against Plume, not Claude's prose) -------------------------------------
 
 
@@ -221,40 +266,38 @@ def check_model(stack: Stack, run: Run, before: set[str], min_coverage: float) -
                 "; ".join(i["code"] for c in refused for i in c.result.get("issues", []))[:300],
             )
         )
-    with httpx.Client(base_url=stack.api, timeout=30) as http:
-        after = {m["id"] for m in http.get("/v1/models", params={"limit": 200}).json()["items"]}
+    with stack_client(stack) as http:
+        listed = request_json(http, "GET", "/v1/models", params={"limit": 200})
+        after = {m["id"] for m in listed["items"]}
         new = sorted(after - before)
         checks.append(Check("a snapshot was stored", bool(new), ", ".join(new)))
         for sid in new:
-            model = http.get(f"/v1/models/{sid}").json()
+            model = request_json(http, "GET", f"/v1/models/{sid}")
             checked = found = 0
             invented: list[str] = []
             missing: list[str] = []
             for f in model["fields"]:
                 for api, src in f["sources"].items():
                     for p in src["paths"]:
-                        r = http.post(
-                            f"/v1/apis/{api}/find-fact",
-                            json={
-                                "name": p["path"],
-                                "kind": "field",
-                                "version": _build(model, api),
-                            },
-                        ).json()
+                        query = {"name": p["path"], "kind": "field", "version": _build(model, api)}
+                        r = request_json(http, "POST", f"/v1/apis/{api}/find-fact", json=query)
                         if not r.get("found"):
                             invented.append(f"{api}:{p['path']}")
                     for e in src["evidence"]:
                         checked += 1
-                        doc = http.get(
+                        body = request_json(
+                            http,
+                            "GET",
                             f"/v1/apis/{api}/documents/{e['docId']}",
                             params={"version": _build(model, api)},
+                            ok=(200, 404),
                         )
-                        body = doc.json() if doc.status_code == 200 else {}
+                        found_doc = "text" in body
                         text = " ".join(
                             [body.get("title", ""), body.get("text", "")]
                             + [x.get("description") or "" for x in body.get("fields", [])]
                         )
-                        if doc.status_code == 200 and _quote_in(e["quote"], text):
+                        if found_doc and _quote_in(e["quote"], text):
                             found += 1
                         else:
                             missing.append(f"{api}:{e['docId']}")

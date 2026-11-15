@@ -97,3 +97,30 @@ def test_mcp_is_rate_limited() -> None:
         codes = [client.post("/mcp", json=body, headers=headers).status_code for _ in range(3)]
     assert codes[-1] == 429
     assert all(c != 429 for c in codes[:2])
+
+
+def test_valid_maintainer_token_is_not_rate_limited(stack: FakeStack) -> None:
+    from plume.application.knowledge.diff_builds import DiffBuilds  # noqa: PLC0415
+    from plume.application.knowledge.list_builds import ListBuilds  # noqa: PLC0415
+    from plume.interfaces.http.app import HttpDependencies, create_app  # noqa: PLC0415
+    from tests.unit.interfaces.test_http_maintainer import TOKEN  # noqa: PLC0415
+
+    deps = HttpDependencies(
+        overviews=stack.overviews,
+        browse=stack.browse,
+        search=stack.search,
+        get_document=stack.get_document,
+        find_fact=stack.find_fact,
+        check_call=stack.check_call,
+        list_builds=lambda: ListBuilds(stack.builds, stack.tags),
+        diff_builds=lambda: DiffBuilds(stack.builds),
+        resolver=stack.resolver,
+        rate_limit_per_minute=2,
+        maintainer_tokens=(TOKEN,),
+    )
+    limited = TestClient(create_app(deps))
+    good = {"Authorization": f"Bearer {TOKEN}"}
+    bad = {"Authorization": "Bearer not-the-token-at-all"}
+    assert [limited.get("/v1/apis", headers=good).status_code for _ in range(5)] == [200] * 5
+    codes = [limited.get("/v1/apis", headers=bad).status_code for _ in range(3)]
+    assert codes[-1] == 429

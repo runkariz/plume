@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "properties": {
+    "create": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "description": "Details of a created coupon."
+      },
+      "description": "List of coupons successfully created by the batch operation."
+    },
+    "update": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "description": "Details of an updated coupon."
+      },
+      "description": "List of coupons successfully modified by the batch operation."
+    },
+    "delete": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "description": "Details of a deleted coupon."
+      },
+      "description": "List of coupons successfully removed by the batch operation."
+    }
+  },
+  "description": "Results of the batch operations containing lists of created, updated, and deleted coupons."
+}

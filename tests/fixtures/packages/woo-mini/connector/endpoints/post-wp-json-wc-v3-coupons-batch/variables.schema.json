@@ -1,0 +1,19 @@
+{
+  "title": "Variables",
+  "type": "object",
+  "properties": {
+    "host": {
+      "type": "string",
+      "description": "API host name only, without https:// and without a trailing slash (e.g. example.com)",
+      "default": "{{ auth?.apikey?.host }}",
+      "examples": [
+        "example.com"
+      ],
+      "title": "Host"
+    }
+  },
+  "required": [
+    "host"
+  ],
+  "description": "Configurable path and URL variables used to target the WooCommerce API host."
+}

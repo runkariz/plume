@@ -1,0 +1,98 @@
+{
+  "type": "object",
+  "properties": {
+    "create": {
+      "type": "array",
+      "description": "List of coupon objects to create",
+      "items": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Unique code used by customers to apply the coupon.",
+            "title": "Coupon Code"
+          },
+          "discount_type": {
+            "type": "string",
+            "description": "Type of discount applied by the coupon, such as percent or fixed cart.",
+            "title": "Discount Type"
+          },
+          "amount": {
+            "type": "string",
+            "description": "Fixed discount value or percentage amount granted by the coupon.",
+            "title": "Discount Amount"
+          },
+          "individual_use": {
+            "type": "boolean",
+            "description": "Whether the coupon cannot be used in conjunction with other coupons.",
+            "title": "Individual Use Only"
+          },
+          "exclude_sale_items": {
+            "type": "boolean",
+            "description": "Whether the coupon cannot be applied to items that are currently on sale.",
+            "title": "Exclude Sale Items"
+          },
+          "minimum_amount": {
+            "type": "string",
+            "description": "Minimum subtotal required in the cart for the coupon to be valid.",
+            "title": "Minimum Spend Amount"
+          }
+        },
+        "description": "Properties of a new coupon to create."
+      },
+      "title": "Create Coupons",
+      "x-ui-tab": "Create"
+    },
+    "update": {
+      "type": "array",
+      "description": "List of coupon objects to update",
+      "items": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "description": "Unique identifier of the coupon to update.",
+            "title": "Coupon ID"
+          },
+          "code": {
+            "type": "string",
+            "description": "Updated code for applying the coupon.",
+            "title": "Updated Coupon Code"
+          },
+          "discount_type": {
+            "type": "string",
+            "description": "Updated discount calculation type for the coupon.",
+            "title": "Updated Discount Type"
+          },
+          "amount": {
+            "type": "string",
+            "description": "Updated discount value or percentage for the coupon.",
+            "title": "Updated Discount Amount"
+          },
+          "minimum_amount": {
+            "type": "string",
+            "description": "Updated minimum cart total needed to apply the coupon.",
+            "title": "Updated Minimum Spend Amount"
+          }
+        },
+        "description": "Properties and identifier of an existing coupon to update."
+      },
+      "title": "Update Coupons",
+      "x-ui-tab": "Update"
+    },
+    "delete": {
+      "type": "array",
+      "description": "List of coupon IDs to delete",
+      "items": {
+        "type": "integer",
+        "description": "Unique identifier of a coupon to be deleted."
+      },
+      "title": "Delete Coupons",
+      "x-ui-tab": "Delete"
+    }
+  },
+  "description": "Batch operations to create, update, or delete multiple coupons simultaneously."
+}

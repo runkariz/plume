@@ -34,6 +34,8 @@ Plume maintainer tools. Canonical models across 2..N APIs:
    (document exists, quote is in it, field and endpoint exist). A refusal lists issue codes;
    fix and resubmit. An accepted draft becomes an immutable snapshot (status
    generated_unverified): get_model(id).
+Before reusing a stored model (list_models / get_model), check stale: true means a pinned
+build is no longer latest; regenerate it with a new session or ask.
 Build control: publish_build(api, build, tag) moves a tag (refused when the quality gate
 failed); get_job(job_id) reads a maintainer job.
 """
@@ -132,9 +134,12 @@ def create_maintainer_server(deps: McpMaintainerDependencies) -> MCPServer:
         """A stored canonical model snapshot."""
 
         def run() -> dict[str, Any]:
-            snap = deps.models().snapshot(snapshot_id)
+            service = deps.models()
+            snap = service.snapshot(snapshot_id)
             return payloads.snapshot_payload(
-                snap, _names(deps.resolver(), [i.api for i in snap.inputs])
+                snap,
+                _names(deps.resolver(), [i.api for i in snap.inputs]),
+                service.stale_inputs(snap),
             )
 
         return await _run(run)
@@ -142,20 +147,17 @@ def create_maintainer_server(deps: McpMaintainerDependencies) -> MCPServer:
     @server.tool(annotations=READ, structured_output=True)
     async def list_models(api: str | None = None) -> dict[str, Any]:
         """Stored model snapshots (newest first), optionally for one API."""
-        return await _run(
-            lambda: {
+
+        def run() -> dict[str, Any]:
+            service = deps.models()
+            return {
                 "models": [
-                    {
-                        "snapshot_id": m.snapshot_id,
-                        "name": m.draft.name,
-                        "concept": m.concept,
-                        "apis": [i.api for i in m.inputs],
-                        "created_at": m.created_at.isoformat(),
-                    }
-                    for m in deps.models().list(api)
-                ]
+                    payloads.model_list_item(m, service.stale_inputs(m)) for m in service.list(api)
+                ],
+                "note": payloads.STALE_HINT,
             }
-        )
+
+        return await _run(run)
 
     @server.tool(annotations=WRITE, structured_output=True)
     async def publish_build(api: str, build: str, tag: str = "latest") -> dict[str, Any]:

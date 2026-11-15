@@ -1,0 +1,12 @@
+{
+  "authorizationType": "API_KEY",
+  "codeQueryParamName": "consumer_key",
+  "id": "api-key-authorization",
+  "name": "API key (consumer_key query parameter)",
+  "testSuccess": {
+    "status": 200
+  },
+  "testUrl": "https://{{apikey.host}}/wp-json/wc/v3/data",
+  "testUrlMethod": "GET",
+  "variableContractRef": "auth/api-key-authorization.variables.schema.json"
+}

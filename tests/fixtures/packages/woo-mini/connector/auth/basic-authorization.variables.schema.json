@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "username": {
+      "type": "string",
+      "description": "REST API Consumer Key"
+    },
+    "password": {
+      "type": "string",
+      "description": "REST API Consumer Secret"
+    },
+    "host": {
+      "type": "string",
+      "description": "API host name only, without https:// and without a trailing slash (e.g. example.com)"
+    }
+  },
+  "required": [
+    "username",
+    "password",
+    "host"
+  ],
+  "description": "Configures credentials and variables required for HTTP Basic authentication."
+}

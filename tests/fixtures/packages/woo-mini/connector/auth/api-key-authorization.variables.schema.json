@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "api_key": {
+      "type": "string",
+      "description": "API Key"
+    },
+    "host": {
+      "type": "string",
+      "description": "API host name only, without https:// and without a trailing slash (e.g. example.com)"
+    }
+  },
+  "required": [
+    "api_key",
+    "host"
+  ],
+  "description": "Configures the API key and related variables used to authenticate requests."
+}

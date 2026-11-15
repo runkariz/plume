@@ -142,7 +142,7 @@ def mcp_app(c: Container) -> Starlette:
 
     # The public reader MCP is rate limited per client address like the HTTP reader API.
     limit = c.settings.reader_rate_limit_per_minute
-    middleware = [Middleware(RateLimitMiddleware, per_minute=limit)]
+    middleware = [Middleware(RateLimitMiddleware, per_minute=limit, trusted_tokens=tokens)]
     return Starlette(routes=routes, lifespan=lifespan, middleware=middleware)
 
 

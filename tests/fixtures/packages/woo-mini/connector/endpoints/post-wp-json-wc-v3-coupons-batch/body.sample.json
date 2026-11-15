@@ -1,0 +1,23 @@
+{
+  "create": [
+    {
+      "amount": "<amount>",
+      "code": "<code>",
+      "discount_type": "<discount_type>",
+      "exclude_sale_items": false,
+      "individual_use": false,
+      "minimum_amount": "<minimum_amount>"
+    }
+  ],
+  "delete": [0
+  ],
+  "update": [
+    {
+      "amount": "<amount>",
+      "code": "<code>",
+      "discount_type": "<discount_type>",
+      "id": 0,
+      "minimum_amount": "<minimum_amount>"
+    }
+  ]
+}

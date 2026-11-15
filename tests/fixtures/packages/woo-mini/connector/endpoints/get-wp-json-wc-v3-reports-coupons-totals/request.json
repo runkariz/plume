@@ -1,0 +1,55 @@
+{
+  "actionName": "Report",
+  "apiVersion": "v3",
+  "authorizationType": "BASIC",
+  "bodyType": "NONE",
+  "description": "Retrieve and view coupons totals report.",
+  "docLink": "https://developer.woocommerce.com/docs/apis/rest-api/v3/reports/",
+  "endpointId": "get-wp-json-wc-v3-reports-coupons-totals",
+  "headersContractRef": "headers.schema.json",
+  "idempotency": {
+    "safeToRetry": true
+  },
+  "isAdvanced": false,
+  "isDataSource": true,
+  "isDeprecated": false,
+  "isPreRelease": false,
+  "method": "GET",
+  "name": "List totals",
+  "operationKind": "list",
+  "permissionNote": "Basic authentication using consumer_key and consumer_secret.",
+  "presets": [
+    "presets/bootstrap.json"
+  ],
+  "provenance": {
+    "docAnchor": "#retrieve-coupons-totals",
+    "extractedAt": "2026-11-15T00:53:37Z",
+    "sourceUrl": "https://developer.woocommerce.com/docs/apis/rest-api/v3/reports/"
+  },
+  "resource": "Report",
+  "responses": [
+    {
+      "contentContractRef": "responses/200.schema.json",
+      "contentType": "application/json",
+      "statusCode": 200
+    }
+  ],
+  "sideEffects": [
+    "none"
+  ],
+  "summary": "Retrieve and view coupons totals report.",
+  "tags": [
+    {
+      "colorSetId": 43,
+      "kind": "version",
+      "name": "v3"
+    },
+    {
+      "colorSetId": 30,
+      "kind": "category",
+      "name": "reports"
+    }
+  ],
+  "url": "https://{{req_vars.host}}/wp-json/wc/v3/reports/coupons/totals",
+  "variablesContractRef": "variables.schema.json"
+}
