@@ -1,4 +1,4 @@
-import { useMemo, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import { useMemo, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
 import type { ModelSnapshot } from '@/api/types';
 import { Card } from '@/components';
 import { CONTROLS_W, GraphControls } from './GraphControls';
@@ -41,6 +41,8 @@ export function ModelWorkbench({
   onText,
   onToggleApi,
   onSelect,
+  renderDocLink,
+  canvasHeight,
 }: {
   snap: ModelSnapshot;
   scope: 'field' | 'all';
@@ -52,6 +54,13 @@ export function ModelWorkbench({
   onText: (text: string) => void;
   onToggleApi: (apiId: string, on: boolean) => void;
   onSelect: (s: Selection) => void;
+  /** How a cited document is shown in the detail panel (a link in the web app, text when omitted). */
+  renderDocLink?: (apiId: string, docId: string) => ReactNode;
+  /**
+   * A fixed canvas height. Without it the height follows the screen (vh): an embedded view must pass one, because
+   * its own height is what the host sets from its content.
+   */
+  canvasHeight?: string;
 }) {
   const wide = useMedia(WIDE, true);
   const roomy = useMedia(OPEN_FROM, true);
@@ -78,11 +87,12 @@ export function ModelWorkbench({
       }
     : snap;
   const height =
-    scope === 'field'
+    canvasHeight ??
+    (scope === 'field'
       ? 'clamp(400px, 50vh, 520px)'
       : readable
         ? 'clamp(560px, 82vh, 860px)'
-        : 'clamp(520px, 78vh, 800px)';
+        : 'clamp(520px, 78vh, 800px)');
   const empty = (scope === 'field' && !focusedField) || graphSnap.inputs.length === 0;
 
   return (
@@ -124,7 +134,7 @@ export function ModelWorkbench({
       </div>
       <Card className="pad wb-detail" role="region" aria-label="Mapping detail">
         {selection ? (
-          <MappingDetail snap={snap} sel={selection} />
+          <MappingDetail snap={snap} sel={selection} renderDocLink={renderDocLink} />
         ) : (
           <p className="muted">This model has no mapping to show.</p>
         )}

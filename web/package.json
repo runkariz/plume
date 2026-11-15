@@ -14,7 +14,8 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "e2e:real:docker": "docker run --rm --network host --user \"$(id -u):$(id -g)\" -e HOME=/tmp -e PLUME_E2E_API_URL=${PLUME_E2E_API_URL:-http://127.0.0.1:18480} -e PLUME_E2E_TOKEN -v \"$PWD/..\":/repo -w /repo/web mcr.microsoft.com/playwright:v1.62.1-noble npx playwright test",
-    "e2e:docker": "docker run --rm --network host --user \"$(id -u):$(id -g)\" -e HOME=/tmp -v \"$PWD/..\":/repo -w /repo/web mcr.microsoft.com/playwright:v1.62.1-noble npx playwright test"
+    "e2e:docker": "docker run --rm --network host --user \"$(id -u):$(id -g)\" -e HOME=/tmp -v \"$PWD/..\":/repo -w /repo/web mcr.microsoft.com/playwright:v1.62.1-noble npx playwright test",
+    "build:widget": "vite build -c vite.widget.config.ts && node scripts/finish-widget.mjs"
   },
   "dependencies": {
     "@fontsource-variable/fraunces": "^5.3.0",

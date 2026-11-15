@@ -1,0 +1,99 @@
+/* Fonts are inlined as data: URLs by the widget build (the host's CSP allows nothing remote): latin subsets only. */
+@font-face {
+  font-family: 'Instrument Sans Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 700;
+  src: url('@fonts/instrument-sans/files/instrument-sans-latin-wght-normal.woff2')
+    format('woff2-variations');
+}
+@font-face {
+  font-family: 'JetBrains Mono Variable';
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url('@fonts/jetbrains-mono/files/jetbrains-mono-latin-wght-normal.woff2')
+    format('woff2-variations');
+}
+
+/* the host's background shows through; the cards keep our surfaces so text keeps its contrast */
+html,
+body {
+  background: var(--host-bg, transparent);
+}
+body {
+  margin: 0;
+}
+.widget {
+  padding: 12px;
+  min-width: 0;
+}
+.widget-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.widget-title {
+  font: 600 20px var(--font-sans);
+  margin: 0;
+}
+.widget-apis {
+  display: inline-flex;
+  gap: 4px;
+}
+.widget-scope {
+  margin-bottom: 10px;
+}
+.widget-note {
+  padding: 24px 8px;
+}
+.widget-summary {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+.widget-summary p {
+  margin: 0;
+}
+.widget-summary .ok {
+  color: var(--ok);
+}
+.widget-summary .warn {
+  color: var(--warn);
+}
+.widget-coverage {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-size: 14px;
+}
+.widget-coverage li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.widget-questions summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 14px;
+}
+.widget-questions ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+}
+/* a narrow frame (a chat column): the detail goes under the graph, the box starts closed */
+.widget .workbench {
+  grid-template-columns: 1fr;
+}
+.widget .wb-detail {
+  height: auto;
+  max-height: 340px;
+}

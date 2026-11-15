@@ -1016,7 +1016,7 @@ th {
 }
 .avatar-api.icon {
   box-sizing: border-box;
-  background: var(--surface);
+  background: var(--icon-tile, #fbfaf7); /* light in both themes, see .logo-img */
   border: 1px solid var(--line);
   overflow: hidden;
 }

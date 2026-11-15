@@ -369,7 +369,10 @@ pre.code {
 }
 
 .logo-img {
-  background: var(--surface);
+  background: var(
+    --icon-tile,
+    #fbfaf7
+  ); /* light in both themes: a dark mark on a dark tile is invisible */
   border: 1px solid var(--line);
   overflow: hidden;
   box-sizing: border-box; /* padding is set inline in px: a % would be relative to the card */
