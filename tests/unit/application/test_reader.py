@@ -222,3 +222,28 @@ def test_find_fact_owner_accepts_method_and_path(shop: FakeStack) -> None:
 
     with pytest.raises(NotFoundError):
         ff.execute("test-catalog-api", "orders[].total", owner="GET /nope")
+
+
+def test_paging_parameters_described_in_a_general_guide(packages: Path, tmp_path: Path) -> None:
+    """Mirakl documents max/offset/page_token once in its general notes ("Pagination is enabled
+    by default" on each list endpoint): absence on an endpoint is then not proven, and the
+    guide is the first mention."""
+    import shutil  # noqa: PLC0415
+
+    copy = tmp_path / "mirakl-paging"
+    shutil.copytree(packages / "mirakl-mini", copy)
+    guide = copy / "connector" / "knowledge" / "context.md"
+    guide.write_text(
+        guide.read_text() + "\n## Pagination\nList calls accept the query parameters `max` "
+        "(at most 100) and `offset`; seek pagination uses `page_token` from next_page_token.\n"
+    )
+    stack = FakeStack()
+    stack.load(str(copy))
+    for name in ("offset", "max", "page_token"):
+        r = stack.find_fact().execute("mirakl", name, location="query", owner="GET /api/orders")
+        assert not r.found
+        assert not r.complete, name
+        assert r.text_mentions[0].doc_id == "guide:context"
+        assert "general guidance" in r.reasons[-1]
+    # A name no guide uses keeps a proven absence.
+    assert stack.find_fact().execute("mirakl", "frobnicate", location="query").complete

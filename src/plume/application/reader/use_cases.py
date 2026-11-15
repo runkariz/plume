@@ -1,5 +1,6 @@
 """Reader use cases. Retrieval only: Claude writes the answers, Plume returns cited material."""
 
+import re
 import time
 from collections.abc import Callable, Sequence
 from typing import Literal
@@ -317,8 +318,15 @@ def _match(fact: Fact, titles: dict[str, str]) -> FactMatch:
     )
 
 
+def _general_guide(h: ChunkHit) -> bool:
+    """The API's own guides (connector knowledge), not one page of an exported site."""
+    return h.kind is DocumentKind.GUIDE and not h.doc_id.startswith("guide:page-")
+
+
 class FindFact:
     """Presence/absence of an endpoint, field or scope, with evidence and a completeness flag."""
+
+    MENTIONS = 5
 
     def __init__(
         self,
@@ -329,6 +337,21 @@ class FindFact:
         self._resolver = resolver
         self._facts = facts
         self._index = index
+
+    def _mentions(self, build_id: BuildId, name: str) -> list[ChunkHit]:
+        """Prose mentions, the API's own guides first: those general notes (pagination, rate
+        limits) are easily outranked by many pages that use the word."""
+        query = name.replace(".", " ").replace("_", " ")
+        guides = [
+            h
+            for h in self._index.text(build_id, query, 20, (DocumentKind.GUIDE,))
+            if _general_guide(h)
+        ]
+        out: list[ChunkHit] = []
+        for h in guides[:2] + self._index.text(build_id, query, self.MENTIONS, ()):
+            if h.doc_id not in {x.doc_id for x in out}:
+                out.append(h)
+        return out[: self.MENTIONS + 1]
 
     def _owner_id(self, build_id: BuildId, owner: str | None) -> str | None:
         """A document id as is; "GET /api/products" (how endpoints are shown everywhere) maps to
@@ -411,7 +434,21 @@ class FindFact:
             reasons.append(f"no model schemas are indexed for {api}")
         mentions: tuple[SearchHit, ...] = ()
         if not found:
-            hits = self._index.text(build_id, name.replace(".", " ").replace("_", " "), 5, ())
+            hits = self._mentions(build_id, name)
+            general = [  # the exact name, not just its words
+                h.doc_id
+                for h in hits
+                if _general_guide(h)
+                and re.search(rf"(?<![\w.]){re.escape(name)}(?![\w])", h.text, re.IGNORECASE)
+            ]
+            if general and fact_kind in (None, FactKind.FIELD) and loc is not FieldLocation.PATH:
+                # Mirakl: max / offset / page_token are described once in the general notes
+                # ("Pagination is enabled by default" on each list endpoint), not per endpoint.
+                complete = False
+                reasons.append(
+                    f"{general[0]} describes {name!r} as general guidance (e.g. a pagination "
+                    "parameter that applies to many endpoints); endpoint schemas do not list it"
+                )
             mentions = tuple(
                 SearchHit(
                     doc_id=h.doc_id,

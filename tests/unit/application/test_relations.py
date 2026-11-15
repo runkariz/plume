@@ -193,3 +193,28 @@ def test_real_bundled_response_models_name_their_operation(real_stack: FakeStack
     docs = {d["doc_id"]: d for a in models.context(session.session_id)["apis"]
             for d in a["documents"]}  # fmt: skip
     assert docs["model:p11-response-200-products"]["endpoint"] == "GET /api/products/offers"
+
+
+@real
+def test_real_relation_sources_prefer_where_the_api_is_read(real_stack: FakeStack) -> None:
+    """Round 3: WooCommerce Product > Image cites model:product images[] and GET responses, not
+    only the create[]/update[] paths of POST /products/batch."""
+    r = real_stack.suggest_related().execute(APIS[:2], "Product", limit=100)
+    image = next(x for x in r.related if x.key == "image")
+    woo = next(c for c in image.candidates if c.id == "product>image").sources["woocommerce"]
+    assert woo
+    assert all(e.read for e in woo)
+    assert woo[0].doc_id == "model:product"
+    assert not any("batch" in e.doc_id for e in woo)
+
+
+@real
+def test_real_image_member_context_lists_the_parent_scoped_documents(
+    real_stack: FakeStack,
+) -> None:
+    models = real_stack.models()
+    session = models.start(APIS[:2], "Image")
+    docs = {a["api"]: [d["doc_id"] for d in a["documents"]]
+            for a in models.context(session.session_id)["apis"]}  # fmt: skip
+    assert any("/products/{product_id}/images" in d for d in docs["shopify"])
+    assert docs["woocommerce"][0] == "model:productimage"

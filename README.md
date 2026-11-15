@@ -75,6 +75,17 @@ npm ci && npm run dev                          # http://127.0.0.1:18473
 
 Sign in to **Maintainer** with the token from step 1. More in [web/README.md](web/README.md).
 
+For a shared or long-running deployment, serve the built web UI and the API from **one
+origin**: a reverse proxy serves `web/dist` and forwards `/v1/` to the API (build the web with
+`VITE_API_BASE_URL` set to that same origin). Cross-origin API calls depend on
+`PLUME_CORS_ORIGINS` and are blocked by some embedded browsers (e.g. Claude's browser pane);
+same-origin needs no CORS at all. A minimal nginx block:
+
+```nginx
+location /v1/ { proxy_pass http://127.0.0.1:18480; proxy_set_header Host $host; }
+location /    { root /srv/plume-web; try_files $uri /index.html; }
+```
+
 Stop with `make down` (data is kept in a Docker volume).
 
 ## Add your own API

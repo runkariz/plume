@@ -153,7 +153,7 @@ def resolve_apis(resolver: BuildResolver, apis: list[str]) -> tuple[ResolvedBuil
     return tuple(resolver.resolve(a) for a in unique)
 
 
-def _last_literal(path: str) -> str:
+def last_literal(path: str) -> str:
     """``/api/{version}/orders/{id}.json`` -> ``orders``; id-list and count literals are skipped
     (``/product_listings/product_ids.json`` -> ``product_listings``)."""
     for seg in reversed(path.strip("/").split("/")):
@@ -172,7 +172,7 @@ def concept_docs(
         if s.kind is DocumentKind.ENDPOINT:
             key = concept_key(s.resource or "")
             if (not key or key in _NOISE) and s.path:
-                key = concept_key(_last_literal(s.path))
+                key = concept_key(last_literal(s.path))
         elif s.kind is DocumentKind.MODEL:
             if s.resource is None:
                 continue  # a bundle root ("A01 response 200") is not a concept
