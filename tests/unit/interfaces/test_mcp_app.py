@@ -157,12 +157,15 @@ async def test_bundle_override(stack: FakeStack) -> None:
     assert getattr(read.contents[0], "text", None) == "<!doctype html><p>bundle</p>"
 
 
-def test_placeholder_loads_nothing_remote_and_renders_text_only() -> None:
+def test_bundle_loads_nothing_remote_and_makes_no_requests() -> None:
+    # The packaged file is the web app's React build (web: `npm run build:widget`). React's DOM runtime
+    # contains the words innerHTML / textContent internally, so those are not checked here; the web tests
+    # check that package text is rendered as text nodes (web/src/widget/widget.test.tsx).
     html = model_view_html()
     assert not re.search(r"""(src|href)\s*=\s*["']?(https?:)?//""", html)
+    assert not re.search(r"""url\(\s*["']?(https?:)?//""", html)
     assert "fetch(" not in html
     assert "XMLHttpRequest" not in html
-    assert "innerHTML" not in html
-    assert "textContent" in html
+    assert "@font-face" not in html  # the host's default CSP has no font-src
     for method in ("ui/initialize", "ui/notifications/initialized", "ui/notifications/tool-result"):
         assert method in html

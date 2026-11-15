@@ -46,7 +46,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
-      '@fonts': fileURLToPath(new URL('./node_modules/@fontsource-variable', import.meta.url)),
     },
   },
   build: {

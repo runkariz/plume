@@ -72,15 +72,18 @@ export function WidgetApp({ connection }: { connection: HostConnection | null })
     };
   }, [connection]);
 
-  // the host decides the theme; its background shows through (the card surfaces stay ours, so text keeps its contrast)
+  // the host decides the theme (and may send its background and font); otherwise the theme's own background is used
   const theme: Theme = ctx.theme ?? systemTheme();
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     const bg = ctx.styles?.variables?.['--color-background-primary'];
-    document.documentElement.style.setProperty(
-      '--host-bg',
-      bg && !/[;{}]/.test(bg) ? bg : 'transparent',
-    );
+    if (bg && !/[;{}]/.test(bg)) document.documentElement.style.setProperty('--host-bg', bg);
+    else document.documentElement.style.removeProperty('--host-bg');
+    // the host's font stack, if it sends one (letters, digits, spaces, commas, quotes and hyphens only)
+    const font = ctx.styles?.variables?.['--font-sans'];
+    if (font && /^[\w\s,'"-]+$/.test(font))
+      document.documentElement.style.setProperty('--host-font-sans', font);
+    else document.documentElement.style.removeProperty('--host-font-sans');
   }, [theme, ctx]);
 
   // the host sizes the frame from what we report
