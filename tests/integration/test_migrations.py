@@ -14,7 +14,7 @@ def test_migration_from_empty_to_head_and_back(engine: Engine) -> None:
 
     result = MigrateSchema(migrator).execute()
     assert result.before is None
-    assert result.after == "0011"
+    assert result.after == "0012"
 
     # Idempotent.
     assert not MigrateSchema(migrator).execute().changed
@@ -22,7 +22,7 @@ def test_migration_from_empty_to_head_and_back(engine: Engine) -> None:
     migrator.downgrade_to_base()
     assert migrator.current_revision() is None
     migrator.upgrade_to_head()
-    assert migrator.current_revision() == "0011"
+    assert migrator.current_revision() == "0012"
 
 
 def test_pgvector_is_available(engine: Engine) -> None:
@@ -73,5 +73,47 @@ def test_0007_keeps_existing_models_official(engine: Engine) -> None:
     )
     assert row.released_at is not None
     assert lineage.owner_key_hash is None
+    migrator.downgrade_to_base()
+    migrator.upgrade_to_head()
+
+
+def test_0012_turns_owner_keys_into_collections(engine: Engine) -> None:
+    """Every owner-key hash becomes one collection holding its model and set lineages; the
+    old key still finds it."""
+    from alembic import command  # noqa: PLC0415
+
+    from plume.application.models.collections import owner_key_hash  # noqa: PLC0415
+    from plume.infrastructure.db.repos.collection_repo import (  # noqa: PLC0415
+        PostgresCollectionRepo,
+    )
+
+    migrator = AlembicMigrator(engine)
+    migrator.downgrade_to_base()
+    cfg = migrator._config()
+    command.upgrade(cfg, "0011")
+    h = owner_key_hash("pk_old")
+    with engine.begin() as conn:
+        for table, lineage in (("model_lineages", "u-1"), ("model_lineages", "u-2"),
+                               ("model_set_lineages", "us-1")):  # fmt: skip
+            conn.execute(
+                text(
+                    f"INSERT INTO {table} (lineage_id, owner_key_hash, created_at) "  # noqa: S608
+                    "VALUES (:l, :h, now())"
+                ),
+                {"l": lineage, "h": h},
+            )
+        conn.execute(
+            text(
+                "INSERT INTO model_lineages (lineage_id, owner_key_hash, created_at) "
+                "VALUES ('m-official', NULL, now())"
+            )
+        )
+    command.upgrade(cfg, "0012")
+    repo = PostgresCollectionRepo(engine)
+    found = repo.for_legacy_keys([h])
+    assert len(found) == 1
+    assert found[0].startswith("c-")
+    assert sorted(repo.items(found[0])) == [("model", "u-1"), ("model", "u-2"), ("set", "us-1")]
+    assert repo.containing("model", "m-official") == []
     migrator.downgrade_to_base()
     migrator.upgrade_to_head()

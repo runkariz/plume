@@ -11,6 +11,7 @@ from plume.infrastructure.db.engine import make_engine
 
 PGVECTOR_IMAGE = "pgvector/pgvector:pg16"
 TABLES = (
+    "collection_items", "collections",
     "build_assets", "model_set_members", "model_set_lineages", "model_sets", "model_set_sessions",
     "model_jobs", "model_lineages", "model_snapshots", "model_sessions",
     "job_events", "jobs", "evals",

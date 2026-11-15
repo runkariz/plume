@@ -126,11 +126,14 @@ def model_sets_router(  # noqa: PLR0915 - one route per operation
         draft: Annotated[dict[str, Any], Body()],
         maintainer: Annotated[bool, Depends(optional)],
         based_on: Annotated[str | None, Query(alias="basedOn")] = None,
+        collection: Annotated[str | None, Query(max_length=100)] = None,
     ) -> JSONResponse:
-        """Validate and store a set: unlisted without the token (with `ownerKey` for a new set),
-        unreleased with it. Relations the user has not decided carry confirmed:false."""
+        """Validate and store a set: unlisted without the token, saved into the user's "My
+        models" link (`collection`; a new one when omitted or unknown, returned as
+        `collection`), unreleased with it. Relations the user has not decided carry
+        confirmed:false."""
         try:
-            result = sets().submit(session_id, draft, based_on, maintainer)
+            result = sets().submit(session_id, draft, based_on, maintainer, collection=collection)
         except ModelDraftRefusedError as exc:
             body = payloads.refusal_payload(exc.issues)
             return JSONResponse(
@@ -142,7 +145,7 @@ def model_sets_router(  # noqa: PLR0915 - one route per operation
             {
                 "created": result.created,
                 "visibility": x.visibility,
-                "ownerKey": result.owner_key,
+                "collection": payloads.collection_payload(result.collection, web_public_url),
                 "set": set_json(x, maintainer),
             },
             status_code=201 if result.created else 200,
@@ -209,13 +212,14 @@ def model_sets_router(  # noqa: PLR0915 - one route per operation
         set_id: str,
         body: s.RelationEditRequest,
         maintainer: Annotated[bool, Depends(optional)],
+        collection: Annotated[str | None, Query(max_length=100)] = None,
     ) -> JSONResponse:
         """The web's relation editor: change relation designs (kind, cardinality, embed/ref,
         confirmed) of the latest version; a new version is stored (unlisted without the token,
         unreleased with it). Only designs whose fields exist in the members pass (see each
         relation's `editableOptions`); anything else is a revision with Claude (422)."""
         try:
-            result = sets().edit_relations(set_id, body.relations, maintainer)
+            result = sets().edit_relations(set_id, body.relations, maintainer, collection)
         except ModelDraftRefusedError as exc:
             out = payloads.refusal_payload(exc.issues)
             return JSONResponse(
@@ -227,7 +231,7 @@ def model_sets_router(  # noqa: PLR0915 - one route per operation
             {
                 "created": result.created,
                 "visibility": x.visibility,
-                "ownerKey": result.owner_key,
+                "collection": payloads.collection_payload(result.collection, web_public_url),
                 "set": set_json(x, maintainer),
             },
             status_code=201 if result.created else 200,

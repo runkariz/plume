@@ -55,6 +55,7 @@ def _reader(stack: FakeStack, html: str | None = None) -> Any:
             diff_builds=lambda: DiffBuilds(stack.builds),
             resolver=stack.resolver,
             models=stack.models,
+            collections=stack.collections,
             web_public_url="https://plume.example",
             mcp_app_html=html,
         )
@@ -111,8 +112,9 @@ async def test_results_have_structured_model_and_text_with_the_link(stack: FakeS
         assert model["shareUrl"] == link
         text = _text(saved)  # what Claude Code (no MCP Apps) shows and the model reads
         assert f"Link: {link}" in text
-        assert sc["owner_key"] in text
-        assert "Keep this key to find or list your model later" in text  # no view declared
+        assert "owner_key" not in sc
+        assert f"Your models: {sc['collection']['url']}" in text  # the My models link
+        assert "bookmark it" in text
         assert "models.json" not in text  # a cloud session can't write files
         assert "Model JSON" not in text  # Claude just wrote it
         assert "refer to it instead of redrawing it" in text
@@ -216,15 +218,3 @@ def test_view_hint_depends_on_the_client_declaring_apps() -> None:
     assert "The user sees this result as an interactive view" in shown
     assert unknown.startswith("Summary.\nIf an interactive view of this result is shown")
     assert unknown.endswith("Model JSON: {}")  # the summary stays first, the JSON last
-
-
-def test_owner_key_text_points_to_the_view_or_prints_the_key_once() -> None:
-    from plume.interfaces.mcp.model_tools import owner_key_text  # noqa: PLC0415
-
-    shown = owner_key_text("pk_secret", view_shown=True)
-    assert "pk_secret" not in shown  # the view shows it (structuredContent) with Copy
-    assert "shown in the view" in shown
-    plain = owner_key_text("pk_secret", view_shown=False)
-    assert "pk_secret" in plain
-    assert "Keep this key to find or list your model later" in plain
-    assert "models.json" not in shown + plain

@@ -14,7 +14,9 @@ from mcp.types import ToolAnnotations
 from mcp_types import CallToolResult
 
 from plume.application.errors import ApplicationError
+from plume.application.models.collections import Collections
 from plume.application.models.generate import GenerateModels
+from plume.application.models.model_sets import ModelSets
 from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import (
     ModelDraftRefusedError,
@@ -122,29 +124,18 @@ def model_text(model: dict[str, Any], full: bool = False) -> str:
     return "\n".join(lines)
 
 
-def owner_key_text(key: str, view_shown: bool) -> str:
-    """How the owner key reaches the user: the view shows it (with Copy) when the host renders
-    it; otherwise it is printed once. Plain words: it is what lists the user's models later."""
-    if view_shown:
-        return (
-            "\nAn owner key for this new model is shown in the view: keep it to find or list "
-            "your models later (list_my_models, or paste it in the web's Your models)."
-        )
-    return (
-        f"\nOwner key (shown only this once): {key}\nKeep this key to find or list your model "
-        "later: list_my_models, or paste it in the web's Your models."
-    )
+def _collection_id(value: str) -> str:
+    """A collection id, also from its pasted URL (…/mine/c-…)."""
+    return value.strip().rstrip("/").rsplit("/", 1)[-1]
 
 
-def submit_text(out: dict[str, Any], view_shown: bool = False) -> str:
+def submit_text(out: dict[str, Any]) -> str:
     if not out.get("accepted"):
         issues = json.dumps(out.get("issues", []), ensure_ascii=False)
         return f"Refused: {len(out.get('issues', []))} issue(s). {out.get('next', '')}\n{issues}"
     text = ("Stored" if out.get("created") else "Already stored") + f" ({out['stored_as']}). "
     text += model_text(out["model"])
-    if out.get("owner_key"):
-        text += owner_key_text(out["owner_key"], view_shown)
-    return text
+    return text + payloads.collection_text(out.get("collection"))
 
 
 def register_model_tools(  # noqa: PLR0915
@@ -156,6 +147,8 @@ def register_model_tools(  # noqa: PLR0915
     web_public_url: str | None = None,
     generate: Callable[[], GenerateModels] | None = None,
     related: Callable[[], SuggestRelated] | None = None,
+    collections: Callable[[], Collections] | None = None,
+    sets: Callable[[], ModelSets] | None = None,
 ) -> None:
     origin = Origin.MAINTAINER if maintainer else Origin.USER
 
@@ -246,17 +239,22 @@ def register_model_tools(  # noqa: PLR0915
         model_session: str | None = None,
         based_on: str | None = None,
         session_id: str | None = None,
+        collection: str | None = None,
     ) -> Annotated[CallToolResult, dict[str, Any]]:
         """Submit the canonical model (JSON as in draft_format). Plume checks every citation.
         Accepted -> a stored model; refused -> issues with codes (MISSING_CITATION,
         QUOTE_NOT_FOUND, FIELD_NOT_FOUND, ...): fix them and submit again. based_on (a model id)
-        makes it the next version of that model."""
+        makes it the next version of that model. collection: the user's "My models" link id
+        (c-...) from an earlier save in this conversation; omit only for the first save (a new
+        link is returned)."""
 
         sid = session_arg(model_session, session_id, "model_session")
 
         def go() -> dict[str, Any]:
             try:
-                result = models().submit(sid, draft, based_on, maintainer)
+                result = models().submit(
+                    sid, draft, based_on, maintainer, collection=None if maintainer else collection
+                )
             except ModelDraftRefusedError as exc:
                 return payloads.refusal_payload(exc.issues)
             snap = result.snapshot
@@ -272,17 +270,17 @@ def register_model_tools(  # noqa: PLR0915
                 "model": body,
                 "stored_as": stored_as,
             }
-            if result.owner_key:
-                out["owner_key"] = result.owner_key
+            link = payloads.collection_payload(result.collection, web_public_url)
+            if link:
+                out["collection"] = link
                 out["note"] = (
-                    "owner_key is shown only once; with it the user can list this model later "
-                    "(list_my_models). Give the user the link."
+                    "Give the user the model link and their My models link; pass "
+                    f"collection={link['id']!r} on every later save in this conversation."
                 )
             return out
 
         out = await run(go)
-        shown = apps_shown(ctx)
-        return ui_result(out, submit_text(out, shown), shown)
+        return ui_result(out, submit_text(out), apps_shown(ctx))
 
     @server.tool(annotations=READ, structured_output=True)
     async def get_model_session(
@@ -422,7 +420,63 @@ def register_model_tools(  # noqa: PLR0915
             return await run(go)
 
         @server.tool(annotations=READ, structured_output=True)
-        async def list_my_models(owner_keys: list[str]) -> dict[str, Any]:
-            """The user's own models: the latest version of each model started with one of
-            these owner keys (from submit_model_draft; keep them locally)."""
-            return await run(lambda: {"models": [list_item(m) for m in models().mine(owner_keys)]})
+        async def list_my_models(
+            collection: str | None = None, owner_keys: list[str] | None = None
+        ) -> dict[str, Any]:
+            """The user's own models and sets: the latest version of each in their "My models"
+            link (collection id c-..., or its URL). owner_keys: old per-model keys (transition):
+            their models and the My models links they became."""
+
+            def go() -> dict[str, Any]:
+                if collection:
+                    if collections is None:
+                        raise ApplicationError("My models links are not configured")
+                    return collection_json(collections().content(_collection_id(collection)))
+                keys = owner_keys or []
+                if not keys:
+                    raise ApplicationError("pass collection (or old owner_keys)")
+                links = collections().for_owner_keys(keys) if collections else []
+                return {
+                    "models": [list_item(m) for m in models().mine(keys)],
+                    "collections": [
+                        {"id": c, "url": payloads.collection_url(c, web_public_url)} for c in links
+                    ],
+                    "next": "Use list_my_models(collection) from now on.",
+                }
+
+            return await run(go)
+
+        @server.tool(annotations=WRITE, structured_output=True)
+        async def merge_my_models(collection: str, sources: list[str]) -> dict[str, Any]:
+            """Move every model and set of the other My models links (sources) into this one,
+            for a user who ended up with several. The old links then list nothing."""
+            if collections is None:
+                raise ToolError("My models links are not configured")
+            merging = collections
+            return await run(
+                lambda: collection_json(
+                    merging().merge(
+                        _collection_id(collection), [_collection_id(x) for x in sources]
+                    )
+                )
+            )
+
+        def collection_json(c: Any) -> dict[str, Any]:
+            set_items = []
+            if sets is not None:
+                service = sets()
+                set_items = [
+                    payloads.set_list_item(
+                        x, service.stale_inputs(x), service.lineage_info(x, False)["versions"]
+                    )
+                    for x in c.sets
+                ]
+            return {
+                "collection": {
+                    "id": c.collection_id,
+                    "url": payloads.collection_url(c.collection_id, web_public_url),
+                },
+                "mergedInto": c.merged_into,
+                "models": [list_item(m) for m in c.models],
+                "sets": set_items,
+            }

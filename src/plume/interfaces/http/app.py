@@ -19,6 +19,7 @@ from plume.application.errors import (
 from plume.application.jobs.maintainer import JobStateError, MaintainerJobs
 from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
+from plume.application.models.collections import Collections
 from plume.application.models.concepts import ModelInputError, SuggestConcepts
 from plume.application.models.generate import GenerateModels
 from plume.application.models.model_sets import ModelSets
@@ -81,6 +82,7 @@ class HttpDependencies:
     suggest_related: Callable[[], SuggestRelated] | None = None
     model_sets: Callable[[], ModelSets] | None = None
     web_public_url: str | None = None
+    collections: Callable[[], Collections] | None = None
 
 
 MAX_RAW_BYTES = 256 * 1024
@@ -554,6 +556,8 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 deps.generate_models,
                 deps.web_public_url,
                 deps.suggest_related,
+                deps.model_sets,
+                deps.collections,
             )
         )
     if deps.model_sets is not None:

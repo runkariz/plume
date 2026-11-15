@@ -117,18 +117,18 @@ def test_anonymous_model_is_unlisted_and_versioned() -> None:
     assert httpx.get(f"{API}/v1/models/{mid}", timeout=10).json()["id"] == mid
     listed = httpx.get(f"{API}/v1/models", timeout=10).json()["items"]
     assert mid not in {m["id"] for m in listed}
+    link = body["collection"]["id"]  # the My models link (Postgres-backed collection)
     rev = httpx.post(f"{API}/v1/models/{mid}/revise", timeout=10).json()
     v2 = httpx.post(
         f"{API}/v1/models/sessions/{rev['sessionId']}/draft",
-        params={"basedOn": mid},
+        params={"basedOn": mid, "collection": link},
         json=dict(_draft("good"), description="Second version."),
         timeout=30,
     ).json()
     assert v2["model"]["lineage"]["version"] == 2
-    mine = httpx.post(
-        f"{API}/v1/models/mine", json={"ownerKeys": [body["ownerKey"]]}, timeout=10
-    ).json()
-    assert [m["id"] for m in mine["items"]] == [v2["model"]["id"]]
+    assert v2["collection"]["id"] == link
+    mine = httpx.get(f"{API}/v1/collections/{link}", timeout=10).json()
+    assert [m["id"] for m in mine["models"]] == [v2["model"]["id"]]
 
 
 @pytest.mark.anyio

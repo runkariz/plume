@@ -3,6 +3,7 @@ from collections.abc import Sequence
 from dataclasses import replace
 from datetime import datetime
 
+from plume.application.ports.collection_repo import Collection
 from plume.application.ports.model_repo import ModelJob, ModelSession
 from plume.application.ports.model_set_repo import SetSession
 from plume.application.ports.model_writer import (
@@ -218,3 +219,48 @@ class InMemoryModelSetRepo:
             for s in self.sets.values()
             if any(m.model_id == snapshot_id for m in s.draft.members)
         )
+
+
+class InMemoryCollectionRepo:
+    def __init__(self) -> None:
+        self.collections: dict[str, Collection] = {}
+        self.legacy: dict[str, str] = {}  # key hash -> collection id
+        self.entries: dict[str, list[tuple[str, str, datetime]]] = {}
+
+    def create(
+        self, collection_id: str, created_at: datetime, legacy_key_hash: str | None = None
+    ) -> None:
+        self.collections[collection_id] = Collection(collection_id, created_at)
+        self.entries.setdefault(collection_id, [])
+        if legacy_key_hash:
+            self.legacy[legacy_key_hash] = collection_id
+
+    def get(self, collection_id: str) -> Collection | None:
+        return self.collections.get(collection_id)
+
+    def add(self, collection_id: str, kind: str, lineage_id: str, at: datetime) -> bool:
+        rows = self.entries.setdefault(collection_id, [])
+        if any((k, lin) == (kind, lineage_id) for k, lin, _ in rows):
+            return False
+        rows.append((kind, lineage_id, at))
+        return True
+
+    def items(self, collection_id: str) -> list[tuple[str, str]]:
+        rows = sorted(self.entries.get(collection_id, []), key=lambda r: r[2], reverse=True)
+        return [(k, lin) for k, lin, _ in rows]
+
+    def containing(self, kind: str, lineage_id: str) -> list[str]:
+        return [
+            cid
+            for cid, rows in self.entries.items()
+            if any((k, lin) == (kind, lineage_id) for k, lin, _ in rows)
+        ]
+
+    def for_legacy_keys(self, key_hashes: Sequence[str]) -> list[str]:
+        return list(dict.fromkeys(self.legacy[h] for h in key_hashes if h in self.legacy))
+
+    def merge(self, into: str, source: str, at: datetime) -> int:
+        moved = sum(self.add(into, k, lin, at) for k, lin, _ in self.entries.get(source, []))
+        self.entries[source] = []
+        self.collections[source] = replace(self.collections[source], merged_into=into)
+        return moved
