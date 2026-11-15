@@ -33,7 +33,8 @@ class LocalPackageStorage:
             raise SourcePackageError("the zip expands too much")
         target = self._root / "jobs" / job_id / "package"
         target.mkdir(parents=True, exist_ok=False)
-        (self._root / "jobs" / job_id / Path(filename).name).write_bytes(data)
+        # The client's file name is only shown back (job.package.filename), never used as a path.
+        (self._root / "jobs" / job_id / "upload.zip").write_bytes(data)
         for m in members:
             name = PurePosixPath(m.filename.replace("\\", "/"))
             if name.is_absolute() or ".." in name.parts or not name.parts:

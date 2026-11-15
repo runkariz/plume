@@ -8,8 +8,10 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, PostgresDsn, SecretStr
+from pydantic import Field, PostgresDsn, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+MIN_TOKEN_LENGTH = 16
 
 
 class Settings(BaseSettings):
@@ -66,6 +68,17 @@ class Settings(BaseSettings):
     )
     max_upload_bytes: int = Field(default=200 * 1024 * 1024, ge=1024)
     cors_origins: tuple[str, ...] = ("http://127.0.0.1:18473", "http://localhost:18473")
+
+    @field_validator("maintainer_tokens")
+    @classmethod
+    def _strong_tokens(cls, tokens: tuple[SecretStr, ...]) -> tuple[SecretStr, ...]:
+        for t in tokens:
+            value = t.get_secret_value()
+            if len(value) < MIN_TOKEN_LENGTH or value != value.strip():
+                raise ValueError(
+                    f"maintainer tokens must be at least {MIN_TOKEN_LENGTH} characters, no spaces"
+                )
+        return tokens
 
     @property
     def sqlalchemy_url(self) -> str:

@@ -5,6 +5,7 @@ The wizard flow of the web UI and the maintainer API. Builds run through the sam
 and is refused when the quality gate failed.
 """
 
+import logging
 import time
 import uuid
 from collections.abc import Callable
@@ -44,6 +45,7 @@ from plume.domain.knowledge.tag import TagName
 from plume.domain.shared.errors import InvalidIdentifierError
 from plume.domain.shared.ids import BuildId
 
+logger = logging.getLogger("plume.jobs")
 DIFF_ITEMS_SHOWN = 200
 USD_PER_MILLION_TOKENS = 0.15  # gemini-embedding-001 list price; an estimate only
 
@@ -375,10 +377,15 @@ class MaintainerJobs:
                 job_id, job.package_path, tag=None, api_id=ApiId(job.api_id or "")
             )
         except Exception as exc:
-            self._jobs.save(replace(self.get(job_id), status=JobStatus.FAILED, error=str(exc)))
-            self._events.append(
-                job_id, {"type": "done", "status": "failed", "message": str(exc)[:500]}
-            )
+            # Application errors are meant for users; anything else (database, driver) may carry
+            # internals such as SQL, so it is logged and replaced by a generic message.
+            if isinstance(exc, ApplicationError):
+                message = str(exc)[:500]
+            else:
+                logger.exception("build of job %s failed", job_id)
+                message = f"internal error ({type(exc).__name__}); see the server log"
+            self._jobs.save(replace(self.get(job_id), status=JobStatus.FAILED, error=message))
+            self._events.append(job_id, {"type": "done", "status": "failed", "message": message})
             return
         eval_view = self._eval_view(job, result.build_id)
         self._jobs.save(
