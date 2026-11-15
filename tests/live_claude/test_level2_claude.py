@@ -16,7 +16,16 @@ from typing import Any
 import httpx
 import pytest
 
-from tests.live_claude.harness import Check, Run, Stack, check_model, check_reader, run_claude
+from tests.live_claude.harness import (
+    Check,
+    Run,
+    Stack,
+    check_model,
+    check_reader,
+    request_json,
+    run_claude,
+    stack_client,
+)
 
 pytestmark = pytest.mark.claude_live
 
@@ -110,8 +119,9 @@ def _fail_message(checks: list[Check]) -> str:
 def test_canonical_model(stack: Stack, case: str, apis: list[str], prompt: str) -> None:
     if stack.token_file is None:
         pytest.skip("PLUME_L2_TOKEN_FILE is needed for the maintainer MCP")
-    with httpx.Client(base_url=stack.api, timeout=30) as http:
-        before = {m["id"] for m in http.get("/v1/models", params={"limit": 200}).json()["items"]}
+    with stack_client(stack) as http:
+        listed = request_json(http, "GET", "/v1/models", params={"limit": 200})
+        before = {m["id"] for m in listed["items"]}
     run = run_claude(stack, prompt, _budget())
     min_cov = float(os.environ.get("PLUME_L2_MIN_COVERAGE", "0.3"))
     checks = check_model(stack, run, before, min_cov)

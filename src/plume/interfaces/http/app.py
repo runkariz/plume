@@ -112,7 +112,11 @@ def create_app(deps: HttpDependencies) -> FastAPI:
         "the build it was read from. Retrieval only: clients (Claude) write the answers.",
     )
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=deps.max_upload_bytes)
-    app.add_middleware(RateLimitMiddleware, per_minute=deps.rate_limit_per_minute)
+    app.add_middleware(
+        RateLimitMiddleware,
+        per_minute=deps.rate_limit_per_minute,
+        trusted_tokens=deps.maintainer_tokens,
+    )
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(
         CORSMiddleware,

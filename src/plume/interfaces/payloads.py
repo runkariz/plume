@@ -169,8 +169,10 @@ def suggestions_payload(s: Suggestions) -> Json:
     }
 
 
-def snapshot_payload(m: ModelSnapshot, names: dict[str, str]) -> Json:
-    """The ModelSnapshot JSON (HTTP and MCP)."""
+def snapshot_payload(
+    m: ModelSnapshot, names: dict[str, str], stale_inputs: list[dict[str, str | None]] | None = None
+) -> Json:
+    """The ModelSnapshot JSON (HTTP and MCP). ``stale`` = a pinned build is no longer latest."""
     fields = []
     for f in m.draft.fields:
         sources = {}
@@ -203,6 +205,8 @@ def snapshot_payload(m: ModelSnapshot, names: dict[str, str]) -> Json:
         "description": m.draft.description,
         "concept": m.concept,
         "status": m.status,
+        "stale": bool(stale_inputs),
+        "staleInputs": list(stale_inputs or []),
         "generatedAt": m.created_at.isoformat(),
         "promptVersion": m.prompt_version,
         "sessionId": m.session_id,
@@ -219,6 +223,24 @@ def snapshot_payload(m: ModelSnapshot, names: dict[str, str]) -> Json:
             "missing": [],
         },
     }
+
+
+def model_list_item(m: ModelSnapshot, stale_inputs: list[dict[str, str | None]]) -> Json:
+    return {
+        "snapshot_id": m.snapshot_id,
+        "name": m.draft.name,
+        "concept": m.concept,
+        "apis": [i.api for i in m.inputs],
+        "created_at": m.created_at.isoformat(),
+        "stale": bool(stale_inputs),
+        "stale_inputs": stale_inputs,
+    }
+
+
+STALE_HINT = (
+    "A model with stale=true was built on older builds of at least one API (see stale_inputs): "
+    "say so, and regenerate it (start_model_session) or ask before relying on it."
+)
 
 
 def refusal_payload(issues: list[Issue]) -> Json:

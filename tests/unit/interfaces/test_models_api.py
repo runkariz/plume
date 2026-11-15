@@ -104,6 +104,8 @@ def test_generate_submit_get(client: TestClient) -> None:
 
     got = client.get(f"/v1/models/{model['id']}").json()
     assert got == model
+    assert got["stale"] is False
+    assert got["staleInputs"] == []
     assert (
         client.get("/v1/models", params={"api": "test-catalog-api"}).json()["items"][0]["id"]
         == model["id"]
@@ -156,6 +158,8 @@ async def test_maintainer_mcp_model_flow(stack: FakeStack) -> None:
         assert snap["name"] == "Order"
         listed = await call(client, "list_models", api="second-catalog-api")
         assert listed["models"][0]["snapshot_id"] == accepted["snapshot_id"]
+        assert listed["models"][0]["stale"] is False
+        assert "stale" in listed["note"]
         build = stack.resolver().resolve("test-catalog-api").build.build_id.value
         pub = await call(client, "publish_build", api="test-catalog-api", build=build, tag="stable")
         assert pub["previous"] is None

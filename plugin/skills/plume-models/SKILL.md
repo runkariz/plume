@@ -8,7 +8,9 @@ description: Build a canonical data model (e.g. Order, Product) across two or mo
 Needs the `plume-maintainer` MCP server (bearer token). Reading stored models only needs the
 reader (`get_model`, `list_models`).
 
-1. Check `list_models(api)` first: reuse a snapshot for the same APIs and concept.
+1. Check `list_models(api)` first: reuse a snapshot for the same APIs and concept only when
+   `stale` is false. `stale: true` means it was built on older builds (see `stale_inputs`):
+   tell the user and regenerate it (steps 2-6) or ask before relying on it.
 2. `suggest_concepts(apis)` → pick the concept the user means.
 3. `start_model_session(apis, concept)` → `get_model_context(session_id)` (a compact index).
 4. For each API, `get_model_evidence(session_id, api)` and follow `next_cursor` until it is
