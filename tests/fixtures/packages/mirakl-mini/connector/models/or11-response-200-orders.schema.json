@@ -1,0 +1,291 @@
+{
+  "title": "OR11_Response_200_Orders",
+  "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+  "x-complete": true,
+  "type": "object",
+  "properties": {
+    "acceptance_decision_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The date where the shop decided to accept or refuse the order. Null when the order was automatically refused or accepted."
+    },
+    "can_cancel": {
+      "type": "boolean",
+      "description": "Indicate if the order can be cancelled"
+    },
+    "can_shop_ship": {
+      "type": "boolean",
+      "description": "Indicates if shops can or cannot ship orders"
+    },
+    "channel": {
+      "$ref": "or11-response-200-orders-channel.schema.json",
+      "description": "The channel of the commercial's order"
+    },
+    "commercial_id": {
+      "type": "string",
+      "description": "Commercial order's identifier"
+    },
+    "created_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Order's creation date"
+    },
+    "currency_iso_code": {
+      "type": "string",
+      "description": "Shop's currency (iso format)\n\nEnum: `\"AED\"`, `\"ARS\"`, `\"AUD\"`, `\"BAM\"`, `\"BGN\"`, `\"BHD\"`, `\"BRL\"`, `\"CAD\"`, `\"CHF\"`, `\"CLP\"`, `\"CNY\"`, `\"COP\"`, `\"CZK\"`, `\"DKK\"`, `\"EGP\"`, `\"EUR\"`, `\"GBP\"`, `\"GEL\"`, `\"GTQ\"`, `\"HKD\"`, `\"HRK\"`, `\"HUF\"`, `\"IDR\"`, `\"ILS\"`, `\"INR\"`, `\"IQD\"`, `\"JOD\"`, `\"JPY\"`, `\"KES\"`, `\"KRW\"`, `\"KWD\"`, `\"LKR\"`, `\"MAD\"`, `\"MGA\"`, `\"MXN\"`, `\"MYR\"`, `\"NGN\"`, `\"NOK\"`, `\"NZD\"`, `\"OMR\"`, `\"PEN\"`, `\"PHP\"`, `\"PKR\"`, `\"PLN\"`, `\"QAR\"`, `\"RON\"`, `\"RSD\"`, `\"RUB\"`, `\"SAR\"`, `\"SEK\"`, `\"SGD\"`, `\"TND\"`, `\"TRY\"`, `\"THB\"`, `\"TWD\"`, `\"UAH\"`, `\"USD\"`, `\"UYU\"`, `\"UZS\"`, `\"VND\"`, `\"ZAR\"`\n"
+    },
+    "customer": {
+      "$ref": "or11-response-200-orders-customer.schema.json",
+      "description": "Information of the customer who ordered"
+    },
+    "customer_debited_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The payment's date of the order by the customer"
+    },
+    "customer_directly_pays_seller": {
+      "type": "boolean",
+      "description": "True if order is paid directly to seller. False otherwise."
+    },
+    "customer_notification_email": {
+      "type": "string",
+      "description": "Anonymized customer email usable for notifications that do not expect an answer"
+    },
+    "delivery_date": {
+      "$ref": "or11-response-200-orders-deliverydate.schema.json",
+      "description": "Expected order delivery date"
+    },
+    "discount_campaigns": {
+      "type": "array",
+      "description": "List of discount campaigns applied to one or more order lines in this order.<br/>This field aggregates all unique discount campaigns present across all order lines.<br/>Empty or absent if no discount campaigns were applied to any order line.",
+      "items": {
+        "$ref": "or11-response-200-orders-discountcampaigns.schema.json",
+        "description": "Discount campaign applied to one or more items within the order."
+      }
+    },
+    "fulfillment": {
+      "$ref": "or11-response-200-orders-fulfillment.schema.json",
+      "description": "Fulfillment information"
+    },
+    "fully_refunded": {
+      "type": "boolean",
+      "description": "Refunds have been requested and their cumulated amounts correspond to the sum of all remaining active order lines."
+    },
+    "has_customer_message": {
+      "type": "boolean",
+      "description": "Indicate if the customer has sent a message related to this order"
+    },
+    "has_incident": {
+      "type": "boolean",
+      "description": "Indicate if order has incident on at least one order line"
+    },
+    "has_invoice": {
+      "type": "boolean",
+      "description": "Is an invoice available for this order."
+    },
+    "invoice_details": {
+      "$ref": "or11-response-200-orders-invoicedetails.schema.json",
+      "description": "Invoice information linked to the order"
+    },
+    "last_updated_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Order's last updated date"
+    },
+    "leadtime_to_ship": {
+      "type": "integer",
+      "format": "int32",
+      "deprecated": true,
+      "description": "Order's lead time to ship, in calendar days."
+    },
+    "order_additional_fields": {
+      "type": "array",
+      "description": "Order's custom fields",
+      "items": {
+        "$ref": "or11-response-200-orders-orderadditionalfields.schema.json",
+        "description": "Custom key-value field associated with the order."
+      }
+    },
+    "order_id": {
+      "type": "string",
+      "description": "Order's identifier"
+    },
+    "order_lines": {
+      "type": "array",
+      "description": "Order lines",
+      "items": {
+        "$ref": "or11-response-200-orders-orderlines.schema.json",
+        "description": "Individual product item and purchase details included in the order."
+      }
+    },
+    "order_refunds": {
+      "type": "array",
+      "description": "The list of refunds aggregated by group identifier<br/>Available when feature ‘order level tax calculation’ is enabled",
+      "items": {
+        "$ref": "or11-response-200-orders-orderrefunds.schema.json",
+        "description": "Refund transaction issued against the order."
+      }
+    },
+    "order_state": {
+      "type": "string",
+      "description": "Order's state\n\nEnum: `\"STAGING\"`, `\"WAITING_ACCEPTANCE\"`, `\"WAITING_DEBIT\"`, `\"WAITING_DEBIT_PAYMENT\"`, `\"SHIPPING\"`, `\"SHIPPED\"`, `\"TO_COLLECT\"`, `\"RECEIVED\"`, `\"CLOSED\"`, `\"REFUSED\"`, `\"CANCELED\"`\n\n<details>\n  <summary>See deprecated values</summary>\n\n  Deprecated values: `\"WAITING_REFUND\"`, `\"WAITING_REFUND_PAYMENT\"`\n</details>\n"
+    },
+    "order_state_reason_code": {
+      "type": "string",
+      "description": "Reason's code of the order state"
+    },
+    "order_state_reason_label": {
+      "type": "string",
+      "description": "<span>Reason's label of the order state </span><span title=\"This field is localized: its value uses the locale provided in the parameters\" class=\"flag\"></span>"
+    },
+    "order_tax_mode": {
+      "type": "string",
+      "description": "Please note: In case there is no tax, the prices will show the same amount in TAX_EXCLUDED and TAX_INCLUDED mode. The tax mode is only useful if taxes are specified in the order.<br>Possible values: <ul><li><code>TAX_EXCLUDED</code>: the price fields (price, unit price, shipping price, cancellation amount, refund amount and order total prices) are expressed without tax (taxes should be added to these prices in order to get the full amount including taxes).</li><li><code>TAX_INCLUDED</code>: the price fields include the tax amount. </li></ul>\n\nEnum: `\"TAX_INCLUDED\"`, `\"TAX_EXCLUDED\"`\n"
+    },
+    "order_taxes": {
+      "type": "array",
+      "description": "Total amount of taxes aggregated per tax code and rate<br/>Available when feature ‘order level tax calculation’ is enabled",
+      "items": {
+        "$ref": "or11-response-200-orders-ordertaxes.schema.json",
+        "description": "Tax breakdown applied to the order."
+      }
+    },
+    "paymentType": {
+      "type": "string",
+      "deprecated": true,
+      "description": "<strong>Warning: this field has been replaced by <code>payment_type</code> and will be removed soon.</strong>"
+    },
+    "payment_duration": {
+      "type": "integer",
+      "format": "int32",
+      "description": "The payment's duration (i.e. the delay after which the order is supposed to be paid), in days.<br/>Only applicable for <code>PAY_ON_DUE_DATE</code> orders, null otherwise.<br/>Note that this field has currently no impact on the order workflow, it is provided for information purposes."
+    },
+    "payment_type": {
+      "type": "string",
+      "description": "The payment's type used by the customer to pay this order"
+    },
+    "payment_workflow": {
+      "type": "string",
+      "description": "The payment workflow followed by the order\n\nEnum: `\"PAY_ON_ACCEPTANCE\"`, `\"PAY_ON_DELIVERY\"`, `\"PAY_ON_DUE_DATE\"`, `\"PAY_ON_SHIPMENT\"`, `\"NO_CUSTOMER_PAYMENT_CONFIRMATION\"`\n"
+    },
+    "price": {
+      "type": "number",
+      "format": "with decimals",
+      "description": "Order's price (sum of order line's price)"
+    },
+    "promotions": {
+      "$ref": "or11-response-200-orders-promotions.schema.json",
+      "description": "Promotions' summary applied to the order"
+    },
+    "quote_id": {
+      "type": "string",
+      "description": "Quote's id from which the order has been placed, or null if it was not from a quote"
+    },
+    "references": {
+      "$ref": "or11-response-200-orders-references.schema.json",
+      "description": "Order references"
+    },
+    "shipping_carrier_code": {
+      "type": "string",
+      "description": "Shipping carrier code (associated with the Shipping company label)"
+    },
+    "shipping_carrier_standard_code": {
+      "type": "string",
+      "description": "Shipping carrier standard code (associated with the shipping carrier code)"
+    },
+    "shipping_company": {
+      "type": "string",
+      "description": "Shipping company"
+    },
+    "shipping_deadline": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Order's shipping deadline"
+    },
+    "shipping_price": {
+      "type": "number",
+      "format": "with decimals",
+      "description": "Order's shipping price (sum of order line's shipping price)"
+    },
+    "shipping_pudo_id": {
+      "type": "string",
+      "description": "PickUp DropOff (PUDO) point identifier"
+    },
+    "shipping_tracking": {
+      "type": "string",
+      "description": "Shipping tracking"
+    },
+    "shipping_tracking_url": {
+      "type": "string",
+      "description": "Shipping tracking url"
+    },
+    "shipping_type_code": {
+      "type": "string",
+      "description": "Code of shipping's type"
+    },
+    "shipping_type_label": {
+      "type": "string",
+      "description": "<span>Label of shipping's type </span><span title=\"This field is localized: its value uses the locale provided in the parameters\" class=\"flag\"></span>"
+    },
+    "shipping_type_standard_code": {
+      "type": "string",
+      "description": "Shipping type's standard code"
+    },
+    "shipping_zone_code": {
+      "type": "string",
+      "description": "Code of shipping's zone"
+    },
+    "shipping_zone_label": {
+      "type": "string",
+      "description": "<span>Label of shipping's zone </span><span title=\"This field is localized: its value uses the locale provided in the parameters\" class=\"flag\"></span>"
+    },
+    "total_commission": {
+      "type": "number",
+      "format": "with decimals",
+      "description": "Order's total commission (sum of the order line's total commission)"
+    },
+    "total_price": {
+      "type": "number",
+      "format": "with decimals",
+      "description": "Total order's price (sum of the order's price with shipping price and fees)."
+    },
+    "transaction_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Payment's transaction date"
+    },
+    "transaction_number": {
+      "type": "string",
+      "description": "Payment's transaction number"
+    }
+  },
+  "required": [
+    "can_cancel",
+    "can_shop_ship",
+    "commercial_id",
+    "created_date",
+    "currency_iso_code",
+    "customer",
+    "fulfillment",
+    "fully_refunded",
+    "has_customer_message",
+    "has_incident",
+    "has_invoice",
+    "last_updated_date",
+    "leadtime_to_ship",
+    "order_id",
+    "order_lines",
+    "order_state",
+    "order_tax_mode",
+    "paymentType",
+    "price",
+    "shipping_price",
+    "shipping_type_code",
+    "shipping_type_label",
+    "shipping_zone_code",
+    "shipping_zone_label",
+    "total_commission",
+    "total_price"
+  ],
+  "description": "Comprehensive details of an order including customer, line items, and fulfillment status."
+}

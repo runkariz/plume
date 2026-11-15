@@ -88,6 +88,8 @@ def _summary(o: ApiOverview) -> s.ApiSummary:
         summary=info.summary,
         endpoints=o.counts.get("endpoint", 0),
         models=o.counts.get("model", 0),
+        model_shapes=o.counts.get("model_shapes", 0),
+        model_names=o.counts.get("model_names", 0),
         guides=o.counts.get("guide", 0),
         docs_as_of=o.ref.docs_as_of if o.ref else None,
         status=s.ApiStatus(

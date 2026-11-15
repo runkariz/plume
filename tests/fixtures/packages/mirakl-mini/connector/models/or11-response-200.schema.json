@@ -1,0 +1,26 @@
+{
+  "title": "OR11_Response_200",
+  "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+  "x-complete": true,
+  "type": "object",
+  "properties": {
+    "orders": {
+      "type": "array",
+      "description": "List of orders",
+      "items": {
+        "$ref": "or11-response-200-orders.schema.json",
+        "description": "Detailed order information."
+      }
+    },
+    "total_count": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Total count of orders"
+    }
+  },
+  "required": [
+    "orders",
+    "total_count"
+  ],
+  "description": "Paginated response containing a list of retrieved orders and total count."
+}

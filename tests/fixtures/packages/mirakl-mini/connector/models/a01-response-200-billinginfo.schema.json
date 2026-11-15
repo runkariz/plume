@@ -1,0 +1,38 @@
+{
+  "title": "A01_Response_200_BillingInfo",
+  "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+  "x-complete": true,
+  "type": "object",
+  "deprecated": true,
+  "properties": {
+    "bank_city": {
+      "type": "string",
+      "description": "City of the bank"
+    },
+    "bank_name": {
+      "type": "string",
+      "description": "Name of the bank"
+    },
+    "bank_street": {
+      "type": "string",
+      "description": "Address of the bank"
+    },
+    "bic": {
+      "type": "string",
+      "description": "BIC of the bank associated to the account"
+    },
+    "iban": {
+      "type": "string",
+      "description": "IBAN of the bank account"
+    },
+    "owner": {
+      "type": "string",
+      "description": "Name of the owner of the bank account"
+    },
+    "zip_code": {
+      "type": "string",
+      "description": "Zip code of the bank"
+    }
+  },
+  "description": "Deprecated banking and account information for the shop."
+}

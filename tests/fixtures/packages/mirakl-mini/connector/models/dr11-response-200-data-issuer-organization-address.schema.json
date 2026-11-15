@@ -1,0 +1,38 @@
+{
+  "title": "DR11_Response_200_Data_Issuer_Organization_Address",
+  "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+  "x-complete": true,
+  "type": "object",
+  "properties": {
+    "city": {
+      "type": "string",
+      "description": "Address city"
+    },
+    "country_iso_code": {
+      "type": "string",
+      "description": "Country ISO 3166-1 code of the address"
+    },
+    "state": {
+      "type": "string",
+      "description": "Address state"
+    },
+    "street_1": {
+      "type": "string",
+      "description": "First information line of the address street, mandatory except if country_iso_code = \"JPN\"."
+    },
+    "street_2": {
+      "type": "string",
+      "description": "Second information line of the address street"
+    },
+    "zip_code": {
+      "type": "string",
+      "description": "Address zip code"
+    }
+  },
+  "required": [
+    "city",
+    "country_iso_code",
+    "street_1"
+  ],
+  "description": "Postal address details of the issuer organization."
+}

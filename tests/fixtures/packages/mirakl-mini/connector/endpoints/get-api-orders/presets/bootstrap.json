@@ -1,0 +1,12 @@
+{
+  "configJson": {
+    "ConfigType": 1,
+    "CursorPaginationEnabled": false,
+    "GetAllPages": false,
+    "HeaderContractData": "{\"Authorization\":\"{{ auth?.apikey?.access_token }}\"}",
+    "InheritsAuth": false
+  },
+  "description": "Init the datasource",
+  "isPublicEntity": true,
+  "name": "Bootstrap"
+}

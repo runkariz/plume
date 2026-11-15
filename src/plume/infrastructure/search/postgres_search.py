@@ -163,8 +163,19 @@ class PostgresSearchIndex:
             chunks = conn.execute(
                 text("SELECT count(*) FROM chunks WHERE build_id = :b"), {"b": build_id.value}
             ).scalar_one()
+            models = conn.execute(
+                text(
+                    "SELECT count(DISTINCT coalesce(shape, doc_id)) AS shapes, "
+                    "count(DISTINCT lower(split_part(title, ' / ', -1))) FILTER ("
+                    "WHERE resource IS NOT NULL) AS names "
+                    "FROM documents WHERE build_id = :b AND kind = 'model'"
+                ),
+                {"b": build_id.value},
+            ).one()
         out = {r.kind: int(r.n) for r in rows}
         out["chunks"] = int(chunks)
+        out["model_shapes"] = int(models.shapes)
+        out["model_names"] = int(models.names or 0)
         return out
 
 

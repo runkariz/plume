@@ -1,0 +1,67 @@
+{
+  "title": "A02_Request_Address",
+  "description": "The address of the shop. Cannot be null.",
+  "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+  "x-complete": true,
+  "type": "object",
+  "properties": {
+    "city": {
+      "type": "string",
+      "description": "City of the shop contact. Cannot be null.",
+      "title": "City"
+    },
+    "civility": {
+      "type": "string",
+      "description": "Civility of the shop contact. Cannot be null.",
+      "title": "Civility"
+    },
+    "country": {
+      "type": "string",
+      "description": "Country ISO 3166-1 code of the shop contact, used by Mirakl to format the address (back office, delivery bill, invoices...) and to adapt the address validation to the country (see <code>zip_code</code> field). Cannot be null.\n\nEnum: `\"AFG\"`, `\"ALA\"`, `\"ALB\"`, `\"DZA\"`, `\"ASM\"`, `\"AND\"`, `\"AGO\"`, `\"AIA\"`, `\"ATA\"`, `\"ATG\"`, `\"ARG\"`, `\"ARM\"`, `\"ABW\"`, `\"AUS\"`, `\"AUT\"`, `\"AZE\"`, `\"BHS\"`, `\"BHR\"`, `\"BGD\"`, `\"BRB\"`, `\"BLR\"`, `\"BEL\"`, `\"BLZ\"`, `\"BEN\"`, `\"BMU\"`, `\"BTN\"`, `\"BOL\"`, `\"BES\"`, `\"BIH\"`, `\"BWA\"`, `\"BVT\"`, `\"BRA\"`, `\"IOT\"`, `\"BRN\"`, `\"BGR\"`, `\"BFA\"`, `\"BDI\"`, `\"KHM\"`, `\"CMR\"`, `\"CAN\"`, `\"CPV\"`, `\"CYM\"`, `\"CAF\"`, `\"TCD\"`, `\"CHL\"`, `\"CHN\"`, `\"CXR\"`, `\"CCK\"`, `\"COL\"`, `\"COM\"`, `\"COG\"`, `\"COD\"`, `\"COK\"`, `\"CRI\"`, `\"CIV\"`, `\"HRV\"`, `\"CUB\"`, `\"CUW\"`, `\"CYP\"`, `\"CZE\"`, `\"DNK\"`, `\"DJI\"`, `\"DMA\"`, `\"DOM\"`, `\"ECU\"`, `\"EGY\"`, `\"SLV\"`, `\"GNQ\"`, `\"ERI\"`, `\"EST\"`, `\"ETH\"`, `\"FLK\"`, `\"FRO\"`, `\"FJI\"`, `\"FIN\"`, `\"FRA\"`, `\"GUF\"`, `\"PYF\"`, `\"ATF\"`, `\"GAB\"`, `\"GMB\"`, `\"GEO\"`, `\"DEU\"`, `\"GHA\"`, `\"GIB\"`, `\"GRC\"`, `\"GRL\"`, `\"GRD\"`, `\"GLP\"`, `\"GUM\"`, `\"GTM\"`, `\"GGY\"`, `\"GIN\"`, `\"GNB\"`, `\"GUY\"`, `\"HTI\"`, `\"HMD\"`, `\"VAT\"`, `\"HND\"`, `\"HKG\"`, `\"HUN\"`, `\"ISL\"`, `\"IND\"`, `\"IDN\"`, `\"IRQ\"`, `\"IRL\"`, `\"IMN\"`, `\"ISR\"`, `\"ITA\"`, `\"JAM\"`, `\"JPN\"`, `\"JEY\"`, `\"JOR\"`, `\"KAZ\"`, `\"KEN\"`, `\"KIR\"`, `\"KOR\"`, `\"KWT\"`, `\"KGZ\"`, `\"LAO\"`, `\"LVA\"`, `\"LBN\"`, `\"LSO\"`, `\"LBR\"`, `\"LBY\"`, `\"LIE\"`, `\"LTU\"`, `\"LUX\"`, `\"MAC\"`, `\"MKD\"`, `\"MDG\"`, `\"MWI\"`, `\"MYS\"`, `\"MDV\"`, `\"MLI\"`, `\"MLT\"`, `\"MHL\"`, `\"MTQ\"`, `\"MRT\"`, `\"MUS\"`, `\"MYT\"`, `\"MEX\"`, `\"FSM\"`, `\"MDA\"`, `\"MCO\"`, `\"MNG\"`, `\"MNE\"`, `\"MSR\"`, `\"MAR\"`, `\"MOZ\"`, `\"MMR\"`, `\"NAM\"`, `\"NRU\"`, `\"NPL\"`, `\"NLD\"`, `\"NCL\"`, `\"NZL\"`, `\"NIC\"`, `\"NER\"`, `\"NGA\"`, `\"NIU\"`, `\"NFK\"`, `\"MNP\"`, `\"NOR\"`, `\"OMN\"`, `\"PAK\"`, `\"PLW\"`, `\"PSE\"`, `\"PAN\"`, `\"PNG\"`, `\"PRY\"`, `\"PER\"`, `\"PHL\"`, `\"PCN\"`, `\"POL\"`, `\"PRT\"`, `\"PRI\"`, `\"QAT\"`, `\"REU\"`, `\"ROU\"`, `\"RUS\"`, `\"RWA\"`, `\"BLM\"`, `\"SHN\"`, `\"KNA\"`, `\"LCA\"`, `\"MAF\"`, `\"SPM\"`, `\"VCT\"`, `\"WSM\"`, `\"SMR\"`, `\"STP\"`, `\"SAU\"`, `\"SEN\"`, `\"SRB\"`, `\"SYC\"`, `\"SLE\"`, `\"SGP\"`, `\"SXM\"`, `\"SVK\"`, `\"SVN\"`, `\"SLB\"`, `\"SOM\"`, `\"ZAF\"`, `\"SGS\"`, `\"SSD\"`, `\"ESP\"`, `\"LKA\"`, `\"SUR\"`, `\"SJM\"`, `\"SWZ\"`, `\"SWE\"`, `\"CHE\"`, `\"TWN\"`, `\"TJK\"`, `\"TZA\"`, `\"THA\"`, `\"TLS\"`, `\"TGO\"`, `\"TKL\"`, `\"TON\"`, `\"TTO\"`, `\"TUN\"`, `\"TUR\"`, `\"TKM\"`, `\"TCA\"`, `\"TUV\"`, `\"UGA\"`, `\"UKR\"`, `\"ARE\"`, `\"GBR\"`, `\"USA\"`, `\"UMI\"`, `\"URY\"`, `\"UZB\"`, `\"VUT\"`, `\"VEN\"`, `\"VNM\"`, `\"VGB\"`, `\"VIR\"`, `\"WLF\"`, `\"YEM\"`, `\"ZMB\"`, `\"ZWE\"`\n",
+      "title": "Country ISO Code"
+    },
+    "firstname": {
+      "type": "string",
+      "description": "First name of the shop contact. Cannot be null.",
+      "title": "First Name"
+    },
+    "lastname": {
+      "type": "string",
+      "description": "Last name of the shop contact. Cannot be null.",
+      "title": "Last Name"
+    },
+    "phone": {
+      "type": "string",
+      "description": "Phone of the shop contact. Nullable.",
+      "title": "Phone"
+    },
+    "phone_secondary": {
+      "type": "string",
+      "description": "Secondary phone of the shop contact. Nullable.",
+      "title": "Secondary Phone",
+      "x-ui-advanced": "Advanced"
+    },
+    "state": {
+      "type": "string",
+      "description": "State (address) of the shop contact. Nullable.",
+      "title": "State",
+      "x-ui-advanced": "Advanced"
+    },
+    "street1": {
+      "type": "string",
+      "description": "First line of the address of the shop contact. Cannot be null.",
+      "title": "Street Line 1"
+    },
+    "street2": {
+      "type": "string",
+      "description": "Second line of the address of the shop contact. Nullable.",
+      "title": "Street Line 2",
+      "x-ui-advanced": "Advanced"
+    },
+    "zip_code": {
+      "type": "string",
+      "description": "Zip code of the shop contact, mandatory except for: Bahrain, Chile, Egypt, Hong-Kong, Kuwait, Oman, Peru, Qatar, Saudi Arabia, United Arab Emirates or Uruguay.",
+      "title": "Zip Code"
+    }
+  }
+}

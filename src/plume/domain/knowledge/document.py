@@ -103,6 +103,9 @@ class Document:
     fields: tuple[FieldSpec, ...] = ()
     scopes: tuple[str, ...] = ()
     source_id: str | None = field(default=None, compare=False)
+    # Structural hash of a model's schema (title/description/examples ignored): equal shapes
+    # are the same structure published under several names.
+    shape: str | None = None
 
     def __post_init__(self) -> None:
         if not _DOC_ID.fullmatch(self.doc_id):

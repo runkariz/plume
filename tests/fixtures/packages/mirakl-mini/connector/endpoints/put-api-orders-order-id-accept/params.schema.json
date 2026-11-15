@@ -1,0 +1,14 @@
+{
+  "title": "Parameters",
+  "type": "object",
+  "properties": {
+    "shop_id": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Use this parameter when your user has access to several shops. If not specified, the shop_id from your default shop will be used.",
+      "default": "{{ auth?.apikey?.shop_id }}",
+      "title": "Shop ID"
+    }
+  },
+  "description": "Query parameters identifying the target shop."
+}

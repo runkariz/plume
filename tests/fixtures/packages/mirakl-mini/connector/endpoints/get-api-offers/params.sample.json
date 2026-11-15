@@ -1,0 +1,9 @@
+{
+  "favorite": false,
+  "offer_state_codes": "<offer_state_codes>",
+  "pricing_channel_code": "<pricing_channel_code>",
+  "pricing_customer_organization_id": "<pricing_customer_organization_id>",
+  "product_id": "<product_id>",
+  "shop_id": 0,
+  "sku": "<sku>"
+}

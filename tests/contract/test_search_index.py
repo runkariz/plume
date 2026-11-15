@@ -42,8 +42,11 @@ GUIDE = Document(
     text="Requests are limited by a leaky bucket per app per shop.",
 )
 ORDERED = ["endpoint:GET~/orders", "guide:rate-limits", "model:product"]
-VECTORS = {"endpoint:GET~/orders#0": _vec(1.0), "model:product#0": _vec(0.0, 1.0),
-           "guide:rate-limits#0": _vec(0.5, 0.5, 0.5, 0.5)}  # fmt: skip
+VECTORS = {
+    "endpoint:GET~/orders#0": _vec(1.0),
+    "model:product#0": _vec(0.0, 1.0),
+    "guide:rate-limits#0": _vec(0.5, 0.5, 0.5, 0.5),
+}
 
 
 @pytest.fixture
@@ -99,7 +102,14 @@ def test_browse_counts_summaries(store: Store, build: BuildId) -> None:
     items, total = store.search.browse(build, (), None, 10, 10)
     assert (items, total) == ([], 3)
     assert store.search.browse(build, (), "100%_")[1] == 0
-    assert store.search.counts(build) == {"endpoint": 1, "model": 1, "guide": 1, "chunks": 3}
+    assert store.search.counts(build) == {
+        "endpoint": 1,
+        "model": 1,
+        "guide": 1,
+        "chunks": 3,
+        "model_shapes": 1,
+        "model_names": 1,
+    }
     s = store.search.summaries(build, ["model:product", "model:nope"])
     assert list(s) == ["model:product"]
     assert s["model:product"].resource == "Product"
@@ -122,9 +132,41 @@ def test_fact_find_exact_suffix_and_filters(store: Store, build: BuildId) -> Non
 def test_fact_owner_endpoints_incomplete(store: Store, build: BuildId) -> None:
     q = store.fact_query
     assert {f.name for f in q.for_owner(build, "endpoint:GET~/orders")} == {
-        "GET /orders", "limit", "orders[].line_items[].sku", "read_orders",
-    }  # fmt: skip
+        "GET /orders",
+        "limit",
+        "orders[].line_items[].sku",
+        "read_orders",
+    }
     assert [f.name for f in q.endpoints(build)] == ["GET /orders"]
     assert q.incomplete_owners(build) == ["model:product"]
     assert q.incomplete_owners(build, owner_id="endpoint:GET~/orders") == []
     assert q.incomplete_owners(build, resource="PRODUCT") == ["model:product"]
+
+
+def test_model_shapes_and_names(store: Store) -> None:
+    from dataclasses import replace  # noqa: PLC0415
+
+    store.apis.upsert(ApiInfo(api_id=API, name="Acme"))
+    b = Build.start(API, T0, spec=BuildSpec("sha256:m", "1", "m", 768))
+    store.builds.save(b)
+    base = Document(
+        doc_id="model:a",
+        kind=DocumentKind.MODEL,
+        title="Address",
+        text="t",
+        resource="Address",
+        shape="s1",
+    )
+    docs = [
+        base,
+        replace(base, doc_id="model:b", title="Shipping To / Address", shape="s2"),
+        replace(base, doc_id="model:c", title="Billing / Address", shape="s1"),
+        replace(base, doc_id="model:d", title="A01 response 200", resource=None, shape="s3"),
+        replace(base, doc_id="model:e", title="Price", resource="Price", shape=None),
+    ]
+    store.documents.add_documents(b.build_id, docs)
+    counts = store.search.counts(b.build_id)
+    assert counts["model"] == 5
+    assert counts["model_shapes"] == 4  # s1, s2, s3, and e (no shape) on its own
+    assert counts["model_names"] == 2  # address, price (the root is not a name)
+    assert store.documents.get_document(b.build_id, "model:b").shape == "s2"  # type: ignore[union-attr]

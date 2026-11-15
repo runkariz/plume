@@ -121,3 +121,17 @@ def test_format_error_is_a_refusal(stack: FakeStack) -> None:
     with pytest.raises(ModelDraftRefusedError) as info:
         stack.models().submit(session.session_id, {"name": "x", "fields": []})
     assert info.value.issues[0].code == "INVALID_FORMAT"
+
+
+def test_bundled_models_suggest_by_leaf_name(packages: Path) -> None:
+    s = FakeStack(embedder=WordEmbedder())
+    s.load(str(packages / "mirakl-mini"))
+    s.load(str(packages / "shopify-mini"))
+    keys = {c.key: c for c in s.suggest().execute(["mirakl", "shopify"]).concepts}
+    assert keys["address"].coverage == {"mirakl": "direct", "shopify": "direct"}
+    assert keys["customer"].coverage["mirakl"] == "direct"
+    assert not any("response" in k for k in keys)  # bundle roots are not concepts
+    counts = s.overviews().one("mirakl").counts
+    assert (counts["model"], counts["model_shapes"]) == (12, 11)
+    # billing info, boolean, date, link, address, customer, orders (the 2 roots are no names)
+    assert counts["model_names"] == 7

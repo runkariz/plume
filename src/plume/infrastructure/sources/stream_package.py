@@ -18,6 +18,7 @@ import hashlib
 import json
 import re
 from collections.abc import Iterator, Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,7 @@ from plume.domain.knowledge.document import (
     normalize_endpoint_path,
     slug_doc_id,
 )
+from plume.domain.knowledge.model_names import display_names, parse_bundled_title
 
 JsonObj = dict[str, Any]
 MAX_FIELD_DEPTH = 6
@@ -107,6 +109,27 @@ def _walk_fields(
     items = schema.get("items")
     if isinstance(items, dict):
         yield from _walk_fields(items, location, f"{pointer}/items", f"{prefix}[]", depth + 1)
+
+
+_SHAPE_IGNORED = frozenset({"title", "description", "examples", "example", "default"})
+
+
+def _shape_of(schema: Any) -> Any:
+    if isinstance(schema, dict):
+        return {
+            k: _shape_of(v)
+            for k, v in sorted(schema.items())
+            if k not in _SHAPE_IGNORED and not k.startswith("x-")
+        }
+    if isinstance(schema, list):
+        return [_shape_of(v) for v in schema]
+    return schema
+
+
+def shape_hash(schema: Any) -> str:
+    """Structure of a JSON schema, ignoring titles, descriptions, examples and x- keys."""
+    canonical = json.dumps(_shape_of(schema), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode()).hexdigest()[:16]
 
 
 def _fields_section(title: str, fields: list[FieldSpec]) -> str:
@@ -260,8 +283,8 @@ class StreamPackageSource:
             request = folder / "request.json"
             if request.is_file():
                 add(self._endpoint(folder, _read_json(request), versions), folder.name)
-        for path in sorted((connector / "models").glob("*.schema.json")):
-            add(self._model(path), path.name)
+        for model in self._models(connector):
+            add(model, model.doc_id)
         for path in sorted((connector / "knowledge").glob("*.json")):
             doc = self._guide(path)
             if doc is not None:
@@ -393,6 +416,12 @@ class StreamPackageSource:
             source_id=_str(req.get("endpointId")),
         )
 
+    def _models(self, connector: Path) -> list[Document]:
+        """Models, with readable names for bundler-generated titles."""
+        models = [self._model(p) for p in sorted((connector / "models").glob("*.schema.json"))]
+        names = display_names((m.doc_id, m.title, m.shape) for m in models)
+        return [_renamed(m, names[m.doc_id]) if m.doc_id in names else m for m in models]
+
     @staticmethod
     def _model(path: Path) -> Document:
         data = _read_json(path)
@@ -417,6 +446,8 @@ class StreamPackageSource:
             resource=title,
             complete=complete,
             fields=tuple(fields),
+            source_id=title,
+            shape=shape_hash(data),
         )
 
     @staticmethod
@@ -490,3 +521,15 @@ class StreamPackageSource:
             source_url=source_url,
             source_id=rel,
         )
+
+
+def _renamed(model: Document, name: str) -> Document:
+    """A bundler-titled model under its display name; the vendor title stays as source_id.
+
+    A bundle root (a whole response/request body) gets no resource: it is not a concept."""
+    original = model.title
+    parsed = parse_bundled_title(original)
+    resource = None if parsed is not None and parsed.is_root else name
+    body = model.text.split("\n\n", 1)[1] if "\n\n" in model.text else ""
+    text = f"# {name} (model)\n\nSource title: {original}" + (f"\n\n{body}" if body else "")
+    return replace(model, title=name, resource=resource, text=text, source_id=original)

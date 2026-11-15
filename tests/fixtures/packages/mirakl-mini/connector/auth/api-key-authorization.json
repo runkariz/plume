@@ -1,0 +1,12 @@
+{
+  "authorizationType": "API_KEY",
+  "headerName": "Authorization",
+  "id": "api-key-authorization",
+  "name": "API key (Authorization header)",
+  "testSuccess": {
+    "status": 200
+  },
+  "testUrl": "https://{instance_name}/api/account",
+  "testUrlMethod": "GET",
+  "variableContractRef": "auth/api-key-authorization.variables.schema.json"
+}

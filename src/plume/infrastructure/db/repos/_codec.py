@@ -63,4 +63,5 @@ def document_from_row(row: Any) -> Document:
         fields=fields_from_json(row.fields),
         scopes=tuple(row.scopes or ()),
         source_id=row.source_id,
+        shape=row.shape,
     )

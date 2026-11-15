@@ -1,0 +1,56 @@
+{
+  "title": "OR11_Response_200_Orders_Customer",
+  "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+  "x-complete": true,
+  "type": "object",
+  "properties": {
+    "accounting_contact": {
+      "$ref": "or11-response-200-orders-customer-accountingcontact.schema.json",
+      "description": "Data related to the accounting contact in the organization.<br/>Null before shipping (or acceptance, depending on platform setting)."
+    },
+    "billing_address": {
+      "$ref": "or11-response-200-orders-customer-billingaddress.schema.json",
+      "description": "Customer's billing address.<br/>Null before shipping (or acceptance, depending on platform setting)."
+    },
+    "civility": {
+      "type": "string",
+      "description": "Customer's civility"
+    },
+    "customer_id": {
+      "type": "string",
+      "description": "Customer's identifier"
+    },
+    "delivery_contact": {
+      "$ref": "or11-response-200-orders-customer-deliverycontact.schema.json",
+      "description": "Data related to the delivery contact in the organization.<br/>Null before shipping (or acceptance, depending on platform setting)."
+    },
+    "firstname": {
+      "type": "string",
+      "description": "Customer's first name"
+    },
+    "lastname": {
+      "type": "string",
+      "description": "Customer's last name"
+    },
+    "locale": {
+      "type": "string",
+      "description": "Customer's locale"
+    },
+    "organization": {
+      "$ref": "or11-response-200-orders-customer-organization.schema.json",
+      "description": "Data related to the organization that created the order (B2B transactions)"
+    },
+    "shipping_address": {
+      "$ref": "or11-response-200-orders-customer-shippingaddress.schema.json",
+      "description": "Customer's Shipping address.<br/>Null before shipping (or acceptance, depending on platform setting)."
+    }
+  },
+  "required": [
+    "billing_address",
+    "customer_id",
+    "firstname",
+    "lastname",
+    "shipping_address"
+  ],
+  "description": "Customer contact, organization, and address information for the order."
+}

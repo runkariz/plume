@@ -1,0 +1,61 @@
+{
+  "title": "DR12_Response_200_Data_ShippingTo_Address",
+  "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+  "x-complete": true,
+  "type": "object",
+  "properties": {
+    "city": {
+      "type": "string",
+      "description": "The city of the shipping destination address."
+    },
+    "civility": {
+      "type": "string",
+      "description": "The civility or title of the recipient (e.g., Mr., Mrs., Dr.)."
+    },
+    "company": {
+      "type": "string",
+      "description": "The company or organization name of the shipping destination."
+    },
+    "company2": {
+      "type": "string",
+      "description": "The secondary company or organization name of the shipping destination (e.g., department or subsidiary)."
+    },
+    "country_iso_code": {
+      "type": "string",
+      "description": "The ISO 3166-1 alpha-3 country code of the shipping destination address."
+    },
+    "firstname": {
+      "type": "string",
+      "description": "The first name of the recipient."
+    },
+    "lastname": {
+      "type": "string",
+      "description": "The last name of the recipient."
+    },
+    "phone": {
+      "type": "string",
+      "description": "The primary phone number of the recipient."
+    },
+    "phone_secondary": {
+      "type": "string",
+      "description": "The secondary phone number of the recipient."
+    },
+    "state": {
+      "type": "string",
+      "description": "The state, province, or region of the shipping destination address."
+    },
+    "street1": {
+      "type": "string",
+      "description": "The primary line of the shipping destination street address (e.g., street number and name)."
+    },
+    "street2": {
+      "type": "string",
+      "description": "The secondary line of the shipping destination street address (e.g., building, floor, or suite number)."
+    },
+    "zip_code": {
+      "type": "string",
+      "description": "The postal or zip code of the shipping destination address."
+    }
+  },
+  "description": "Recipient contact and postal address information for delivery."
+}

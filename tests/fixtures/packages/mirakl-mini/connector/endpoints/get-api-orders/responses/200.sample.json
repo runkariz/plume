@@ -1,0 +1,586 @@
+{
+  "orders": [
+    {
+      "acceptance_decision_date": "2026-01-01T00:00:00Z",
+      "can_cancel": false,
+      "can_shop_ship": false,
+      "channel": {
+        "code": "<code>",
+        "label": "<label>"
+      },
+      "commercial_id": "<commercial_id>",
+      "created_date": "2026-01-01T00:00:00Z",
+      "currency_iso_code": "<currency_iso_code>",
+      "customer": {
+        "accounting_contact": {
+          "civility": "<civility>",
+          "customer_id": "<customer_id>",
+          "firstname": "<firstname>",
+          "lastname": "<lastname>",
+          "locale": "<locale>"
+        },
+        "billing_address": {
+          "city": "<city>",
+          "civility": "<civility>",
+          "company": "<company>",
+          "company_2": "<company_2>",
+          "country": "<country>",
+          "country_iso_code": "<country_iso_code>",
+          "firstname": "<firstname>",
+          "lastname": "<lastname>",
+          "phone": "<phone>",
+          "phone_secondary": "<phone_secondary>",
+          "state": "<state>",
+          "street_1": "<street_1>",
+          "street_2": "<street_2>",
+          "zip_code": "<zip_code>"
+        },
+        "civility": "<civility>",
+        "customer_id": "<customer_id>",
+        "delivery_contact": {
+          "civility": "<civility>",
+          "customer_id": "<customer_id>",
+          "firstname": "<firstname>",
+          "lastname": "<lastname>",
+          "locale": "<locale>"
+        },
+        "firstname": "<firstname>",
+        "lastname": "<lastname>",
+        "locale": "<locale>",
+        "organization": {
+          "address": {
+            "city": "<city>",
+            "country_iso_code": "<country_iso_code>",
+            "state": "<state>",
+            "street_1": "<street_1>",
+            "street_2": "<street_2>",
+            "zip_code": "<zip_code>"
+          },
+          "electronic_address": "<electronic_address>",
+          "identification_number": "<identification_number>",
+          "name": "<name>",
+          "organization_id": "<organization_id>",
+          "phone_number": "<phone_number>",
+          "tax_identification_number": "<tax_identification_number>"
+        },
+        "shipping_address": {
+          "additional_info": "<additional_info>",
+          "city": "<city>",
+          "civility": "<civility>",
+          "company": "<company>",
+          "company_2": "<company_2>",
+          "country": "<country>",
+          "country_iso_code": "<country_iso_code>",
+          "firstname": "<firstname>",
+          "lastname": "<lastname>",
+          "phone": "<phone>",
+          "phone_secondary": "<phone_secondary>",
+          "state": "<state>",
+          "street_1": "<street_1>",
+          "street_2": "<street_2>",
+          "zip_code": "<zip_code>"
+        }
+      },
+      "customer_debited_date": "2026-01-01T00:00:00Z",
+      "customer_directly_pays_seller": false,
+      "customer_notification_email": "<customer_notification_email>",
+      "delivery_date": {
+        "earliest": "2026-01-01T00:00:00Z",
+        "latest": "2026-01-01T00:00:00Z"
+      },
+      "discount_campaigns": [
+        {
+          "identifier": "<identifier>"
+        }
+      ],
+      "fulfillment": {
+        "center": {
+          "code": "<code>"
+        }
+      },
+      "fully_refunded": false,
+      "has_customer_message": false,
+      "has_incident": false,
+      "has_invoice": false,
+      "invoice_details": {
+        "document_details": [
+          {
+            "format": "<format>"
+          }
+        ],
+        "payment_terms": {
+          "days": 0,
+          "type": "<type>"
+        }
+      },
+      "last_updated_date": "2026-01-01T00:00:00Z",
+      "leadtime_to_ship": 0,
+      "order_additional_fields": [
+        {
+          "code": "<code>",
+          "type": "<type>"
+        }
+      ],
+      "order_id": "<order_id>",
+      "order_lines": [
+        {
+          "can_refund": false,
+          "cancelations": [
+            {
+              "amount": 0,
+              "amount_breakdown": {
+                "parts": [
+                  {
+                    "amount": 0,
+                    "commissionable": false,
+                    "debitable_from_customer": false,
+                    "payable_to_shop": false
+                  }
+                ]
+              },
+              "commission_amount": 0,
+              "commission_taxes": [
+                {
+                  "amount": 0,
+                  "code": "<code>"
+                }
+              ],
+              "commission_total_amount": 0,
+              "created_date": "2026-01-01T00:00:00Z",
+              "eco_contributions": [
+                {
+                  "epr_category_code": "<epr_category_code>",
+                  "producer_id": "<producer_id>",
+                  "producer_id_owner": "<producer_id_owner>",
+                  "total_amount": 0,
+                  "unit_amount": 0
+                }
+              ],
+              "fees": [
+                {
+                  "amount": 0,
+                  "code": "<code>"
+                }
+              ],
+              "id": "<id>",
+              "purchase_information": {
+                "purchase_commission_on_fees": {
+                  "total_amount": 0
+                },
+                "purchase_commission_on_price": 0,
+                "purchase_commission_on_shipping": 0,
+                "purchase_fee_amount": {
+                  "total_amount": 0
+                },
+                "purchase_price": 0,
+                "purchase_shipping_price": 0
+              },
+              "quantity": 0,
+              "reason_code": "<reason_code>",
+              "shipping_amount": 0,
+              "shipping_amount_breakdown": {
+                "parts": [
+                  {
+                    "amount": 0,
+                    "commissionable": false,
+                    "debitable_from_customer": false,
+                    "payable_to_shop": false
+                  }
+                ]
+              },
+              "shipping_taxes": [
+                {
+                  "amount": 0,
+                  "amount_breakdown": {
+                    "parts": []
+                  },
+                  "code": "<code>",
+                  "purchase_tax": {
+                    "purchase_amount": 0,
+                    "purchase_rate": 0
+                  },
+                  "rate": 0
+                }
+              ],
+              "taxes": [
+                {
+                  "amount": 0,
+                  "amount_breakdown": {
+                    "parts": []
+                  },
+                  "code": "<code>",
+                  "purchase_tax": {
+                    "purchase_amount": 0,
+                    "purchase_rate": 0
+                  },
+                  "rate": 0
+                }
+              ]
+            }
+          ],
+          "category_code": "<category_code>",
+          "category_label": "<category_label>",
+          "commission_fee": 0,
+          "commission_rate_vat": 0,
+          "commission_taxes": [
+            {
+              "amount": 0,
+              "code": "<code>",
+              "rate": 0
+            }
+          ],
+          "commission_vat": 0,
+          "created_date": "2026-01-01T00:00:00Z",
+          "debited_date": "2026-01-01T00:00:00Z",
+          "description": "<description>",
+          "discount_campaign": {
+            "identifier": "<identifier>"
+          },
+          "eco_contributions": [
+            {
+              "epr_category_code": "<epr_category_code>",
+              "producer_id": "<producer_id>",
+              "producer_id_owner": "<producer_id_owner>",
+              "total_amount": 0,
+              "unit_amount": 0
+            }
+          ],
+          "fees": [
+            {
+              "amount": 0,
+              "code": "<code>"
+            }
+          ],
+          "last_updated_date": "2026-01-01T00:00:00Z",
+          "measurement": {
+            "actual_measurement": 0,
+            "measurement_unit": "<measurement_unit>",
+            "ordered_measurement": 0
+          },
+          "offer_id": 0,
+          "offer_sku": "<offer_sku>",
+          "offer_state_code": "<offer_state_code>",
+          "order_line_additional_fields": [
+            {
+              "code": "<code>",
+              "type": "<type>"
+            }
+          ],
+          "order_line_id": "<order_line_id>",
+          "order_line_index": 0,
+          "order_line_state": "<order_line_state>",
+          "order_line_state_reason_code": "<order_line_state_reason_code>",
+          "order_line_state_reason_label": "<order_line_state_reason_label>",
+          "origin_unit_price": 0,
+          "price": 0,
+          "price_additional_info": "<price_additional_info>",
+          "price_amount_breakdown": {
+            "parts": [
+              {
+                "amount": 0,
+                "commissionable": false,
+                "debitable_from_customer": false,
+                "payable_to_shop": false
+              }
+            ]
+          },
+          "price_unit": 0,
+          "product_medias": [
+            {
+              "media_url": "<media_url>",
+              "mime_type": "<mime_type>",
+              "type": "<type>"
+            }
+          ],
+          "product_shop_sku": "<product_shop_sku>",
+          "product_sku": "<product_sku>",
+          "product_title": "<product_title>",
+          "promotions": [
+            {
+              "apportioned": false,
+              "campaign": {
+                "identifier": "<identifier>"
+              },
+              "configuration": {
+                "amount_off": 0,
+                "free_items_quantity": 0,
+                "internal_description": "<internal_description>",
+                "percentage_off": 0,
+                "reduced_unit_price": 0,
+                "type": "<type>"
+              },
+              "deduced_amount": 0,
+              "id": "<id>",
+              "offered_quantity": 0,
+              "promo_code": "<promo_code>"
+            }
+          ],
+          "purchase_information": {
+            "purchase_commission_on_fees": {
+              "total_amount": 0
+            },
+            "purchase_commission_on_price": 0,
+            "purchase_commission_on_shipping": 0,
+            "purchase_fee_amount": {
+              "total_amount": 0
+            },
+            "purchase_price": 0,
+            "purchase_shipping_price": 0,
+            "purchase_unit_price": 0
+          },
+          "quantity": 0,
+          "received_date": "2026-01-01T00:00:00Z",
+          "refunds": [
+            {
+              "amount": 0,
+              "amount_breakdown": {
+                "parts": [
+                  {
+                    "amount": 0,
+                    "commissionable": false,
+                    "debitable_from_customer": false,
+                    "payable_to_shop": false
+                  }
+                ]
+              },
+              "commission_amount": 0,
+              "commission_tax_amount": 0,
+              "commission_taxes": [
+                {
+                  "amount": 0,
+                  "code": "<code>"
+                }
+              ],
+              "commission_total_amount": 0,
+              "created_date": "2026-01-01T00:00:00Z",
+              "eco_contributions": [
+                {
+                  "epr_category_code": "<epr_category_code>",
+                  "producer_id": "<producer_id>",
+                  "producer_id_owner": "<producer_id_owner>",
+                  "total_amount": 0,
+                  "unit_amount": 0
+                }
+              ],
+              "fees": [
+                {
+                  "amount": 0,
+                  "code": "<code>"
+                }
+              ],
+              "id": "<id>",
+              "order_refund_id": "<order_refund_id>",
+              "purchase_information": {
+                "purchase_commission_on_fees": {
+                  "total_amount": 0
+                },
+                "purchase_commission_on_price": 0,
+                "purchase_commission_on_shipping": 0,
+                "purchase_fee_amount": {
+                  "total_amount": 0
+                },
+                "purchase_price": 0,
+                "purchase_shipping_price": 0
+              },
+              "quantity": 0,
+              "reason_code": "<reason_code>",
+              "refund_state": "<refund_state>",
+              "shipping_amount": 0,
+              "shipping_amount_breakdown": {
+                "parts": [
+                  {
+                    "amount": 0,
+                    "commissionable": false,
+                    "debitable_from_customer": false,
+                    "payable_to_shop": false
+                  }
+                ]
+              },
+              "shipping_taxes": [
+                {
+                  "amount": 0,
+                  "amount_breakdown": {
+                    "parts": []
+                  },
+                  "code": "<code>",
+                  "purchase_tax": {
+                    "purchase_amount": 0,
+                    "purchase_rate": 0
+                  },
+                  "rate": 0
+                }
+              ],
+              "state": "<state>",
+              "tax_legal_notice": "<tax_legal_notice>",
+              "taxes": [
+                {
+                  "amount": 0,
+                  "amount_breakdown": {
+                    "parts": []
+                  },
+                  "code": "<code>",
+                  "purchase_tax": {
+                    "purchase_amount": 0,
+                    "purchase_rate": 0
+                  },
+                  "rate": 0
+                }
+              ],
+              "transaction_date": "2026-01-01T00:00:00Z",
+              "transaction_number": "<transaction_number>"
+            }
+          ],
+          "shipped_date": "2026-01-01T00:00:00Z",
+          "shipping_from": {
+            "address": {
+              "city": "<city>",
+              "country_iso_code": "<country_iso_code>",
+              "state": "<state>",
+              "street_1": "<street_1>",
+              "street_2": "<street_2>",
+              "zip_code": "<zip_code>"
+            },
+            "warehouse": {
+              "code": "<code>"
+            }
+          },
+          "shipping_price": 0,
+          "shipping_price_additional_unit": 0,
+          "shipping_price_amount_breakdown": {
+            "parts": [
+              {
+                "amount": 0,
+                "commissionable": false,
+                "debitable_from_customer": false,
+                "payable_to_shop": false
+              }
+            ]
+          },
+          "shipping_price_unit": 0,
+          "shipping_taxes": [
+            {
+              "amount": 0,
+              "amount_breakdown": {
+                "parts": [
+                  {
+                    "amount": 0,
+                    "commissionable": false,
+                    "debitable_from_customer": false,
+                    "payable_to_shop": false
+                  }
+                ]
+              },
+              "code": "<code>",
+              "purchase_tax": {
+                "purchase_amount": 0,
+                "purchase_rate": 0
+              },
+              "rate": 0,
+              "tax_calculation_rule": "<tax_calculation_rule>"
+            }
+          ],
+          "tax_legal_notice": "<tax_legal_notice>",
+          "taxes": [
+            {
+              "amount": 0,
+              "amount_breakdown": {
+                "parts": [
+                  {
+                    "amount": 0,
+                    "commissionable": false,
+                    "debitable_from_customer": false,
+                    "payable_to_shop": false
+                  }
+                ]
+              },
+              "code": "<code>",
+              "origin_unit_amount": 0,
+              "purchase_tax": {
+                "purchase_amount": 0,
+                "purchase_rate": 0
+              },
+              "rate": 0,
+              "tax_calculation_rule": "<tax_calculation_rule>"
+            }
+          ],
+          "total_commission": 0,
+          "total_price": 0
+        }
+      ],
+      "order_refunds": [
+        {
+          "order_refund_id": "<order_refund_id>",
+          "taxes": [
+            {
+              "code": "<code>",
+              "rate": 0,
+              "total_amount": 0
+            }
+          ]
+        }
+      ],
+      "order_state": "<order_state>",
+      "order_state_reason_code": "<order_state_reason_code>",
+      "order_state_reason_label": "<order_state_reason_label>",
+      "order_tax_mode": "<order_tax_mode>",
+      "order_taxes": [
+        {
+          "code": "<code>",
+          "rate": 0,
+          "total_amount": 0
+        }
+      ],
+      "paymentType": "<paymentType>",
+      "payment_duration": 0,
+      "payment_type": "<payment_type>",
+      "payment_workflow": "<payment_workflow>",
+      "price": 0,
+      "promotions": {
+        "applied_promotions": [
+          {
+            "apportioned": false,
+            "campaign": {
+              "identifier": "<identifier>"
+            },
+            "configuration": {
+              "amount_off": 0,
+              "free_items_quantity": 0,
+              "internal_description": "<internal_description>",
+              "percentage_off": 0,
+              "reduced_unit_price": 0,
+              "type": "<type>"
+            },
+            "deduced_amount": 0,
+            "id": "<id>",
+            "offered_quantity": 0,
+            "promo_code": "<promo_code>"
+          }
+        ],
+        "total_deduced_amount": 0
+      },
+      "quote_id": "<quote_id>",
+      "references": {
+        "order_reference_for_customer": "<order_reference_for_customer>",
+        "order_reference_for_seller": "<order_reference_for_seller>"
+      },
+      "shipping_carrier_code": "<shipping_carrier_code>",
+      "shipping_carrier_standard_code": "<shipping_carrier_standard_code>",
+      "shipping_company": "<shipping_company>",
+      "shipping_deadline": "2026-01-01T00:00:00Z",
+      "shipping_price": 0,
+      "shipping_pudo_id": "<shipping_pudo_id>",
+      "shipping_tracking": "<shipping_tracking>",
+      "shipping_tracking_url": "<shipping_tracking_url>",
+      "shipping_type_code": "<shipping_type_code>",
+      "shipping_type_label": "<shipping_type_label>",
+      "shipping_type_standard_code": "<shipping_type_standard_code>",
+      "shipping_zone_code": "<shipping_zone_code>",
+      "shipping_zone_label": "<shipping_zone_label>",
+      "total_commission": 0,
+      "total_price": 0,
+      "transaction_date": "2026-01-01T00:00:00Z",
+      "transaction_number": "<transaction_number>"
+    }
+  ],
+  "total_count": 0
+}

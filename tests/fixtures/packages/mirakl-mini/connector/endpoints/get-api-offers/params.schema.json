@@ -1,0 +1,48 @@
+{
+  "title": "Parameters",
+  "type": "object",
+  "properties": {
+    "offer_state_codes": {
+      "type": "string",
+      "description": "List of offer state codes",
+      "title": "Offer State Codes",
+      "x-ui-advanced": "Advanced Filters"
+    },
+    "sku": {
+      "type": "string",
+      "description": "Offer's sku",
+      "title": "Offer SKU"
+    },
+    "product_id": {
+      "type": "string",
+      "description": "Product's sku",
+      "title": "Product SKU"
+    },
+    "favorite": {
+      "type": "boolean",
+      "description": "Filter only favorite offers",
+      "default": false,
+      "title": "Favorite Offers Only"
+    },
+    "pricing_channel_code": {
+      "type": "string",
+      "description": "Filter used to pick prices on a specific channel",
+      "title": "Pricing Channel Code",
+      "x-ui-advanced": "Advanced Filters"
+    },
+    "pricing_customer_organization_id": {
+      "type": "string",
+      "description": "For Customer Pricing users only. Customer identifier code the API will use to return all prices and applicable price for this organization. Ignored if value does not exist.",
+      "title": "Pricing Customer Organization ID",
+      "x-ui-advanced": "Advanced Filters"
+    },
+    "shop_id": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Use this parameter when your user has access to several shops. If not specified, the shop_id from your default shop will be used.",
+      "default": "{{ auth?.apikey?.shop_id }}",
+      "title": "Shop ID"
+    }
+  },
+  "description": "Query parameters for filtering and searching offers."
+}
