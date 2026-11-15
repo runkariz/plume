@@ -11,8 +11,9 @@ Claude (and any MCP client) so answers about the API come with citations.
   exact index of endpoints, fields and scopes so "is this documented?" has evidence behind it.
 - **MCP.** A read-only reader server for questions, a maintainer server for builds and tags.
 
-Status: early. In place: the skeleton (slice 1) and ingest (slice 2): read a connector package,
-chunk, embed, extract exact facts, seal, tag. Search, MCP and the web UI follow.
+Status: early. In place: ingest (read a connector package, chunk, embed, extract exact facts,
+seal, tag) and the reader (hybrid search, exact facts, documents, call checks) over HTTP and MCP.
+The eval gate, export/restore, canonical models and the web UI follow.
 
 ## Quick start
 
@@ -55,6 +56,25 @@ runs import -> chunk -> embed -> facts -> seal -> tag.
 - `plume diff <old> <new>` lists added/changed/removed chunk ids; `plume tag <build> latest`
   publishes or rolls back.
 
+## Serve and connect Claude
+
+```bash
+make up                         # Postgres + API (127.0.0.1:18480) + MCP (127.0.0.1:18481/mcp)
+claude mcp add --transport http plume http://127.0.0.1:18481/mcp
+```
+
+Or install the Claude Code plugin from this repository's marketplace (MCP config + a skill that
+tells Claude how to cite and when absence is proven):
+
+```
+/plugin install plume --marketplace <owner>/plume
+```
+
+Run the servers without Docker: `uv run plume serve` (HTTP) and `uv run plume mcp` (MCP). The
+HTTP contract is [docs/openapi.json](docs/openapi.json) (`uv run plume openapi`); the MCP tools
+are in [docs/mcp-tools.md](docs/mcp-tools.md); the input package format is in
+[docs/package-contract.md](docs/package-contract.md).
+
 ## Layout
 
 Clean architecture, enforced by import-linter (`.importlinter`) and `tests/architecture`:
@@ -64,7 +84,7 @@ src/plume/
   domain/          entities and rules, standard library only
   application/     use cases and ports (typing.Protocol)
   infrastructure/  adapters: Postgres, Alembic, settings
-  interfaces/      CLI (Typer); later HTTP and MCP
+  interfaces/      CLI (Typer), HTTP (FastAPI), MCP reader server
   bootstrap/       composition root
 ```
 

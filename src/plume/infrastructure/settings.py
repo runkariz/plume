@@ -43,6 +43,16 @@ class Settings(BaseSettings):
     embed_dims: Literal[768] = 768
     embed_batch_size: int | None = Field(default=None, ge=1, le=250)
     chunk_max_chars: int = Field(default=6000, ge=200)
+    mcp_host: str = "127.0.0.1"
+    mcp_public_url: str = Field(
+        default="http://127.0.0.1:18481/mcp", description="MCP URL shown to users (connect hint)."
+    )
+    mcp_allowed_hosts: tuple[str, ...] = Field(
+        default=("127.0.0.1:*", "localhost:*", "[::1]:*"),
+        description="Host headers the MCP server accepts (DNS-rebinding protection).",
+    )
+    reader_rate_limit_per_minute: int = Field(default=120, ge=0)
+    cors_origins: tuple[str, ...] = ("http://127.0.0.1:18473", "http://localhost:18473")
 
     @property
     def sqlalchemy_url(self) -> str:

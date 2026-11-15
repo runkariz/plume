@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "plume": {
+      "type": "http",
+      "url": "${PLUME_MCP_URL:-http://127.0.0.1:18481/mcp}"
+    }
+  }
+}
