@@ -2,7 +2,10 @@ import { apiBaseUrl } from './config';
 import { createSseParser } from './sse';
 import {
   ApiError,
+  type DraftIssue,
   type GenerateRequest,
+  type GenerateResponse,
+  type ModelListItem,
   type Job,
   type ModelSnapshot,
   type SuggestResponse,
@@ -34,7 +37,16 @@ export interface PlumeApi {
   // canonical models
   listModelCandidates(signal?: AbortSignal): Promise<ApiList>;
   suggestModels(apis: string[], signal?: AbortSignal): Promise<SuggestResponse>;
-  generateModel(req: GenerateRequest, signal?: AbortSignal): Promise<{ snapshotId: string }>;
+  generateModel(req: GenerateRequest, signal?: AbortSignal): Promise<GenerateResponse>;
+  listModels(api?: string, signal?: AbortSignal): Promise<{ items: ModelListItem[] }>;
+  /** The evidence pack Claude reads for a session (snake_case JSON from the server). */
+  getModelContext(sessionId: string, signal?: AbortSignal): Promise<unknown>;
+  /** Maintainer token required. A refused draft rejects with an ApiError carrying `issues`. */
+  submitModelDraft(
+    sessionId: string,
+    draft: unknown,
+    signal?: AbortSignal,
+  ): Promise<{ created: boolean; model: ModelSnapshot }>;
   getSnapshot(id: string, signal?: AbortSignal): Promise<ModelSnapshot>;
   // maintainer (the key is sent as a bearer token)
   verifyMaintainer(key: string, signal?: AbortSignal): Promise<MaintainerIdentity>;
@@ -83,8 +95,16 @@ export function createApiClient(
   /** Plume errors are {error, message}; FastAPI validation errors are {detail: [...]}; mocks use {detail: string}. */
   async function fail(res: Response): Promise<never> {
     let message = res.statusText;
+    let code: string | undefined;
+    let issues: DraftIssue[] | undefined;
     try {
-      message = errorMessage(await res.json()) ?? message;
+      const body: unknown = await res.json();
+      message = errorMessage(body) ?? message;
+      if (body && typeof body === 'object') {
+        const b = body as Record<string, unknown>;
+        if (typeof b.error === 'string') code = b.error;
+        if (Array.isArray(b.issues)) issues = b.issues as DraftIssue[];
+      }
     } catch {
       /* non-JSON error body */
     }
@@ -92,7 +112,7 @@ export function createApiClient(
       const wait = res.headers.get('Retry-After');
       message = `${message || 'Too many requests'}${wait ? ` Try again in ${wait} s.` : ''}`;
     }
-    throw new ApiError(res.status, message || `Request failed (${res.status})`);
+    throw new ApiError(res.status, message || `Request failed (${res.status})`, { code, issues });
   }
 
   async function raw(
@@ -187,7 +207,16 @@ export function createApiClient(
     suggestModels: (apis, signal) =>
       call<SuggestResponse>('/v1/models/suggest', { method: 'POST', body: { apis }, signal }),
     generateModel: (body, signal) =>
-      call<{ snapshotId: string }>('/v1/models/generate', { method: 'POST', body, signal }),
+      call<GenerateResponse>('/v1/models/generate', { method: 'POST', body, signal }),
+    listModels: (api, signal) =>
+      call<{ items: ModelListItem[] }>(`/v1/models${api ? `?api=${enc(api)}` : ''}`, { signal }),
+    getModelContext: (sessionId, signal) =>
+      call<unknown>(`/v1/models/sessions/${enc(sessionId)}/context`, { signal }),
+    submitModelDraft: (sessionId, body, signal) =>
+      call<{ created: boolean; model: ModelSnapshot }>(
+        `/v1/models/sessions/${enc(sessionId)}/draft`,
+        { method: 'POST', body, signal },
+      ),
     getSnapshot: (id, signal) => call<ModelSnapshot>(`/v1/models/${enc(id)}`, { signal }),
     verifyMaintainer: (key, signal) =>
       call<MaintainerIdentity>('/v1/maintainer/me', { key, signal }),
