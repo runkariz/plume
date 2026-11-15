@@ -286,7 +286,8 @@ test('anonymous: Claude session, a refused draft, then an UNLISTED model with sh
     startingDraft: Record<string, unknown>;
   };
   const v2 = await request.post(
-    `${API}/v1/models/sessions/${rev.sessionId}/draft?basedOn=${modelId}`,
+    // the browser sends its My models link with a version: it joins it (the link lists the version saved INTO it)
+    `${API}/v1/models/sessions/${rev.sessionId}/draft?basedOn=${modelId}&collection=${collectionId}`,
     {
       data: { ...rev.startingDraft, name: `${NAME} (revised)` },
     },

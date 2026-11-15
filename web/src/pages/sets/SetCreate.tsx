@@ -42,6 +42,9 @@ export function SetSessionPanel({
   // While a pasted draft is being submitted the poll must not open the set: the submit knows the My models link, the
   // poll does not, and whichever navigates last wins.
   const submitting = useRef(false);
+  // A member pasted first can start the person's My models link while they stay on this page: it is shown when the
+  // set opens (the set itself then joins that link and starts nothing new).
+  const startedLink = useRef<CollectionRef | null>(null);
   const id = session.setSessionId;
   useEffect(() => {
     const ctrl = new AbortController();
@@ -87,7 +90,8 @@ export function SetSessionPanel({
           collection: sent,
         });
         rememberCollection(collection, sent);
-        onOpen(set.id, collection ? { collection } : undefined);
+        const shown = collection?.created ? collection : (startedLink.current ?? collection);
+        onOpen(set.id, shown ? { collection: shown } : undefined);
       } else {
         const memberSession = session.memberSessions[kind];
         if (!memberSession) throw new Error(`There is no session for ${kind}.`);
@@ -100,6 +104,7 @@ export function SetSessionPanel({
           { collection: sent },
         );
         rememberCollection(collection, sent);
+        if (collection?.created) startedLink.current = collection;
         setStored((s) => ({ ...s, [kind]: model.id }));
         setDraft('');
         setKind('set');

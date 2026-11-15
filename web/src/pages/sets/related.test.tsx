@@ -337,6 +337,37 @@ describe('Paste a draft yourself (set session)', () => {
   });
 });
 
+describe('Paste a draft: the link a member started is shown when the set opens', () => {
+  it('a member pasted first starts the My models link; the set joins it and the notice still shows the link', async () => {
+    renderApp(url);
+    await loaded();
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Image' }));
+    await userEvent.click(within(bar()).getByRole('button', { name: 'Create with Claude' }));
+    const p = await screen.findByRole('region', { name: 'Create the set with Claude' });
+    const box = within(p).getByLabelText('Draft JSON');
+    await userEvent.selectOptions(within(p).getByLabelText('This draft is'), 'Image');
+    await userEvent.click(box);
+    await userEvent.paste('{"name":"Image","fields":[{"name":"url"}]}');
+    await userEvent.click(within(p).getByRole('button', { name: 'Submit draft' }));
+    await within(p).findByRole('list', { name: 'Stored member models' });
+    const started = localStorage.getItem('plume-collection');
+    expect(started).toMatch(/^c-MockCollection\d+$/);
+    expect(screen.queryByText('Your model set is saved, and unlisted')).not.toBeInTheDocument(); // still on this page
+    await userEvent.click(box);
+    await userEvent.paste(
+      '{"name":"Product + Image","members":{"Product":"u-1","Image":"u-2"},"relations":[]}',
+    );
+    await userEvent.selectOptions(within(p).getByLabelText('This draft is'), 'set');
+    await userEvent.click(within(p).getByRole('button', { name: 'Submit draft' }));
+    // the set joined the member's link: the link is shown once, now, with the set
+    expect(await screen.findByText('Your model set is saved, and unlisted')).toBeInTheDocument();
+    expect(screen.getByLabelText('Link to My models')).toHaveValue(
+      `${window.location.origin}/mine/${started}`,
+    );
+    expect(localStorage.getItem('plume-collection')).toBe(started);
+  });
+});
+
 describe('Generate the set on the server (maintainer)', () => {
   async function start(concept = 'Product', pick = 'Image') {
     authStore.signIn('pl_ok', 'maintainer', true);
