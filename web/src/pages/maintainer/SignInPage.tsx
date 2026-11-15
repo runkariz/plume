@@ -3,8 +3,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { ApiError } from '@/api/types';
 import { authStore, useIsMaintainer } from '@/app/authStore';
-import { Button, Card, Field } from '@/components';
-import { PlumeMark } from '@/icons';
+import { BrandMark, Button, Card, Field } from '@/components';
 
 export function SignInPage() {
   const client = useApiClient();
@@ -49,7 +48,7 @@ export function SignInPage() {
     <div className="center">
       <Card className="login">
         <div className="login-brand">
-          <PlumeMark /> Plume
+          <BrandMark size={34} /> Plume
         </div>
         <h1 className="sr-only">Maintainer sign-in</h1>
         <p className="muted login-lead">

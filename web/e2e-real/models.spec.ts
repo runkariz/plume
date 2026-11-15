@@ -453,7 +453,7 @@ for (const theme of THEMES) {
       await shot(page, 'w7-real-model-view', theme);
 
       // the mapping list drives the detail panel (the keyboard route into the graph)
-      await page.getByRole('combobox', { name: 'Mapping' }).selectOption({ index: 1 });
+      await page.getByRole('option').nth(1).click();
       await expect(page.getByRole('heading', { name: / ← / })).toBeVisible();
     });
   });

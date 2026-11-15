@@ -16,10 +16,29 @@
   font: 600 21px var(--font-serif);
   letter-spacing: -0.01em;
 }
-.brand svg {
-  width: 26px;
-  height: 26px;
-  color: var(--accent);
+.brand-mark {
+  display: block;
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+/* the dark mark on the light theme, the white one on the dark theme (same switch as the colour tokens) */
+.brand-mark-dark {
+  display: none;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .brand-mark-light {
+    display: none;
+  }
+  :root:not([data-theme='light']) .brand-mark-dark {
+    display: block;
+  }
+}
+:root[data-theme='dark'] .brand-mark-light {
+  display: none;
+}
+:root[data-theme='dark'] .brand-mark-dark {
+  display: block;
 }
 .site-nav {
   display: flex;
@@ -435,11 +454,6 @@ a.stretched:focus-visible {
   align-items: center;
   gap: 10px;
   font: 600 28px var(--font-serif);
-}
-.login-brand svg {
-  width: 30px;
-  height: 30px;
-  color: var(--accent);
 }
 .login-lead {
   text-align: center;
@@ -1950,5 +1964,192 @@ th[scope='row'] {
   .concept-main {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+}
+
+/* W14: the graph with its control box (over the left of the canvas) and the mapping detail beside it */
+.workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 16px;
+  align-items: stretch;
+  margin-bottom: 8px;
+}
+.wb-canvas {
+  position: relative;
+  min-width: 0;
+}
+.wb-empty {
+  display: grid;
+  place-items: center;
+}
+.wb-detail {
+  height: var(--wb-h);
+  overflow: auto;
+}
+.wb-controls {
+  position: absolute;
+  z-index: 6;
+  left: 12px;
+  top: 12px;
+  width: 272px;
+  max-width: calc(100% - 24px);
+  max-height: calc(100% - 24px);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  box-shadow: 0 6px 22px rgb(0 0 0 / 14%);
+}
+.wb-controls:not(.open) {
+  width: auto;
+}
+.wb-controls-toggle {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  padding: 10px 14px;
+  font: 600 14px var(--font-sans);
+  color: var(--ink);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.wb-controls-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: var(--r);
+}
+.wb-controls-body {
+  padding: 0 14px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: hidden;
+}
+.wb-controls-body[hidden] {
+  display: none;
+}
+.wb-field label,
+.wb-apis legend,
+.wb-list-head {
+  font-size: 13px;
+  color: var(--muted);
+}
+.wb-field .input {
+  width: 100%;
+  margin-top: 4px;
+}
+.wb-apis {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+.wb-apis legend {
+  flex: 0 0 100%;
+  padding: 0;
+  margin-bottom: 2px;
+}
+.wb-apis p {
+  flex: 0 0 100%;
+}
+.wb-apis label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.wb-apis label.off {
+  color: var(--faint);
+}
+.wb-apis p {
+  margin: 0;
+}
+.wb-list-head {
+  display: flex;
+  justify-content: space-between;
+}
+.wb-list {
+  list-style: none;
+  margin: 0;
+  padding: 2px;
+  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 150px;
+  max-height: 340px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.wb-list:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.wb-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.wb-list li.act {
+  background: var(--surface-2);
+  outline: 1px solid var(--line);
+}
+.wb-list li.sel {
+  background: var(--accent-soft, var(--surface-2));
+  font-weight: 600;
+}
+.wb-list li.off .wb-row-name,
+.wb-list li.off .faint {
+  color: var(--muted);
+}
+.wb-list li.off .avatar-api {
+  opacity: 0.5;
+  filter: grayscale(1);
+}
+.wb-row-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+.wb-row-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.wb-row-api {
+  white-space: nowrap;
+}
+/* greyed out, not hidden: the filter and the API checkboxes keep the context */
+.react-flow__node.dim {
+  opacity: 0.62;
+  filter: grayscale(1);
+}
+/* text in a greyed-out node must keep its contrast: it is the muted colour, not the faint one */
+.react-flow__node.dim .faint {
+  color: var(--ink);
+}
+@media (max-width: 980px) {
+  .workbench {
+    grid-template-columns: 1fr;
+  }
+  .wb-detail {
+    height: auto;
+    max-height: none;
+  }
+}
+@media (max-width: 720px) {
+  .wb-controls.open {
+    width: calc(100% - 24px);
   }
 }

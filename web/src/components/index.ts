@@ -12,5 +12,6 @@ export { Segmented } from './Segmented';
 export type { SegOption } from './Segmented';
 export { Stepper } from './Stepper';
 export { Banner } from './Banner';
+export { BrandMark } from './BrandMark';
 export { ApiAvatar } from './ApiAvatar';
 export { RawJson } from './RawJson';
