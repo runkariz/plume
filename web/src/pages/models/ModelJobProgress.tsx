@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApiClient } from '@/api/context';
-import type { Concept, DraftIssue, ModelJobEvent } from '@/api/types';
+import type { Concept, DraftIssue, ModelJobEvent, ModelWarning } from '@/api/types';
 import { Banner, Button, Card, Chip } from '@/components';
+import { BeatLine, JobClock, type Beat } from './JobClock';
+import { groupWarnings } from './warnings';
 
 interface Round {
   n: number;
@@ -16,6 +18,10 @@ interface Progress {
   snapshotId: string | null;
   failure: string | null;
   finished: boolean;
+  /** The latest heartbeat: server seconds at `at` (our clock) and what it is waiting for. */
+  beat: Beat | null;
+  /** Rounds whose accepted draft had warnings and was sent back once for repair. */
+  repairs: { round: number; warnings: ModelWarning[] }[];
 }
 
 const EMPTY: Progress = {
@@ -26,6 +32,8 @@ const EMPTY: Progress = {
   snapshotId: null,
   failure: null,
   finished: false,
+  beat: null,
+  repairs: [],
 };
 
 export function reduce(p: Progress, e: ModelJobEvent): Progress {
@@ -47,6 +55,23 @@ export function reduce(p: Progress, e: ModelJobEvent): Progress {
       };
     case 'accepted':
       return { ...p, snapshotId: e.snapshotId ?? p.snapshotId };
+    case 'heartbeat':
+      return {
+        ...p,
+        beat: {
+          seconds: e.elapsed,
+          at: Date.now(),
+          round: e.round,
+          of: e.of,
+          phase: e.phase,
+          detail: e.detail,
+          concept: e.concept,
+        },
+      };
+    case 'warnings':
+      return p.repairs.some((r) => r.round === e.round)
+        ? p
+        : { ...p, repairs: [...p.repairs, { round: e.round, warnings: e.warnings }] };
     case 'failed':
       return { ...p, failure: e.message };
     case 'done':
@@ -102,11 +127,7 @@ export function ModelJobProgress({
       <div ref={focus} tabIndex={-1} className="session-focus">
         <div className="rowhead">
           <h2>Generating {concept.name}</h2>
-          {!failed && !p.finished ? (
-            <span className="live">
-              <span className="dot" aria-hidden /> Working on the server
-            </span>
-          ) : null}
+          {!failed && !p.finished ? <JobClock running beat={p.beat} /> : null}
         </div>
         <p className="muted">
           Plume reads the pinned docs, writes the model and checks every citation before it stores
@@ -124,6 +145,17 @@ export function ModelJobProgress({
               className={r.issues ? 'refused' : p.snapshotId || p.failure ? 'done' : 'active'}
             >
               Round {r.n} of {p.maxRounds}
+              {p.repairs.find((x) => x.round === r.n) ? (
+                <>
+                  {' '}
+                  <Chip tone="warn">
+                    warnings, sent back once for repair:{' '}
+                    {groupWarnings(p.repairs.find((x) => x.round === r.n)?.warnings)
+                      .map((g) => g.summary)
+                      .join('; ')}
+                  </Chip>
+                </>
+              ) : null}
               {r.issues ? (
                 <>
                   :{' '}
@@ -151,6 +183,7 @@ export function ModelJobProgress({
             </li>
           ))}
         </ol>
+        {!failed && !p.finished ? <BeatLine beat={p.beat} maxRounds={p.maxRounds} /> : null}
         {p.finished && p.snapshotId && !failed ? (
           <p role="status" className="muted">
             Done: opening the model for review…

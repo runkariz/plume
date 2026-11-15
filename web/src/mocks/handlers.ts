@@ -29,6 +29,7 @@ import {
   listItem,
   seedModels,
   setJobScript,
+  supersedable,
   type MockJob,
   type MockSession,
   type StoredModel,
@@ -74,6 +75,15 @@ export interface MockOptions {
 }
 
 /** Test hook (browser only): `localStorage['plume-mock-pause-at'] = 'mid'` freezes the build stream mid-way. */
+/** localStorage `plume-mock-hold-job` = "1": a model job stops at its first heartbeat and stays running (screenshots). */
+function holdJobAtHeartbeat(): boolean {
+  try {
+    return globalThis.localStorage?.getItem('plume-mock-hold-job') === '1';
+  } catch {
+    return false;
+  }
+}
+
 function readPauseAt(): number | null {
   try {
     return globalThis.localStorage?.getItem('plume-mock-pause-at') === 'mid'
@@ -546,6 +556,13 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
             controller.enqueue(
               encoder.encode(`id: ${i + 1}\nevent: ${type}\ndata: ${JSON.stringify(data)}\n\n`),
             );
+            if (e.type === 'heartbeat' && holdJobAtHeartbeat()) {
+              // the model call is still in flight: hold the stream open until the client leaves
+              await new Promise<void>((resolve) =>
+                request.signal.addEventListener('abort', () => resolve()),
+              );
+              return;
+            }
           }
           controller.close();
         },
@@ -568,8 +585,56 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
         );
       return HttpResponse.json(decorate(allModels(), stored));
     }),
+    http.get(`${base}/v1/models/:id/supersedable`, ({ params, request }) => {
+      if (!isMaintainer(request)) return unauthorized();
+      const stored = models.get(String(params.id));
+      if (!stored)
+        return HttpResponse.json(
+          { error: 'not_found', message: 'Snapshot not found' },
+          { status: 404 },
+        );
+      return HttpResponse.json({ items: supersedable(allModels(), stored) });
+    }),
+    http.post(`${base}/v1/models/:id/supersede`, async ({ params, request }) => {
+      if (!isMaintainer(request)) return unauthorized();
+      const stored = models.get(String(params.id));
+      if (!stored)
+        return HttpResponse.json(
+          { error: 'not_found', message: 'Snapshot not found' },
+          { status: 404 },
+        );
+      const body = (await request.json().catch(() => ({}))) as { supersedes?: unknown };
+      const ids = Array.isArray(body.supersedes) ? body.supersedes : [];
+      if (ids.length === 0)
+        return HttpResponse.json(
+          { error: 'invalid_request', message: 'Name at least one model to supersede.' },
+          { status: 400 },
+        );
+      const valid = new Set(supersedable(allModels(), stored).map((c) => c.id));
+      const bad = ids.filter((x) => typeof x !== 'string' || !valid.has(x));
+      if (stored.visibility !== 'official' || bad.length)
+        return HttpResponse.json(
+          {
+            error: 'invalid_state',
+            message:
+              stored.visibility !== 'official'
+                ? 'Only an official model can supersede others.'
+                : `Not official models of this concept: ${bad.join(', ')}`,
+          },
+          { status: 409 },
+        );
+      for (const id of ids as string[]) {
+        const old = models.get(id);
+        if (old) {
+          old.visibility = 'superseded';
+          old.supersededBy = stored.model.id;
+          old.supersededAt = '2026-11-16T12:30:00Z';
+        }
+      }
+      return HttpResponse.json(decorate(allModels(), stored));
+    }),
     ...(['release', 'discard'] as const).map((action) =>
-      http.post(`${base}/v1/models/:id/${action}`, ({ params, request }) => {
+      http.post(`${base}/v1/models/:id/${action}`, async ({ params, request }) => {
         if (!isMaintainer(request))
           return HttpResponse.json(
             { error: 'unauthorized', message: 'Missing or invalid token' },
@@ -586,7 +651,31 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
             { error: 'invalid_state', message: `Only an unreleased model can be ${action}d.` },
             { status: 409 },
           );
+        // release may name the official models of the same concept it replaces: every one must be such a model
+        const body = (await request.json().catch(() => ({}))) as { supersedes?: unknown };
+        const replaced =
+          action === 'release' && Array.isArray(body.supersedes) ? body.supersedes : [];
+        const valid = new Set(supersedable(allModels(), stored).map((c) => c.id));
+        const bad = replaced.filter((x) => typeof x !== 'string' || !valid.has(x));
+        if (bad.length)
+          return HttpResponse.json(
+            {
+              error: 'invalid_state',
+              message: `Not official models of this concept: ${bad.join(', ')}`,
+            },
+            { status: 409 },
+          );
         stored.visibility = action === 'release' ? 'official' : 'discarded';
+        if (replaced.length) {
+          for (const id of replaced as string[]) {
+            const old = models.get(id);
+            if (old) {
+              old.visibility = 'superseded'; // readable by id, out of the lists
+              old.supersededBy = stored.model.id;
+              old.supersededAt = '2026-11-16T12:00:00Z';
+            }
+          }
+        }
         return HttpResponse.json(decorate(allModels(), stored));
       }),
     ),

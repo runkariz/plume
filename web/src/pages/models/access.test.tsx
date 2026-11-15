@@ -4,7 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { authStore } from '@/app/authStore';
 import { createHandlers } from '@/mocks/handlers';
 import { inventorySnapshot } from '@/mocks/modelData';
-import { DEMO_OWNER_KEY, UNLISTED_V3, UNRELEASED } from '@/mocks/modelStore';
+import { DEMO_OWNER_KEY, UNLISTED_V3, UNRELEASED, UNRELEASED_ORDER } from '@/mocks/modelStore';
 import { renderApp } from '@/test/render';
 import { server, TEST_API_BASE } from '@/test/server';
 import { forgetOwnerKeys, readOwnerKeys, saveOwnerKey, shareLink } from '@/lib/ownerKeys';
@@ -87,6 +87,8 @@ describe('Generate on the server (signed-in maintainer)', () => {
       snapshotId: null,
       failure: null,
       finished: false,
+      beat: null,
+      repairs: [],
     };
     const issue = { code: 'X', field: 'f', api: null, message: 'm' };
     let p = reduce(empty, { type: 'round', n: 1, of: 3 });
@@ -250,7 +252,11 @@ describe('Lists: who sees which model', () => {
       'href',
       `/models/${UNRELEASED}`,
     );
-    expect(within(waiting).getByText('Unreleased')).toBeInTheDocument();
+    expect(within(waiting).getAllByText('Unreleased').length).toBeGreaterThan(0);
+    expect(within(waiting).getByRole('link', { name: 'Order' })).toHaveAttribute(
+      'href',
+      `/models/${UNRELEASED_ORDER}`,
+    );
     // the public list is still official only
     const list = screen.getByRole('region', { name: 'Official models' });
     expect(within(list).queryByText('Return')).not.toBeInTheDocument();

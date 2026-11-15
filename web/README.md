@@ -60,6 +60,11 @@ Against a build served on one origin (nginx proxying `/v1`, see Deploying), set 
 address, `PLUME_E2E_API_URL` to the API (the specs also call it directly) and `PLUME_E2E_SAME_ORIGIN=true`, so the
 specs expect relative `/v1/...` calls and icon paths.
 
+`e2e-real/zz-warnings.spec.ts` needs a test-catalog that has a POST `/api/{version}/orders`, which the default fixtures
+lack: copy `tests/fixtures/packages/test-catalog`, copy its `connector/endpoints/get-api-v1-orders` to
+`post-api-v1-orders`, set `"method": "POST"` (and drop `endpointId`) in that `request.json`, load the copy, and run the
+spec with `PLUME_E2E_WRITE_ONLY=true`; it is skipped otherwise.
+
 Useful variables: `PLUME_E2E_SHOTS_DIR` (a folder **outside the repo**, mounted into the container, receives
 light/dark screenshots), `PLUME_E2E_BASE_URL` (use an already running web server), `PLUME_E2E_OUTPUT_DIR`.
 The docker scripts mount the whole repo (`/repo`) because some specs read `tests/fixtures`.
@@ -198,6 +203,23 @@ Rules it must keep (the host's default CSP is `default-src 'none'`, scripts and 
 `scripts/finish-widget.mjs` fails the build if the file refers to anything outside itself. `e2e/widget.spec.ts`
 runs the BUILT file in a sandboxed iframe under that CSP with the network cut, driven by a stand-in host
 (`e2e/widget-host.ts`), and checks axe in both themes: run `npm run build:widget` before it.
+
+## Releasing models: replacing older ones, and warnings
+
+- **Release asks which older official models of the same concept it replaces** (`ReleaseChoice`): the candidates come
+  from `GET /v1/models/{id}/supersedable` (any API set; each with its APIs, `stale`, and `covered` = its APIs are all
+  inside the new model's). Nothing is ticked for the maintainer; replacing one that covers an API the new model lacks
+  says so. `POST /v1/models/{id}/release` then carries `{supersedes: [ids]}` (409 when an id is not a candidate: nothing
+  changes). A replaced model has visibility `superseded`: readable by id, "Superseded by <id>" on its page, out of the
+  lists; the new one says "Replaced these official models". An official model's page has "Retire older models of this
+  concept" for the same choice after the fact (`POST /v1/models/{id}/supersede`). Sets are not part of this yet.
+- **Warnings** (`warnings: [{code, field, api, message}]` on a model, `field` = the canonical path): shown on the model
+  page ("Check these mappings", grouped by code, each field linked to its mapping), counted in the review banner ("3
+  mappings cite only a request body"), as a note under the mapping in the detail, and as text in the widget. Today:
+  `WRITE_ONLY_SOURCE`.
+- **Server generation progress**: the job stream sends `heartbeat` (`elapsed`, `round`, `of`, `phase`, `concept`) while
+  a model call is in flight; the panel shows "Waiting for the model, 2:41 (round 2 of 3)" and a clock that keeps going
+  between heartbeats. A `warnings` event marks a round whose draft was sent back once for repair.
 
 ## Deploying: one origin (recommended)
 

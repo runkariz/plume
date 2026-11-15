@@ -6,6 +6,7 @@ import { countLeaves } from '@/pages/models/fields';
 import { ModelWorkbench } from '@/pages/models/ModelWorkbench';
 import { defaultSelection, type Selection } from '@/pages/models/graph';
 import { toggleApi } from '@/pages/models/modelView';
+import { groupWarnings } from '@/pages/models/warnings';
 import { extractModel, type Shown } from './model';
 import { OwnerKeyNotice } from './OwnerKeyNotice';
 import { SetPanel } from './SetPanel';
@@ -305,6 +306,11 @@ function Summary({ model }: { model: ModelSnapshot }) {
           ? `All ${c.checked} cited paths found in the pinned builds`
           : `${c.checked - c.found} of ${c.checked} cited paths were not found and were dropped`}
       </p>
+      {groupWarnings(model.warnings).map((g) => (
+        <p key={g.code} className="small warn">
+          {g.summary}: <span className="mono">{g.items.map((w) => w.field ?? '?').join(', ')}</span>
+        </p>
+      ))}
       {model.openQuestions.length > 0 ? (
         <details className="widget-questions">
           <summary>Open questions ({model.openQuestions.length})</summary>
