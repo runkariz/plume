@@ -1,0 +1,71 @@
+{
+  "actionName": "Order",
+  "authorizationType": "API_KEY",
+  "bodyType": "NONE",
+  "dataSourceExtractionCode": "return response.orders || [];",
+  "defaultCompositionKey": "order_id",
+  "description": "<div class=\"extension-title\">Description</div>",
+  "docLink": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+  "endpointId": "get-api-orders",
+  "headersContractRef": "headers.schema.json",
+  "idempotency": {
+    "safeToRetry": true
+  },
+  "isAdvanced": false,
+  "isDataSource": true,
+  "isDeprecated": false,
+  "isPreRelease": false,
+  "method": "GET",
+  "name": "List orders",
+  "operationKind": "list",
+  "paramsContractRef": "params.schema.json",
+  "presets": [
+    "presets/bootstrap.json"
+  ],
+  "provenance": {
+    "evidence": [
+      "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml"
+    ],
+    "extractedAt": "2026-11-05T02:17:38Z",
+    "sourceUrl": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml"
+  },
+  "relations": [
+    {
+      "kind": "child",
+      "targetEndpointId": "get-api-orders-order-id-evaluation",
+      "via": {
+        "field": "id",
+        "param": "order_id"
+      }
+    },
+    {
+      "kind": "child",
+      "targetEndpointId": "get-api-orders-order-id-messages",
+      "via": {
+        "field": "id",
+        "param": "order_id"
+      }
+    }
+  ],
+  "resource": "Order",
+  "responses": [
+    {
+      "contentContractRef": "responses/200.schema.json",
+      "contentType": "application/json",
+      "statusCode": 200
+    }
+  ],
+  "sideEffects": [
+    "none"
+  ],
+  "specOperationId": "OR11",
+  "summary": "<div class=\"extension-title\">Description</div> Pagination is enabled by default.",
+  "tags": [
+    {
+      "colorSetId": 30,
+      "kind": "category",
+      "name": "Orders"
+    }
+  ],
+  "url": "https://{instance_name}/api/orders"
+}

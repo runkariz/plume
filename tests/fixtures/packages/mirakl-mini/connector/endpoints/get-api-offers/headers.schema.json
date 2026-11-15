@@ -1,0 +1,19 @@
+{
+  "title": "Headers",
+  "type": "object",
+  "properties": {
+    "Authorization": {
+      "type": "string",
+      "description": "Authentication token",
+      "default": "{{ auth?.apikey?.access_token }}",
+      "examples": [
+        "{{ auth?.apikey?.access_token }}"
+      ],
+      "title": "Authorization"
+    }
+  },
+  "required": [
+    "Authorization"
+  ],
+  "description": "Request headers for authenticating the offers list request."
+}

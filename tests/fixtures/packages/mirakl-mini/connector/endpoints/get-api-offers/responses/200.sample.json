@@ -1,0 +1,161 @@
+{
+  "offers": [
+    {
+      "active": false,
+      "all_prices": [
+        {
+          "channel_code": "<channel_code>",
+          "context": {
+            "channel_codes": [
+              "<string>"
+            ],
+            "customer_group_ids": [
+              "<string>"
+            ],
+            "customer_organization_ids": [
+              "<string>"
+            ],
+            "end_date": "2026-01-01T00:00:00Z",
+            "start_date": "2026-01-01T00:00:00Z"
+          },
+          "discount_end_date": "2026-01-01T00:00:00Z",
+          "discount_start_date": "2026-01-01T00:00:00Z",
+          "price": 0,
+          "unit_discount_price": 0,
+          "unit_origin_price": 0,
+          "volume_prices": [
+            {
+              "price": 0,
+              "quantity_threshold": 0,
+              "unit_discount_price": 0,
+              "unit_origin_price": 0
+            }
+          ]
+        }
+      ],
+      "allow_quote_requests": false,
+      "applicable_pricing": {
+        "channel_code": "<channel_code>",
+        "context": {
+          "channel_codes": [
+            "<string>"
+          ],
+          "customer_group_ids": [
+            "<string>"
+          ],
+          "customer_organization_ids": [
+            "<string>"
+          ],
+          "end_date": "2026-01-01T00:00:00Z",
+          "start_date": "2026-01-01T00:00:00Z"
+        },
+        "discount_end_date": "2026-01-01T00:00:00Z",
+        "discount_start_date": "2026-01-01T00:00:00Z",
+        "price": 0,
+        "unit_discount_price": 0,
+        "unit_origin_price": 0,
+        "volume_prices": [
+          {
+            "price": 0,
+            "quantity_threshold": 0,
+            "unit_discount_price": 0,
+            "unit_origin_price": 0
+          }
+        ]
+      },
+      "available_end_date": "2026-01-01T00:00:00Z",
+      "available_start_date": "2026-01-01T00:00:00Z",
+      "category_code": "<category_code>",
+      "category_label": "<category_label>",
+      "channels": [
+        "<string>"
+      ],
+      "currency_iso_code": "<currency_iso_code>",
+      "description": "<description>",
+      "discount": {
+        "discount_price": 0,
+        "end_date": "2026-01-01T00:00:00Z",
+        "origin_price": 0,
+        "ranges": [
+          {
+            "price": 0,
+            "quantity_threshold": 0
+          }
+        ],
+        "start_date": "2026-01-01T00:00:00Z"
+      },
+      "eco_contributions": [
+        {
+          "eco_contribution_amount": 0,
+          "epr_category_code": "<epr_category_code>",
+          "producer_id": "<producer_id>"
+        }
+      ],
+      "favorite_rank": 0,
+      "fulfillment": {
+        "center": {
+          "code": "<code>"
+        }
+      },
+      "inactivity_reasons": [
+        "<string>"
+      ],
+      "internal_description": "<internal_description>",
+      "leadtime_to_ship": 0,
+      "logistic_class": {
+        "code": "<code>",
+        "label": "<label>"
+      },
+      "max_order_quantity": 0,
+      "min_order_quantity": 0,
+      "min_quantity_alert": 0,
+      "min_shipping_price": 0,
+      "min_shipping_price_additional": 0,
+      "min_shipping_type": "<min_shipping_type>",
+      "min_shipping_zone": "<min_shipping_zone>",
+      "msrp": 0,
+      "offer_additional_fields": [
+        {
+          "code": "<code>",
+          "type": "<type>"
+        }
+      ],
+      "offer_id": 0,
+      "package_quantity": 0,
+      "price": 0,
+      "price_additional_info": "<price_additional_info>",
+      "product_brand": "<product_brand>",
+      "product_description": "<product_description>",
+      "product_references": [
+        {
+          "reference": "<reference>",
+          "reference_type": "<reference_type>"
+        }
+      ],
+      "product_sku": "<product_sku>",
+      "product_tax_code": "<product_tax_code>",
+      "product_title": "<product_title>",
+      "quantity": 0,
+      "retail_prices": [
+        {
+          "discount_end_date": "2026-01-01T00:00:00Z",
+          "discount_start_date": "2026-01-01T00:00:00Z",
+          "price": 0,
+          "unit_discount_price": 0,
+          "unit_origin_price": 0
+        }
+      ],
+      "shipping_deadline": "2026-01-01T00:00:00Z",
+      "shop_sku": "<shop_sku>",
+      "state_code": "<state_code>",
+      "total_price": 0,
+      "warehouses": [
+        {
+          "code": "<code>",
+          "quantity": 0
+        }
+      ]
+    }
+  ],
+  "total_count": 0
+}

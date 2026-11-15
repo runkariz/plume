@@ -1,0 +1,185 @@
+{
+  "apiVersioning": {
+    "scheme": "none"
+  },
+  "authIds": [
+    "api-key-authorization"
+  ],
+  "baseUrls": [
+    "https://{{app_env.vars.host}}"
+  ],
+  "category": {
+    "bundleVersion": 31,
+    "confidence": 0.95,
+    "key": "marketplaces",
+    "reason": "Mirakl provides software enabling enterprise marketplaces, and this API is specifically for third-party marketplace sellers to manage offers and orders."
+  },
+  "conventions": {
+    "casing": "snake",
+    "dateTimeFormat": "RFC 3339"
+  },
+  "defaultAuthId": "api-key-authorization",
+  "description": "",
+  "docLink": "https://developer.mirakl.com/content/product/mmp/rest/seller/openapi3",
+  "environmentVariablesRef": "environment.variables.schema.json",
+  "environments": [
+    {
+      "baseUrl": "https://your-instance.mirakl.net",
+      "isDefault": true,
+      "key": "production",
+      "kind": "production",
+      "name": "production",
+      "notes": "URL to be replaced by your Mirakl instance URL",
+      "provenance": {
+        "evidenceUrl": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+        "source": "spec"
+      },
+      "servers": {
+        "api": "https://your-instance.mirakl.net"
+      }
+    },
+    {
+      "baseUrl": "https://{{app_env.vars.host}}",
+      "isDefault": false,
+      "key": "production-2",
+      "kind": "production",
+      "name": "production",
+      "provenance": {
+        "source": "derived"
+      },
+      "servers": {
+        "api": "https://{{app_env.vars.host}}"
+      }
+    }
+  ],
+  "errorFormat": {
+    "statusCodes": [
+      {
+        "meaning": "Too many order lines given",
+        "retryable": false,
+        "status": 400
+      }
+    ]
+  },
+  "iconUrl": "https://mirakl.com/media/favicons/favicon-light.svg",
+  "knowledgeIds": [
+    "context"
+  ],
+  "name": "mirakl",
+  "provenance": {
+    "extractedAt": "2026-11-05T02:17:38Z",
+    "extractorVersion": "1.0.0.0",
+    "rulesBundleVersion": 31,
+    "rulesVersion": "kariz-connector.v2@7c5342b8da8a",
+    "sourceUrl": "https://developer.mirakl.com/content/product/mmp/rest/seller/openapi3"
+  },
+  "resources": [
+    {
+      "children": [
+        "Line"
+      ],
+      "name": "DocumentRequest"
+    },
+    {
+      "name": "Download",
+      "parent": "Thread"
+    },
+    {
+      "name": "ErrorReport",
+      "parent": "Import"
+    },
+    {
+      "name": "Evaluation",
+      "parent": "Order"
+    },
+    {
+      "children": [
+        "ErrorReport",
+        "NewProductReport",
+        "Status",
+        "TransformationErrorReport",
+        "TransformedFile"
+      ],
+      "name": "Import"
+    },
+    {
+      "name": "Incident"
+    },
+    {
+      "name": "InvoicingAndAccounting"
+    },
+    {
+      "name": "Line",
+      "parent": "DocumentRequest"
+    },
+    {
+      "name": "Message",
+      "parent": "Order"
+    },
+    {
+      "name": "MultipleShipment"
+    },
+    {
+      "name": "NewProductReport",
+      "parent": "Import"
+    },
+    {
+      "children": [
+        "Quantity"
+      ],
+      "name": "Offer"
+    },
+    {
+      "children": [
+        "Evaluation",
+        "Message"
+      ],
+      "name": "Order"
+    },
+    {
+      "name": "Picklist"
+    },
+    {
+      "name": "PlatformSetting"
+    },
+    {
+      "name": "Product"
+    },
+    {
+      "name": "Promotion"
+    },
+    {
+      "name": "Quantity",
+      "parent": "Offer"
+    },
+    {
+      "name": "Return"
+    },
+    {
+      "name": "Status",
+      "parent": "Import"
+    },
+    {
+      "name": "Store"
+    },
+    {
+      "children": [
+        "Download"
+      ],
+      "name": "Thread"
+    },
+    {
+      "name": "TransformationErrorReport",
+      "parent": "Import"
+    },
+    {
+      "name": "TransformedFile",
+      "parent": "Import"
+    },
+    {
+      "name": "User"
+    }
+  ],
+  "summary": "Interact with Mirakl marketplace seller resources to manage orders, offers, products, shipments, returns, promotions, and account documents.",
+  "systemName": "mirakl"
+}

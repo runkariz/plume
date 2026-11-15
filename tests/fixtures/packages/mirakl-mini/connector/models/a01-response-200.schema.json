@@ -1,0 +1,273 @@
+{
+  "title": "A01_Response_200",
+  "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+  "x-complete": true,
+  "type": "object",
+  "properties": {
+    "applicable_taxes": {
+      "type": "array",
+      "description": "List of the shop's applicable taxes",
+      "items": {
+        "$ref": "a01-response-200-applicabletaxes.schema.json",
+        "description": "Applicable tax configuration for the shop."
+      }
+    },
+    "approval_delay": {
+      "type": "integer",
+      "format": "int64",
+      "description": "Average time for a shop to accept or refuse an order (in seconds)"
+    },
+    "approval_rate": {
+      "type": "number",
+      "format": "with decimals",
+      "description": "Rate of accepted orders"
+    },
+    "banner": {
+      "type": "string",
+      "description": "Url of the shop's banner image"
+    },
+    "billing_info": {
+      "$ref": "a01-response-200-billinginfo.schema.json",
+      "deprecated": true,
+      "description": "<p>Banking information</p><p>Use “payment_info” attribute instead</p>"
+    },
+    "channels": {
+      "type": "array",
+      "description": "List of the channel codes associated to the shop",
+      "items": {
+        "type": "string",
+        "description": "Code of an associated sales channel."
+      },
+      "uniqueItems": true
+    },
+    "closed_from": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The start date of the closing of the shop"
+    },
+    "closed_to": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The end date of the closing of the shop"
+    },
+    "contact_informations": {
+      "$ref": "a01-response-200-contactinformations.schema.json",
+      "description": "Contact information"
+    },
+    "currency_iso_code": {
+      "type": "string",
+      "description": "The currency of the shop (iso format)\n\nEnum: `\"AED\"`, `\"ARS\"`, `\"AUD\"`, `\"BAM\"`, `\"BGN\"`, `\"BHD\"`, `\"BRL\"`, `\"CAD\"`, `\"CHF\"`, `\"CLP\"`, `\"CNY\"`, `\"COP\"`, `\"CZK\"`, `\"DKK\"`, `\"EGP\"`, `\"EUR\"`, `\"GBP\"`, `\"GEL\"`, `\"GTQ\"`, `\"HKD\"`, `\"HRK\"`, `\"HUF\"`, `\"IDR\"`, `\"ILS\"`, `\"INR\"`, `\"IQD\"`, `\"JOD\"`, `\"JPY\"`, `\"KES\"`, `\"KRW\"`, `\"KWD\"`, `\"LKR\"`, `\"MAD\"`, `\"MGA\"`, `\"MXN\"`, `\"MYR\"`, `\"NGN\"`, `\"NOK\"`, `\"NZD\"`, `\"OMR\"`, `\"PEN\"`, `\"PHP\"`, `\"PKR\"`, `\"PLN\"`, `\"QAR\"`, `\"RON\"`, `\"RSD\"`, `\"RUB\"`, `\"SAR\"`, `\"SEK\"`, `\"SGD\"`, `\"TND\"`, `\"TRY\"`, `\"THB\"`, `\"TWD\"`, `\"UAH\"`, `\"USD\"`, `\"UYU\"`, `\"UZS\"`, `\"VND\"`, `\"ZAR\"`\n"
+    },
+    "date_created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Creation date of the shop"
+    },
+    "default_billing_information": {
+      "$ref": "a01-response-200-defaultbillinginformation.schema.json",
+      "description": "The default billing information of the shop, used for invoicing and reporting purposes"
+    },
+    "description": {
+      "type": "string",
+      "description": "The description of the shop, max length: 3000 characters."
+    },
+    "domains": {
+      "type": "array",
+      "description": "Shop domains",
+      "items": {
+        "type": "string",
+        "description": "Enum: `\"PRODUCT\"`, `\"SERVICE\"`\n"
+      },
+      "uniqueItems": true
+    },
+    "dropship": {
+      "$ref": "a01-response-200-dropship.schema.json",
+      "description": "Dropship configuration"
+    },
+    "evaluations_count": {
+      "type": "integer",
+      "format": "int64",
+      "description": "Number of evaluations for the shop"
+    },
+    "free_shipping": {
+      "type": "boolean",
+      "description": "Whether or not this shop offers free shipping to customers"
+    },
+    "grade": {
+      "type": "number",
+      "format": "with decimals",
+      "description": "Global grade of the shop"
+    },
+    "is_professional": {
+      "type": "boolean",
+      "description": "Whether or not the shop is professional"
+    },
+    "kyc": {
+      "$ref": "a01-response-200-kyc.schema.json",
+      "description": "KYC information (only supported when KYC feature is enabled)"
+    },
+    "last_updated_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The date of the last modification of the shop.\nNote: The following statistics fields do not update the <code>last_updated</code> date:\n<ul>\n    <li><code>orders_count</code></li>\n    <li><code>offers_count</code></li>\n    <li><code>evaluations_count</code></li>\n    <li><code>grade</code></li>\n    <li><code>approval_rate</code></li>\n    <li><code>approval_delay</code></li>\n    <li><code>order_messages_response_delay</code></li>\n</ul>\n"
+    },
+    "logo": {
+      "type": "string",
+      "description": "Url of the shop's logo image"
+    },
+    "model": {
+      "type": "string",
+      "description": "Shop platform model, current possible values :\n<ul>\n    <li><code>MARKETPLACE</code></li>\n    <li><code>DROPSHIP</code></li>\n    <li><code>ONE_CREDITOR</code></li>\n</ul>\n\nEnum: `\"MARKETPLACE\"`, `\"DROPSHIP\"`, `\"ONE_CREDITOR\"`\n"
+    },
+    "offers_count": {
+      "type": "integer",
+      "format": "int64",
+      "description": "Total count of active offers of the shop"
+    },
+    "order_messages_response_delay": {
+      "type": "integer",
+      "format": "int64",
+      "description": "Average time for a shop to answer to an order message (in seconds)"
+    },
+    "orders_count": {
+      "type": "integer",
+      "format": "int64",
+      "description": "Total count of debited orders (or if Pay on Delivery, accepted) of the shop"
+    },
+    "payment_details": {
+      "$ref": "a01-response-200-paymentdetails.schema.json",
+      "description": "Payment details"
+    },
+    "payment_info": {
+      "$ref": "a01-response-200-paymentinfo.schema.json",
+      "description": "Payment information"
+    },
+    "payment_method_mandatory": {
+      "type": "boolean",
+      "description": "Payment method mandatory"
+    },
+    "premium": {
+      "type": "boolean",
+      "description": "Whether or not the shop is premium"
+    },
+    "pro_details": {
+      "$ref": "a01-response-200-prodetails.schema.json",
+      "deprecated": true,
+      "description": "<p>Professional details</p><p>Use \"default_billing_information\" instead</p>"
+    },
+    "producer_identifiers": {
+      "type": "array",
+      "description": "List of shop’s producer identifiers per Extended Producer Responsibility (EPR) categories. Only available if the operator setting <em>Activate data collection related to circular economy regulations</em> is enabled.",
+      "items": {
+        "$ref": "a01-response-200-produceridentifiers.schema.json",
+        "description": "Producer unique identifier details."
+      },
+      "uniqueItems": true
+    },
+    "recycling_policy": {
+      "type": "string",
+      "description": "Recycling policy - only available if the operator setting <em>Activate data collection related to circular economy regulations</em> has been enabled.",
+      "maxLength": 5000
+    },
+    "return_policy": {
+      "type": "string",
+      "description": "Terms of restitution, max length: 60000 characters."
+    },
+    "shipping": {
+      "$ref": "a01-response-200-shipping.schema.json",
+      "description": "Shop shipping configuration"
+    },
+    "shipping_country": {
+      "type": "string",
+      "description": "Code ISO 3166-1 alpha-3 of the shipping country"
+    },
+    "shipping_types": {
+      "type": "array",
+      "deprecated": true,
+      "description": "<p>List of shipping types of the shop</p><p>Use “shippings” attributes instead</p>",
+      "items": {
+        "type": "string",
+        "deprecated": true,
+        "description": "Code representing an available shipping type."
+      }
+    },
+    "shipping_zones": {
+      "type": "array",
+      "deprecated": true,
+      "description": "<p>List of shipping zones of the shop</p><p>Use “shippings” attributes instead</p>",
+      "items": {
+        "type": "string",
+        "deprecated": true,
+        "description": "Code representing an available shipping zone."
+      }
+    },
+    "shippings": {
+      "type": "array",
+      "description": "All the pair shipping zone / shipping type accepted by the shop",
+      "items": {
+        "$ref": "a01-response-200-shippings.schema.json",
+        "description": "Shipping method and pricing configuration."
+      }
+    },
+    "shop_additional_fields": {
+      "type": "array",
+      "description": "List of additional fields",
+      "items": {
+        "$ref": "a01-response-200-shopadditionalfields.schema.json",
+        "description": "Custom additional field and its assigned value for the shop."
+      }
+    },
+    "shop_id": {
+      "type": "integer",
+      "format": "int64",
+      "description": "The identifier of the shop"
+    },
+    "shop_name": {
+      "type": "string",
+      "description": "The name of the shop"
+    },
+    "shop_state": {
+      "type": "string",
+      "description": "The state of the shop\n\nEnum: `\"OPEN\"`, `\"CLOSE\"`, `\"SUSPENDED\"`, `\"TERMINATED\"`\n"
+    },
+    "specific_billing_informations": {
+      "type": "array",
+      "description": "The list of specific billing information of the shop, used for invoicing and reporting purposes\n<br/><i>Applies only when the shop is <code>professional</code></i>\n",
+      "items": {
+        "$ref": "a01-response-200-specificbillinginformations.schema.json",
+        "description": "Channel- or context-specific billing details for the shop."
+      }
+    },
+    "suspension_type": {
+      "type": "string",
+      "description": "Shop suspension type, current possible values:<ul><li><code>MANUAL</code>: Shop account has been manually suspended in the back-office</li><li><code>PENDING_APPROVAL</code>: Shop account has been suspended at creation</li><li><code>AUTOMATIC_SUSPENSION</code>: Shop account has been suspended by Mirakl Quality Control</li><li><code>INCOMPLETE_PROFILE</code>: Shop account is suspended because some mandatory fields are missing in its profile</li></ul>\n\nEnum: `\"MANUAL\"`, `\"PENDING_APPROVAL\"`, `\"INCOMPLETE_PROFILE\"`, `\"AUTOMATIC_SUSPENSION\"`\n"
+    }
+  },
+  "required": [
+    "billing_info",
+    "channels",
+    "contact_informations",
+    "currency_iso_code",
+    "date_created",
+    "default_billing_information",
+    "domains",
+    "evaluations_count",
+    "free_shipping",
+    "is_professional",
+    "last_updated_date",
+    "offers_count",
+    "orders_count",
+    "payment_details",
+    "payment_method_mandatory",
+    "premium",
+    "pro_details",
+    "shipping",
+    "shipping_types",
+    "shipping_zones",
+    "shop_additional_fields",
+    "shop_id",
+    "shop_name",
+    "shop_state"
+  ],
+  "description": "Details of the retrieved shop."
+}

@@ -163,6 +163,7 @@ def _doc(d: Document) -> dict[str, Any]:
         "fields": json.loads(fields_to_json(d.fields)),
         "scopes": list(d.scopes),
         "source_id": d.source_id,
+        "shape": d.shape,
     }
 
 
@@ -182,6 +183,7 @@ def _doc_back(d: dict[str, Any]) -> Document:
         fields=fields_from_json(d.get("fields", [])),
         scopes=tuple(d.get("scopes", [])),
         source_id=d.get("source_id"),
+        shape=d.get("shape"),
     )
 
 

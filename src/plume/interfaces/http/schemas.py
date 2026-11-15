@@ -42,6 +42,8 @@ class ApiSummary(Schema):
     summary: str
     endpoints: int
     models: int
+    model_shapes: int = Field(description="Distinct model structures (same schema = one shape).")
+    model_names: int = Field(description="Distinct model names (bundle roots excluded).")
     guides: int
     docs_as_of: str | None
     status: ApiStatus
@@ -395,6 +397,7 @@ class GenerateResponse(Schema):
     context_url: str
     claude_prompt: str
     mcp_url: str
+    maintainer_mcp_url: str
 
 
 class DraftIssue(Schema):

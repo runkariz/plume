@@ -16,7 +16,9 @@ from plume.application.reader.resolve import BuildResolver, ResolvedBuild
 from plume.domain.knowledge.document import DocumentKind
 from plume.domain.knowledge.fact import FactKind
 
-_NOISE = frozenset({"general", "default", "misc", "other", "error", "errors", "api", "app"})
+_NOISE = frozenset(
+    {"general", "default", "misc", "other", "error", "errors", "api", "app", "data", "datum"}
+)
 _WRITE = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 MAX_APIS = 6
 MAX_CONCEPTS = 24
@@ -86,7 +88,9 @@ def concept_docs(
             if (not key or key in _NOISE) and s.path:
                 key = concept_key(_last_literal(s.path))
         elif s.kind is DocumentKind.MODEL:
-            key = concept_key(s.title)
+            if s.resource is None:
+                continue  # a bundle root ("A01 response 200") is not a concept
+            key = concept_key(s.title.split(" / ")[-1])
         else:
             continue
         if key and key not in _NOISE:
@@ -129,9 +133,15 @@ class SuggestConcepts:
         summaries, _ = self._index.browse(r.build.build_id, (), None, 100_000, 0)
         groups = concept_docs(summaries)
         for key, docs in groups.items():
-            first = docs[0]
-            name = first.resource if first.kind is DocumentKind.ENDPOINT else first.title
-            names.setdefault(key, name or key)
+            # Prefer a document whose own name gives the key (a model "Order", an endpoint with
+            # resource "Order"); else the key itself, title-cased ("orders" path -> "Order").
+            for d in docs:
+                own = (d.resource if d.kind is DocumentKind.ENDPOINT else d.title) or ""
+                own = own.split(" / ")[-1]
+                if concept_key(own) == key:
+                    names.setdefault(key, own)
+                    break
+            names.setdefault(key, key.capitalize())
         owner_key = {d.doc_id: k for k, docs in groups.items() for d in docs}
         words: set[str] = set()
         leaves: dict[str, set[str]] = defaultdict(set)

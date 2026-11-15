@@ -93,6 +93,11 @@ class InMemorySearchIndex:
         for d in self._docs.list_documents(build_id):
             out[d.kind.value] = out.get(d.kind.value, 0) + 1
         out["chunks"] = len(self._docs.list_chunks(build_id))
+        models = [d for d in self._docs.list_documents(build_id) if d.kind is DocumentKind.MODEL]
+        out["model_shapes"] = len({d.shape or d.doc_id for d in models})
+        out["model_names"] = len(
+            {d.title.split(" / ")[-1].lower() for d in models if d.resource is not None}
+        )
         return out
 
 

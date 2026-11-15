@@ -1,0 +1,674 @@
+{
+  "type": "object",
+  "properties": {
+    "offers": {
+      "type": "array",
+      "description": "Offers for a shop",
+      "items": {
+        "title": "OF21_Response_200_Offers",
+        "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+        "x-complete": true,
+        "type": "object",
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "description": "Is the offer active"
+          },
+          "all_prices": {
+            "type": "array",
+            "description": "All prices for the offer\n<br/>\nFor Dropship specifically: the list of purchasing prices of the offer, also referred to as costs or wholesale prices\n",
+            "items": {
+              "title": "OF21_Response_200_Offers_AllPrices",
+              "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+              "x-complete": true,
+              "type": "object",
+              "properties": {
+                "channel_code": {
+                  "type": "string",
+                  "deprecated": true,
+                  "description": "    Single Channel Pricing users: The channel code on which a specific price applies.\n    This is the pricing_channel_code supplied as input in the API if prices are defined for this channel.\n    If no pricing is defined for this channel, or no pricing_channel_code is supplied, it falls back on the default prices.\n    channel_code is set to null for the default prices. Multi Channel Pricing users: returned null.\n    Refer to context > channel_codes in order to retrieve the channel codes for which the price apply.\n"
+                },
+                "context": {
+                  "$ref": "#/$defs/OF21Response200OffersAllPricesContext",
+                  "title": "OF21_Response_200_Offers_AllPrices_Context"
+                },
+                "discount_end_date": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "End date of the discount, or null if no discount exists or if the discount does not have an end date."
+                },
+                "discount_start_date": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Start date of the discount, or null if no discount exists or if the discount does not have a start date."
+                },
+                "price": {
+                  "type": "number",
+                  "format": "with decimals",
+                  "description": "Price of the offer.\n<br/>\nFor Dropship specifically: the purchasing price of the offer\n<br/>\nIf a discount is defined and is currently active (within the validity interval), it represents the unit_discount_price.\n<br/>\nIn other cases, it represents the unit_origin_price.\n"
+                },
+                "unit_discount_price": {
+                  "type": "number",
+                  "format": "with decimals",
+                  "description": "Discount price for a quantity of one, i.e. the discount price for a quantity of one.\n<br/>\nFor Dropship specifically: the discount purchasing price for a quantity of one\n<br/>\nSet to null if no discount is defined or if no discount price for a quantity of one is defined.\n"
+                },
+                "unit_origin_price": {
+                  "type": "number",
+                  "format": "with decimals",
+                  "description": "Original price for a quantity of one, i.e. the price for a quantity of one regardless of the discounts.\n<br/>\nFor Dropship specifically: the purchasing price for a quantity of one, also referred to as cost or wholesale price\n"
+                },
+                "volume_prices": {
+                  "type": "array",
+                  "description": "Volume prices for each quantity threshold. Returns at least the price for a quantity threshold of one.\n",
+                  "items": {
+                    "$ref": "#/$defs/OF21Response200OffersAllPricesVolumePrices",
+                    "title": "OF21_Response_200_Offers_AllPrices_VolumePrices"
+                  }
+                }
+              },
+              "required": [
+                "price",
+                "unit_origin_price",
+                "volume_prices"
+              ],
+              "description": "Price configuration and discount schedule applied to specific contexts or quantity tiers."
+            }
+          },
+          "allow_quote_requests": {
+            "type": "boolean",
+            "description": "Whether the offer is eligible for quotation"
+          },
+          "applicable_pricing": {
+            "title": "OF21_Response_200_Offers_ApplicablePricing",
+            "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+            "x-complete": true,
+            "type": "object",
+            "properties": {
+              "channel_code": {
+                "type": "string",
+                "deprecated": true,
+                "description": "    Single Channel Pricing users: The channel code on which a specific price applies.\n    This is the pricing_channel_code supplied as input in the API if prices are defined for this channel.\n    If no pricing is defined for this channel, or no pricing_channel_code is supplied, it falls back on the default prices.\n    channel_code is set to null for the default prices. Multi Channel Pricing users: returned null.\n    Refer to context > channel_codes in order to retrieve the channel codes for which the price apply.\n"
+              },
+              "context": {
+                "$ref": "#/$defs/OF21Response200OffersAllPricesContext",
+                "title": "OF21_Response_200_Offers_ApplicablePricing_Context"
+              },
+              "discount_end_date": {
+                "type": "string",
+                "format": "date-time",
+                "description": "End date of the discount, or null if no discount exists or if the discount does not have an end date."
+              },
+              "discount_start_date": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Start date of the discount, or null if no discount exists or if the discount does not have a start date."
+              },
+              "price": {
+                "type": "number",
+                "format": "with decimals",
+                "description": "Price of the offer.\n<br/>\nFor Dropship specifically: the purchasing price of the offer\n<br/>\nIf a discount is defined and is currently active (within the validity interval), it represents the unit_discount_price.\n<br/>\nIn other cases, it represents the unit_origin_price.\n"
+              },
+              "unit_discount_price": {
+                "type": "number",
+                "format": "with decimals",
+                "description": "Discount price for a quantity of one, i.e. the discount price for a quantity of one.\n<br/>\nFor Dropship specifically: the discount purchasing price for a quantity of one\n<br/>\nSet to null if no discount is defined or if no discount price for a quantity of one is defined.\n"
+              },
+              "unit_origin_price": {
+                "type": "number",
+                "format": "with decimals",
+                "description": "Original price for a quantity of one, i.e. the price for a quantity of one regardless of the discounts.\n<br/>\nFor Dropship specifically: the purchasing price for a quantity of one, also referred to as cost or wholesale price\n"
+              },
+              "volume_prices": {
+                "type": "array",
+                "description": "Volume prices for each quantity threshold. Returns at least the price for a quantity threshold of one.\n",
+                "items": {
+                  "$ref": "#/$defs/OF21Response200OffersAllPricesVolumePrices",
+                  "title": "OF21_Response_200_Offers_ApplicablePricing_VolumePrices"
+                }
+              }
+            },
+            "required": [
+              "price",
+              "unit_origin_price",
+              "volume_prices"
+            ],
+            "description": "Pricing defined for the offer, including the prices for the selected channel if available\n<br/>\nFor Dropship specifically: the list of applicable purchasing prices of the offer, also referred to as costs or wholesale prices.\n"
+          },
+          "available_end_date": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Available end date"
+          },
+          "available_start_date": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Available start date"
+          },
+          "category_code": {
+            "type": "string",
+            "description": "Product category code"
+          },
+          "category_label": {
+            "type": "string",
+            "description": "<span>Product category label </span><span title=\"This field is localized: its value uses the locale provided in the parameters\" class=\"flag\"></span>"
+          },
+          "channels": {
+            "type": "array",
+            "description": "List of channel codes on which the offer can be sold",
+            "items": {
+              "type": "string",
+              "description": "Unique code representing an eligible sales channel for the offer."
+            },
+            "uniqueItems": true
+          },
+          "currency_iso_code": {
+            "type": "string",
+            "description": "The currency of the shop (iso format)\n\nEnum: `\"AED\"`, `\"ARS\"`, `\"AUD\"`, `\"BAM\"`, `\"BGN\"`, `\"BHD\"`, `\"BRL\"`, `\"CAD\"`, `\"CHF\"`, `\"CLP\"`, `\"CNY\"`, `\"COP\"`, `\"CZK\"`, `\"DKK\"`, `\"EGP\"`, `\"EUR\"`, `\"GBP\"`, `\"GEL\"`, `\"GTQ\"`, `\"HKD\"`, `\"HRK\"`, `\"HUF\"`, `\"IDR\"`, `\"ILS\"`, `\"INR\"`, `\"IQD\"`, `\"JOD\"`, `\"JPY\"`, `\"KES\"`, `\"KRW\"`, `\"KWD\"`, `\"LKR\"`, `\"MAD\"`, `\"MGA\"`, `\"MXN\"`, `\"MYR\"`, `\"NGN\"`, `\"NOK\"`, `\"NZD\"`, `\"OMR\"`, `\"PEN\"`, `\"PHP\"`, `\"PKR\"`, `\"PLN\"`, `\"QAR\"`, `\"RON\"`, `\"RSD\"`, `\"RUB\"`, `\"SAR\"`, `\"SEK\"`, `\"SGD\"`, `\"TND\"`, `\"TRY\"`, `\"THB\"`, `\"TWD\"`, `\"UAH\"`, `\"USD\"`, `\"UYU\"`, `\"UZS\"`, `\"VND\"`, `\"ZAR\"`\n"
+          },
+          "description": {
+            "type": "string",
+            "description": "Offer description"
+          },
+          "discount": {
+            "title": "OF21_Response_200_Offers_Discount",
+            "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+            "x-complete": true,
+            "type": "object",
+            "deprecated": true,
+            "properties": {
+              "discount_price": {
+                "type": "number",
+                "format": "with decimals",
+                "description": "Discount price. Not to be read if discount with ranges is specified (i.e. discount with at least one range with quantity threshold greater than one). <br/>For Dropship specifically: the purchasing discount price."
+              },
+              "end_date": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Discount end date"
+              },
+              "origin_price": {
+                "type": "number",
+                "format": "with decimals",
+                "description": "Origin price <br/>For Dropship specifically: the origin purchasing price"
+              },
+              "ranges": {
+                "type": "array",
+                "description": "Discount ranges",
+                "items": {
+                  "title": "OF21_Response_200_Offers_Discount_Ranges",
+                  "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+                  "x-complete": true,
+                  "type": "object",
+                  "properties": {
+                    "price": {
+                      "type": "number",
+                      "format": "with decimals",
+                      "description": "Price of the offer if the quantity threshold is reached"
+                    },
+                    "quantity_threshold": {
+                      "type": "integer",
+                      "format": "int32",
+                      "description": "Minimum quantity to order for the given price to be applied"
+                    }
+                  },
+                  "required": [
+                    "price",
+                    "quantity_threshold"
+                  ],
+                  "description": "Promotional tier specifying the discounted price when a minimum quantity is ordered."
+                }
+              },
+              "start_date": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Discount start date"
+              }
+            },
+            "description": "<p>Discount of the offer</p><p>Please use 'applicablePricing' instead</p>"
+          },
+          "eco_contributions": {
+            "type": "array",
+            "description": "Eco-contributions of the offer - only available if the operator setting <em>Activate data collection related to circular economy regulations</em> has been enabled.",
+            "items": {
+              "title": "OF21_Response_200_Offers_EcoContributions",
+              "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+              "x-complete": true,
+              "type": "object",
+              "properties": {
+                "eco_contribution_amount": {
+                  "type": "number",
+                  "format": "with decimals",
+                  "description": "Amount of the eco-contribution."
+                },
+                "epr_category_code": {
+                  "type": "string",
+                  "description": "Extended Producer Responsibility (EPR) category code.\n\nEnum: `\"FR-AGROPACK\"`, `\"FR-ASL\"`, `\"FR-DASRIPAT\"`, `\"FR-DBPS\"`, `\"FR-DDS\"`, `\"FR-DEA\"`, `\"FR-DEEE\"`, `\"FR-DISPMED\"`, `\"FR-DIY\"`, `\"FR-EMBM\"`, `\"FR-GF\"`, `\"FR-JOUETS\"`, `\"FR-LUB\"`, `\"FR-MH\"`, `\"FR-MNU\"`, `\"FR-PA\"`, `\"FR-PAP\"`, `\"FR-PCHIM\"`, `\"FR-PMCB\"`, `\"FR-PNEU\"`, `\"FR-TABAC\"`, `\"FR-TLC\"`, `\"FR-VEHICULE\"`, `\"FR-VHU\"`, `\"DE-BATTG\"`, `\"DE-PACK\"`, `\"DE-WEEE\"`, `\"ES-PACK\"`, `\"ES-GPACK\"`, `\"ES-WEEE\"`\n",
+                  "maxLength": 255,
+                  "minLength": 0
+                },
+                "producer_id": {
+                  "type": "string",
+                  "description": "Producer identifier of the eco-contribution.<br/>Not present if the producer identifier belongs to the operator.",
+                  "maxLength": 255,
+                  "minLength": 0
+                }
+              },
+              "required": [
+                "epr_category_code"
+              ],
+              "description": "Environmental contribution fee details tied to a specific producer and category."
+            },
+            "maxItems": 20
+          },
+          "favorite_rank": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Favorite rank for the offer, when the favorite feature is enabled and the offer is a favorite"
+          },
+          "fulfillment": {
+            "title": "OF21_Response_200_Offers_Fulfillment",
+            "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+            "x-complete": true,
+            "type": "object",
+            "properties": {
+              "center": {
+                "title": "OF21_Response_200_Offers_Fulfillment_Center",
+                "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+                "x-complete": true,
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "description": "Center code"
+                  }
+                },
+                "required": [
+                  "code"
+                ],
+                "description": "Fulfillment center code"
+              }
+            },
+            "required": [
+              "center"
+            ],
+            "description": "Fulfillment information"
+          },
+          "inactivity_reasons": {
+            "type": "array",
+            "description": "Reasons for offers inactivity, mandatory if an offer is inactive",
+            "items": {
+              "type": "string",
+              "description": "Enum: `\"PRODUCT_STATUS_NEW\"`, `\"PRODUCT_STATUS_INVALID\"`, `\"PRODUCT_STATUS_REJECTED\"`, `\"PRODUCT_STATUS_UNAUTHORIZED_TO_SELL\"`, `\"PRODUCT_STATUS_PENDING\"`, `\"PRODUCT_STATUS_SYNCHRO_ERROR\"`, `\"PRODUCT_DISABLED\"`, `\"SHOP_NOT_OPEN\"`, `\"ZERO_QUANTITY\"`, `\"NO_MIN_SHIPPING_RATE\"`, `\"NOT_IN_AVAILABILITY_PERIOD\"`, `\"NO_CHANNEL_ON_SHOP\"`, `\"SHOP_CURRENCY_DISABLED\"`, `\"AVAILABLE_QUANTITY_LESS_THAN_MIN_ORDER_QUANTITY\"`, `\"AVAILABLE_QUANTITY_LESS_THAN_PACKAGE_QUANTITY\"`, `\"NO_ACTIVE_PRICE\"`, `\"CATEGORY_UNAUTHORIZED_TO_SELL\"`, `\"BRAND_UNAUTHORIZED_TO_SELL\"`, `\"OFFER_STATE_UNAUTHORIZED_TO_SELL\"`\n"
+            }
+          },
+          "internal_description": {
+            "type": "string",
+            "description": "The offer's description as shown in the back office"
+          },
+          "leadtime_to_ship": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Offer's lead time to ship value. If this value has been set to 0, value is returned as 1 (unless platform's default lead time to ship value is also 0). If no lead time to ship was specified for the offer, platform's default value is returned."
+          },
+          "logistic_class": {
+            "title": "OF21_Response_200_Offers_LogisticClass",
+            "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+            "x-complete": true,
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "description": "Logistic class code"
+              },
+              "label": {
+                "type": "string",
+                "description": "<span>Logistic class label </span><span title=\"This field is localized: its value uses the locale provided in the parameters\" class=\"flag\"></span>"
+              }
+            },
+            "required": [
+              "code",
+              "label"
+            ],
+            "description": "The logistic class associated to the offer"
+          },
+          "max_order_quantity": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Highest quantity of product items per order"
+          },
+          "min_order_quantity": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Lowest quantity of product items per order"
+          },
+          "min_quantity_alert": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Mininum quantity of the offer"
+          },
+          "min_shipping_price": {
+            "type": "number",
+            "format": "with decimals",
+            "description": "Unit price of the minimum shipping rate"
+          },
+          "min_shipping_price_additional": {
+            "type": "number",
+            "format": "with decimals",
+            "description": "Additional unit price associated to the minimum shipping rate"
+          },
+          "min_shipping_type": {
+            "type": "string",
+            "description": "Code of the shipping type associated to the minimum shipping rate"
+          },
+          "min_shipping_zone": {
+            "type": "string",
+            "description": "Code of the shipping zone associated to the minimum shipping rate"
+          },
+          "msrp": {
+            "type": "number",
+            "format": "with decimals",
+            "description": "The retail price recommendation, also referred to as manufacturer's suggested retail price (MSRP) or recommended retail price (RRP).\n<br/>\nApplicable only for Dropship offers.\n"
+          },
+          "offer_additional_fields": {
+            "type": "array",
+            "description": "Custom fields of the offer",
+            "items": {
+              "title": "OF21_Response_200_Offers_OfferAdditionalFields",
+              "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+              "x-complete": true,
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "description": "Custom field's code"
+                },
+                "type": {
+                  "type": "string",
+                  "description": "Custom field's type\n\nEnum: `\"STRING\"`, `\"DATE\"`, `\"NUMERIC\"`, `\"BOOLEAN\"`, `\"LINK\"`, `\"REGEX\"`, `\"TEXTAREA\"`, `\"LIST\"`, `\"MULTIPLE_VALUES_LIST\"`\n"
+                }
+              },
+              "required": [
+                "code"
+              ],
+              "description": "Custom attribute and value defined for the offer."
+            }
+          },
+          "offer_id": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Identifier of the offer"
+          },
+          "package_quantity": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Indivisible quantity of the same product"
+          },
+          "price": {
+            "type": "number",
+            "format": "with decimals",
+            "description": "Price of the offer\n<br/>\nFor Dropship specifically: the purchasing price of the offer, also referred to as cost or wholesale price\n"
+          },
+          "price_additional_info": {
+            "type": "string",
+            "description": "Additional price information for the offer"
+          },
+          "product_brand": {
+            "type": "string",
+            "description": "Brand of the product"
+          },
+          "product_description": {
+            "type": "string",
+            "description": "Description of the product"
+          },
+          "product_references": {
+            "type": "array",
+            "description": "Product references",
+            "items": {
+              "title": "OF21_Response_200_Offers_ProductReferences",
+              "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+              "x-complete": true,
+              "type": "object",
+              "properties": {
+                "reference": {
+                  "type": "string",
+                  "description": "Value of the reference"
+                },
+                "reference_type": {
+                  "type": "string",
+                  "description": "Type of the reference"
+                }
+              },
+              "required": [
+                "reference",
+                "reference_type"
+              ],
+              "description": "Product identifier such as EAN, UPC, or ISBN associated with the offer."
+            }
+          },
+          "product_sku": {
+            "type": "string",
+            "description": "Product SKU"
+          },
+          "product_tax_code": {
+            "type": "string",
+            "description": "Offer product tax code"
+          },
+          "product_title": {
+            "type": "string",
+            "description": "Product title"
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Available quantity of the offer"
+          },
+          "retail_prices": {
+            "type": "array",
+            "description": "List retail prices for the offer, also referred to as selling prices.\n<br/>\nApplicable only for Dropship offers.\n",
+            "items": {
+              "title": "OF21_Response_200_Offers_RetailPrices",
+              "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+              "x-complete": true,
+              "type": "object",
+              "properties": {
+                "discount_end_date": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "End date of the discount, or null if no discount exists or if the discount does not have an end date."
+                },
+                "discount_start_date": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Start date of the discount, or null if no discount exists or if the discount does not have a start date."
+                },
+                "price": {
+                  "type": "number",
+                  "format": "with decimals",
+                  "description": "Retail price of the offer, also referred to as selling price.\n<br/>\nIf a discount is defined and is currently active (within the validity interval), it represents the unit_discount_price.\n<br/>\nIn other cases, it represents the unit_origin_price.\n"
+                },
+                "unit_discount_price": {
+                  "type": "number",
+                  "format": "with decimals",
+                  "description": "Discount retail price for a quantity of one, i.e. the discount retail price for a quantity of one.\n<br/>\nSet to null if no discount is defined or if no discount retail price for a quantity of one is defined or if the discount is not currently active (within the validity interval).\n"
+                },
+                "unit_origin_price": {
+                  "type": "number",
+                  "format": "with decimals",
+                  "description": "Original retail price for a quantity of one, i.e. the retail price for a quantity of one regardless of the discounts."
+                }
+              },
+              "required": [
+                "price",
+                "unit_origin_price"
+              ],
+              "description": "Channel-specific manufacturer suggested retail price (MSRP) for the offer."
+            }
+          },
+          "shipping_deadline": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Estimated shipping date, that includes business closing days and cut-off configured on the platform. Add the earliest and latest delivery times to calculate the estimated delivery date to customers"
+          },
+          "shop_sku": {
+            "type": "string",
+            "description": "The offer's shop SKU"
+          },
+          "state_code": {
+            "type": "string",
+            "description": "Offer condition"
+          },
+          "total_price": {
+            "type": "number",
+            "format": "with decimals",
+            "description": "Total price of the offer (price + minimum shipping rate)\n<br/>\nFor Dropship specifically: the purchasing price of the offer + minimum shipping rate\n"
+          },
+          "warehouses": {
+            "type": "array",
+            "description": "The breakdown of the available quantities of the offer in each warehouse.",
+            "items": {
+              "title": "OF21_Response_200_Offers_Warehouses",
+              "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+              "x-complete": true,
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "description": "The code of the warehouse"
+                },
+                "quantity": {
+                  "type": "integer",
+                  "format": "int32",
+                  "description": "The available quantity of the offer for the warehouse"
+                }
+              },
+              "required": [
+                "code",
+                "quantity"
+              ],
+              "description": "Warehouse location and stock quantity allocated to the offer."
+            }
+          }
+        },
+        "required": [
+          "active",
+          "all_prices",
+          "category_code",
+          "category_label",
+          "channels",
+          "currency_iso_code",
+          "description",
+          "fulfillment",
+          "leadtime_to_ship",
+          "logistic_class",
+          "max_order_quantity",
+          "min_order_quantity",
+          "min_quantity_alert",
+          "min_shipping_price",
+          "min_shipping_price_additional",
+          "min_shipping_type",
+          "min_shipping_zone",
+          "offer_id",
+          "package_quantity",
+          "product_references",
+          "product_sku",
+          "product_title",
+          "quantity",
+          "shipping_deadline",
+          "shop_sku",
+          "state_code"
+        ],
+        "description": "Offer details including pricing, status, and associated product info."
+      }
+    },
+    "total_count": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Offer total count"
+    }
+  },
+  "required": [
+    "offers",
+    "total_count"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OF21_Response_200",
+  "description": "Paginated response containing matching offers.",
+  "$defs": {
+    "OF21Response200OffersAllPricesContext": {
+      "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+      "x-complete": true,
+      "type": "object",
+      "properties": {
+        "channel_codes": {
+          "type": "array",
+          "description": "The channel codes on which a specific price applies.",
+          "items": {
+            "type": "string",
+            "description": "Identifier of a sales channel where the pricing rule is active."
+          }
+        },
+        "customer_group_ids": {
+          "type": "array",
+          "description": "The customer group ids on which a specific price applies.",
+          "items": {
+            "type": "string",
+            "description": "Identifier of a customer group entitled to the pricing rule."
+          }
+        },
+        "customer_organization_ids": {
+          "type": "array",
+          "description": "The customer organization ids on which a specific price applies.",
+          "items": {
+            "type": "string",
+            "description": "Identifier of a customer organization entitled to the pricing rule."
+          }
+        },
+        "end_date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The end date of a specific price."
+        },
+        "start_date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The start date of a specific price."
+        }
+      },
+      "description": "The context is not returned for default prices.\n"
+    },
+    "OF21Response200OffersAllPricesVolumePrices": {
+      "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+      "x-complete": true,
+      "type": "object",
+      "properties": {
+        "price": {
+          "type": "number",
+          "format": "with decimals",
+          "description": "Price of the offer.  If the discount is currently active, it represents the unit discount price. Otherwise it is the original price."
+        },
+        "quantity_threshold": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Quantity threshold of this price range"
+        },
+        "unit_discount_price": {
+          "type": "number",
+          "format": "with decimals",
+          "description": "Unit discount price for this quantity threshold"
+        },
+        "unit_origin_price": {
+          "type": "number",
+          "format": "with decimals",
+          "description": "Unit price for this quantity threshold"
+        }
+      },
+      "required": [
+        "price",
+        "quantity_threshold",
+        "unit_discount_price",
+        "unit_origin_price"
+      ],
+      "description": "Unit pricing and active discounts for a specific order quantity threshold."
+    }
+  }
+}

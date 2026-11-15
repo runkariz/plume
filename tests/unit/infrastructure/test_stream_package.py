@@ -106,3 +106,38 @@ def test_bad_json_is_reported(packages: Path, tmp_path: Path) -> None:
     (copy / "connector" / "models" / "order.schema.json").write_text("{nope")
     with pytest.raises(SourcePackageError, match=r"order\.schema\.json"):
         source.load(str(copy))
+
+
+def test_bundled_model_titles_get_display_names(packages: Path) -> None:
+    pkg = source.load(str(packages / "mirakl-mini"))
+    models = {d.doc_id: d for d in pkg.documents if d.kind is DocumentKind.MODEL}
+    billing = models["model:a01-response-200-billinginfo"]
+    assert billing.title == "Billing Info"
+    assert billing.source_id == "A01_Response_200_BillingInfo"
+    assert billing.text.startswith("# Billing Info (model)\n\nSource title: A01_Response_200_")
+    root = models["model:a01-response-200"]
+    assert root.title == "A01 response 200"
+    assert root.resource is None
+    shipping = models["model:dr12-response-200-data-shippingto-address"]
+    assert shipping.title == "Shipping To / Address"
+    same = models["model:a02-request-address"], models["model:a02-response-200-updated-address"]
+    assert same[0].shape == same[1].shape
+    assert len({m.shape for m in models.values()}) == 11
+
+
+def test_shape_ignores_wording() -> None:
+    from plume.infrastructure.sources.stream_package import shape_hash  # noqa: PLC0415
+
+    a = {
+        "type": "object",
+        "title": "A",
+        "properties": {"x": {"type": "string", "description": "d"}},
+    }
+    b = {
+        "type": "object",
+        "title": "B",
+        "x-note": 1,
+        "properties": {"x": {"type": "string", "examples": ["e"]}},
+    }
+    c = {"type": "object", "properties": {"x": {"type": "integer"}}}
+    assert shape_hash(a) == shape_hash(b) != shape_hash(c)

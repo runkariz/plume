@@ -58,6 +58,16 @@
           "logo": {
             "$ref": "#/components/schemas/Logo"
           },
+          "modelNames": {
+            "description": "Distinct model names (bundle roots excluded).",
+            "title": "Modelnames",
+            "type": "integer"
+          },
+          "modelShapes": {
+            "description": "Distinct model structures (same schema = one shape).",
+            "title": "Modelshapes",
+            "type": "integer"
+          },
           "models": {
             "title": "Models",
             "type": "integer"
@@ -117,6 +127,8 @@
           "summary",
           "endpoints",
           "models",
+          "modelShapes",
+          "modelNames",
           "guides",
           "docsAsOf",
           "status",
@@ -248,6 +260,16 @@
           "logo": {
             "$ref": "#/components/schemas/Logo"
           },
+          "modelNames": {
+            "description": "Distinct model names (bundle roots excluded).",
+            "title": "Modelnames",
+            "type": "integer"
+          },
+          "modelShapes": {
+            "description": "Distinct model structures (same schema = one shape).",
+            "title": "Modelshapes",
+            "type": "integer"
+          },
           "models": {
             "title": "Models",
             "type": "integer"
@@ -271,6 +293,8 @@
           "summary",
           "endpoints",
           "models",
+          "modelShapes",
+          "modelNames",
           "guides",
           "docsAsOf",
           "status",
@@ -1474,6 +1498,10 @@
             "title": "Inputs",
             "type": "array"
           },
+          "maintainerMcpUrl": {
+            "title": "Maintainermcpurl",
+            "type": "string"
+          },
           "mcpUrl": {
             "title": "Mcpurl",
             "type": "string"
@@ -1509,7 +1537,8 @@
           "inputs",
           "contextUrl",
           "claudePrompt",
-          "mcpUrl"
+          "mcpUrl",
+          "maintainerMcpUrl"
         ],
         "title": "GenerateResponse",
         "type": "object"

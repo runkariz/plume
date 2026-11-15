@@ -1,0 +1,15 @@
+{
+  "title": "Variables",
+  "type": "object",
+  "properties": {
+    "order_id": {
+      "type": "string",
+      "description": "Order's identifier",
+      "title": "Order ID"
+    }
+  },
+  "required": [
+    "order_id"
+  ],
+  "description": "Path variables specifying the order identifier."
+}

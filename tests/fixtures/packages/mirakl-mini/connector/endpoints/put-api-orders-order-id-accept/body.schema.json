@@ -1,0 +1,39 @@
+{
+  "type": "object",
+  "properties": {
+    "order_lines": {
+      "type": "array",
+      "description": "List of representations of order line for acceptance",
+      "items": {
+        "title": "OR21_Request_OrderLines",
+        "description": "Acceptance decision and quantities for a specific order line.",
+        "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+        "x-complete": true,
+        "type": "object",
+        "properties": {
+          "accepted": {
+            "type": "boolean",
+            "description": "Boolean indicating if the order line is accepted or refused",
+            "title": "Accepted"
+          },
+          "id": {
+            "type": "string",
+            "description": "Order line's identifier",
+            "title": "Order Line ID"
+          }
+        },
+        "required": [
+          "accepted",
+          "id"
+        ]
+      },
+      "title": "Order Lines"
+    }
+  },
+  "required": [
+    "order_lines"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OR21_Request",
+  "description": "List of order lines to accept or refuse for the order."
+}

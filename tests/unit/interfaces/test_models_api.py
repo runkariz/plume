@@ -67,6 +67,8 @@ def test_candidates_and_suggest(client: TestClient) -> None:
     assert r["apis"][0]["logo"]["text"]
     assert r["apis"][0]["shortName"] == "Test"
     order = next(c for c in r["concepts"] if c["id"] == "order")
+    assert order["name"] == "Order"
+    assert next(c for c in r["concepts"] if c["id"] == "product")["name"] == "Product"
     assert order["coverage"] == {"test-catalog-api": "direct", "second-catalog-api": "direct"}
     assert order["difficulty"] == {"tone": "ok", "label": "Straightforward"}
     assert {"count", "summary"} <= set(r["notModeled"])
@@ -79,6 +81,7 @@ def test_generate_submit_get(client: TestClient) -> None:
     assert g["snapshotId"] is None
     sid = g["sessionId"]
     assert "get_model_context" in g["claudePrompt"]
+    assert g["maintainerMcpUrl"].endswith("/maintainer/mcp")
     ctx = client.get(g["contextUrl"]).json()
     assert ctx["session_id"] == sid
 
