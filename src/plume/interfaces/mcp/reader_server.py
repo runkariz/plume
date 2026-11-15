@@ -250,6 +250,17 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
             return await _run(run)
 
         @server.tool(annotations=READ_ONLY, structured_output=True)
+        async def get_environments(api: str, version: str | None = None) -> dict[str, Any]:
+            """Environments (servers, host variables) and API versioning, verbatim from the
+            package (null when it does not state them)."""
+
+            def run() -> dict[str, Any]:
+                ref, env = sections().environments(api, version)
+                return {**payloads.ref_payload(ref), **env}
+
+            return await _run(run)
+
+        @server.tool(annotations=READ_ONLY, structured_output=True)
         async def list_triggers(api: str, version: str | None = None) -> dict[str, Any]:
             """Trigger events / webhook topics the package lists. present=false means the package
             has no triggers section (say so; do not guess topics). Webhook-management endpoints

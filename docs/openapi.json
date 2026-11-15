@@ -1579,6 +1579,93 @@
         "title": "DraftRefused",
         "type": "object"
       },
+      "EnvironmentsOut": {
+        "properties": {
+          "api": {
+            "title": "Api",
+            "type": "string"
+          },
+          "baseUrls": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseurls"
+          },
+          "build": {
+            "title": "Build",
+            "type": "string"
+          },
+          "environments": {
+            "description": "app.json environments[], verbatim.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Environments",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "present": {
+            "title": "Present",
+            "type": "boolean"
+          },
+          "variablesSchema": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "connector/environment.variables.schema.json, verbatim.",
+            "title": "Variablesschema"
+          },
+          "versioning": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "app.json apiVersioning, verbatim.",
+            "title": "Versioning"
+          }
+        },
+        "required": [
+          "api",
+          "build",
+          "present",
+          "note",
+          "versioning",
+          "baseUrls",
+          "variablesSchema"
+        ],
+        "title": "EnvironmentsOut",
+        "type": "object"
+      },
       "ErrorBody": {
         "properties": {
           "detail": {
@@ -3832,6 +3919,77 @@
           }
         },
         "summary": "Get Document",
+        "tags": [
+          "reader"
+        ]
+      }
+    },
+    "/v1/apis/{api}/environments": {
+      "get": {
+        "description": "Environments (servers, variables such as the shop host) and API versioning, as the\npackage states them.",
+        "operationId": "environments_v1_apis__api__environments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "api",
+            "required": true,
+            "schema": {
+              "title": "Api",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Tag or build id; default latest",
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tag or build id; default latest",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Environments",
         "tags": [
           "reader"
         ]

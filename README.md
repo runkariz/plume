@@ -152,6 +152,9 @@ releases. See [docs/package-contract.md](docs/package-contract.md).
 `gold-import`, `export`, `restore`, `serve` (HTTP), `mcp` (MCP), `openapi`.
 
 **HTTP**: [docs/openapi.json](docs/openapi.json) (also served at `/openapi.json` and `/docs`).
+Besides search and facts, each API exposes what its package contains, verbatim:
+`/v1/apis/{api}/items?kind=&tag=` (every id resolves at `/documents/{id}`, with the source JSON as
+`raw`), `/auth`, `/triggers`, `/environments` and `/icon`; an absent section says so.
 Reader routes are public and rate limited; maintainer routes need `Authorization: Bearer
 <token>`: [docs/maintainer-api.md](docs/maintainer-api.md).
 

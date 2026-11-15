@@ -291,7 +291,10 @@ class StreamPackageSource:
         info = self._api_info(app)
         versions = info.versions
 
-        documents: list[Document] = [self._app_document(info, app)]
+        app_doc = self._app_document(info, app)
+        env_schema = _opt_json(connector / "environment.variables.schema.json")
+        app_doc = replace(app_doc, raw={"app": app, "environment_variables_schema": env_schema})
+        documents: list[Document] = [app_doc]
         seen: set[str] = {documents[0].doc_id}
 
         def add(doc: Document, origin: str) -> None:

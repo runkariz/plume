@@ -82,6 +82,23 @@ def sections_router(sections: Callable[[], PackageSections]) -> APIRouter:
             file=v["file"],
         )
 
+    @router.get("/v1/apis/{api}/environments", response_model=s.EnvironmentsOut, responses=errors)
+    def environments(api: str, version: version_q = None) -> s.EnvironmentsOut:
+        """Environments (servers, variables such as the shop host) and API versioning, as the
+        package states them."""
+        ref, env = sections().environments(api, version)
+        envs = env["environments"] or []
+        return s.EnvironmentsOut(
+            api=ref.api,
+            build=ref.build,
+            present=bool(envs),
+            note=None if envs else NOT_IN_PACKAGE,
+            environments=[e for e in envs if isinstance(e, dict)],
+            versioning=env["versioning"] if isinstance(env["versioning"], dict) else None,
+            base_urls=env["base_urls"] if isinstance(env["base_urls"], list) else None,
+            variables_schema=env["variables_schema"],
+        )
+
     @router.get("/v1/apis/{api}/triggers", response_model=s.TriggerList, responses=errors)
     def triggers(
         api: str,

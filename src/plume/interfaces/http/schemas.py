@@ -535,3 +535,18 @@ class TriggerDetail(TriggerSummary):
     build: str
     source_url: str | None
     event: dict[str, Any] = Field(description="The event JSON from the package, verbatim.")
+
+
+class EnvironmentsOut(Schema):
+    api: str
+    build: str
+    present: bool
+    note: str | None
+    environments: list[dict[str, Any]] = Field(
+        default_factory=list, description="app.json environments[], verbatim."
+    )
+    versioning: dict[str, Any] | None = Field(description="app.json apiVersioning, verbatim.")
+    base_urls: list[str] | None
+    variables_schema: dict[str, Any] | None = Field(
+        description="connector/environment.variables.schema.json, verbatim."
+    )

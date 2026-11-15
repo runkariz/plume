@@ -159,3 +159,12 @@ async def test_mcp_section_tools(stack: FakeStack) -> None:
         assert none["present"] is False
         trig = await call(client, "get_trigger", api="shopify", key="orders/create")
         assert trig["event"]["delivery"] == "webhook"
+
+
+def test_environments_are_verbatim(client: TestClient) -> None:
+    env = client.get("/v1/apis/woocommerce/environments").json()
+    assert env["present"] is True
+    assert env["environments"][0]["key"] == "production"
+    assert env["versioning"] is not None
+    shop = client.get("/v1/apis/test-catalog-api/environments").json()
+    assert shop["environments"][0]["servers"]["api"] == "http://127.0.0.1:18091"

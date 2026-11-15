@@ -13,6 +13,9 @@ DNS-rebinding protection (allowed hosts from `PLUME_MCP_ALLOWED_HOSTS`). Every r
 | `check_call` | `api, method, path, params?, version?` | `documented` / `not_documented`, matched endpoint, per-param location |
 | `list_builds` | `api` | builds (newest first) with tags |
 | `diff_builds` | `api, from_version, to_version?, limit?` | added / changed / removed chunk ids |
+| `list_auth_schemes` / `get_auth_scheme` | `api[, scheme_id], version?` | auth schemes as the package states them; detail = the auth JSON + variables schema verbatim |
+| `list_triggers` / `get_trigger` | `api[, key], version?` | trigger events / webhook topics; `present: false` when the package has none |
+| `get_environments` | `api, version?` | environments, base URLs, versioning and the variables schema, verbatim |
 | `get_model` | `snapshot_id` | a stored canonical model |
 | `list_models` | `api?` | stored canonical models, newest first |
 

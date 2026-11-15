@@ -82,6 +82,21 @@ class PackageSections:
                 return _ref(r), d
         raise NotFoundError(f"{api} has no trigger {key!r}")
 
+    def environments(self, api: str, version: str | None = None) -> tuple[BuildRef, dict[str, Any]]:
+        """app.json environments + apiVersioning and the environment variables schema, verbatim
+        (None when the package does not state them)."""
+        r = self._resolver.resolve(api, version)
+        apps = self._docs(r, DocumentKind.APP)
+        raw = dict(apps[0].raw or {}) if apps else {}
+        app: dict[str, Any] = _obj(raw.get("app")) or {}
+        envs = app.get("environments")
+        return _ref(r), {
+            "environments": envs if isinstance(envs, list) else None,
+            "versioning": app.get("apiVersioning"),
+            "base_urls": app.get("baseUrls"),
+            "variables_schema": raw.get("environment_variables_schema"),
+        }
+
     def icon(self, api: str, version: str | None = None) -> tuple[BuildRef, Asset | None]:
         r = self._resolver.resolve(api, version)
         return _ref(r), self._assets.get(r.build.build_id, ICON)
