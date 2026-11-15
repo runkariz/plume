@@ -30,7 +30,10 @@ import {
 } from './modelView';
 import {
   LineageHistory,
+  RetirePanel,
   SameConceptLine,
+  SupersededBanner,
+  SupersedesLine,
   LineageLine,
   OwnerKeyNotice,
   ReviewBanner,
@@ -38,6 +41,7 @@ import {
   ShareCard,
   VisibilityChip,
 } from './ModelAccess';
+import { ModelWarnings } from './ModelWarnings';
 import { StaleChip } from './StaleChip';
 
 export function claudePrompt(s: ModelSnapshot): string {
@@ -193,9 +197,13 @@ export function ModelView() {
         </div>
       ) : null}
       <div className="access-banner">
-        <ReviewBanner snap={snap} onChanged={retry} />
+        <ReviewBanner snap={snap} onChanged={() => retry()} />
         <LineageHistory snap={snap} />
+        <SupersededBanner snap={snap} />
+        <RetirePanel snap={snap} onChanged={() => retry()} />
+        <SupersedesLine snap={snap} />
         <SameConceptLine snap={snap} />
+        <ModelWarnings snap={snap} />
       </div>
       {snap.stale ? (
         <div className="stale-banner">

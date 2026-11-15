@@ -22,6 +22,15 @@ export function categoryLabel(key: string): string {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : 'Other';
 }
 
+/** 161 -> "2:41", 59 -> "0:59", 3725 -> "1:02:05": a running clock. */
+export function formatElapsed(seconds: number): string {
+  const s = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = String(s % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+}
+
 /** 47 -> "47 ms", 3.2 -> "3.2 ms", 0.4 -> "0.4 ms". */
 export function formatMs(ms: number): string {
   return `${ms >= 10 ? Math.round(ms) : Math.round(ms * 10) / 10} ms`;

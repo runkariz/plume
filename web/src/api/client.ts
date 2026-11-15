@@ -13,6 +13,7 @@ import {
   type ModelJob,
   type RelatedConcepts,
   type SetSessionRequest,
+  type Supersedable,
   type SetSessionResponse,
   type SetSessionStatus,
   type ModelJobEvent,
@@ -101,7 +102,16 @@ export interface PlumeApi {
   /** Public poll of a session: has a draft been accepted for it yet? */
   getModelSession(sessionId: string, signal?: AbortSignal): Promise<ModelSessionStatus>;
   /** Maintainer token. 409 invalid_state unless the model is unreleased. */
-  releaseModel(id: string, signal?: AbortSignal): Promise<ModelSnapshot>;
+  /** `supersedes`: ids of official models of the same concept this one replaces (none by default). */
+  releaseModel(
+    id: string,
+    signal?: AbortSignal,
+    opts?: { supersedes?: string[] },
+  ): Promise<ModelSnapshot>;
+  /** Maintainer token: retires older official models of the same concept after the fact (409: not official / not a candidate). */
+  supersedeModels(id: string, supersedes: string[], signal?: AbortSignal): Promise<ModelSnapshot>;
+  /** Maintainer token: the official models of the same concept this one could supersede (none on an older server). */
+  listSupersedable(id: string, signal?: AbortSignal): Promise<Supersedable[]>;
   discardModel(id: string, signal?: AbortSignal): Promise<ModelSnapshot>;
   getModelJob(jobId: string, signal?: AbortSignal): Promise<ModelJob>;
   /** Streams a generation job; resolves after `done`, resumes with Last-Event-ID, rejects after repeated loss. */
@@ -438,8 +448,30 @@ export function createApiClient(
       }),
     getModelSession: (sessionId, signal) =>
       call<ModelSessionStatus>(`/v1/models/sessions/${enc(sessionId)}`, { signal }),
-    releaseModel: (id, signal) =>
-      call<ModelSnapshot>(`/v1/models/${enc(id)}/release`, { method: 'POST', signal }),
+    supersedeModels: (id, supersedes, signal) =>
+      call<ModelSnapshot>(`/v1/models/${enc(id)}/supersede`, {
+        method: 'POST',
+        body: { supersedes },
+        signal,
+      }),
+    listSupersedable: async (id, signal) => {
+      try {
+        const r = await call<{ items: Supersedable[] }>(`/v1/models/${enc(id)}/supersedable`, {
+          signal,
+        });
+        return r.items ?? [];
+      } catch (e) {
+        if (e instanceof ApiError && e.status === 404) return []; // an older server: nothing to supersede
+        throw e;
+      }
+    },
+    releaseModel: (id, signal, opts) =>
+      call<ModelSnapshot>(`/v1/models/${enc(id)}/release`, {
+        method: 'POST',
+        // a body only when something is superseded: a plain release is the request it always was
+        ...(opts?.supersedes?.length ? { body: { supersedes: opts.supersedes } } : {}),
+        signal,
+      }),
     discardModel: (id, signal) =>
       call<ModelSnapshot>(`/v1/models/${enc(id)}/discard`, { method: 'POST', signal }),
     getModelJob: (jobId, signal) => call<ModelJob>(`/v1/models/jobs/${enc(jobId)}`, { signal }),

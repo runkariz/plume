@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test as base, type Page } from '@playwright/test';
+import { expect, test as base, type Locator, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -31,6 +31,13 @@ export async function shot(page: Page, name: string, theme: Theme) {
   if (!SHOTS) return;
   mkdirSync(SHOTS, { recursive: true });
   await page.screenshot({ path: join(SHOTS, `${name}-${theme}.png`), fullPage: true });
+}
+
+/** A screenshot of one element (a dialog, a panel): legible where a full page of a long model is not. */
+export async function shotOf(el: Locator, name: string, theme: Theme) {
+  if (!SHOTS) return;
+  mkdirSync(SHOTS, { recursive: true });
+  await el.screenshot({ path: join(SHOTS, `${name}-${theme}.png`) });
 }
 
 /** Picks a mapping in the control box of the graph (it is closed by default on a narrow screen). */

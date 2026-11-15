@@ -399,18 +399,25 @@ describe('Other versions of this concept (sameConcept)', () => {
   const OLDER = 'm-order0lder0a1b2c3d4e5f60718293a4b5c';
   const official = async () => {
     const r = await fetch(`${TEST_API_BASE}/v1/models`);
-    return ((await r.json()) as { items: { id: string; concept: string }[] }).items;
+    return ((await r.json()) as { items: { id: string; concept: string; apis: string[] }[] }).items;
   };
 
   it('the official list has one model per concept and API set: the newest', async () => {
-    const items = await official();
-    const orders = items.filter((i) => i.concept.toLowerCase() === 'order');
-    expect(orders).toHaveLength(1);
-    expect(orders[0]?.id).not.toBe(OLDER);
+    const items = (await fetch(`${TEST_API_BASE}/v1/models`).then((r) => r.json())) as {
+      items: { id: string; concept: string; apis: string[] }[];
+    };
+    const keys = items.items.map((i) => `${i.concept.toLowerCase()}|${[...i.apis].sort().join()}`);
+    expect(new Set(keys).size).toBe(keys.length); // never two with the same concept and API set
+    // the newest Order over all three APIs; the older one is not listed, the one over two APIs is
+    const orders = items.items.filter((i) => i.concept.toLowerCase() === 'order');
+    expect(orders).toHaveLength(2);
+    expect(orders.map((o) => o.id)).not.toContain(OLDER);
   });
 
   it('names the other official models of the same concept, both ways, and links to them', async () => {
-    const newest = (await official()).find((i) => i.concept.toLowerCase() === 'order')?.id ?? '';
+    const newest =
+      (await official()).find((i) => i.concept.toLowerCase() === 'order' && i.apis.length === 3)
+        ?.id ?? '';
     renderApp(`/models/${newest}`);
     expect(await screen.findByText(/Other official models of this concept/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: OLDER })).toHaveAttribute('href', `/models/${OLDER}`);

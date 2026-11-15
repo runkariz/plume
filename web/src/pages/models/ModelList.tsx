@@ -94,7 +94,8 @@ export function MyModels() {
     <Card className="pad model-list" role="region" aria-label="Your models">
       <h2 className="h2-sm">Your models</h2>
       <p className="muted small">
-        Made in this browser. Only people with a model's link can open it.
+        Listed by the owner keys this browser holds: made here, or added by key. Only people with a
+        model's link can open it.
       </p>
       <Rows items={state.data.items} />
     </Card>
