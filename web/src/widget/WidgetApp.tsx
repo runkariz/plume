@@ -7,6 +7,7 @@ import { ModelWorkbench } from '@/pages/models/ModelWorkbench';
 import { defaultSelection, type Selection } from '@/pages/models/graph';
 import { toggleApi } from '@/pages/models/modelView';
 import { extractModel, type Shown } from './model';
+import { SetPanel } from './SetPanel';
 import type { CallToolResult, HostConnection, HostContext } from './protocol';
 
 /** Above this many fields the embedded view opens on one field, like the page. */
@@ -161,6 +162,10 @@ function Body({ phase, connection }: { phase: Phase; connection: HostConnection 
       );
     case 'unrecognised':
       return <p className="muted widget-note">This result has no model to show.</p>;
+    case 'set':
+      return (
+        <SetPanel key={phase.set.id} set={phase.set} link={phase.link} connection={connection} />
+      );
     case 'model':
       return (
         <ModelPanel

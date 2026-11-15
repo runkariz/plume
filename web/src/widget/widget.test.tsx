@@ -1,6 +1,7 @@
 import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { inventorySnapshot } from '@/mocks/modelData';
+import { SET_OFFICIAL, seedSets, setJson } from '@/mocks/setStore';
 import { extractModel, normalise } from './model';
 import { HostConnection, PROTOCOL_VERSION, type Transport } from './protocol';
 import { WidgetApp } from './WidgetApp';
@@ -254,6 +255,108 @@ describe('a result that is not shaped like the HTTP routes', () => {
     });
     expect(await screen.findByRole('heading', { name: 'Inventory' })).toBeInTheDocument();
     expect(screen.getByRole('group', { name: /Mapping graph/ })).toBeInTheDocument();
+  });
+});
+
+describe('a model set result', () => {
+  const all = seedSets();
+  const stored = all.find((x) => x.set.id === SET_OFFICIAL);
+  const set = stored ? setJson(all, stored) : (undefined as never);
+
+  it('reads a set from get_model_set (the set itself) and from submit/release ({set} with a share_url)', () => {
+    expect(extractModel(result(set))).toMatchObject({
+      kind: 'set',
+      set: { id: SET_OFFICIAL },
+      link: null,
+    });
+    expect(
+      extractModel(result({ accepted: true, share_url: 'https://p/model-sets/x', set })),
+    ).toMatchObject({
+      kind: 'set',
+      link: 'https://p/model-sets/x',
+    });
+    expect(extractModel(result({ set, releasedMembers: ['m-order'] }))).toMatchObject({
+      kind: 'set',
+    });
+    // a set carries no `fields`: it is not mistaken for a model
+    expect(extractModel(result(set)).kind).not.toBe('model');
+  });
+
+  it('survives a set without lists, without logos and with an odd colour', () => {
+    const bare = {
+      kind: 'model_set',
+      id: 's-1',
+      name: 'Bare',
+      visibility: 'unlisted',
+      members: [],
+      inputs: [{ id: 'shopify', shortName: 'Shopify', logo: { text: 5, color: 'red' } }],
+    };
+    const shown = extractModel(result(bare));
+    expect(shown.kind).toBe('set');
+    if (shown.kind !== 'set') return;
+    expect(shown.set.relations).toEqual([]);
+    expect(shown.set.undecided).toEqual([]);
+    expect(shown.set.inputs[0]?.logo).toMatchObject({ text: 'S', url: null });
+  });
+
+  async function shownSet(structured: unknown, caps: object = {}) {
+    const h = fakeHost();
+    render(<WidgetApp connection={h.conn} />);
+    await h.reply(h.sent[0]?.id, { hostCapabilities: caps, hostContext: { theme: 'light' } });
+    await h.push({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/tool-result',
+      params: result(structured),
+    });
+    return h;
+  }
+
+  it('shows the set: name, chips, the diagram, the models and the relations as text', async () => {
+    await shownSet(set);
+    expect(await screen.findByRole('heading', { name: 'Shop', level: 1 })).toBeInTheDocument();
+    expect(screen.getByText('Official')).toBeInTheDocument();
+    expect(screen.getByText('3 models')).toBeInTheDocument();
+    expect(screen.getByText('2 relations')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /Model set diagram/ })).toBeInTheDocument();
+    const models = screen.getByRole('region', { name: 'Models' });
+    expect(within(models).getAllByRole('listitem')).toHaveLength(3);
+    expect(within(models).getByText(/12 fields/)).toBeInTheDocument();
+    const relations = screen.getByRole('region', { name: 'Relations' });
+    expect(within(relations).getByText('Order → Product')).toBeInTheDocument();
+    expect(within(relations).getAllByText('1:n · nested')).toHaveLength(2);
+    // how each API documents it, as text; an API that does not says so
+    expect(
+      within(relations).getAllByText(/WooCommerce does not document it/).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('says what is still to decide, and opens the set in Plume through the host', async () => {
+    const draft = setJson(
+      all,
+      all.find((x) => x.set.visibility === 'unreleased') ?? (stored as never),
+    );
+    const h = await shownSet(
+      { accepted: true, share_url: 'https://plume.example/model-sets/d', set: draft },
+      { openLinks: {} },
+    );
+    expect(await screen.findByText('1 to decide')).toBeInTheDocument();
+    expect(screen.getByText('to decide')).toBeInTheDocument(); // on the relation itself
+    expect(screen.getByText('not available to you')).toBeInTheDocument(); // the missing member
+    await userEvent.click(screen.getByRole('button', { name: 'Open in Plume' }));
+    expect(h.sent.find((m) => m.method === 'ui/open-link')?.params).toEqual({
+      url: 'https://plume.example/model-sets/d',
+    });
+  });
+
+  it('package text is text: a hostile name is not markup', async () => {
+    const evil = '<img src=x onerror="alert(1)">';
+    await shownSet({
+      ...set,
+      name: evil,
+      members: set.members.map((m, i) => (i === 0 ? { ...m, name: evil } : m)),
+    });
+    expect(await screen.findByRole('heading', { name: evil })).toBeInTheDocument();
+    expect(document.querySelector('img[onerror]')).toBeNull();
   });
 });
 

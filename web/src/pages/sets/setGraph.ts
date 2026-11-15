@@ -1,8 +1,16 @@
 import { MarkerType, type Edge, type Node } from '@xyflow/react';
-import type { ApiRef, ModelSet, SetMember, SetRelation } from '@/api/types';
+import type { ApiRef, ModelSet, RelationSupport, SetMember, SetRelation } from '@/api/types';
 
 // narrower boxes and gaps: with the control box and the detail panel the canvas is about 700 px wide
 export const SET_NODE = { w: 230, h: 120, gapX: 120, gapY: 32 } as const;
+
+/** How an API documents a relation, in words. */
+export const SUPPORT_TEXT: Record<RelationSupport, string> = {
+  nested: 'as nested objects',
+  sub_resource: 'as a sub-resource path',
+  id_field: 'as an id field',
+  model_ref: 'as a reference to the model',
+};
 
 export const memberId = (concept: string) => `m:${concept}`;
 export const relationId = (id: string) => `r:${id}`;

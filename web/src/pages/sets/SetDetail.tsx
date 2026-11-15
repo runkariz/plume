@@ -1,23 +1,9 @@
 import { useId } from 'react';
 import { Link } from 'react-router-dom';
-import type {
-  ModelSet,
-  RelationEdit,
-  RelationOption,
-  RelationSupport,
-  SetMember,
-  SetRelation,
-} from '@/api/types';
+import type { ModelSet, RelationEdit, RelationOption, SetMember, SetRelation } from '@/api/types';
 import { ApiAvatar, Chip } from '@/components';
 import { docHref } from '@/lib/docHref';
-import { findMember } from './setGraph';
-
-const SUPPORT: Record<RelationSupport, string> = {
-  nested: 'as nested objects',
-  sub_resource: 'as a sub-resource path',
-  id_field: 'as an id field',
-  model_ref: 'as a reference to the model',
-};
+import { findMember, SUPPORT_TEXT } from './setGraph';
 
 /** The design choices staged on this page: a relation id and the index of the chosen option. */
 export type Staged = Record<string, number>;
@@ -207,7 +193,9 @@ function RelationDetail({
           return (
             <li key={a.id}>
               <ApiAvatar text={a.logo.text} color={a.logo.color} size={18} /> <b>{a.shortName}</b>{' '}
-              <span className="muted small">{how ? SUPPORT[how] : 'does not document it'}</span>
+              <span className="muted small">
+                {how ? SUPPORT_TEXT[how] : 'does not document it'}
+              </span>
               {src && how ? (
                 <>
                   {src.paths.length ? (

@@ -1,4 +1,4 @@
-import type { DraftIssue, ModelSnapshot } from '@/api/types';
+import type { DraftIssue, ModelSet, ModelSnapshot } from '@/api/types';
 import { apiLabel } from '@/lib/names';
 import { withPaths } from '@/pages/models/fields';
 import type { CallToolResult } from './protocol';
@@ -6,12 +6,19 @@ import type { CallToolResult } from './protocol';
 /** What a tool result means for the view. */
 export type Shown =
   | { kind: 'model'; model: ModelSnapshot; link: string | null }
+  | { kind: 'set'; set: ModelSet; link: string | null }
   | { kind: 'refused'; issues: DraftIssue[] }
   | { kind: 'pending'; status: string }
   | { kind: 'error'; message: string }
   | { kind: 'unrecognised' };
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+
+function looksLikeSet(v: unknown): v is ModelSet {
+  return (
+    isObject(v) && v.kind === 'model_set' && typeof v.id === 'string' && Array.isArray(v.members)
+  );
+}
 
 function looksLikeModel(v: unknown): v is ModelSnapshot {
   return (
@@ -31,6 +38,15 @@ export function extractModel(result: CallToolResult): Shown {
   if (!isObject(sc)) return { kind: 'unrecognised' };
   if (sc.accepted === false)
     return { kind: 'refused', issues: Array.isArray(sc.issues) ? (sc.issues as DraftIssue[]) : [] };
+  // a model set: the set JSON itself (get_model_set), or {set: ...} (submit_model_set, release_model_set)
+  const asSet = looksLikeSet(sc.set) ? sc.set : looksLikeSet(sc) ? sc : null;
+  if (asSet) {
+    const setLink =
+      (typeof sc.share_url === 'string' && sc.share_url) ||
+      (typeof asSet.shareUrl === 'string' && asSet.shareUrl) ||
+      null;
+    return { kind: 'set', set: normaliseSet(asSet), link: setLink };
+  }
   const candidate = looksLikeModel(sc.model) ? sc.model : sc;
   if (!looksLikeModel(candidate)) {
     // get_generation while the job still runs: {status, ...} and no model yet
@@ -80,4 +96,20 @@ export function normalise(m: ModelSnapshot): ModelSnapshot {
       logo: safeLogo(a),
     })),
   });
+}
+
+/** The set as the view shows it: display names and neutral tiles for the APIs, and every list present. */
+export function normaliseSet(s: ModelSet): ModelSet {
+  return {
+    ...s,
+    inputs: (s.inputs ?? []).map((a) => ({ ...a, shortName: apiLabel(a), logo: safeLogo(a) })),
+    members: s.members ?? [],
+    relations: (s.relations ?? []).map((r) => ({
+      ...r,
+      support: r.support ?? {},
+      sources: r.sources ?? {},
+    })),
+    undecided: s.undecided ?? [],
+    openQuestions: s.openQuestions ?? [],
+  };
 }
