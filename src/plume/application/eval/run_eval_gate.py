@@ -66,7 +66,9 @@ class RunEvalGate:
                 dense = self._index.dense(build_id, vector, POOL)
                 text = self._index.text(build_id, q.question, POOL)
                 ranked = tuple(h.doc_id for h in fuse_hits(dense, text, q.question, POOL))
-                missing = tuple(d for d in q.expect_docs if d not in known)
+                # Expected docs are alternatives: missing only when none of them is in the build.
+                present = [d for d in q.expect_docs if d in known]
+                missing = () if present else tuple(q.expect_docs)
                 o = QuestionOutcome(q.qid, q.kind, ranked=ranked, missing_expected=missing)
                 rank = o.first_hit_rank(q.expect_docs)
                 details.append(
