@@ -517,3 +517,29 @@ def test_suggest_related_route_and_mcp_tool(packages: Path, tmp_path: Path) -> N
             return dict(res.structured_content or {})
 
     assert anyio.run(mcp)["related"] == r["related"]
+
+
+def test_release_with_supersedes(stack: FakeStack, client: TestClient) -> None:
+    models = stack.models()
+    old = models.release(
+        models.submit(models.start(APIS, "Order").session_id, _draft("good"), maintainer=True)
+        .snapshot.snapshot_id
+    ).snapshot_id  # fmt: skip
+    draft = {**_draft("good"), "description": "newer"}
+    new = models.submit(models.start(APIS, "order").session_id, draft, maintainer=True)
+    nid = new.snapshot.snapshot_id
+    assert client.get(f"/v1/models/{nid}/supersedable").status_code == 401
+    items = client.get(f"/v1/models/{nid}/supersedable", headers=AUTH).json()["items"]
+    assert [(i["id"], i["covered"], i["stale"], i["apis"]) for i in items] == [
+        (old, True, False, APIS)
+    ]
+    bad = client.post(f"/v1/models/{nid}/release", headers=AUTH, json={"supersedes": ["m-x"]})
+    assert bad.status_code == 409
+    out = client.post(f"/v1/models/{nid}/release", headers=AUTH, json={"supersedes": [old]})
+    assert out.status_code == 200
+    body = out.json()
+    assert (body["visibility"], body["supersedes"], body["warnings"]) == ("official", [old], [])
+    gone = client.get(f"/v1/models/{old}").json()  # still readable by id, without the token
+    assert (gone["visibility"], gone["supersededBy"]) == ("superseded", nid)
+    assert gone["supersededAt"]
+    assert [m["id"] for m in client.get("/v1/models").json()["items"]] == [nid]

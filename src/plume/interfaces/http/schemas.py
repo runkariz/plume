@@ -179,6 +179,15 @@ class AskResponse(Schema):
     total_ms: float
 
 
+class ReleaseRequest(Schema):
+    supersedes: list[str] = Field(
+        default_factory=list,
+        max_length=50,
+        description="Official models of the same concept this release replaces (ids from "
+        "GET /v1/models/{id}/supersedable).",
+    )
+
+
 class CheckCallRequest(Schema):
     method: HttpMethod
     path: str = Field(min_length=1, max_length=1000)

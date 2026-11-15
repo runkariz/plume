@@ -85,6 +85,15 @@ class InMemoryModelRepo:
         wanted = set(key_hashes)
         return [lin for lin, h in self.owners.items() if h is not None and h in wanted]
 
+    def supersede(self, snapshot_id: str, by: str, at: datetime) -> bool:
+        s = self.snapshots.get(snapshot_id)
+        if s is None or s.visibility != "official":
+            return False
+        self.snapshots[snapshot_id] = replace(
+            s, visibility="superseded", superseded_by=by, superseded_at=at
+        )
+        return True
+
 
 class InMemoryModelJobRepo:
     def __init__(self) -> None:

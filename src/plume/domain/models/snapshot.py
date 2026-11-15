@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any
 
 from plume.domain.models.canonical_model import CanonicalField, ModelDraft
+from plume.domain.models.validation import Issue
 from plume.domain.shared.hashing import content_hash
 
 PROMPT_VERSION = "plume-models-v1"
@@ -14,14 +15,16 @@ PROMPT_VERSION = "plume-models-v1"
 class Visibility:
     """official = released by a maintainer, listed publicly; unreleased = written for (or by) a
     maintainer, waiting for review; unlisted = a user's model, readable by anyone with its id;
-    discarded = an unreleased model the maintainer threw away."""
+    discarded = an unreleased model the maintainer threw away; superseded = an official model a
+    maintainer replaced with a newer one at release (readable by id, not listed)."""
 
     OFFICIAL = "official"
     UNRELEASED = "unreleased"
     UNLISTED = "unlisted"
     DISCARDED = "discarded"
-    ALL = (OFFICIAL, UNRELEASED, UNLISTED, DISCARDED)
-    PUBLIC = (OFFICIAL, UNLISTED)  # readable without the maintainer token (by id)
+    SUPERSEDED = "superseded"
+    ALL = (OFFICIAL, UNRELEASED, UNLISTED, DISCARDED, SUPERSEDED)
+    PUBLIC = (OFFICIAL, UNLISTED, SUPERSEDED)  # readable without the maintainer token (by id)
 
 
 class Origin:
@@ -55,6 +58,9 @@ class ModelSnapshot:
     content_key: str = ""  # snapshot_id_for(...) of the content ("" = the snapshot id)
     released_at: datetime | None = None
     generator_usage: dict[str, int] | None = None  # LLM tokens spent writing it (server generation)
+    warnings: tuple[Issue, ...] = ()  # validation warnings (WRITE_ONLY_SOURCE, ...)
+    superseded_by: str | None = None  # the official model that replaced it at its release
+    superseded_at: datetime | None = None
 
     @property
     def lineage(self) -> str:

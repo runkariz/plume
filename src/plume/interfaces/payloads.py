@@ -326,6 +326,12 @@ def snapshot_payload(
         "generatedAt": m.created_at.isoformat(),
         "promptVersion": m.prompt_version,
         "generatorUsage": m.generator_usage,
+        "warnings": [
+            {"code": w.code, "field": w.field, "api": w.api, "message": w.message}
+            for w in m.warnings
+        ],
+        "supersededBy": m.superseded_by,
+        "supersededAt": m.superseded_at.isoformat() if m.superseded_at else None,
         "sessionId": m.session_id,
         "inputs": [api_ref(i.api, names.get(i.api, i.api)) | {"build": i.build} for i in m.inputs],
         "fields": fields,

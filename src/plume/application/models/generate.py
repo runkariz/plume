@@ -6,6 +6,7 @@ it. Progress is a job with events (SSE), like builds."""
 import json
 import logging
 import re
+import threading
 import uuid
 from dataclasses import replace
 from typing import Any
@@ -34,6 +35,7 @@ from plume.domain.shared.clock import Clock
 logger = logging.getLogger("plume.models.generate")
 
 MAX_ROUNDS = 3
+HEARTBEAT_SECONDS = 15.0  # a `heartbeat` event this often while the model is writing
 EVIDENCE_BUDGET_CHARS = 200_000
 ENDED = ("succeeded", "failed")
 
@@ -42,6 +44,14 @@ SYSTEM = (
     "knowledge: every mapping must be backed by the evidence you are given, with quotes copied "
     "verbatim. Reply with exactly ONE JSON object: the draft, in the draft_format shown. No prose, "
     "no code fences.\n\n" + INSTRUCTIONS
+)
+
+
+WARNINGS_PROMPT = (
+    "Plume accepted the draft with these warnings. Where the evidence pack has a model or a GET "
+    "response field for the same value, cite that instead of the request body; keep a "
+    "write-only source only when there is no read source. Reply with the full draft as one "
+    "JSON object.\n"
 )
 
 
@@ -80,6 +90,7 @@ class GenerateModels:
         runner: JobRunner,
         clock: Clock,
         max_rounds: int = MAX_ROUNDS,
+        heartbeat_seconds: float = HEARTBEAT_SECONDS,
         evidence_budget: int = EVIDENCE_BUDGET_CHARS,
     ) -> None:
         self._sessions = sessions
@@ -89,6 +100,7 @@ class GenerateModels:
         self._runner = runner
         self._clock = clock
         self._max_rounds = max(1, max_rounds)
+        self._heartbeat = heartbeat_seconds
         self._budget = evidence_budget
 
     def available(self) -> bool:
@@ -153,7 +165,13 @@ class GenerateModels:
         try:
             job = self._save(job, status="running")
             session = sets.get_session(job.session_id or "")
-            self._emit(job_id, "started", apis=list(job.apis), concept=job.concept)
+            self._emit(
+                job_id,
+                "started",
+                apis=list(job.apis),
+                concept=job.concept,
+                at=self._clock.now().isoformat(),
+            )
             members: dict[str, str] = {}
             for concept, member_session in session.member_sessions:
                 sid = self._write_model(self.get(job_id), member_session, concept)
@@ -278,10 +296,11 @@ class GenerateModels:
             )
         ]
         spent: dict[str, int] | None = None  # tokens for this model (all its rounds)
+        fallback: dict[str, Any] | None = None  # an accepted draft held back for its warnings
         for n in range(1, self._max_rounds + 1):
             job = self._save(job, round=n)
             self._emit(job.job_id, "round", n=n, of=self._max_rounds, **tag)
-            reply = self._writer.write(SYSTEM, turns)
+            reply = self._write_with_heartbeat(job, n, turns, tag)
             used = self._writer.last_usage
             if used:
                 spent = _add_usage(spent, used)
@@ -290,6 +309,15 @@ class GenerateModels:
             turns.append(Turn("model", reply))
             try:
                 draft = parse_reply(reply)
+                warned = self._sessions.check(session_id, draft)
+                if warned and fallback is None and n < self._max_rounds:
+                    # Once: a mapping that cites only a write (request body) may have a read
+                    # source in the pack. The draft is kept in case the next round fails.
+                    fallback = draft
+                    self._emit(job.job_id, "warnings", round=n, warnings=_issues(warned), **tag)
+                    turns.append(Turn("user", WARNINGS_PROMPT + json.dumps(
+                        _issues(warned), ensure_ascii=False)))  # fmt: skip
+                    continue
                 result = self._sessions.submit(
                     session_id,
                     draft,
@@ -314,17 +342,67 @@ class GenerateModels:
                     )
                 )
                 continue
-            sid = result.snapshot.snapshot_id
-            if concept:
-                self._emit(job.job_id, "member", concept=concept, snapshotId=sid, round=n)
-            return sid
+            return self._stored(job, result.snapshot.snapshot_id, n, concept)
+        if fallback is not None:  # the repair round did not hold: keep the accepted draft
+            result = self._sessions.submit(
+                session_id,
+                fallback,
+                maintainer=True,
+                generator=self._writer.name,
+                generator_usage=spent,
+            )
+            return self._stored(job, result.snapshot.snapshot_id, self._max_rounds, concept)
         return None
+
+    def _stored(self, job: ModelJob, sid: str, n: int, concept: str | None) -> str:
+        if concept:
+            self._emit(job.job_id, "member", concept=concept, snapshotId=sid, round=n)
+        return sid
+
+    def _write_with_heartbeat(
+        self, job: ModelJob, n: int, turns: list[Turn], tag: dict[str, Any]
+    ) -> str:
+        """One model call; a `heartbeat` event every HEARTBEAT_SECONDS while it runs (a long
+        call showed "Round 1 of 3" for minutes)."""
+        result: dict[str, Any] = {}
+
+        def call() -> None:
+            try:
+                result["reply"] = self._writer.write(SYSTEM, turns)
+            except BaseException as exc:
+                result["error"] = exc
+
+        worker = threading.Thread(target=call, name=f"plume-write-{job.job_id}", daemon=True)
+        worker.start()
+        while True:
+            worker.join(self._heartbeat)
+            if not worker.is_alive():
+                break
+            elapsed = (self._clock.now() - job.created_at).total_seconds()
+            self._emit(
+                job.job_id,
+                "heartbeat",
+                elapsed=round(elapsed),
+                round=n,
+                of=self._max_rounds,
+                phase="waiting_for_model",
+                **tag,
+            )
+        if "error" in result:
+            raise result["error"]
+        return str(result["reply"])
 
     def _run(self, job_id: str) -> None:
         job = self.get(job_id)
         try:
             job = self._save(job, status="running")
-            self._emit(job_id, "started", apis=list(job.apis), concept=job.concept)
+            self._emit(
+                job_id,
+                "started",
+                apis=list(job.apis),
+                concept=job.concept,
+                at=self._clock.now().isoformat(),
+            )
             sid = self._write_model(job, job.session_id or "")
             if sid is None:
                 self._fail(
