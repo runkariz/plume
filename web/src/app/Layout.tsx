@@ -1,4 +1,4 @@
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useMatches, useNavigate } from 'react-router-dom';
 import { GitHubIcon, MoonIcon, PlumeMark, SunIcon } from '@/icons';
 import { authStore, useIsMaintainer, useMaintainerName } from './authStore';
 import { useTheme } from './theme';
@@ -9,6 +9,7 @@ export function Layout() {
   const { theme, toggle } = useTheme();
   const maintainer = useIsMaintainer();
   const name = useMaintainerName() ?? 'maintainer';
+  const wide = useMatches().some((m) => (m.handle as { wide?: boolean } | undefined)?.wide);
   const onSignIn = useLocation().pathname === '/maintainer';
   const navigate = useNavigate();
   return (
@@ -30,6 +31,9 @@ export function Layout() {
             >
               {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
             </button>
+            <NavLink className="nav-link" to="/models">
+              Models
+            </NavLink>
             <a className="nav-link" href={GITHUB_URL} rel="noreferrer">
               <GitHubIcon /> GitHub
             </a>
@@ -61,7 +65,7 @@ export function Layout() {
           </nav>
         </div>
       </header>
-      <main id="main" tabIndex={-1} className="wrap">
+      <main id="main" tabIndex={-1} className={wide ? 'wrap wide' : 'wrap'}>
         <Outlet />
       </main>
     </>

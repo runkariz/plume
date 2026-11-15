@@ -225,3 +225,71 @@ export type JobEvent =
   | { type: 'progress'; id: string; done: number; total: number; etaSeconds: number | null }
   | { type: 'service'; id: string; service: 'postgres' | 'gemini'; detail: string }
   | { type: 'done'; id: string; status: 'staged' | 'failed'; message?: string };
+
+// ---- canonical models (W4) ----
+
+export interface ApiRef {
+  id: string;
+  name: string;
+  /** Short label for chips and avatars, e.g. "Shopify". */
+  shortName: string;
+  logo: { text: string; color: string };
+}
+
+export type CoverageKind = 'direct' | 'derived' | 'absent';
+export type Operation = 'read' | 'write';
+
+export interface Concept {
+  id: string;
+  name: string;
+  description: string;
+  likelyFields: number;
+  coverage: Record<string, CoverageKind>; // by api id
+  operations: Operation[];
+  difficulty: { tone: 'ok' | 'warn' | 'bad'; label: string };
+}
+
+export interface SuggestResponse {
+  apis: ApiRef[];
+  concepts: Concept[];
+  notModeled: { count: number; summary: string };
+}
+
+export interface GenerateRequest {
+  apis: string[];
+  concept: string;
+}
+
+export type FieldSupport = 'supported' | 'derived' | 'unsupported';
+
+export interface FieldSource {
+  paths: { path: string; type: string }[];
+  /** Edge label for derived mappings, e.g. "not null = true" or "join: inventory_item_id". */
+  transform?: string;
+  fetch?: { endpoint: string };
+  join?: string[];
+  evidence?: { quote: string; anchor: string }[];
+}
+
+export interface ModelField {
+  name: string;
+  type: string;
+  required: boolean;
+  support: Record<string, FieldSupport>; // by api id
+  sources: Record<string, FieldSource>;
+}
+
+export interface ModelSnapshot {
+  id: string;
+  name: string;
+  description: string;
+  status: 'generated_unverified';
+  generatedAt: string;
+  promptVersion: string;
+  inputs: (ApiRef & { build: string })[];
+  fields: ModelField[];
+  /** Question text may contain **bold** spans. */
+  openQuestions: { question: string; detail?: string }[];
+  coverage: Record<string, { mapped: number; total: number }>;
+  citations: { checked: number; found: number; missing: string[] };
+}

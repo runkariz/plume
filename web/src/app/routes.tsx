@@ -1,10 +1,11 @@
 import type { RouteObject } from 'react-router-dom';
-import { ComingSoon } from '@/pages/ComingSoon';
 import { ApiDetailPage } from '@/pages/ApiDetailPage';
 import { Home } from '@/pages/Home';
 import { KitPage } from '@/pages/KitPage';
 import { NotFound } from '@/pages/NotFound';
 import { TryItPage } from '@/pages/TryItPage';
+import { PickApps } from '@/pages/models/PickApps';
+import { Suggestions } from '@/pages/models/Suggestions';
 import { BuildStep } from '@/pages/maintainer/BuildStep';
 import { RequireMaintainer } from '@/pages/maintainer/Guard';
 import { MaintainerEntry } from '@/pages/maintainer/MaintainerEntry';
@@ -30,7 +31,14 @@ export const routes: RouteObject[] = [
           { path: 'maintainer/jobs/:jobId/publish', element: <PublishStep /> },
         ],
       },
-      { path: 'models', element: <ComingSoon title="Models" /> },
+      { path: 'models', element: <PickApps /> },
+      { path: 'models/suggest', element: <Suggestions /> },
+      {
+        path: 'models/:snapshotId',
+        // React Flow is large: load it only when a model is opened
+        lazy: async () => ({ Component: (await import('@/pages/models/ModelView')).ModelView }),
+        handle: { wide: true },
+      },
       { path: 'kit', element: <KitPage /> },
       { path: '*', element: <NotFound /> },
     ],

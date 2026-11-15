@@ -22,6 +22,18 @@ class TestFormData extends NodeFormData {
 }
 globalThis.FormData = TestFormData as unknown as typeof FormData;
 
+// React Flow needs these browser APIs, which jsdom lacks.
+class TestResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+globalThis.ResizeObserver ??= TestResizeObserver;
+class TestDOMMatrix {
+  m22 = 1;
+}
+(globalThis as { DOMMatrixReadOnly?: unknown }).DOMMatrixReadOnly ??= TestDOMMatrix;
+
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));
 afterEach(() => {
   cleanup();
