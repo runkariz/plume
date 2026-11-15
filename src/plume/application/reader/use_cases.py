@@ -376,8 +376,14 @@ class FindFact:
                 if f.name.partition(" ")[0] == method.upper()
                 and path_matches(f.name.partition(" ")[2], path)
             ]
-            if len({f.owner_id for f in matches}) == 1:
-                return matches[0].owner_id
+            owners = sorted({f.owner_id for f in matches})
+            if len(owners) == 1:
+                return owners[0]
+            if len(owners) > 1:
+                raise ReaderInputError(
+                    f"{method.upper()} {path} matches {len(owners)} operations; pass one of "
+                    f"these document ids as owner: {', '.join(owners)}"
+                )
         return owner  # unknown: reported as not in the build below
 
     def execute(
@@ -541,20 +547,18 @@ class CheckCall:
                 checked,
                 None,
             )
-        candidates.sort(key=lambda c: (-c[0], c[2]))
-        _, endpoint, matched_path = candidates[0]
-        owned = self._facts.for_owner(build_id, endpoint.owner_id)
-        checks = []
-        for p in params:
-            hits = [
-                f
-                for f in owned
-                if f.kind is FactKind.FIELD
-                and (f.name.lower() == p.lower() or f.name.lower().endswith("." + p.lower()))
-                and f.location is not FieldLocation.RESPONSE
-            ]
-            where = hits[0].location.value if hits and hits[0].location else None
-            checks.append(ParamCheck(p, bool(hits), where))
+        candidates.sort(key=lambda c: (-c[0], c[2], c[1].owner_id))
+        best = candidates[0]
+        # Several operations at the same METHOD + path: the one that documents the most of
+        # these params; the others are named as alternatives.
+        tied = [c for c in candidates if c[2] == best[2]]
+        scored = []
+        for _, f, f_path in tied:
+            checks = self._param_checks(build_id, f.owner_id, params)
+            scored.append((-sum(c.found for c in checks), f.owner_id, f, f_path, checks))
+        scored.sort(key=lambda x: (x[0], x[1]))
+        _, _, endpoint, matched_path, checks = scored[0]
+        alternatives = tuple(x[1] for x in scored[1:])
         complete = endpoint.complete
         verdict = "documented" if all(c.found for c in checks) else "not_documented"
         return CheckCallResult(
@@ -569,4 +573,22 @@ class CheckCall:
             tuple(checks),
             checked,
             endpoint.evidence,
+            alternatives,
         )
+
+    def _param_checks(
+        self, build_id: BuildId, owner_id: str, params: Sequence[str]
+    ) -> list[ParamCheck]:
+        owned = self._facts.for_owner(build_id, owner_id)
+        checks = []
+        for p in params:
+            hits = [
+                f
+                for f in owned
+                if f.kind is FactKind.FIELD
+                and (f.name.lower() == p.lower() or f.name.lower().endswith("." + p.lower()))
+                and f.location is not FieldLocation.RESPONSE
+            ]
+            where = hits[0].location.value if hits and hits[0].location else None
+            checks.append(ParamCheck(p, bool(hits), where))
+        return checks

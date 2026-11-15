@@ -247,3 +247,37 @@ def test_paging_parameters_described_in_a_general_guide(packages: Path, tmp_path
         assert "general guidance" in r.reasons[-1]
     # A name no guide uses keeps a proven absence.
     assert stack.find_fact().execute("mirakl", "frobnicate", location="query").complete
+
+
+def test_operations_sharing_method_and_path_stay_distinct(packages: Path, tmp_path: Path) -> None:
+    """Mirakl OF54 / OR15 / TL05 are all GET /{file_path} (a URL from response data): each
+    keeps its own document, id suffixed with the package endpoint id; lookups by
+    "METHOD /path" name every candidate."""
+    import json  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+
+    import pytest  # noqa: PLC0415
+
+    from plume.application.reader.use_cases import ReaderInputError  # noqa: PLC0415
+
+    copy = tmp_path / "mirakl-shared-path"
+    shutil.copytree(packages / "mirakl-mini", copy)
+    eps = copy / "connector" / "endpoints"
+    src = eps / "get-api-orders"
+    for name in ("get-or15", "get-tl05"):
+        shutil.copytree(src, eps / name)
+        req = json.loads((eps / name / "request.json").read_text())
+        req.update(endpointId=name, url="https://{instance_name}/{{req_vars.file_path}}")
+        (eps / name / "request.json").write_text(json.dumps(req))
+    stack = FakeStack()
+    stack.load(str(copy))
+    r = stack.check_call().execute("mirakl", "GET", "/export.csv")
+    assert r.verdict == "documented"
+    ids = {r.matched_id, *r.alternatives}
+    assert ids == {"endpoint:GET~/{file_path}@get-or15", "endpoint:GET~/{file_path}@get-tl05"}
+    with pytest.raises(ReaderInputError, match="matches 2 operations"):
+        stack.find_fact().execute("mirakl", "order_ids", owner="GET /{file_path}")
+    one = stack.find_fact().execute(
+        "mirakl", "order_ids", owner="endpoint:GET~/{file_path}@get-tl05"
+    )
+    assert one.found

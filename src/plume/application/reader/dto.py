@@ -117,3 +117,5 @@ class CheckCallResult:
     params: tuple[ParamCheck, ...]
     checked: dict[str, int]
     citation: Citation | None
+    alternatives: tuple[str, ...] = ()
+    """Other operations documented at the same METHOD + path (distinct ids)."""

@@ -19,7 +19,8 @@ from plume.domain.shared.hashing import ContentHash, content_hash
 # 6: the reader follows $ref to sibling schema files and #/$defs (model -> item model fields).
 # 7: knowledge-export page guides record their endpoints (search keeps one next to the page).
 # 8: models record the operations whose response names them (raw x-plume-returned-by).
-CHUNKER_VERSION = "8"
+# 9: endpoints sharing METHOD + path get "<id>@<package endpoint id>" document ids.
+CHUNKER_VERSION = "9"
 DEFAULT_MAX_CHARS = 6000
 _HEADING = re.compile(r"^#{1,3} ", re.MULTILINE)
 
