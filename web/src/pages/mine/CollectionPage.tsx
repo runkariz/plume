@@ -106,61 +106,64 @@ export function CollectionPage() {
           </p>
         </div>
       </div>
-      {c.mergedInto ? (
-        <Banner tone="accent" title="This link was merged into another one">
-          Its models moved: <Link to={`/mine/${c.mergedInto}`}>open the one they are in now</Link>.
-        </Banner>
-      ) : null}
-      <Card className="pad">
-        <h2 className="h2-sm">Link to this list</h2>
-        <p className="muted small">
-          Bookmark it to find these models from any browser. It only lists them: it cannot change or
-          release anything.
-        </p>
-        <CollectionLink id={c.id} />
-        {!c.mergedInto && !isMine ? (
-          <div className="row" style={{ marginTop: 12 }}>
-            <Button onClick={() => void adoptHere()} disabled={busy !== null}>
-              Use this link in this browser
-            </Button>
-            {other ? (
-              <Button onClick={() => void merge()} disabled={busy !== null}>
-                {busy === 'merge' ? 'Merging…' : 'Merge my other link into this one'}
+      <div className="mine-stack">
+        {c.mergedInto ? (
+          <Banner tone="accent" title="This link was merged into another one">
+            Its models moved: <Link to={`/mine/${c.mergedInto}`}>open the one they are in now</Link>
+            .
+          </Banner>
+        ) : null}
+        <Card className="pad">
+          <h2 className="h2-sm">Link to this list</h2>
+          <p className="muted small">
+            Bookmark it to find these models from any browser. It only lists them: it cannot change
+            or release anything.
+          </p>
+          <CollectionLink id={c.id} />
+          {!c.mergedInto && !isMine ? (
+            <div className="row" style={{ marginTop: 12 }}>
+              <Button onClick={() => void adoptHere()} disabled={busy !== null}>
+                Use this link in this browser
               </Button>
-            ) : null}
-          </div>
+              {other ? (
+                <Button onClick={() => void merge()} disabled={busy !== null}>
+                  {busy === 'merge' ? 'Merging…' : 'Merge my other link into this one'}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+          {done ? (
+            <p role="status" className="small ok">
+              {done}
+            </p>
+          ) : null}
+          {error ? (
+            <p role="alert" className="form-error">
+              {error}
+            </p>
+          ) : null}
+        </Card>
+        {!c.mergedInto ? (
+          <>
+            <Card className="pad model-list" role="region" aria-label="Models">
+              <h2 className="h2-sm">Models</h2>
+              {c.models.length ? (
+                <ModelRows items={c.models} />
+              ) : (
+                <p className="muted small">No models yet.</p>
+              )}
+            </Card>
+            <Card className="pad model-list" role="region" aria-label="Model sets">
+              <h2 className="h2-sm">Model sets</h2>
+              {c.sets.length ? (
+                <SetRows items={c.sets} />
+              ) : (
+                <p className="muted small">No model sets yet.</p>
+              )}
+            </Card>
+          </>
         ) : null}
-        {done ? (
-          <p role="status" className="small ok">
-            {done}
-          </p>
-        ) : null}
-        {error ? (
-          <p role="alert" className="form-error">
-            {error}
-          </p>
-        ) : null}
-      </Card>
-      {!c.mergedInto ? (
-        <>
-          <Card className="pad model-list" role="region" aria-label="Models">
-            <h2 className="h2-sm">Models</h2>
-            {c.models.length ? (
-              <ModelRows items={c.models} />
-            ) : (
-              <p className="muted small">No models yet.</p>
-            )}
-          </Card>
-          <Card className="pad model-list" role="region" aria-label="Model sets">
-            <h2 className="h2-sm">Model sets</h2>
-            {c.sets.length ? (
-              <SetRows items={c.sets} />
-            ) : (
-              <p className="muted small">No model sets yet.</p>
-            )}
-          </Card>
-        </>
-      ) : null}
+      </div>
     </>
   );
 }

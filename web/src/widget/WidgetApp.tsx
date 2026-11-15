@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { ModelSnapshot } from '@/api/types';
+import type { CollectionRef, ModelSnapshot } from '@/api/types';
 import { FixedThemeProvider, type Theme } from '@/app/theme';
 import { ApiAvatar, Banner, Button, Chip, Segmented } from '@/components';
 import { countLeaves } from '@/pages/models/fields';
@@ -8,7 +8,7 @@ import { defaultSelection, type Selection } from '@/pages/models/graph';
 import { toggleApi } from '@/pages/models/modelView';
 import { groupWarnings } from '@/pages/models/warnings';
 import { extractModel, type Shown } from './model';
-import { OwnerKeyNotice } from './OwnerKeyNotice';
+import { CollectionNotice } from './CollectionNotice';
 import { SetPanel } from './SetPanel';
 import type { CallToolResult, HostConnection, HostContext } from './protocol';
 
@@ -170,7 +170,7 @@ function Body({ phase, connection }: { phase: Phase; connection: HostConnection 
           key={phase.set.id}
           set={phase.set}
           link={phase.link}
-          ownerKey={phase.ownerKey}
+          collection={phase.collection}
           connection={connection}
         />
       );
@@ -180,7 +180,7 @@ function Body({ phase, connection }: { phase: Phase; connection: HostConnection 
           key={phase.model.id}
           model={phase.model}
           link={phase.link}
-          ownerKey={phase.ownerKey}
+          collection={phase.collection}
           connection={connection}
         />
       );
@@ -190,12 +190,12 @@ function Body({ phase, connection }: { phase: Phase; connection: HostConnection 
 function ModelPanel({
   model,
   link,
-  ownerKey,
+  collection,
   connection,
 }: {
   model: ModelSnapshot;
   link: string | null;
-  ownerKey: string | null;
+  collection: CollectionRef | null;
   connection: HostConnection | null;
 }) {
   const big = countLeaves(model) > BIG;
@@ -206,7 +206,8 @@ function ModelPanel({
   const selection = useMemo(() => picked ?? defaultSelection(model), [picked, model]);
   const vis = model.visibility ? VISIBILITY[model.visibility] : undefined;
   const lineage = model.lineage;
-  const canOpen = Boolean(link && connection?.hostCapabilities.openLinks);
+  const canOpenLinks = Boolean(connection?.hostCapabilities.openLinks);
+  const canOpen = Boolean(link && canOpenLinks);
 
   return (
     <>
@@ -251,7 +252,14 @@ function ModelPanel({
           ) : null}
         </div>
       </div>
-      {ownerKey ? <OwnerKeyNotice key={ownerKey} ownerKey={ownerKey} what="model" /> : null}
+      {collection ? (
+        <CollectionNotice
+          key={collection.id}
+          collection={collection}
+          what="model"
+          onOpen={canOpenLinks ? (u) => void connection?.openLink(u) : undefined}
+        />
+      ) : null}
       {big ? (
         <div className="widget-scope">
           <Segmented

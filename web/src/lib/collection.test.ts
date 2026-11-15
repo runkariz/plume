@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import {
   collectionLink,
+  rememberCollection,
   forgetCollection,
   parseCollectionRef,
   readCollectionId,
@@ -76,5 +77,36 @@ describe('the stored id', () => {
 describe('collectionLink', () => {
   it("is this site's /mine/<id>", () => {
     expect(collectionLink(ID)).toBe(`${window.location.origin}/mine/${ID}`);
+  });
+});
+
+describe('rememberCollection: only a link this browser made or sent is kept', () => {
+  const ref = (over: object = {}) => ({ id: ID, url: `/mine/${ID}`, created: false, ...over });
+  it('keeps a link the save created', () => {
+    rememberCollection(ref({ created: true }));
+    expect(readCollectionId()).toBe(ID);
+  });
+  it('keeps the link this browser sent (the save joined it)', () => {
+    rememberCollection(ref(), ID);
+    expect(readCollectionId()).toBe(ID);
+  });
+  it("does NOT adopt a link it never held: saving a version of someone else's model can answer that model's link", () => {
+    rememberCollection(ref());
+    expect(readCollectionId()).toBeNull();
+    rememberCollection(ref(), null);
+    expect(readCollectionId()).toBeNull();
+    rememberCollection(ref(), 'c-SomethingElse0123456789');
+    expect(readCollectionId()).toBeNull();
+  });
+  it('a link the server made to replace an unknown one is kept (created), and nothing changes without a link', () => {
+    saveCollectionId('c-Mistyped0123456789ab');
+    rememberCollection(
+      ref({ id: 'c-BrandNewLink0123456789', created: true }),
+      'c-Mistyped0123456789ab',
+    );
+    expect(readCollectionId()).toBe('c-BrandNewLink0123456789');
+    rememberCollection(null);
+    rememberCollection(undefined);
+    expect(readCollectionId()).toBe('c-BrandNewLink0123456789');
   });
 });

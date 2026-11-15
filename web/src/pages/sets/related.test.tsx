@@ -309,7 +309,7 @@ describe('Paste a draft yourself (set session)', () => {
     expect(stored).toHaveTextContent(/Image:\s*stored\s*u-mock/);
     expect(within(p).getByLabelText('Draft JSON')).toHaveValue('');
     expect(within(p).getByLabelText('This draft is')).toHaveValue('set');
-    expect(localStorage.getItem('plume-owner-keys')).toContain('ok-mock'); // a new lineage: its key is kept
+    expect(localStorage.getItem('plume-collection')).toMatch(/^c-MockCollection\d+$/); // the first save started the link
   });
 
   it('a refused member draft shows its issues, and nothing is listed as stored', async () => {
@@ -321,7 +321,7 @@ describe('Paste a draft yourself (set session)', () => {
     expect(within(p).queryByRole('list', { name: 'Stored member models' })).not.toBeInTheDocument();
   });
 
-  it('opens the set once stored, keeps its owner key and shows it once', async () => {
+  it('opens the set once stored, keeps the My models link and shows it once', async () => {
     const { p, router } = await panel();
     await paste(
       p,
@@ -331,9 +331,8 @@ describe('Paste a draft yourself (set session)', () => {
     await waitFor(() =>
       expect(router.state.location.pathname).toMatch(/^\/model-sets\/u-set-mock/),
     );
-    expect(JSON.parse(localStorage.getItem('plume-owner-keys') ?? '[]')).toEqual([
-      expect.stringMatching(/^pk_u-set-mock/),
-    ]);
+    // the member model and the set joined the same link
+    expect(localStorage.getItem('plume-collection')).toMatch(/^c-MockCollection\d+$/);
     expect(await screen.findByText('Your model set is saved, and unlisted')).toBeInTheDocument();
   });
 });

@@ -196,7 +196,7 @@ test('a maintainer who generates on the server sees clearly when the server has 
   );
 });
 
-test('anonymous: Claude session, a refused draft, then an UNLISTED model with share link, owner key and lineage', async ({
+test('anonymous: Claude session, a refused draft, then an UNLISTED model with share link, My models link and lineage', async ({
   page,
   request,
 }) => {
@@ -243,13 +243,13 @@ test('anonymous: Claude session, a refused draft, then an UNLISTED model with sh
   await expect(page).toHaveURL(/\/models\/u-[A-Za-z0-9_-]+$/);
   const modelId = new URL(page.url()).pathname.split('/').pop() ?? '';
   await expect(page.locator('.chip', { hasText: 'Unlisted: anyone with the link' })).toBeVisible();
-  // the owner key: shown once, saved in this browser
+  // the My models link: shown once, kept in this browser
   const notice = page.getByText('Your model is saved, and unlisted');
   await expect(notice).toBeVisible();
-  const ownerKey = await page.locator('.owner-key').textContent();
-  expect(ownerKey).toBeTruthy();
-  const stored = await page.evaluate(() => localStorage.getItem('plume-owner-keys'));
-  expect(JSON.parse(stored ?? '[]')).toContain(ownerKey);
+  const myLink = await page.getByLabel('Link to My models').inputValue();
+  const collectionId = /\/mine\/(c-[A-Za-z0-9_-]+)$/.exec(myLink)?.[1];
+  expect(collectionId).toBeTruthy();
+  expect(await page.evaluate(() => localStorage.getItem('plume-collection'))).toBe(collectionId);
   // the share link is this site + the model's path; Modify with Claude carries the server's prompt
   const share = page.getByRole('region', { name: 'Share this model' });
   await expect(share.getByLabel('Link to this model')).toHaveValue(
@@ -263,7 +263,7 @@ test('anonymous: Claude session, a refused draft, then an UNLISTED model with sh
   await shot(page, 'w12-real-unlisted-model', 'light');
   await toggleDark(page, 'w12-real-unlisted-model');
 
-  // anyone with the link sees it (no token, no owner key); it is in no list
+  // anyone with the link sees it (no token); it is in no list
   const view = await request.get(`${API}/v1/models/${modelId}`);
   expect(view.status()).toBe(200);
   const body = (await view.json()) as { visibility: string; official: boolean };
@@ -308,7 +308,7 @@ test('anonymous: Claude session, a refused draft, then an UNLISTED model with sh
   await expect(page.getByText('A newer version of this model exists')).toBeVisible();
   await expect(page.locator('.lineage')).toContainText('v1 of 2');
 
-  // "Your models" lists the latest version under this browser's key; the Official list does not
+  // "Your models" lists the latest version under this browser's My models link; the Official list does not
   await page.goto('/models');
   const mine = page.getByRole('region', { name: 'Your models' });
   await expect(mine.getByRole('link', { name: `${NAME} (revised)` })).toBeVisible();

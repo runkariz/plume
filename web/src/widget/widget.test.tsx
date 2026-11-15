@@ -390,11 +390,16 @@ describe('a model set result', () => {
   });
 });
 
-describe('the owner key of a new lineage (shown once, in the view only)', () => {
-  const KEY = 'ok-widget-3f9a0c71d2e84b5f';
+describe('the My models link of a save without a token (shown in the view only)', () => {
+  const COLLECTION = {
+    id: 'c-WidgetCollection0123456',
+    url: 'https://plume.example/mine/c-WidgetCollection0123456',
+    created: true,
+  };
   const all = seedSets();
   const stored = all.find((x) => x.set.id === SET_OFFICIAL);
   const set = stored ? setJson(all, stored) : (undefined as never);
+  const model = { ...inventorySnapshot, visibility: 'unlisted' };
 
   async function shown(structured: unknown, caps: object = {}) {
     const h = fakeHost();
@@ -406,93 +411,133 @@ describe('the owner key of a new lineage (shown once, in the view only)', () => 
     return { h, push };
   }
 
-  it('is read from structuredContent.owner_key for a model and for a set (and ownerKey too)', () => {
-    const model = { ...inventorySnapshot, visibility: 'unlisted' };
-    expect(extractModel(result({ accepted: true, owner_key: KEY, model }))).toMatchObject({
+  it('is read from structuredContent.collection for a model and for a set', () => {
+    expect(extractModel(result({ accepted: true, collection: COLLECTION, model }))).toMatchObject({
       kind: 'model',
-      ownerKey: KEY,
+      collection: { id: COLLECTION.id, url: COLLECTION.url, created: true, note: null },
     });
-    expect(extractModel(result({ accepted: true, ownerKey: KEY, set }))).toMatchObject({
+    expect(extractModel(result({ accepted: true, collection: COLLECTION, set }))).toMatchObject({
       kind: 'set',
-      ownerKey: KEY,
+      collection: { id: COLLECTION.id },
     });
-    for (const none of [undefined, null, '', '  ', 5, {}])
-      expect(extractModel(result({ accepted: true, owner_key: none, model }))).toMatchObject({
-        ownerKey: null,
-      });
+    // the server's note comes along
+    expect(
+      extractModel(
+        result({
+          accepted: true,
+          collection: { ...COLLECTION, note: 'a new link was made' },
+          model,
+        }),
+      ),
+    ).toMatchObject({ collection: { note: 'a new link was made' } });
   });
 
-  it('shows the key with Copy and the words that say what it is for, for a model', async () => {
+  it('is no link unless it is a whole one (never a half-link), and an old owner_key is ignored', () => {
+    for (const bad of [
+      undefined,
+      null,
+      '',
+      5,
+      {},
+      { id: 'c-x' },
+      { url: 'https://x' },
+      { id: '', url: 'https://x' },
+      { id: 'c-x', url: 5 },
+    ])
+      expect(extractModel(result({ accepted: true, collection: bad, model }))).toMatchObject({
+        collection: null,
+      });
+    expect(extractModel(result({ accepted: true, owner_key: 'ok-old', model }))).toMatchObject({
+      collection: null,
+    });
+  });
+
+  it('shows "Your models" with the link and Copy, for a model', async () => {
+    await shown({ accepted: true, collection: COLLECTION, model });
+    expect(await screen.findByText('Your model is saved, and unlisted')).toBeInTheDocument();
+    expect(screen.getByText(/new link that lists them/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Link to My models')).toHaveValue(COLLECTION.url);
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/owner key/i);
+  });
+
+  it('says "model set" for a set, and does not call a link it joined "new"', async () => {
+    await shown({ accepted: true, collection: { ...COLLECTION, created: false }, set });
+    expect(await screen.findByText('Your model set is saved, and unlisted')).toBeInTheDocument();
+    expect(screen.getByText(/saved in your My models list/)).toBeInTheDocument();
+    expect(screen.queryByText(/new link that lists them/)).not.toBeInTheDocument();
+  });
+
+  it("shows the server's note when it has one", async () => {
     await shown({
       accepted: true,
-      owner_key: KEY,
-      model: { ...inventorySnapshot, visibility: 'unlisted' },
+      collection: {
+        ...COLLECTION,
+        note: 'The link you sent is not known here, so a new one was made.',
+      },
+      model,
     });
-    expect(await screen.findByText('Your model is saved, and unlisted')).toBeInTheDocument();
-    expect(screen.getByText(/Keep this key to find or list your models later/)).toBeInTheDocument();
-    expect(screen.getByLabelText('Owner key')).toHaveValue(KEY);
-    expect(screen.getByRole('button', { name: 'Copy key' })).toBeInTheDocument();
+    expect(await screen.findByText(/so a new one was made/)).toBeInTheDocument();
   });
 
-  it('says "model set" for a set', async () => {
-    await shown({ accepted: true, owner_key: KEY, set });
-    expect(await screen.findByText('Your model set is saved, and unlisted')).toBeInTheDocument();
-    expect(screen.getByLabelText('Owner key')).toHaveValue(KEY);
-  });
-
-  it('shows nothing when the result has no key', async () => {
-    await shown({ accepted: true, model: { ...inventorySnapshot, visibility: 'official' } });
+  it('shows nothing when the result has no link (a maintainer save, or an older server)', async () => {
+    await shown({
+      accepted: true,
+      collection: null,
+      model: { ...inventorySnapshot, visibility: 'official' },
+    });
     await screen.findByRole('heading', { name: 'Inventory' });
-    expect(screen.queryByLabelText('Owner key')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Link to My models')).not.toBeInTheDocument();
     expect(screen.queryByText(/is saved, and unlisted/)).not.toBeInTheDocument();
   });
 
   it('copies with the clipboard API; when the sandbox refuses it, falls back; when that fails too, says so', async () => {
-    await shown({
-      accepted: true,
-      owner_key: KEY,
-      model: { ...inventorySnapshot, visibility: 'unlisted' },
-    });
-    const copyBtn = await screen.findByRole('button', { name: 'Copy key' });
-    // 1. the clipboard API works
+    await shown({ accepted: true, collection: COLLECTION, model });
+    const copyBtn = await screen.findByRole('button', { name: 'Copy link' });
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     await userEvent.click(copyBtn);
-    expect(writeText).toHaveBeenCalledWith(KEY);
-    expect(await screen.findByText('Key copied')).toBeInTheDocument();
-    // 2. the clipboard API is refused by the sandbox: the browser's copy command is tried
+    expect(writeText).toHaveBeenCalledWith(COLLECTION.url);
+    expect(await screen.findByText('Link copied')).toBeInTheDocument();
     writeText.mockRejectedValue(new Error('NotAllowedError'));
     const exec = vi.fn().mockReturnValue(true);
     Object.defineProperty(document, 'execCommand', { value: exec, configurable: true });
     await userEvent.click(copyBtn);
     expect(exec).toHaveBeenCalledWith('copy');
-    // 3. neither works: the key is selected and the person is told to copy it by hand
     exec.mockReturnValue(false);
     await userEvent.click(copyBtn);
-    expect(await screen.findByText(/Copy failed: the key is selected/)).toBeInTheDocument();
+    expect(await screen.findByText(/Copy failed: the link is selected/)).toBeInTheDocument();
   });
 
-  it('can be dismissed, and a retry that returns a NEW key shows it again', async () => {
-    const model = { ...inventorySnapshot, visibility: 'unlisted' };
-    const { push } = await shown({ accepted: true, owner_key: KEY, created: true, model });
-    await userEvent.click(await screen.findByRole('button', { name: 'Dismiss' }));
-    expect(screen.queryByLabelText('Owner key')).not.toBeInTheDocument();
-    // the same draft again (created:false) comes back with a new key for the same model
-    await push({ accepted: true, owner_key: 'ok-second-key', created: false, model });
-    expect(await screen.findByLabelText('Owner key')).toHaveValue('ok-second-key');
-  });
-
-  it('is only text and only in the view: never a link, never stored', async () => {
-    const stash = vi.spyOn(Storage.prototype, 'setItem');
-    await shown({
-      accepted: true,
-      owner_key: KEY,
-      share_url: 'https://plume.example/models/x',
-      model: { ...inventorySnapshot, visibility: 'unlisted' },
+  it('can be dismissed, and offers "Open My models" only when the host can open links and the link is absolute', async () => {
+    const { h } = await shown({ accepted: true, collection: COLLECTION, model }, { openLinks: {} });
+    await userEvent.click(await screen.findByRole('button', { name: 'Open My models' }));
+    expect(h.sent.find((m) => m.method === 'ui/open-link')?.params).toEqual({
+      url: COLLECTION.url,
     });
-    await screen.findByLabelText('Owner key');
-    expect(document.body.innerHTML.split(KEY).length - 1).toBe(1); // once, in the field's value
-    expect(screen.queryByRole('link', { name: new RegExp(KEY) })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByLabelText('Link to My models')).not.toBeInTheDocument();
+  });
+
+  it('shows a relative link (the server does not know the web address) as text, with no Open button', async () => {
+    await shown(
+      {
+        accepted: true,
+        collection: { ...COLLECTION, url: '/mine/c-WidgetCollection0123456' },
+        model,
+      },
+      { openLinks: {} },
+    );
+    expect(await screen.findByLabelText('Link to My models')).toHaveValue(
+      '/mine/c-WidgetCollection0123456',
+    );
+    expect(screen.queryByRole('button', { name: 'Open My models' })).not.toBeInTheDocument();
+  });
+
+  it('is only text and only in the view: nothing stored, no request', async () => {
+    const stash = vi.spyOn(Storage.prototype, 'setItem');
+    await shown({ accepted: true, collection: COLLECTION, model });
+    await screen.findByLabelText('Link to My models');
     expect(stash).not.toHaveBeenCalled();
     stash.mockRestore();
   });

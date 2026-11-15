@@ -72,7 +72,7 @@ export function GenerateSession({
   }, []);
 
   // Poll the session: a draft accepted for it (by Claude or pasted elsewhere) names the model to open.
-  // While a pasted draft is being submitted the poll must not open the model: the submit knows the owner key, the
+  // While a pasted draft is being submitted the poll must not open the model: the submit knows the My models link, the
   // poll does not, and whichever navigates last wins (the key and the "saved" notice would be lost).
   const submitting = useRef(false);
   const sessionId = session.sessionId;
@@ -138,13 +138,14 @@ export function GenerateSession({
     submitting.current = true;
     try {
       // someone without a token: the model joins the My models collection this browser holds, or starts one
+      const sent = readCollectionId();
       const { model, collection } = await client.submitModelDraft(
         session.sessionId,
         parsed,
         undefined,
-        { collection: readCollectionId() },
+        { collection: sent },
       );
-      rememberCollection(collection);
+      rememberCollection(collection, sent);
       onOpen(model.id, collection ? { collection } : undefined);
     } catch (err) {
       submitting.current = false;

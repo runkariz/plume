@@ -4,10 +4,11 @@ import { http, HttpResponse } from 'msw';
 import type { ModelSet } from '@/api/types';
 import { authStore } from '@/app/authStore';
 import { createHandlers } from '@/mocks/handlers';
-import { SET_OFFICIAL, SET_OWNER_KEY, SET_UNLISTED, SET_UNRELEASED } from '@/mocks/setStore';
+import { SET_COLLECTION } from '@/mocks/collectionStore';
+import { SET_OFFICIAL, SET_UNLISTED, SET_UNRELEASED } from '@/mocks/setStore';
 import { renderApp } from '@/test/render';
 import { server, TEST_API_BASE } from '@/test/server';
-import { readOwnerKeys } from '@/lib/ownerKeys';
+import { readCollectionId, saveCollectionId } from '@/lib/collection';
 import { editsFor, isChange } from './SetDetail';
 import { dimmingSet, layoutSet, parseSetView, relationLabel, withSetView } from './setGraph';
 
@@ -232,7 +233,20 @@ describe('the model set page', () => {
 });
 
 describe('editing relations makes a new version', () => {
-  it('an anonymous visitor editing the official set gets their own unlisted copy and the owner key (kept in this browser)', async () => {
+  it("editing someone else's unlisted set starts this browser's own link: never the author's", async () => {
+    // a save without a link always gets a NEW one (the server never answers a link the caller did not send)
+    renderApp(`/model-sets/${SET_UNLISTED}?sel=r:product-variants`);
+    await screen.findByRole('radio', { name: /Variant refers to Product/ });
+    await userEvent.click(screen.getByRole('radio', { name: /Variant refers to Product/ }));
+    const bar = screen.getByRole('region', { name: 'Changes to save' });
+    await userEvent.click(within(bar).getByRole('button', { name: 'Save as a new version' }));
+    expect(await screen.findByText('Saved as a new version')).toBeInTheDocument();
+    expect(readCollectionId()).toMatch(/^c-MockCollection\d+$/);
+    expect(readCollectionId()).not.toBe(SET_COLLECTION);
+    expect(screen.getByText('Your model set is saved, and unlisted')).toBeInTheDocument();
+  });
+
+  it('an anonymous visitor editing the official set gets their own unlisted copy and a My models link (kept in this browser)', async () => {
     const { router } = renderApp(`/model-sets/${SET_OFFICIAL}?sel=r:product-variants`);
     await screen.findByRole('radio', { name: /Variant refers to Product/ });
     await userEvent.click(screen.getByRole('radio', { name: /Variant refers to Product/ }));
@@ -244,7 +258,10 @@ describe('editing relations makes a new version', () => {
     expect(await screen.findByText('Saved as a new version')).toBeInTheDocument();
     expect(screen.getByText('Unlisted: anyone with the link')).toBeInTheDocument();
     expect(screen.getByText('Your model set is saved, and unlisted')).toBeInTheDocument();
-    expect(readOwnerKeys()).toHaveLength(1);
+    expect(readCollectionId()).toMatch(/^c-MockCollection\d+$/);
+    expect(screen.getByLabelText('Link to My models')).toHaveValue(
+      `${window.location.origin}/mine/${readCollectionId()}`,
+    );
     expect(router.state.location.pathname).toMatch(/^\/model-sets\/u-set/);
     // the new version holds the design that was chosen
     await userEvent.click(
@@ -397,7 +414,7 @@ describe('release (maintainer)', () => {
 });
 
 describe('the lists', () => {
-  it('the Models page lists the official sets; the unreleased only for a maintainer; "Your model sets" by owner key', async () => {
+  it('the Models page lists the official sets; the unreleased only for a maintainer; "Your model sets" from the My models link', async () => {
     const { unmount } = renderApp('/models');
     const official = await screen.findByRole('region', { name: 'Official model sets' });
     expect(within(official).getByRole('link', { name: 'Shop' })).toHaveAttribute(
@@ -412,7 +429,7 @@ describe('the lists', () => {
     expect(screen.queryByRole('region', { name: 'Your model sets' })).not.toBeInTheDocument();
     unmount();
     authStore.signIn('pl_ok', 'maintainer');
-    localStorage.setItem('plume-owner-keys', JSON.stringify([SET_OWNER_KEY]));
+    saveCollectionId(SET_COLLECTION);
     renderApp('/models');
     const waiting = await screen.findByRole('region', { name: 'Sets waiting for review' });
     expect(within(waiting).getByRole('link', { name: 'Catalog (draft)' })).toBeInTheDocument();

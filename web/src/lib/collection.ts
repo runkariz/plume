@@ -79,9 +79,17 @@ export function useCollectionId(): string | null {
   return useSyncExternalStore(subscribe, readCollectionId, () => null);
 }
 
-/** A save answered with the person's collection: keep its id here, so later saves join it and /models lists it. */
-export function rememberCollection(ref: CollectionRef | null | undefined): void {
-  if (ref?.id) saveCollectionId(ref.id);
+/**
+ * A save answered with a collection: keep its id here, so later saves join it and /models lists it. Only a link this
+ * browser MADE (`created`) or SENT (`sent`) is kept: saving a new version of someone else's unlisted model can be
+ * answered with the link of the model's lineage, which this browser never held and must not adopt (it would list
+ * the other person's models and put this person's next saves into them).
+ */
+export function rememberCollection(
+  ref: CollectionRef | null | undefined,
+  sent?: string | null,
+): void {
+  if (ref?.id && (ref.created || ref.id === sent)) saveCollectionId(ref.id);
 }
 
 /**

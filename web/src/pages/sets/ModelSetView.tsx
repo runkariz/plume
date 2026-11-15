@@ -129,10 +129,9 @@ function SetPage({
     setSaving(true);
     setSaveError(null);
     try {
-      const r = await client.saveSetRelations(set.id, edits, undefined, {
-        collection: readCollectionId(),
-      });
-      rememberCollection(r.collection);
+      const sent = readCollectionId();
+      const r = await client.saveSetRelations(set.id, edits, undefined, { collection: sent });
+      rememberCollection(r.collection, sent);
       navigate(`/model-sets/${r.set.id}`, {
         state: { saved: true, ...(collectionArrival(r.collection)?.state ?? {}) },
       });

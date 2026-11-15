@@ -39,7 +39,7 @@ export function SetSessionPanel({
   const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
   useEffect(() => focus.current?.focus(), []);
 
-  // While a pasted draft is being submitted the poll must not open the set: the submit knows the owner key, the
+  // While a pasted draft is being submitted the poll must not open the set: the submit knows the My models link, the
   // poll does not, and whichever navigates last wins.
   const submitting = useRef(false);
   const id = session.setSessionId;
@@ -82,22 +82,24 @@ export function SetSessionPanel({
     submitting.current = true;
     try {
       if (kind === 'set') {
+        const sent = readCollectionId();
         const { set, collection } = await client.submitSetDraft(id, parsed, undefined, {
-          collection: readCollectionId(),
+          collection: sent,
         });
-        rememberCollection(collection);
+        rememberCollection(collection, sent);
         onOpen(set.id, collection ? { collection } : undefined);
       } else {
         const memberSession = session.memberSessions[kind];
         if (!memberSession) throw new Error(`There is no session for ${kind}.`);
         // each member joins the collection the first one started (remembered here), so the set and its models are one list
+        const sent = readCollectionId();
         const { model, collection } = await client.submitModelDraft(
           memberSession,
           parsed,
           undefined,
-          { collection: readCollectionId() },
+          { collection: sent },
         );
-        rememberCollection(collection);
+        rememberCollection(collection, sent);
         setStored((s) => ({ ...s, [kind]: model.id }));
         setDraft('');
         setKind('set');

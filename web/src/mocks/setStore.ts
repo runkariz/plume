@@ -9,12 +9,14 @@ import type {
   SetRelation,
 } from '@/api/types';
 import { apiRef } from './modelData';
+import { SET_COLLECTION } from './collectionStore';
 
 /** What the mock server keeps for a model set: the JSON plus who may see it and where it belongs. */
 export interface StoredSet {
   set: ModelSet;
   lineageId: string;
-  ownerKey?: string;
+  /** The My models link this lineage was saved under (an anonymous save). */
+  collection?: string;
   createdAt: string;
 }
 
@@ -60,6 +62,7 @@ const opt = (
 export const SET_OFFICIAL = 'set_shop00000000000000000';
 export const SET_UNRELEASED = 'set_draft0000000000000000';
 export const SET_UNLISTED = 'u-set0000000000000000000001';
+/** The old owner key of the unlisted set: only the transition (POST /v1/models/mine) still takes it. */
 export const SET_OWNER_KEY = 'pk_set_demo_owner_key';
 
 function orderItems(confirmed: boolean, current: 'embedded' | 'reference'): SetRelation {
@@ -182,10 +185,15 @@ function build(
 }
 
 export function seedSets(): StoredSet[] {
-  const at = (s: ModelSet, createdAt: string, lineageId: string, ownerKey?: string): StoredSet => ({
+  const at = (
+    s: ModelSet,
+    createdAt: string,
+    lineageId: string,
+    collection?: string,
+  ): StoredSet => ({
     set: s,
     lineageId,
-    ownerKey,
+    collection,
     createdAt,
   });
   return [
@@ -231,7 +239,7 @@ export function seedSets(): StoredSet[] {
       ),
       '2026-11-16T13:00:00Z',
       'S-mine',
-      SET_OWNER_KEY,
+      SET_COLLECTION,
     ),
   ];
 }
@@ -262,7 +270,6 @@ export function newSet(
   return {
     set,
     lineageId: `L-${id}`,
-    ownerKey: visibility === 'unlisted' ? `pk_${id}` : undefined,
     createdAt: '2026-11-16T14:00:00Z',
   };
 }

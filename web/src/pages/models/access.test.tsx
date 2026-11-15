@@ -4,10 +4,13 @@ import { http, HttpResponse } from 'msw';
 import { authStore } from '@/app/authStore';
 import { createHandlers } from '@/mocks/handlers';
 import { inventorySnapshot } from '@/mocks/modelData';
-import { DEMO_OWNER_KEY, UNLISTED_V3, UNRELEASED, UNRELEASED_ORDER } from '@/mocks/modelStore';
+import { DEMO_COLLECTION } from '@/mocks/collectionStore';
+import { UNLISTED_V3, UNRELEASED, UNRELEASED_ORDER } from '@/mocks/modelStore';
 import { renderApp } from '@/test/render';
 import { server, TEST_API_BASE } from '@/test/server';
-import { forgetOwnerKeys, readOwnerKeys, saveOwnerKey, shareLink } from '@/lib/ownerKeys';
+import { forgetCollection, readCollectionId, saveCollectionId } from '@/lib/collection';
+import { forgetOwnerKeys, readOwnerKeys } from '@/lib/ownerKeys';
+import { shareLink } from '@/lib/shareLink';
 import { reduce } from './ModelJobProgress';
 import { pollConfig } from './GenerateSession';
 
@@ -262,25 +265,41 @@ describe('Lists: who sees which model', () => {
     expect(within(list).queryByText('Return')).not.toBeInTheDocument();
   });
 
-  it('"Your models" lists the models of the owner keys this browser holds, latest version of each', async () => {
-    saveOwnerKey(DEMO_OWNER_KEY);
+  it('"Your models" lists the My models link this browser holds, latest version of each', async () => {
+    saveCollectionId(DEMO_COLLECTION);
     renderApp('/models');
     const mine = await screen.findByRole('region', { name: 'Your models' });
-    expect(within(mine).getAllByRole('link')).toHaveLength(1);
-    const row = within(mine)
-      .getByRole('link', { name: 'Inventory, with a returns count' })
-      .closest('li') as HTMLElement;
+    const row = (
+      await within(mine).findByRole('link', { name: 'Inventory, with a returns count' })
+    ).closest('li') as HTMLElement;
     expect(within(row).getByText('v3 of 3')).toBeInTheDocument();
     expect(within(row).getByText('Unlisted')).toBeInTheDocument();
-    // the server was asked with POST, so the key is in no URL
-    expect(readOwnerKeys()).toEqual([DEMO_OWNER_KEY]);
+    // the link itself, to bookmark
+    expect(within(mine).getByLabelText('Link to My models')).toHaveValue(
+      `${window.location.origin}/mine/${DEMO_COLLECTION}`,
+    );
+    expect(readCollectionId()).toBe(DEMO_COLLECTION);
   });
 
-  it('an unknown owner key shows nothing', async () => {
-    saveOwnerKey('ok-someone-else');
+  it('a link this Plume does not know says so and can be forgotten', async () => {
+    saveCollectionId('c-SomeoneElse0123456789');
+    renderApp('/models');
+    const mine = await screen.findByRole('region', { name: 'Your models' });
+    expect(await within(mine).findByRole('alert')).toHaveTextContent(
+      'does not know the My models link this browser holds',
+    );
+    await userEvent.click(within(mine).getByRole('button', { name: 'Forget that link' }));
+    expect(readCollectionId()).toBeNull();
+    await waitFor(() =>
+      expect(screen.queryByRole('region', { name: 'Your models' })).not.toBeInTheDocument(),
+    );
+  });
+
+  it('without a link there is no "Your models" (only the way to open one)', async () => {
     renderApp('/models');
     await screen.findByRole('region', { name: 'Official models' });
     expect(screen.queryByRole('region', { name: 'Your models' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Open a My models link' })).toBeInTheDocument();
   });
 });
 
@@ -367,18 +386,15 @@ describe('The model page: lineage, sharing, modifying', () => {
   });
 });
 
-describe('Owner keys in this browser', () => {
-  it('stores each key once and can forget them', () => {
-    saveOwnerKey('a');
-    saveOwnerKey('a');
-    saveOwnerKey('b');
-    saveOwnerKey('');
+describe('Old owner keys (read once, to switch to the link they became)', () => {
+  it('are read from storage and forgotten', () => {
+    localStorage.setItem('plume-owner-keys', JSON.stringify(['a', 'b', '']));
     expect(readOwnerKeys()).toEqual(['a', 'b']);
     forgetOwnerKeys();
     expect(readOwnerKeys()).toEqual([]);
   });
 
-  it('survives unavailable or corrupt storage', () => {
+  it('survive unavailable or corrupt storage', () => {
     localStorage.setItem('plume-owner-keys', '{not json');
     expect(readOwnerKeys()).toEqual([]);
     localStorage.setItem('plume-owner-keys', '{"a":1}');
@@ -387,8 +403,9 @@ describe('Owner keys in this browser', () => {
       throw new Error('blocked');
     });
     expect(readOwnerKeys()).toEqual([]);
-    expect(() => saveOwnerKey('x')).not.toThrow();
+    expect(() => forgetOwnerKeys()).not.toThrow();
     spy.mockRestore();
+    forgetCollection();
   });
 
   it('builds the share link from this site, not from the server (which may not know its URL)', () => {

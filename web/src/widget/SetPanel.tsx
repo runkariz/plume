@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import type { ModelSet } from '@/api/types';
+import type { CollectionRef, ModelSet } from '@/api/types';
 import { ApiAvatar, Button, Chip } from '@/components';
 import { SetDetail } from '@/pages/sets/SetDetail';
 import { SetWorkbench } from '@/pages/sets/SetWorkbench';
 import { findMember, relationLabel, SUPPORT_TEXT, toggleShow } from '@/pages/sets/setGraph';
-import { OwnerKeyNotice } from './OwnerKeyNotice';
+import { CollectionNotice } from './CollectionNotice';
 import type { HostConnection } from './protocol';
 
 const VISIBILITY: Record<string, { label: string; tone: 'ok' | 'info' | 'warn' | 'bad' }> = {
@@ -22,19 +22,20 @@ const VISIBILITY: Record<string, { label: string; tone: 'ok' | 'info' | 'warn' |
 export function SetPanel({
   set,
   link,
-  ownerKey,
+  collection,
   connection,
 }: {
   set: ModelSet;
   link: string | null;
-  ownerKey: string | null;
+  collection: CollectionRef | null;
   connection: HostConnection | null;
 }) {
   const [selection, setSelection] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [show, setShow] = useState<string[] | null>(null);
   const vis = VISIBILITY[set.visibility];
-  const canOpen = Boolean(link && connection?.hostCapabilities.openLinks);
+  const canOpenLinks = Boolean(connection?.hostCapabilities.openLinks);
+  const canOpen = Boolean(link && canOpenLinks);
   const undecided = useMemo(() => new Set(set.undecided), [set.undecided]);
   return (
     <>
@@ -86,7 +87,14 @@ export function SetPanel({
           ) : null}
         </div>
       </div>
-      {ownerKey ? <OwnerKeyNotice key={ownerKey} ownerKey={ownerKey} what="model set" /> : null}
+      {collection ? (
+        <CollectionNotice
+          key={collection.id}
+          collection={collection}
+          what="model set"
+          onOpen={canOpenLinks ? (u) => void connection?.openLink(u) : undefined}
+        />
+      ) : null}
       {set.description ? <p className="muted">{set.description}</p> : null}
       {set.members.length > 0 ? (
         <SetWorkbench

@@ -2486,3 +2486,9 @@ ul.plain {
 .job-beat {
   margin-top: 8px;
 }
+
+/* the cards of the My models page, one under the other */
+.mine-stack {
+  display: grid;
+  gap: 16px;
+}
