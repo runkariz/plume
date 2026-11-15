@@ -25,6 +25,7 @@ import {
 } from '@/components';
 import { SearchIcon } from '@/icons';
 import { breakable } from '@/lib/breakable';
+import { ModelList } from './models/ModelList';
 import { categoryLabel, formatDate, formatScore, modelCount } from '@/lib/format';
 
 type Tab = 'all' | ItemKind;
@@ -222,6 +223,7 @@ function Detail({ api }: { api: ApiDetail }) {
             <Kv label="Store" value={api.index.store} />
             <Kv label="Build" value={api.index.build ?? '–'} mono />
           </Card>
+          <ModelList api={api.id} title="Canonical models" />
           <Card className="pad" id="connect">
             <h2 style={{ marginBottom: 12 }}>Connect</h2>
             <pre className="code">

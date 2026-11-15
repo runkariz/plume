@@ -22,7 +22,7 @@ export function Banner({
       ) : null}
       <div>
         <h3>{title}</h3>
-        {children ? <p>{children}</p> : null}
+        {children ? <div className="banner-body">{children}</div> : null}
       </div>
     </div>
   );

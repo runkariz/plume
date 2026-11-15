@@ -85,7 +85,14 @@ export function GenerateSession({
     const timer = setInterval(() => {
       client.listModels(firstApi, ctrl.signal).then(
         (r) => {
-          const hit = r.items.find((m) => m.concept === concept.id && sameSet(m.apis, ids));
+          // the server's concept spelling varies ("Order" / "order"): compare without case. An older model of the
+          // same concept is stale (built on previous docs): the one we wait for is current.
+          const hit = r.items.find(
+            (m) =>
+              !m.stale &&
+              m.concept.toLowerCase() === concept.id.toLowerCase() &&
+              sameSet(m.apis, ids),
+          );
           if (hit && !ctrl.signal.aborted) onOpen(hit.id);
         },
         () => undefined, // a missed poll is not an error: try again on the next tick

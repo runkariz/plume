@@ -406,7 +406,23 @@ export const productSnapshot: ModelSnapshot = {
 };
 
 /** A real 40-field Order model (Shopify + WooCommerce + Mirakl), copied from a live snapshot: the shape of a big model. */
-export const order40Snapshot = realOrder40 as unknown as ModelSnapshot;
+export const order40Snapshot: ModelSnapshot = {
+  ...(realOrder40 as unknown as ModelSnapshot),
+  // the docs of two of its APIs changed after it was built (the shape plume-6f's server sends)
+  stale: true,
+  staleInputs: [
+    {
+      api: 'shopify',
+      pinned: 'b-e9f58eb5a9cb0b835a4ed625c692e546',
+      current: 'b-91c706474d71676ed99042893780964e',
+    },
+    {
+      api: 'woocommerce',
+      pinned: 'b-574fe7333dffe19c2d28cda69505f8f6',
+      current: 'b-49e2f7af69657435ac9b19f491ea1f7e',
+    },
+  ],
+};
 
 export const snapshots: Record<string, ModelSnapshot> = {
   [order40Snapshot.id]: order40Snapshot,
