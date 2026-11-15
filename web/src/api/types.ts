@@ -409,6 +409,28 @@ export interface ModelLineage {
   history: { id: string; version: number; createdAt: string; visibility: ModelVisibility }[];
 }
 
+/** Something the server noticed about a mapping and did not refuse (e.g. WRITE_ONLY_SOURCE). */
+export interface ModelWarning {
+  code: string;
+  /** The canonical field the warning is about, as in `fields[].path`. */
+  field?: string | null;
+  api?: string | null;
+  message?: string | null;
+}
+
+/** An official model the one being released could replace (same concept), as the release dialog lists it. */
+export interface Supersedable {
+  id: string;
+  name: string;
+  concept?: string;
+  /** The API ids it covers. */
+  apis: string[];
+  stale?: boolean;
+  version?: number;
+  /** Its API set is inside the new model's: releasing the new one loses no API. */
+  covered?: boolean;
+}
+
 export interface ModelSnapshot {
   id: string;
   name: string;
@@ -426,6 +448,12 @@ export interface ModelSnapshot {
   revisePrompt?: string;
   /** The ids of the other official models of the same concept (case-insensitive) over the same APIs. */
   sameConcept?: string[];
+  /** Warnings the server attached to the mappings (absent on older servers). */
+  warnings?: ModelWarning[];
+  /** The official models this one replaced when it was released. */
+  supersedes?: string[];
+  /** Set once a newer model replaced this one: it stays readable by id but leaves the lists. */
+  supersededBy?: string | null;
   /** True when a pinned API has a newer build: the model is built on older docs. */
   stale?: boolean;
   staleInputs?: StaleInput[];
@@ -505,6 +533,15 @@ export type ModelJobEvent =
   | { type: 'round'; id?: string; n: number; of: number }
   | { type: 'refused'; id?: string; round: number; issues: DraftIssue[] }
   | { type: 'accepted'; id?: string; snapshotId?: string; setId?: string }
+  /** While a model call is in flight: how long the job has run and what it is waiting for. */
+  | {
+      type: 'heartbeat';
+      id?: string;
+      elapsed: number;
+      round?: number;
+      phase?: string;
+      detail?: string;
+    }
   /** A model set job: one member model was written and accepted (its own rounds ran before). */
   | { type: 'member'; id?: string; concept: string; snapshotId: string; round?: number }
   /** A model set job: the relations proposed from the documented candidates (all undecided). */

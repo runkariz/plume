@@ -6,6 +6,7 @@ import type {
   ModelListItem,
   ModelSnapshot,
   ModelVisibility,
+  Supersedable,
 } from '@/api/types';
 import { inventorySnapshot, nestedSnapshot, order40Snapshot, productSnapshot } from './modelData';
 import { iconApis } from './sectionData';
@@ -22,6 +23,9 @@ export interface StoredModel {
   basedOn: string | null;
   ownerKey?: string;
   createdAt: string;
+  /** Set when a newer model replaced this one on release. */
+  supersededBy?: string;
+  supersedes?: string[];
 }
 
 export interface MockSession {
@@ -46,6 +50,10 @@ const UNLISTED_V1 = 'u-1a7e5d93c04b48d2b8f6e0a39c1d7f52';
 const UNLISTED_V2 = 'u-2b8c6e04d15c59e3c9a7f1b40d2e8a63';
 /** A fixed unreleased model, the maintainer's review page. */
 export const UNRELEASED = 'm-unrel0a1b2c3d4e5f60718293a4b5c6d7e8f';
+/** An unreleased Order over Shopify + WooCommerce: releasing it asks which official Orders it replaces. */
+export const UNRELEASED_ORDER = 'm-unrelorder0a1b2c3d4e5f60718293a4b5c';
+/** An official Order over Shopify + WooCommerce, built on older docs (stale). */
+export const OFFICIAL_ORDER_SW = 'm-ordersw0a1b2c3d4e5f60718293a4b5c6d7';
 /** The owner key of the unlisted lineage above (tests put it in localStorage to see "Your models"). */
 export const DEMO_OWNER_KEY = 'ok-demo-3f9a0c71d2e84b5f';
 
@@ -100,12 +108,67 @@ export function seedModels(): StoredModel[] {
     unlisted(UNLISTED_V1, 'Inventory, with a returns count', '2026-11-14T15:00:00Z', 'snap_8f3a21'),
     unlisted(UNLISTED_V2, 'Inventory, with a returns count', '2026-11-14T16:00:00Z', UNLISTED_V1),
     unlisted(UNLISTED_V3, 'Inventory, with a returns count', '2026-11-14T17:00:00Z', UNLISTED_V2),
-    seed({ ...productSnapshot, id: UNRELEASED, name: 'Return' }, 'return', {
-      visibility: 'unreleased',
-      lineageId: 'L-return',
-      generator: 'gemini:gemini-2.5-pro',
-      createdAt: '2026-11-15T07:00:00Z',
-    }),
+    seed(
+      {
+        ...order40Snapshot,
+        id: OFFICIAL_ORDER_SW,
+        name: 'Order (Shopify + WooCommerce)',
+        stale: true,
+        generatedAt: '2026-11-03T09:00:00Z',
+      },
+      'Order',
+      { visibility: 'official', lineageId: 'L-order-sw', apis: ['shopify', 'woocommerce'] },
+    ),
+    seed(
+      {
+        ...order40Snapshot,
+        id: UNRELEASED_ORDER,
+        name: 'Order',
+        generatedAt: '2026-11-16T07:00:00Z',
+      },
+      'Order',
+      {
+        visibility: 'unreleased',
+        lineageId: 'L-order-new',
+        apis: ['shopify', 'woocommerce'],
+        generator: 'gemini:gemini-2.5-pro',
+      },
+    ),
+    seed(
+      {
+        ...productSnapshot,
+        id: UNRELEASED,
+        name: 'Return',
+        // the server's WRITE_ONLY_SOURCE: mappings whose only citation is a request body (a field the API accepts, never returns)
+        warnings: [
+          {
+            code: 'WRITE_ONLY_SOURCE',
+            field: 'sku',
+            api: 'mirakl',
+            message: 'shop_sku is documented only in the request body of POST /offers.',
+          },
+          {
+            code: 'WRITE_ONLY_SOURCE',
+            field: 'sku',
+            api: 'woocommerce',
+            message: 'sku is documented only in the request body of POST /products.',
+          },
+          {
+            code: 'WRITE_ONLY_SOURCE',
+            field: 'title',
+            api: 'mirakl',
+            message: 'product_title is documented only in the request body of POST /products.',
+          },
+        ],
+      },
+      'return',
+      {
+        visibility: 'unreleased',
+        lineageId: 'L-return',
+        generator: 'gemini:gemini-2.5-pro',
+        createdAt: '2026-11-15T07:00:00Z',
+      },
+    ),
   ];
 }
 
@@ -152,6 +215,8 @@ export function decorate(all: StoredModel[], m: StoredModel): ModelSnapshot {
     shareUrl: null,
     revisePrompt: REVISE(m),
     sameConcept: sameConceptOf(all, m),
+    ...(m.supersedes?.length ? { supersedes: m.supersedes } : {}),
+    supersededBy: m.supersededBy ?? null,
   };
 }
 
@@ -165,10 +230,33 @@ export function sameConceptOf(all: StoredModel[], m: StoredModel): string[] {
       (x) =>
         x !== m &&
         x.visibility === 'official' &&
+        !x.supersededBy &&
         x.concept.toLowerCase() === m.concept.toLowerCase() &&
         sameApis(x.apis, m.apis),
     )
     .map((x) => x.model.id);
+}
+
+/** The official models of the same concept (any API set) that releasing `m` could replace, as the dialog lists them. */
+export function supersedable(all: StoredModel[], m: StoredModel): Supersedable[] {
+  return all
+    .filter(
+      (x) =>
+        x !== m &&
+        x.visibility === 'official' &&
+        !x.supersededBy &&
+        x.concept.toLowerCase() === m.concept.toLowerCase(),
+    )
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .map((x) => ({
+      id: x.model.id,
+      name: x.model.name,
+      concept: x.concept,
+      apis: x.apis,
+      stale: x.model.stale ?? false,
+      version: lineageOf(all, x).version,
+      covered: x.apis.every((a) => m.apis.includes(a)),
+    }));
 }
 
 export function listItem(all: StoredModel[], m: StoredModel): ModelListItem {
@@ -205,6 +293,7 @@ export function setJobScript(
       ? []
       : [
           { type: 'round', n: 1, of: 3 },
+          { type: 'heartbeat', elapsed: 12 + i * 20, round: 1, phase: 'waiting_for_model' },
           { type: 'member', concept, snapshotId: `m-${jobId}-${i}`, round: 1 },
         ],
   );
@@ -273,6 +362,7 @@ export function jobScript(
       { type: 'started', apis, concept },
       { type: 'context', documents: 12, fields: 214 },
       { type: 'round', n: 1, of: 3 },
+      { type: 'heartbeat', elapsed: 12, round: 1, phase: 'waiting_for_model' },
       ...(concept === 'shipment'
         ? ([
             { type: 'refused', round: 1, issues },

@@ -93,7 +93,7 @@ export function MySets() {
   return (
     <SetList
       title="Your model sets"
-      intro="Made in this browser. Only people with a set's link can open it."
+      intro="Listed by the owner keys this browser holds: made here, or added by key. Only people with a set's link can open it."
       load={load}
     />
   );

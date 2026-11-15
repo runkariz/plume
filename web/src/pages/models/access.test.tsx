@@ -87,6 +87,7 @@ describe('Generate on the server (signed-in maintainer)', () => {
       snapshotId: null,
       failure: null,
       finished: false,
+      beat: null,
     };
     const issue = { code: 'X', field: 'f', api: null, message: 'm' };
     let p = reduce(empty, { type: 'round', n: 1, of: 3 });

@@ -3,6 +3,7 @@ import type { ModelSnapshot } from '@/api/types';
 import { Chip } from '@/components';
 import { findField } from './fields';
 import type { Selection } from './graph';
+import { warningSummary, warningsFor } from './warnings';
 
 /** One mapping in full: where the data is fetched, the source path, how it is transformed, and the evidence. */
 export function MappingDetail({
@@ -37,6 +38,11 @@ export function MappingDetail({
         )}
       </div>
       {field.description ? <p className="muted small">{field.description}</p> : null}
+      {warningsFor(snap, sel.field, sel.apiId).map((w, i) => (
+        <p key={`${w.code}-${i}`} className="cite warn" role="note">
+          {w.message || warningSummary(w.code, [w])}
+        </p>
+      ))}
       {!src ? (
         <p className="muted">{api.shortName} has no equivalent field.</p>
       ) : (

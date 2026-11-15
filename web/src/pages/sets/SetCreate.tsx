@@ -10,6 +10,7 @@ import { useIsMaintainer } from '@/app/authStore';
 import { Banner, Button, Card, Chip } from '@/components';
 import { saveOwnerKey } from '@/lib/ownerKeys';
 import { Issues } from '@/pages/models/GenerateSession';
+import { BeatLine, JobClock, type Beat } from '@/pages/models/JobClock';
 
 /** How often the open session checks for the new set (tests lower it). */
 export const setPollConfig = { ms: 3000 };
@@ -250,6 +251,7 @@ interface SetProgress {
   setId: string | null;
   failure: string | null;
   finished: boolean;
+  beat: Beat | null;
 }
 
 const EMPTY: SetProgress = {
@@ -259,6 +261,7 @@ const EMPTY: SetProgress = {
   setId: null,
   failure: null,
   finished: false,
+  beat: null,
 };
 
 export function reduceSetJob(p: SetProgress, e: ModelJobEvent): SetProgress {
@@ -271,6 +274,17 @@ export function reduceSetJob(p: SetProgress, e: ModelJobEvent): SetProgress {
       return { ...p, dropped: e.issues };
     case 'accepted':
       return { ...p, setId: e.setId ?? p.setId };
+    case 'heartbeat':
+      return {
+        ...p,
+        beat: {
+          seconds: e.elapsed,
+          at: Date.now(),
+          round: e.round,
+          phase: e.phase,
+          detail: e.detail,
+        },
+      };
     case 'failed':
       return { ...p, failure: e.message };
     case 'done':
@@ -326,11 +340,7 @@ export function SetJobProgress({
       <div ref={focus} tabIndex={-1} className="session-focus">
         <div className="rowhead">
           <h2>Generating the set</h2>
-          {!failed && !p.finished ? (
-            <span className="live">
-              <span className="dot" aria-hidden /> Working on the server
-            </span>
-          ) : null}
+          {!failed && !p.finished ? <JobClock running beat={p.beat} /> : null}
         </div>
         <p className="muted">
           Plume writes a model for each concept, checking every citation, then proposes the
@@ -368,6 +378,7 @@ export function SetJobProgress({
               : 'Proposing the relations'}
           </li>
         </ol>
+        {!failed && !p.finished ? <BeatLine beat={p.beat} /> : null}
         {p.dropped.length ? (
           <Banner tone="warn" title="Some proposed relations were not valid">
             They were left out; decide them yourself in the set.
