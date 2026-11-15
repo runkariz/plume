@@ -1,0 +1,87 @@
+{
+  "actionName": "Product",
+  "authorizationType": "OAUTH2",
+  "bodyType": "NONE",
+  "dataSourceExtractionCode": "return response.products || [];",
+  "defaultCompositionKey": "id",
+  "description": "Retrieve a list of products.",
+  "docLink": "https://shopify.dev/docs/api/admin-rest/latest/resources/product",
+  "endpointId": "get-admin-api-latest-products-json",
+  "examples": [
+    {
+      "request": {
+        "headers": {
+          "X-Shopify-Access-Token": "{token}"
+        },
+        "params": {
+          "ids": "632910392,921728736"
+        }
+      },
+      "source": "https://shopify.dev/docs/api/admin-rest/latest/resources/product",
+      "title": "Example 1"
+    }
+  ],
+  "headersContractRef": "headers.schema.json",
+  "idempotency": {
+    "safeToRetry": true
+  },
+  "isAdvanced": true,
+  "isDataSource": true,
+  "isDeprecated": false,
+  "isPreRelease": false,
+  "method": "GET",
+  "name": "List products",
+  "operationKind": "list",
+  "pagination": {
+    "pageSizeParam": "limit"
+  },
+  "paramsContractRef": "params.schema.json",
+  "permissionNote": "X-Shopify-Access-Token header",
+  "presets": [
+    "presets/bootstrap.json",
+    "presets/incremental.json"
+  ],
+  "provenance": {
+    "docAnchor": "#get-products?ids=632910392,921728736",
+    "extractedAt": "2026-11-12T14:30:12Z",
+    "sourceUrl": "https://shopify.dev/docs/api/admin-rest/latest/resources/product"
+  },
+  "relations": [
+    {
+      "kind": "child",
+      "targetEndpointId": "get-admin-api-latest-products-product-id-images-json",
+      "via": {
+        "field": "id",
+        "param": "product_id"
+      }
+    },
+    {
+      "kind": "child",
+      "targetEndpointId": "get-admin-api-latest-products-product-id-resource-feedback-json",
+      "via": {
+        "field": "id",
+        "param": "product_id"
+      }
+    }
+  ],
+  "resource": "Product",
+  "responses": [
+    {
+      "contentContractRef": "responses/200.schema.json",
+      "contentType": "application/json",
+      "statusCode": 200
+    }
+  ],
+  "sideEffects": [
+    "none"
+  ],
+  "summary": "Retrieve a list of products.",
+  "tags": [
+    {
+      "colorSetId": 30,
+      "kind": "category",
+      "name": "products"
+    }
+  ],
+  "url": "{{app_env.servers.api}}/admin/api/latest/products.json"
+}

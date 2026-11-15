@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "api_key": {
+      "type": "string",
+      "description": "API Key"
+    }
+  },
+  "required": [
+    "api_key"
+  ],
+  "description": "Configuration variables for API key authentication using the X-Catalog-Key header."
+}

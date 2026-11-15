@@ -1,0 +1,19 @@
+{
+  "title": "Headers",
+  "type": "object",
+  "properties": {
+    "X-Shopify-Access-Token": {
+      "type": "string",
+      "description": "Authentication token",
+      "default": "{{ auth?.oauth?.token }}",
+      "examples": [
+        "{{ auth?.oauth?.token }}"
+      ],
+      "title": "Access Token"
+    }
+  },
+  "required": [
+    "X-Shopify-Access-Token"
+  ],
+  "description": "HTTP request headers required to authenticate and delete the product."
+}

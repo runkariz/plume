@@ -1,0 +1,69 @@
+{
+  "type": "object",
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "title": "Product",
+        "x-source-url": "file:///uploaded/4c3034da5bd5/catalog-b.openapi.json",
+        "x-complete": true,
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier of the product."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name of the product."
+          },
+          "price": {
+            "type": "string",
+            "description": "Price value of the product."
+          },
+          "currency": {
+            "type": "string",
+            "description": "Currency code in which the price is specified."
+          },
+          "shop": {
+            "type": "string",
+            "description": "Identifier or name of the shop offering the product."
+          }
+        },
+        "description": "Individual product record."
+      },
+      "description": "Products retrieved for the current page."
+    },
+    "count": {
+      "type": "integer",
+      "description": "Number of products returned in the current page."
+    },
+    "pageSize": {
+      "type": "integer",
+      "description": "Rows per page actually used."
+    },
+    "maxPageSize": {
+      "type": "integer",
+      "description": "The most rows one page can hold."
+    },
+    "pageSizeCapped": {
+      "type": "boolean",
+      "description": "Indicates whether the requested page size exceeded the server maximum and was capped."
+    },
+    "query": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Search term applied to filter the products, or null if omitted."
+    },
+    "nextPageToken": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "Cursor token used to fetch the subsequent page of products, or null if none remain."
+    }
+  },
+  "description": "Paginated list of products matching the request parameters."
+}

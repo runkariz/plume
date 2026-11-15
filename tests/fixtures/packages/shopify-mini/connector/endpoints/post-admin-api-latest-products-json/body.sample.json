@@ -1,0 +1,44 @@
+{
+  "product": {
+    "body_html": "<body_html>",
+    "images": [
+      {
+        "attachment": "<attachment>",
+        "src": "<src>"
+      }
+    ],
+    "metafields": [
+      {
+        "key": "<key>",
+        "namespace": "<namespace>",
+        "type": "<type>",
+        "value": "<value>"
+      }
+    ],
+    "metafields_global_description_tag": "<metafields_global_description_tag>",
+    "metafields_global_title_tag": "<metafields_global_title_tag>",
+    "options": [
+      {
+        "name": "<name>",
+        "values": [
+          "<string>"
+        ]
+      }
+    ],
+    "product_type": "<product_type>",
+    "published": false,
+    "status": "active",
+    "tags": "<tags>",
+    "title": "<title>",
+    "variants": [
+      {
+        "option1": "<option1>",
+        "option2": "<option2>",
+        "option3": "<option3>",
+        "price": "<price>",
+        "sku": "<sku>"
+      }
+    ],
+    "vendor": "<vendor>"
+  }
+}

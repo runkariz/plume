@@ -1,0 +1,23 @@
+{
+  "product": {
+    "body_html": "<body_html>",
+    "id": 0,
+    "images": [
+      {}
+    ],
+    "metafields": [
+      {}
+    ],
+    "metafields_global_description_tag": "<metafields_global_description_tag>",
+    "metafields_global_title_tag": "<metafields_global_title_tag>",
+    "product_type": "<product_type>",
+    "published": false,
+    "status": "active",
+    "tags": "<tags>",
+    "title": "<title>",
+    "variants": [
+      {}
+    ],
+    "vendor": "<vendor>"
+  }
+}

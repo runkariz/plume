@@ -1,0 +1,89 @@
+{
+  "title": "LineItem",
+  "description": "The product variant line item or custom line item associated to the draft order.",
+  "x-source-url": "https://shopify.dev/docs/api/admin-rest/latest/resources/draftorder",
+  "x-complete": true,
+  "type": "object",
+  "properties": {
+    "custom": {
+      "type": "boolean",
+      "description": "Whether this is a custom line item or a product variant line item. If set to true indicates a custom line item. If set to false indicates a product variant line item."
+    },
+    "id": {
+      "type": "integer",
+      "description": "The ID of the line item."
+    },
+    "variant_id": {
+      "type": "integer",
+      "description": "The ID of the product variant corresponding to the line item. Required for a product variant line item. Set to null for a custom line item."
+    },
+    "product_id": {
+      "type": "integer",
+      "description": "The ID of the product corresponding to the line item’s product variant."
+    },
+    "name": {
+      "type": "string",
+      "description": "The name of the product."
+    },
+    "variant_title": {
+      "type": "string",
+      "description": "The title of the product variant. Defaults to Custom for custom line items created via the API."
+    },
+    "vendor": {
+      "type": "string",
+      "description": "The vendor."
+    },
+    "quantity": {
+      "type": "integer",
+      "description": "The number of products that were purchased."
+    },
+    "gift_card": {
+      "type": "boolean",
+      "description": "Indicates if the product is a gift card. Valid values: true or false."
+    },
+    "fulfillment_service": {
+      "type": "string",
+      "description": "The service provider responsible for fulfillment. Valid values are either manual or the name of the provider, for example amazon, shipwire. Defaults to manual for custom line items."
+    },
+    "properties": {
+      "type": "array",
+      "description": "An array of custom information for an item that has been added to the draft order, often used to provide product customization options. Copied to created order when draft order is completed."
+    },
+    "applied_discount": {
+      "$ref": "applieddiscount.schema.json",
+      "description": "The discount applied to the line item."
+    },
+    "tax_lines": {
+      "type": "array",
+      "description": "The calculated rate and amount of taxes for the line item.",
+      "items": {
+        "$ref": "taxline.schema.json",
+        "description": "A tax line detail for the line item."
+      }
+    },
+    "title": {
+      "type": "string",
+      "description": "The title of the product or variant. Applicable only to custom line items. Required field."
+    },
+    "price": {
+      "type": "string",
+      "description": "The price of the item before discounts have been applied. Applicable only to custom line items. Required field."
+    },
+    "grams": {
+      "type": "integer",
+      "description": "The weight of the item in grams. Applicable only to custom line items. If not specified, defaults to 0."
+    },
+    "requires_shipping": {
+      "type": "boolean",
+      "description": "Whether the fulfillment requires shipping. Applicable only to custom line items. Valid values: true or false."
+    },
+    "sku": {
+      "type": "string",
+      "description": "A unique identifier for the item in the fulfillment. Applicable only to custom line items."
+    },
+    "taxable": {
+      "type": "boolean",
+      "description": "Whether the product is taxable. Applicable only to custom line items."
+    }
+  }
+}

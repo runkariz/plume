@@ -1,0 +1,28 @@
+{
+  "product": {
+    "admin_graphql_api_id": "<admin_graphql_api_id>",
+    "body_html": "<body_html>",
+    "created_at": "<created_at>",
+    "handle": "<handle>",
+    "id": 0,
+    "image": {},
+    "images": [
+      {}
+    ],
+    "options": [
+      {}
+    ],
+    "product_type": "<product_type>",
+    "published_at": "<published_at>",
+    "published_scope": "<published_scope>",
+    "status": "<status>",
+    "tags": "<tags>",
+    "template_suffix": "<template_suffix>",
+    "title": "<title>",
+    "updated_at": "<updated_at>",
+    "variants": [
+      {}
+    ],
+    "vendor": "<vendor>"
+  }
+}

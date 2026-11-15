@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "string",
+      "description": "Short error code indicating the resource or pagination cursor is gone."
+    },
+    "message": {
+      "type": "string",
+      "description": "Human-readable details explaining that the pagination cursor has expired."
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Error",
+  "description": "Error response returned when the requested page token has expired."
+}

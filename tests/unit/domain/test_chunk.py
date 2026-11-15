@@ -1,0 +1,49 @@
+import pytest
+
+from plume.domain.knowledge.chunk import chunk_document
+from plume.domain.knowledge.document import Document, DocumentKind
+
+
+def _doc(kind: DocumentKind, text: str) -> Document:
+    return Document(doc_id=f"{kind.value}:x", kind=kind, title="Title", text=text)
+
+
+def test_endpoint_is_one_chunk() -> None:
+    chunks = chunk_document(_doc(DocumentKind.ENDPOINT, "# A\n\nbody\n\n## Params\n- x"))
+    assert [c.chunk_id for c in chunks] == ["endpoint:x#0"]
+    assert chunks[0].embed_text.startswith("Title\n\n")
+
+
+def test_guide_splits_at_headings() -> None:
+    chunks = chunk_document(_doc(DocumentKind.GUIDE, "intro\n\n# One\naaa\n\n## Two\nbbb"))
+    assert [c.text for c in chunks] == ["intro", "# One\naaa", "## Two\nbbb"]
+    assert [c.ordinal for c in chunks] == [0, 1, 2]
+
+
+def test_long_text_is_split_to_size() -> None:
+    text = "\n\n".join(f"paragraph {i} " + "x" * 150 for i in range(20))
+    chunks = chunk_document(_doc(DocumentKind.ENDPOINT, text), max_chars=400)
+    assert len(chunks) > 1
+    assert all(len(c.text) <= 400 for c in chunks)
+    assert "".join(c.text for c in chunks).replace("\n", "") == text.replace("\n", "")
+
+
+def test_one_huge_paragraph_is_cut() -> None:
+    chunks = chunk_document(_doc(DocumentKind.MODEL, "y" * 1000), max_chars=300)
+    assert [len(c.text) for c in chunks] == [300, 300, 300, 100]
+
+
+def test_chunking_is_deterministic_and_hashes_differ_by_role() -> None:
+    doc = _doc(DocumentKind.GUIDE, "# A\nsame")
+    a, b = chunk_document(doc), chunk_document(doc)
+    assert a == b
+    assert a[0].embed_hash != a[0].content_hash
+
+
+def test_empty_text_gives_the_title() -> None:
+    assert chunk_document(_doc(DocumentKind.GUIDE, "  "))[0].text == "Title"
+
+
+def test_tiny_max_chars_refused() -> None:
+    with pytest.raises(ValueError, match="at least"):
+        chunk_document(_doc(DocumentKind.GUIDE, "x"), max_chars=10)

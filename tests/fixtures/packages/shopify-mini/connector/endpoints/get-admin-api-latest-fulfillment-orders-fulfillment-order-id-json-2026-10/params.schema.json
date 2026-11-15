@@ -1,0 +1,25 @@
+{
+  "title": "Parameters",
+  "type": "object",
+  "properties": {
+    "include_financial_summaries": {
+      "type": "boolean",
+      "description": "Include the financial summary data for each line item, if available.",
+      "default": false,
+      "examples": [
+        true
+      ],
+      "title": "Include Financial Summaries"
+    },
+    "include_order_reference_fields": {
+      "type": "boolean",
+      "description": "Indicates whether the order reference fields should be returned in the result.",
+      "default": false,
+      "examples": [
+        true
+      ],
+      "title": "Include Order Reference Fields"
+    }
+  },
+  "description": "Query parameters for customizing the returned fulfillment order details."
+}

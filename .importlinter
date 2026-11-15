@@ -1,0 +1,55 @@
+[importlinter]
+root_package = plume
+include_external_packages = True
+
+[importlinter:contract:layers]
+name = Layers: bootstrap > interfaces | infrastructure > application > domain
+type = layers
+layers =
+    plume.bootstrap
+    plume.interfaces | plume.infrastructure
+    plume.application
+    plume.domain
+
+[importlinter:contract:domain-pure]
+name = Domain imports only the standard library
+type = forbidden
+source_modules =
+    plume.domain
+forbidden_modules =
+    pydantic
+    pydantic_settings
+    sqlalchemy
+    psycopg
+    alembic
+    typer
+    fastapi
+    starlette
+    mcp
+
+[importlinter:contract:application-pure]
+name = Application imports no framework, driver or settings library
+type = forbidden
+source_modules =
+    plume.application
+forbidden_modules =
+    pydantic
+    pydantic_settings
+    sqlalchemy
+    psycopg
+    alembic
+    typer
+    fastapi
+    starlette
+    mcp
+
+[importlinter:contract:interfaces-no-infrastructure]
+name = Interfaces never import infrastructure
+type = forbidden
+source_modules =
+    plume.interfaces
+forbidden_modules =
+    plume.infrastructure
+    sqlalchemy
+    psycopg
+    alembic

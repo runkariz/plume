@@ -1,0 +1,30 @@
+{
+  "title": "Parameters",
+  "type": "object",
+  "properties": {
+    "assignment_status": {
+      "type": "string",
+      "description": "The assignment status of the fulfillment orders that should be returned. If assignment_status parameter isn't provided, then the query will return all assigned fulfillment orders, except those with the CLOSED status.",
+      "enum": [
+        "fulfillment_unsubmitted",
+        "fulfillment_requested",
+        "fulfillment_accepted",
+        "cancellation_requested"
+      ],
+      "examples": [
+        "cancellation_requested"
+      ],
+      "title": "Assignment Status"
+    },
+    "location_ids[]": {
+      "type": "array",
+      "description": "The IDs of the assigned locations of the fulfillment orders that should be returned. If not provided, returns all fulfillment orders assigned to the shop locations managed by the app.",
+      "examples": [
+        [24826418
+        ]
+      ],
+      "title": "Location IDs"
+    }
+  },
+  "description": "Query parameters to filter assigned fulfillment orders by status or location."
+}

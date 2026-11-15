@@ -1,0 +1,33 @@
+{
+  "title": "Order",
+  "x-source-url": "file:///uploaded/0162daf229a5/catalog.openapi.json",
+  "x-complete": true,
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier of the order."
+    },
+    "number": {
+      "type": "string",
+      "description": "Human-readable reference or tracking number for the order."
+    },
+    "customer": {
+      "type": "string",
+      "description": "Name or identifier of the customer who placed the order."
+    },
+    "total": {
+      "type": "string",
+      "description": "Total monetary amount billed for the order."
+    },
+    "currency": {
+      "type": "string",
+      "description": "Three-letter currency code for the order total."
+    },
+    "shop": {
+      "type": "string",
+      "description": "Identifier or name of the shop where the order was placed."
+    }
+  },
+  "description": "Details of a customer purchase order."
+}

@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "string",
+      "description": "Error code describing the bad request."
+    },
+    "message": {
+      "type": "string",
+      "description": "Explanation of why the request could not be processed."
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Error",
+  "description": "Error response returned when the request parameters are invalid."
+}

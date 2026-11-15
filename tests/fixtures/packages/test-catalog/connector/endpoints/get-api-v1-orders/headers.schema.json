@@ -1,0 +1,19 @@
+{
+  "title": "Headers",
+  "type": "object",
+  "properties": {
+    "X-Catalog-Key": {
+      "type": "string",
+      "description": "Authentication token",
+      "default": "{{ auth?.apikey?.api_key }}",
+      "examples": [
+        "{{ auth?.apikey?.api_key }}"
+      ],
+      "title": "Catalog Key"
+    }
+  },
+  "required": [
+    "X-Catalog-Key"
+  ],
+  "description": "HTTP request headers required to authenticate the orders request."
+}

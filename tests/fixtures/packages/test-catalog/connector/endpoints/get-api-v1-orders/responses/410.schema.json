@@ -1,0 +1,16 @@
+{
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "string",
+      "description": "Error classification code indicating the resource or token is gone."
+    },
+    "message": {
+      "type": "string",
+      "description": "Details explaining that the requested page token has expired."
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Error",
+  "description": "Response returned when the pagination cursor has expired."
+}

@@ -1,0 +1,18 @@
+{
+  "title": "Variables",
+  "type": "object",
+  "properties": {
+    "fulfillment_order_id": {
+      "type": "string",
+      "description": "The ID of the fulfillment order.",
+      "examples": [
+        "1046000804"
+      ],
+      "title": "Fulfillment Order ID"
+    }
+  },
+  "required": [
+    "fulfillment_order_id"
+  ],
+  "description": "Path parameters identifying the target fulfillment order."
+}
