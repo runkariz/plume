@@ -397,6 +397,7 @@ class GenerateResponse(Schema):
     context_url: str
     claude_prompt: str
     mcp_url: str
+    maintainer_mcp_url: str
 
 
 class DraftIssue(Schema):

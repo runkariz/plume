@@ -133,9 +133,15 @@ class SuggestConcepts:
         summaries, _ = self._index.browse(r.build.build_id, (), None, 100_000, 0)
         groups = concept_docs(summaries)
         for key, docs in groups.items():
-            first = docs[0]
-            name = first.resource if first.kind is DocumentKind.ENDPOINT else first.title
-            names.setdefault(key, name or key)
+            # Prefer a document whose own name gives the key (a model "Order", an endpoint with
+            # resource "Order"); else the key itself, title-cased ("orders" path -> "Order").
+            for d in docs:
+                own = (d.resource if d.kind is DocumentKind.ENDPOINT else d.title) or ""
+                own = own.split(" / ")[-1]
+                if concept_key(own) == key:
+                    names.setdefault(key, own)
+                    break
+            names.setdefault(key, key.capitalize())
         owner_key = {d.doc_id: k for k, docs in groups.items() for d in docs}
         words: set[str] = set()
         leaves: dict[str, set[str]] = defaultdict(set)

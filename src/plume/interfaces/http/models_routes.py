@@ -81,6 +81,7 @@ def models_router(
             context_url=f"/v1/models/sessions/{session.session_id}/context",
             claude_prompt=prompt,
             mcp_url=claude_mcp_url,
+            maintainer_mcp_url=claude_mcp_url.removesuffix("/mcp") + "/maintainer/mcp",
         )
 
     @router.get("/v1/models/sessions/{session_id}/context", responses=errors)

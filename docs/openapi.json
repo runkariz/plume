@@ -1498,6 +1498,10 @@
             "title": "Inputs",
             "type": "array"
           },
+          "maintainerMcpUrl": {
+            "title": "Maintainermcpurl",
+            "type": "string"
+          },
           "mcpUrl": {
             "title": "Mcpurl",
             "type": "string"
@@ -1533,7 +1537,8 @@
           "inputs",
           "contextUrl",
           "claudePrompt",
-          "mcpUrl"
+          "mcpUrl",
+          "maintainerMcpUrl"
         ],
         "title": "GenerateResponse",
         "type": "object"
