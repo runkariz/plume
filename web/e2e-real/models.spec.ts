@@ -2,7 +2,7 @@ import { expect, type APIRequestContext, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expectNoSeriousA11y, settle, shot, test, THEMES } from '../e2e/helpers';
+import { expectNoSeriousA11y, openControls, settle, shot, test, THEMES } from '../e2e/helpers';
 
 /**
  * Canonical models against the real API (P5): pick two loaded APIs, see the suggestions, open a generation
@@ -154,9 +154,23 @@ test('a maintainer who generates on the server sees clearly when the server has 
   await expect(
     orderRow(page, idx).getByRole('button', { name: 'Use Claude instead to generate Order' }),
   ).toBeVisible();
+  // the server may say up front that it cannot generate (me.generation === false): then the button already says
+  // so and goes straight to Claude; otherwise the failed request is explained under the concept that was clicked
+  const me = (await (await request.get(`${API}/v1/maintainer/me`, { headers: auth })).json()) as {
+    generation?: boolean;
+  };
+  if (me.generation === false) {
+    await expect(
+      orderRow(page, idx).getByRole('button', { name: 'Generate Order with Claude' }),
+    ).toBeVisible();
+    await generate(page, idx).click();
+    await expect(page.getByRole('region', { name: 'Generation session' })).toBeVisible();
+    return;
+  }
   await generate(page, idx).click();
   const alert = page.getByRole('alert').filter({ hasText: 'not configured' });
   await expect(alert).toContainText('Server-side generation is not configured on this Plume');
+  await expect(alert).toBeInViewport();
   await expect(alert.getByRole('button', { name: 'Use Claude instead' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Generation on the server' })).toHaveCount(0);
   await settle(page);
@@ -453,7 +467,8 @@ for (const theme of THEMES) {
       await shot(page, 'w7-real-model-view', theme);
 
       // the mapping list drives the detail panel (the keyboard route into the graph)
-      await page.getByRole('combobox', { name: 'Mapping' }).selectOption({ index: 1 });
+      await openControls(page); // closed by default below 1400 px
+      await page.getByRole('option').nth(1).click();
       await expect(page.getByRole('heading', { name: / ← / })).toBeVisible();
     });
   });

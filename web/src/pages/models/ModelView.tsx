@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
 import { ApiError, type ModelSnapshot } from '@/api/types';
@@ -17,9 +17,15 @@ import {
 import { shortBuild } from '@/lib/format';
 import { apiLabel } from '@/lib/names';
 import { richText } from '@/lib/richText';
-import { defaultSelection, type Selection } from './graph';
-import { MappingGraph } from './MappingGraph';
-import { docHref, MappingTable } from './MappingTable';
+import { MappingTable } from './MappingTable';
+import { ModelWorkbench } from './ModelWorkbench';
+import {
+  effectiveSelection,
+  parseModelView,
+  toggleApi,
+  withModelView,
+  type ModelViewState,
+} from './modelView';
 import {
   LineageHistory,
   LineageLine,
@@ -37,85 +43,6 @@ export function claudePrompt(s: ModelSnapshot): string {
     `Use the Plume connector. Call get_snapshot with id "${s.id}": the canonical ${s.name} model for ${apis}. ` +
     `It was generated and is unverified, so check each mapping with search_docs, get_endpoint and find_field ` +
     `before you write any mapping code.`
-  );
-}
-
-function MappingDetail({ snap, sel }: { snap: ModelSnapshot; sel: Selection }) {
-  const field = snap.fields.find((f) => f.name === sel.field);
-  const api = snap.inputs.find((a) => a.id === sel.apiId);
-  const src = field?.sources[sel.apiId];
-  const support = field?.support[sel.apiId];
-  if (!field || !api) return null;
-  return (
-    <>
-      <div className="rowhead">
-        <h2 className="mono-h">
-          {field.name} ← {api.shortName}
-        </h2>
-        {support === 'derived' ? (
-          <Chip tone="warn">
-            derived: {src?.join?.length ? 'join' : src?.transform ? 'transform' : 'combine'}
-          </Chip>
-        ) : support === 'supported' ? (
-          <Chip tone="ok">direct</Chip>
-        ) : (
-          <Chip>not supported</Chip>
-        )}
-      </div>
-      {field.description ? <p className="muted small">{field.description}</p> : null}
-      {!src ? (
-        <p className="muted">{api.shortName} has no equivalent field.</p>
-      ) : (
-        <>
-          {src.fetch ? (
-            <div className="dl">
-              <div className="dl-k">Fetch</div>
-              <div className="mono">{src.fetch.endpoint}</div>
-            </div>
-          ) : null}
-          <div className="dl">
-            <div className="dl-k">Source</div>
-            <div className="mono">{src.paths.map((p) => p.path).join(', ')}</div>
-          </div>
-          {src.transform ? (
-            <div className="dl">
-              <div className="dl-k">Transform</div>
-              <div className="mono">{src.transform}</div>
-            </div>
-          ) : null}
-          {src.join?.length ? (
-            <div className="dl">
-              <div className="dl-k">Join</div>
-              {src.join.map((j) => (
-                <div key={j} className="mono">
-                  {j}
-                </div>
-              ))}
-            </div>
-          ) : null}
-          {src.evidence?.map((e) => (
-            <blockquote key={e.quote} className="evidence">
-              <p>“{e.quote}”</p>
-              <cite className="faint small">
-                {e.docId ? <Link to={docHref(sel.apiId, e.docId)}>{e.docId}</Link> : null}
-                {e.docId && e.anchor ? ' · ' : ''}
-                {e.anchor}
-              </cite>
-            </blockquote>
-          ))}
-        </>
-      )}
-      {snap.citations.missing.length === 0 ? (
-        <p className="cite ok">
-          All {snap.citations.checked} cited paths found in the pinned builds
-        </p>
-      ) : (
-        <p className="cite warn">
-          {snap.citations.checked - snap.citations.found} of {snap.citations.checked} cited paths
-          were not found and were dropped: {snap.citations.missing.join(', ')}
-        </p>
-      )}
-    </>
   );
 }
 
@@ -137,12 +64,6 @@ export function ModelView() {
     [client, snapshotId],
   );
   const { state, retry } = useAsync(load);
-  const [picked, setPicked] = useState<Selection | null>(null);
-  const [focusNonce, setFocusNonce] = useState(0);
-  const [mapFilter, setMapFilter] = useState('');
-  // null = the default for the model size (a big model opens as a table, with the graph focused on one field)
-  const [viewChoice, setViewChoice] = useState<'table' | 'graph' | null>(null);
-  const [scopeChoice, setScopeChoice] = useState<'field' | 'all' | null>(null);
   const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
   // right after someone without a token created this model: the owner key, shown once (then dropped from history)
   const location = useLocation();
@@ -152,13 +73,30 @@ export function ModelView() {
   );
   const [ownerKeyOpen, setOwnerKeyOpen] = useState(ownerKey !== null);
   useEffect(() => {
-    if (ownerKey) navigate(location.pathname, { replace: true, state: null });
+    if (ownerKey) navigate(location.pathname + location.search, { replace: true, state: null });
     // once, on arrival
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const snap = state.status === 'ready' ? state.data : null;
-  const selection = useMemo(() => picked ?? (snap ? defaultSelection(snap) : null), [picked, snap]);
+  // the view, the filter, the checked APIs and the selected mapping are in the URL: a link keeps them
+  const [params, setParams] = useSearchParams();
+  const mv = useMemo(() => (snap ? parseModelView(params, snap) : null), [params, snap]);
+  const latest = useRef(params);
+  useEffect(() => {
+    latest.current = params;
+  }, [params]);
+  // every change starts from the latest URL (two quick clicks must both count)
+  const update = useCallback(
+    (f: (v: ModelViewState) => ModelViewState) => {
+      if (!snap) return;
+      const next = withModelView(latest.current, f(parseModelView(latest.current, snap)));
+      latest.current = next;
+      setParams(next, { replace: true });
+    },
+    [snap, setParams],
+  );
+  const selection = snap && mv ? effectiveSelection(snap, mv) : null;
 
   async function copy(text: string) {
     try {
@@ -196,34 +134,10 @@ export function ModelView() {
     );
 
   const prompt = claudePrompt(snap);
-  const options = snap.fields.flatMap((f) =>
-    snap.inputs
-      .filter((a) => f.support[a.id] && f.support[a.id] !== 'unsupported')
-      .map((a) => ({ value: `${f.name}|${a.id}`, label: `${f.name} ← ${a.shortName}` })),
-  );
   const big = snap.fields.length > BIG_MODEL;
-  const view = viewChoice ?? (big ? 'table' : 'graph');
-  const scope = scopeChoice ?? (big ? 'field' : 'all');
-  const focusedField =
-    scope === 'field' && selection
-      ? snap.fields.find((f) => f.name === selection.field)
-      : undefined;
-  const graphSnap = focusedField
-    ? {
-        ...snap,
-        fields: [focusedField],
-        inputs: snap.inputs.filter(
-          (a) => (focusedField.support[a.id] ?? 'unsupported') !== 'unsupported',
-        ),
-      }
-    : snap;
-  const filterText = mapFilter.trim().toLowerCase();
-  const shownOptions = options.filter(
-    (o) =>
-      !filterText ||
-      o.label.toLowerCase().includes(filterText) ||
-      o.value === (selection ? `${selection.field}|${selection.apiId}` : ''),
-  );
+  // null in the URL = the default for the model size (a big model opens as a table, with the graph on one field)
+  const view = mv?.view ?? (big ? 'table' : 'graph');
+  const scope = mv?.scope ?? (big ? 'field' : 'all');
 
   return (
     <>
@@ -330,7 +244,7 @@ export function ModelView() {
         <Segmented
           label="View"
           value={view}
-          onChange={setViewChoice}
+          onChange={(v) => update((s0) => ({ ...s0, view: v }))}
           options={[
             { value: 'table', label: 'Table' },
             { value: 'graph', label: 'Graph' },
@@ -341,7 +255,7 @@ export function ModelView() {
             label="Graph shows"
             variant="pills"
             value={scope}
-            onChange={setScopeChoice}
+            onChange={(v) => update((s0) => ({ ...s0, scope: v }))}
             options={[
               { value: 'field', label: 'Selected field' },
               { value: 'all', label: 'Whole model' },
@@ -352,66 +266,28 @@ export function ModelView() {
           {view === 'table'
             ? 'Every field and how each API fills it, with its citations.'
             : scope === 'field'
-              ? 'Pick a field in the Mapping list below to see it here.'
-              : 'Scroll to pan, Ctrl or ⌘ + scroll to zoom. Pick a mapping below to zoom to it.'}
+              ? 'Pick a mapping in the list on the left to see it here.'
+              : 'Scroll to pan, Ctrl or ⌘ + scroll to zoom. Pick a mapping in the list on the left to zoom to it.'}
         </span>
       </div>
       {view === 'table' ? (
         <MappingTable snapshot={snap} />
-      ) : (scope === 'field' && !focusedField) || graphSnap.inputs.length === 0 ? (
-        <p className="muted state">No API fills this field.</p>
       ) : (
-        <MappingGraph
-          key={`${scope}:${focusedField?.name ?? 'all'}`}
-          snapshot={graphSnap}
+        <ModelWorkbench
+          snap={snap}
+          scope={scope}
+          readable={big}
+          text={mv?.f ?? ''}
+          show={mv?.show ?? null}
           selection={selection}
-          onSelect={setPicked}
-          focusNonce={focusNonce}
-          readable={big && scope === 'all'}
+          onText={(f) => update((s0) => ({ ...s0, f }))}
+          onToggleApi={(id, on) =>
+            update((s0) => ({ ...s0, show: toggleApi(snap, s0.show, id, on) }))
+          }
+          onSelect={(sel) => update((s0) => ({ ...s0, selection: sel }))}
         />
       )}
       <div className={`model-cols${view === 'table' ? ' two-up' : ''}`}>
-        {view === 'graph' ? (
-          <Card className="pad">
-            {options.length > 20 ? (
-              <div className="map-filter">
-                <label htmlFor="map-filter" className="sr-only">
-                  Filter mappings
-                </label>
-                <input
-                  id="map-filter"
-                  type="search"
-                  className="input"
-                  placeholder={`Filter ${options.length} mappings by field or API`}
-                  value={mapFilter}
-                  onChange={(e) => setMapFilter(e.target.value)}
-                />
-                <p className="faint small" aria-live="polite">
-                  {shownOptions.length} of {options.length} mappings
-                </p>
-              </div>
-            ) : null}
-            <label className="map-pick">
-              <span className="sr-only">Mapping</span>
-              <select
-                className="input"
-                value={selection ? `${selection.field}|${selection.apiId}` : ''}
-                onChange={(e) => {
-                  const [field = '', apiId = ''] = e.target.value.split('|');
-                  setPicked({ field, apiId });
-                  setFocusNonce((n) => n + 1); // a pick from the list also zooms the graph to it
-                }}
-              >
-                {shownOptions.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {selection ? <MappingDetail snap={snap} sel={selection} /> : null}
-          </Card>
-        ) : null}
         <ShareCard snap={snap} />
         <ReviseCard snap={snap} />
         <Card className="pad">

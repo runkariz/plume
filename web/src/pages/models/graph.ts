@@ -2,18 +2,20 @@ import type { Edge, Node } from '@xyflow/react';
 import type { ModelSnapshot } from '@/api/types';
 
 export const NODE = {
-  groupW: 400,
-  fieldW: 360,
+  // narrower than the first version (1500 units): with the control box and the detail panel the canvas is about
+  // 900 px wide, and the graph has to stay readable there
+  groupW: 360,
+  fieldW: 320,
   fieldH: 62,
   gap: 28,
-  canonW: 320,
+  canonW: 280,
   canonH: 96,
   canonGap: 24,
   groupPadTop: 56,
   groupPadBottom: 24,
   groupGap: 36,
-  centerX: 560,
-  rightX: 1040,
+  centerX: 470,
+  rightX: 900,
 } as const;
 
 export interface FieldNodeData extends Record<string, unknown> {
@@ -48,6 +50,8 @@ export interface GroupNodeData extends Record<string, unknown> {
 export interface EdgeData extends Record<string, unknown> {
   field: string;
   apiId: string;
+  /** The source path this edge goes to (what the name filter looks at besides the field). */
+  path: string;
   derived: boolean;
 }
 
@@ -55,7 +59,7 @@ export type ModelNode = Node<FieldNodeData | CanonNodeData | GroupNodeData>;
 export type ModelEdge = Edge<EdgeData>;
 
 /** Edge labels stay short: transforms in real models are whole sentences (the table and the detail card show them in full). */
-export const MAX_EDGE_LABEL = 32;
+export const MAX_EDGE_LABEL = 26;
 export function edgeLabel(transform?: string | null, join?: string[]): string | undefined {
   const text = transform?.trim() || (join?.length ? 'join' : undefined);
   if (!text) return undefined;
@@ -70,7 +74,15 @@ const groupNodeId = (apiId: string) => `group:${apiId}`;
  * Lays the snapshot out like mockup 11: the first API on the left, the canonical fields in the middle,
  * the other APIs stacked on the right. Pure and deterministic, so it is unit tested without React Flow.
  */
-export function buildGraph(snap: ModelSnapshot): { nodes: ModelNode[]; edges: ModelEdge[] } {
+export function buildGraph(
+  snap: ModelSnapshot,
+  opts: { compact?: boolean } = {},
+): { nodes: ModelNode[]; edges: ModelEdge[] } {
+  // compact: one field and the APIs behind it. The columns come closer so the field can be drawn larger, and the
+  // edge labels are left out (the detail panel says the transform in full).
+  const L = opts.compact
+    ? { ...NODE, fieldW: 260, canonW: 220, groupW: 300, centerX: 340, rightX: 640 }
+    : NODE;
   const nodes: ModelNode[] = [];
   const edges: ModelEdge[] = [];
   const canonY = (i: number) => 24 + i * (NODE.canonH + NODE.canonGap);
@@ -80,8 +92,8 @@ export function buildGraph(snap: ModelSnapshot): { nodes: ModelNode[]; edges: Mo
     nodes.push({
       id: canonNodeId(f.name),
       type: 'canonical',
-      position: { x: NODE.centerX, y: canonY(i) + NODE.groupPadTop - 24 },
-      width: NODE.canonW,
+      position: { x: L.centerX, y: canonY(i) + NODE.groupPadTop - 24 },
+      width: L.canonW,
       height: NODE.canonH,
       draggable: false,
       data: {
@@ -105,7 +117,7 @@ export function buildGraph(snap: ModelSnapshot): { nodes: ModelNode[]; edges: Mo
   let rightCursor = 0;
   snap.inputs.forEach((api, apiIndex) => {
     const left = apiIndex === 0;
-    const x = left ? 0 : NODE.rightX;
+    const x = left ? 0 : L.rightX;
     // unique source paths in order of first use, each aligned to its first canonical row when on the left
     const used: { path: string; type: string; row: number }[] = [];
     snap.fields.forEach((f, row) => {
@@ -134,7 +146,7 @@ export function buildGraph(snap: ModelSnapshot): { nodes: ModelNode[]; edges: Mo
       id: groupNodeId(api.id),
       type: 'apiGroup',
       position: { x: x - 20, y: top },
-      width: NODE.groupW,
+      width: L.groupW,
       height,
       draggable: false,
       selectable: false,
@@ -155,7 +167,7 @@ export function buildGraph(snap: ModelSnapshot): { nodes: ModelNode[]; edges: Mo
         id: fieldNodeId(api.id, u.path),
         type: 'apiField',
         position: { x, y: positions[i] ?? 0 },
-        width: NODE.fieldW,
+        width: L.fieldW,
         height: NODE.fieldH,
         draggable: false,
         data: { kind: 'api-field', apiId: api.id, path: u.path, type: u.type },
@@ -179,8 +191,8 @@ export function buildGraph(snap: ModelSnapshot): { nodes: ModelNode[]; edges: Mo
           source: left ? apiNode : canonNodeId(f.name),
           target: left ? canonNodeId(f.name) : apiNode,
           type: 'default',
-          label: derived ? edgeLabel(src.transform, src.join) : undefined,
-          data: { field: f.name, apiId: api.id, derived },
+          label: derived && !opts.compact ? edgeLabel(src.transform, src.join) : undefined,
+          data: { field: f.name, apiId: api.id, path: p.path, derived },
           style: {
             stroke: api.logo.color,
             strokeWidth: 1.8,
@@ -215,4 +227,89 @@ export function defaultSelection(snap: ModelSnapshot): Selection | null {
     }
   }
   return first;
+}
+
+/** What the graph greys out: nodes and edges that are filtered away or belong to an unchecked API. */
+export interface Dimming {
+  nodes: Set<string>;
+  edges: Set<string>;
+}
+
+/**
+ * Nothing is hidden, only greyed out, so the context stays: an edge is active when its API is checked and, with a
+ * name filter, its canonical field or its source path contains the text. A node is active when an active edge
+ * touches it (a canonical field also when its own name matches); a group follows its API's checkbox.
+ * `checked` null means every API is checked.
+ */
+export function dimming(
+  g: { nodes: ModelNode[]; edges: ModelEdge[] },
+  opts: { checked: ReadonlySet<string> | null; text: string },
+): Dimming {
+  const text = opts.text.trim().toLowerCase();
+  const on = (apiId: string) => opts.checked === null || opts.checked.has(apiId);
+  const hit = (...values: string[]) =>
+    text === '' || values.some((v) => v.toLowerCase().includes(text));
+  const activeEdges = new Set<string>();
+  const touched = new Set<string>();
+  for (const e of g.edges) {
+    const d = e.data;
+    if (d && on(d.apiId) && hit(d.field, d.path)) {
+      activeEdges.add(e.id);
+      touched.add(e.source);
+      touched.add(e.target);
+    }
+  }
+  const nodes = new Set<string>();
+  for (const n of g.nodes) {
+    const d = n.data;
+    if (d.kind === 'group') {
+      if (!on(d.apiId)) nodes.add(n.id);
+    } else if (d.kind === 'canonical') {
+      const edgeless = !g.edges.some((e) => e.source === n.id || e.target === n.id);
+      const active =
+        touched.has(n.id) || (text !== '' && hit(d.field)) || (edgeless && text === '');
+      if (!active) nodes.add(n.id);
+    } else if (!touched.has(n.id)) {
+      nodes.add(n.id);
+    }
+  }
+  const edges = new Set(g.edges.filter((e) => !activeEdges.has(e.id)).map((e) => e.id));
+  return { nodes, edges };
+}
+
+/** One row of the mapping list: a canonical field and one API that fills it. */
+export interface MappingRow {
+  field: string;
+  apiId: string;
+  apiName: string;
+  kind: 'supported' | 'derived';
+  paths: string[];
+}
+
+export function mappingRows(snap: ModelSnapshot): MappingRow[] {
+  return snap.fields.flatMap((f) =>
+    snap.inputs.flatMap((a) => {
+      const support = f.support[a.id];
+      if (support !== 'supported' && support !== 'derived') return [];
+      return [
+        {
+          field: f.name,
+          apiId: a.id,
+          apiName: a.shortName,
+          kind: support,
+          paths: (f.sources[a.id]?.paths ?? []).map((p) => p.path),
+        },
+      ];
+    }),
+  );
+}
+
+/** A row matches the name filter by its canonical field or any of its source paths. */
+export function rowMatches(row: MappingRow, text: string): boolean {
+  const t = text.trim().toLowerCase();
+  return (
+    t === '' ||
+    row.field.toLowerCase().includes(t) ||
+    row.paths.some((p) => p.toLowerCase().includes(t))
+  );
 }

@@ -549,7 +549,9 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
       }),
     ),
     http.get(`${base}/v1/maintainer/me`, ({ request }) =>
-      isMaintainer(request) ? HttpResponse.json({ name: 'maintainer' }) : unauthorized(),
+      isMaintainer(request)
+        ? HttpResponse.json({ name: 'maintainer', generation: true })
+        : unauthorized(),
     ),
     http.post(`${base}/v1/packages`, async ({ request }) => {
       if (!isMaintainer(request)) return unauthorized();

@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test';
-import { expectNoSeriousA11y, settle, shot, test, THEMES } from './helpers';
+import { expectNoSeriousA11y, settle, shot, test, THEMES, pickMapping } from './helpers';
 
 for (const theme of THEMES) {
   test.describe(`canonical models (${theme})`, () => {
@@ -116,15 +116,34 @@ test('picking a mapping from the list zooms the graph to it, and the wheel scrol
   await expect(page.locator('.react-flow__node').first()).toBeVisible();
   const overview = await scale();
 
-  await page
-    .getByRole('combobox', { name: 'Mapping' })
-    .selectOption({ label: 'lead_time_days ← Mirakl' });
+  await pickMapping(page, /^lead_time_days ← Mirakl/);
   await expect(page.getByRole('heading', { name: 'lead_time_days ← Mirakl' })).toBeVisible();
+  // the view moves to the picked field and the field is in plain sight: on the canvas, not under the control box
   await expect
-    .poll(scale, { message: 'the view zooms to the picked field' })
-    .toBeGreaterThan(overview * 1.05);
+    .poll(scale, { message: 'the view moved to the picked field' })
+    .not.toBeCloseTo(overview, 3);
+  const canvasBox = await page.locator('.flow').boundingBox();
+  const controlsBox = await page
+    .getByRole('complementary', { name: 'Graph controls' })
+    .boundingBox();
+  const picked = await page.locator('.react-flow__node-canonical.selected').boundingBox();
+  expect(canvasBox && controlsBox && picked).toBeTruthy();
+  expect(picked?.x ?? 0).toBeGreaterThanOrEqual(
+    (controlsBox?.x ?? 0) + (controlsBox?.width ?? 0) - 2,
+  );
+  expect((picked?.x ?? 0) + (picked?.width ?? 0)).toBeLessThanOrEqual(
+    (canvasBox?.x ?? 0) + (canvasBox?.width ?? 0) + 2,
+  );
 
   // clicking in the graph selects without moving the view
+  // wait for the zoom animation to end before measuring
+  await expect
+    .poll(async () => {
+      const a = await scale();
+      await page.waitForTimeout(200);
+      return Math.abs((await scale()) - a) < 0.0005;
+    })
+    .toBe(true);
   const zoomed = await scale();
   await page
     .locator('.react-flow__edge[aria-label="manage_stock from Shopify (derived)"]')
@@ -135,7 +154,7 @@ test('picking a mapping from the list zooms the graph to it, and the wheel scrol
   // the page scrolls over the canvas (zoom is Ctrl/Cmd + wheel, the controls or pinch)
   const box = await page.locator('.flow').boundingBox();
   expect(box).toBeTruthy();
-  await page.mouse.move((box?.x ?? 0) + 200, (box?.y ?? 0) + 200);
+  await page.mouse.move((box?.x ?? 0) + (box?.width ?? 800) - 150, (box?.y ?? 0) + 120);
   const before = await page.evaluate(() => window.scrollY);
   await page.mouse.wheel(0, 400);
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);

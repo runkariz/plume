@@ -288,20 +288,23 @@ describe('Model view', () => {
 
   it('switches the detail with the mapping list (keyboard alternative to clicking the graph)', async () => {
     renderApp('/models/snap_8f3a21');
-    const pick = await screen.findByRole('combobox', { name: 'Mapping' });
-    await userEvent.selectOptions(pick, 'sku|mirakl');
-    expect(screen.getByRole('heading', { name: 'sku ← Mirakl' })).toBeInTheDocument();
+    const list = await screen.findByRole('listbox', { name: 'Mappings' });
+    await userEvent.click(within(list).getByRole('option', { name: /^sku ← Mirakl/ }));
+    expect(
+      within(screen.getByRole('region', { name: 'Mapping detail' })).getByRole('heading', {
+        name: 'sku ← Mirakl',
+      }),
+    ).toBeInTheDocument();
     expect(screen.getByText('direct', { selector: '.chip' })).toBeInTheDocument();
     expect(screen.queryByText(/GET \/admin/)).not.toBeInTheDocument();
   });
 
-  it('filters a long mapping list and keeps the selected mapping visible', async () => {
+  it('filters the mapping list by field name or source path', async () => {
     server.use(
       http.get(`${TEST_API_BASE}/v1/models/:id`, async () => {
         const { inventorySnapshot } = await import('@/mocks/modelData');
         const base = inventorySnapshot.fields[2];
         if (!base) throw new Error('fixture');
-        // 12 extra fields: more than 12 mappings in total, so the filter box appears
         const extra = Array.from({ length: 12 }, (_, i) => ({ ...base, name: `extra_${i}` }));
         return HttpResponse.json({
           ...inventorySnapshot,
@@ -310,28 +313,37 @@ describe('Model view', () => {
       }),
     );
     renderApp('/models/snap_8f3a21');
-    // 19 fields: a big model opens as a table; the Mapping list belongs to the graph view
+    // 19 fields: a big model opens as a table; the control box belongs to the graph view
     await userEvent.click(await screen.findByRole('radio', { name: 'Graph' }));
-    const filter = await screen.findByRole('searchbox', { name: 'Filter mappings' });
-    const total = screen
-      .getByRole('combobox', { name: 'Mapping' })
-      .querySelectorAll('option').length;
+    const list = await screen.findByRole('listbox', { name: 'Mappings' });
+    const total = within(list).getAllByRole('option').length;
     expect(total).toBeGreaterThan(12);
-    await userEvent.type(filter, 'extra_3');
-    const options = screen.getByRole('combobox', { name: 'Mapping' }).querySelectorAll('option');
-    // the matching mappings of extra_3 (3 APIs) plus the currently selected mapping, which stays visible
-    expect(options.length).toBeLessThan(total);
-    expect([...options].some((o) => o.textContent?.startsWith('extra_3'))).toBe(true);
-    expect([...options].some((o) => o.textContent === 'quantity_available ← Shopify')).toBe(true);
-    expect(
-      screen.getByText(new RegExp(`${options.length} of ${total} mappings`)),
-    ).toBeInTheDocument();
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Filter by name' }), 'extra_3');
+    await waitFor(() => expect(within(list).getAllByRole('option').length).toBeLessThan(total));
+    const names = within(list)
+      .getAllByRole('option')
+      .map((o) => o.querySelector('.wb-row-name')?.textContent);
+    expect(names, 'only the matching mappings stay').toEqual(
+      names.filter((n) => n?.startsWith('extra_3')),
+    );
+    expect(screen.getByText(`${names.length} of ${total}`)).toBeInTheDocument();
+    // a source path matches too
+    await userEvent.clear(screen.getByRole('searchbox', { name: 'Filter by name' }));
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Filter by name' }), 'variants');
+    await waitFor(() => expect(within(list).getAllByRole('option').length).toBeLessThan(total));
+    expect(within(list).getAllByRole('option').length).toBeGreaterThan(0);
   });
 
-  it('does not show the filter for a small model', async () => {
+  it('the control box collapses and opens again, and says what it keeps', async () => {
     renderApp('/models/snap_8f3a21');
-    await screen.findByRole('combobox', { name: 'Mapping' });
-    expect(screen.queryByRole('searchbox', { name: 'Filter mappings' })).not.toBeInTheDocument();
+    const toggle = await screen.findByRole('button', { name: /Filter and mappings/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('Unchecked APIs stay in the graph, greyed out.')).toBeVisible();
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('listbox', { name: 'Mappings' })).not.toBeInTheDocument();
+    await userEvent.click(toggle);
+    expect(await screen.findByRole('listbox', { name: 'Mappings' })).toBeInTheDocument();
   });
 
   it('reports dropped citations', async () => {
