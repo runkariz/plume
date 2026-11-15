@@ -42,3 +42,11 @@ returns the exact MCP payload as `claudePayload`.
 
 Absence rule: say "not documented in build X" only when `find_fact` returns `found:false` and
 `complete:true`; with `complete:false` absence is not proven.
+
+## MCP Apps
+
+Both servers serve `ui://plume/model-view` (`text/html;profile=mcp-app`). `get_model`,
+`submit_model_draft` (and on the maintainer server `release_model`, `discard_model`,
+`get_generation`) point at it with `_meta.ui.resourceUri`, so Claude web/Desktop show the model
+inline; text-only hosts get a summary and the link. Write tools are `visibility: ["model"]`.
+See [mcp-apps.md](mcp-apps.md).

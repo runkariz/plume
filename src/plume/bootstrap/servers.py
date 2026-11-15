@@ -57,6 +57,11 @@ def http_app(c: Container) -> FastAPI:
     )
 
 
+def _app_html(c: Container) -> str | None:
+    path = c.settings.mcp_app_html
+    return path.read_text(encoding="utf-8") if path is not None else None
+
+
 def reader_server(c: Container) -> MCPServer:
     return create_reader_server(
         McpReaderDependencies(
@@ -71,6 +76,7 @@ def reader_server(c: Container) -> MCPServer:
             models=c.models,
             sections=c.sections,
             web_public_url=c.settings.web_public_url,
+            mcp_app_html=_app_html(c),
         )
     )
 
@@ -85,6 +91,7 @@ def maintainer_mcp_server(c: Container) -> MCPServer:
             jobs=c.maintainer,
             generate=c.generate,
             web_public_url=c.settings.web_public_url,
+            mcp_app_html=_app_html(c),
         )
     )
 

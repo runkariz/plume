@@ -26,7 +26,7 @@ class Turn:
 class ModelWriter(Protocol):
     @property
     def name(self) -> str:
-        """Recorded as the snapshot's generator, e.g. ``gemini:gemini-2.5-pro``."""
+        """Recorded as the snapshot's generator, e.g. ``gemini:gemini-4-argon``."""
         ...
 
     def available(self) -> bool: ...

@@ -129,3 +129,18 @@ def test_anonymous_model_is_unlisted_and_versioned() -> None:
         f"{API}/v1/models/mine", json={"ownerKeys": [body["ownerKey"]]}, timeout=10
     ).json()
     assert [m["id"] for m in mine["items"]] == [v2["model"]["id"]]
+
+
+@pytest.mark.anyio
+async def test_reader_mcp_serves_the_model_view_app() -> None:
+    reader = os.environ.get("PLUME_E2E_MCP", "http://127.0.0.1:18481") + "/mcp"
+    async with Client(streamable_http_client(reader)) as client:
+        caps = client.server_capabilities
+        assert caps is not None
+        assert "io.modelcontextprotocol/ui" in (caps.extensions or {})
+        read = await client.read_resource("ui://plume/model-view")
+        content = read.contents[0]
+        assert content.mime_type == "text/html;profile=mcp-app"
+        assert "ui/initialize" in getattr(content, "text", "")
+        tools = {t.name: t for t in (await client.list_tools()).tools}
+        assert (tools["get_model"].meta or {})["ui"]["resourceUri"] == "ui://plume/model-view"

@@ -48,9 +48,14 @@ class Settings(BaseSettings):
         "(maintainer). Read on every call, never logged. Unset = generation answers 503.",
     )
     model_llm: str = Field(
-        default="gemini-2.5-pro", description="Gemini model for server-side model generation."
+        default="gemini-4-argon", description="Gemini model for server-side model generation."
     )
     model_max_rounds: int = Field(default=3, ge=1, le=10)
+    mcp_app_html: Path | None = Field(
+        default=None,
+        description="The MCP App bundle (model view, one self-contained HTML file). Unset = the "
+        "file packaged with Plume.",
+    )
     web_public_url: str | None = Field(
         default=None,
         description="The web UI's public base URL; model share links are <this>/models/{id}.",

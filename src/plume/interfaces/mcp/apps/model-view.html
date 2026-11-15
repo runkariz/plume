@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plume model</title>
+<!-- PLACEHOLDER MCP App (ui://plume/model-view). The real bundle is the web mapping view built
+     as one self-contained HTML file; this one only proves the wiring. It loads nothing remote and
+     renders every value with textContent (package text is untrusted). -->
+<style>
+  :root { color-scheme: light dark; --bg: #ffffff; --fg: #171717; --muted: #6b7280; --line: #e5e7eb; }
+  :root[data-theme="dark"] { --bg: #171717; --fg: #f5f5f5; --muted: #9ca3af; --line: #374151; }
+  body { margin: 0; padding: 12px 16px; background: var(--color-background-primary, var(--bg));
+         color: var(--color-text-primary, var(--fg));
+         font: 14px/1.45 var(--font-sans, system-ui, sans-serif); }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  .meta { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .derived { font-style: italic; }
+  .absent { color: var(--muted); }
+</style>
+</head>
+<body>
+<h1 id="title">Waiting for the model...</h1>
+<div class="meta" id="meta"></div>
+<table id="fields" hidden><thead><tr id="head"></tr></thead><tbody id="rows"></tbody></table>
+<p class="meta" id="link"></p>
+<script>
+(() => {
+  "use strict";
+  let nextId = 1;
+  const pending = new Map();
+  const send = (msg) => window.parent.postMessage({ jsonrpc: "2.0", ...msg }, "*");
+  const request = (method, params) => new Promise((resolve) => {
+    const id = nextId++;
+    pending.set(id, resolve);
+    send({ id, method, params });
+  });
+  const el = (tag, text, cls) => {
+    const node = document.createElement(tag);
+    node.textContent = text == null ? "" : String(text);
+    if (cls) node.className = cls;
+    return node;
+  };
+  const applyContext = (ctx) => {
+    if (!ctx) return;
+    if (ctx.theme) document.documentElement.dataset.theme = ctx.theme;
+    const vars = ctx.styles && ctx.styles.variables;
+    if (vars) for (const [k, v] of Object.entries(vars)) {
+      if (typeof v === "string") document.documentElement.style.setProperty(k, v);
+    }
+  };
+  const render = (result) => {
+    const sc = (result && result.structuredContent) || {};
+    const model = sc.model || (sc.fields ? sc : null);
+    if (!model) {
+      document.getElementById("title").textContent = sc.accepted === false
+        ? "Draft refused: " + (sc.issues || []).length + " issue(s)"
+        : "No model in this result";
+      return;
+    }
+    const apis = (model.inputs || []).map((i) => i.id);
+    document.getElementById("title").textContent = model.name + " (" + model.concept + ")";
+    const lineage = model.lineage || {};
+    document.getElementById("meta").textContent = [
+      model.visibility, lineage.version ? "v" + lineage.version + " of " + lineage.versions : "",
+      apis.join(", "), model.stale ? "stale" : "",
+    ].filter(Boolean).join(" · ");
+    const head = document.getElementById("head");
+    head.replaceChildren(el("th", "Field"), ...apis.map((a) => el("th", a)));
+    const rows = document.getElementById("rows");
+    rows.replaceChildren(...(model.fields || []).map((f) => {
+      const tr = document.createElement("tr");
+      tr.append(el("td", f.name + " : " + f.type));
+      for (const a of apis) {
+        const src = (f.sources || {})[a];
+        const support = (f.support || {})[a] || "unsupported";
+        const text = src ? src.paths.map((p) => p.path).join(", ") +
+          (src.transform ? " (" + src.transform + ")" : "") : "-";
+        tr.append(el("td", text, support === "unsupported" ? "absent" : support));
+      }
+      return tr;
+    }));
+    document.getElementById("fields").hidden = false;
+    const link = model.shareUrl || model.sharePath || "";
+    document.getElementById("link").textContent = link ? "Open in Plume: " + link : "";
+    const height = document.documentElement.scrollHeight;
+    send({ method: "ui/notifications/size-changed", params: { height } });
+  };
+  window.addEventListener("message", (event) => {
+    if (event.source !== window.parent) return;
+    const msg = event.data;
+    if (!msg || msg.jsonrpc !== "2.0") return;
+    if (msg.id != null && pending.has(msg.id)) {
+      pending.get(msg.id)(msg.result);
+      pending.delete(msg.id);
+      return;
+    }
+    if (msg.method === "ui/notifications/tool-result") render(msg.params);
+    if (msg.method === "ui/notifications/host-context-changed") applyContext(msg.params);
+  });
+  request("ui/initialize", {
+    protocolVersion: "2026-01-26",
+    appInfo: { name: "plume-model-view", version: "0.1.0" },
+    appCapabilities: {},
+  }).then((result) => {
+    applyContext(result && result.hostContext);
+    send({ method: "ui/notifications/initialized", params: {} });
+  });
+})();
+</script>
+</body>
+</html>
