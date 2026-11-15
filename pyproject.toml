@@ -56,6 +56,7 @@ ignore = ["PLR2004", "PLR0913", "PLR0917"]
 "src/plume/infrastructure/db/migrations/**" = ["N999"]
 "src/plume/interfaces/cli/main.py" = ["PLR0915"]  # one Typer app factory with nested commands
 "src/plume/interfaces/http/app.py" = ["PLR0915"]  # one FastAPI app factory with nested routes
+"src/plume/interfaces/mcp/*_server.py" = ["PLR0915"]  # one MCP server factory with nested tools
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"

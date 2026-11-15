@@ -25,6 +25,7 @@ from typing import Any
 from plume.application.errors import SourcePackageError
 from plume.application.ports.package_source import SourcePackage
 from plume.domain.knowledge.api import ApiId, ApiInfo, Category
+from plume.domain.knowledge.asset import CONTENT_TYPES, ICON, MAX_ASSET_BYTES, Asset
 from plume.domain.knowledge.document import (
     Document,
     DocumentKind,
@@ -168,6 +169,41 @@ def _obj(value: object) -> JsonObj:
     return value if isinstance(value, dict) else {}
 
 
+def _json_files(folder: Path) -> list[JsonObj]:
+    """Every *.json in a folder, verbatim, in name order ([] when the folder is absent)."""
+    return [_read_json(p) for p in sorted(folder.glob("*.json"))] if folder.is_dir() else []
+
+
+def _mcp_section(folder: Path) -> JsonObj | None:
+    """connector/mcp/ (package 1.2, only when the vendor runs an MCP server), verbatim:
+    servers/<id>.json, tools/<server>/<tool>/tool.json + input/output schemas."""
+    servers_dir = folder / "servers"
+    if not servers_dir.is_dir():
+        return None
+    servers = []
+    for path in sorted(servers_dir.glob("*.json")):
+        tools = []
+        for tool_dir in sorted((folder / "tools" / path.stem).glob("*/")):
+            tool = _opt_json(tool_dir / "tool.json")
+            if tool is None:
+                continue
+            tools.append(
+                {
+                    "tool": tool,
+                    "input_schema": _opt_json(tool_dir / "input.schema.json"),
+                    "output_schema": _opt_json(tool_dir / "output.schema.json"),
+                }
+            )
+        servers.append({"id": path.stem, "server": _read_json(path), "tools": tools})
+    return {"servers": servers}
+
+
+def _tags(req: JsonObj) -> tuple[str, ...]:
+    """request.json tags[].name, verbatim and in order."""
+    names = [t.get("name") for t in req.get("tags") or [] if isinstance(t, dict)]
+    return tuple(dict.fromkeys(n for n in names if isinstance(n, str) and n))
+
+
 def _url_path(url: str) -> str:
     path = _TEMPLATE_VAR.sub(r"{\1}", url)
     path = _TEMPLATE_ANY.sub("", path)
@@ -284,7 +320,18 @@ class StreamPackageSource:
         info = self._api_info(app)
         versions = info.versions
 
-        documents: list[Document] = [self._app_document(info, app)]
+        app_doc = self._app_document(info, app)
+        env_schema = _opt_json(connector / "environment.variables.schema.json")
+        app_doc = replace(
+            app_doc,
+            raw={
+                "app": app,
+                "environment_variables_schema": env_schema,
+                "webhooks": _json_files(connector / "triggers" / "webhooks"),
+                "mcp": _mcp_section(connector / "mcp"),
+            },
+        )
+        documents: list[Document] = [app_doc]
         seen: set[str] = {documents[0].doc_id}
 
         def add(doc: Document, origin: str) -> None:
@@ -302,6 +349,9 @@ class StreamPackageSource:
             add(model, model.doc_id)
         for doc, origin in self._guides_and_auth(connector, warnings):
             add(doc, origin)
+        for path in sorted((connector / "triggers" / "events").glob("*.json")):
+            add(self._trigger(path), path.name)
+        icon, extra_hashed = self._icon(connector, package_root)
         export = package_root / "knowledge-export"
         if export.is_dir() and knowledge_export.detect(export):
             documents = _apply_export(documents, knowledge_export.load(export), warnings)
@@ -313,18 +363,22 @@ class StreamPackageSource:
         return SourcePackage(
             api=info,
             documents=tuple(documents),
-            package_hash=self._hash(connector, export if export.is_dir() else None),
+            package_hash=self._hash(connector, export if export.is_dir() else None, extra_hashed),
             source_ref=str(package_root),
             run_id=_str(manifest.get("runId")),
             contract_version=contract_version,
             warnings=tuple(warnings),
+            assets=(icon,) if icon is not None else (),
         )
 
     # -- pieces --------------------------------------------------------------------------------
 
     @staticmethod
-    def _hash(connector: Path, export: Path | None) -> str:
+    def _hash(connector: Path, export: Path | None, extra: list[Path] | None = None) -> str:
         digest = hashlib.sha256()
+        for path in extra or []:  # files outside connector/ that Plume reads (e.g. _icon/)
+            digest.update(f"extra/{path.name}\0".encode())
+            digest.update(path.read_bytes())
         for base, label in ((connector, "connector"), (export, "knowledge-export")):
             if base is None:
                 continue
@@ -423,6 +477,8 @@ class StreamPackageSource:
             fields=tuple(f for fs in sections.values() for f in fs) + tuple(response_fields),
             scopes=scopes,
             source_id=_str(req.get("endpointId")),
+            tags=_tags(req),
+            raw=req,
         )
 
     def _guides_and_auth(self, connector: Path, warnings: list[str]) -> list[tuple[Document, str]]:
@@ -470,6 +526,7 @@ class StreamPackageSource:
             fields=tuple(fields),
             source_id=title,
             shape=shape_hash(data),
+            raw=data,
         )
 
     @staticmethod
@@ -512,6 +569,11 @@ class StreamPackageSource:
                 lines.append(f"- `{entry['scope']}`" + (f": {desc}" if desc else ""))
         if lines:
             parts.append("## Scopes\n" + "\n".join(lines))
+        ref = _str(data.get("variableContractRef")) or f"auth/{path.stem}.variables.schema.json"
+        variables_path = path.parent.parent / ref
+        if not variables_path.is_file():
+            variables_path = path.with_name(f"{path.stem}.variables.schema.json")
+        variables = _opt_json(variables_path)
         return Document(
             doc_id=slug_doc_id(DocumentKind.AUTH, _slug(key)),
             kind=DocumentKind.AUTH,
@@ -519,7 +581,43 @@ class StreamPackageSource:
             text="\n\n".join(parts),
             scopes=tuple(dict.fromkeys(scopes)),
             source_id=key,
+            raw={"scheme": data, "variables_schema": variables, "file": path.name},
         )
+
+    @staticmethod
+    def _trigger(path: Path) -> Document:
+        data = _read_json(path)
+        key = _str(data.get("key")) or path.stem
+        title = _str(data.get("title")) or key
+        parts = [f"# {title} (trigger)", f"Key: `{key}`"]
+        for label, name in (("Delivery", "delivery"), ("Resource", "resource")):
+            if _str(data.get(name)):
+                parts.append(f"{label}: {data[name]}")
+        if _str(data.get("description")):
+            parts.append(str(data["description"]))
+        provenance = _obj(data.get("provenance"))
+        return Document(
+            doc_id=slug_doc_id(DocumentKind.TRIGGER, _slug(key.replace("/", "-"))),
+            kind=DocumentKind.TRIGGER,
+            title=title,
+            text="\n\n".join(parts),
+            source_url=_str(provenance.get("evidenceUrl")) or _str(data.get("sourceUrl")),
+            resource=_str(data.get("resource")),
+            source_id=key,
+            raw=data,
+        )
+
+    @staticmethod
+    def _icon(connector: Path, package_root: Path) -> tuple[Asset | None, list[Path]]:
+        """The package's own icon: connector/icon.*, else _icon/icon.* (with pick.json)."""
+        for folder in (connector, package_root / "_icon"):
+            for ext, content_type in CONTENT_TYPES.items():
+                path = folder / f"icon.{ext}"
+                if path.is_file() and 0 < path.stat().st_size <= MAX_ASSET_BYTES:
+                    rel = path.relative_to(package_root).as_posix()
+                    hashed = [] if folder == connector else [path]
+                    return Asset(ICON, content_type, path.read_bytes(), rel), hashed
+        return None, []
 
     @staticmethod
     def _export_page(path: Path, base: Path) -> Document:

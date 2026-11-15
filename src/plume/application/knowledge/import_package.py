@@ -3,6 +3,7 @@
 from plume.application.dto import ImportResult
 from plume.application.errors import SourcePackageError
 from plume.application.ports.api_repo import ApiRepo
+from plume.application.ports.asset_repo import AssetRepo
 from plume.application.ports.build_repo import BuildRepo
 from plume.application.ports.document_repo import DocumentRepo
 from plume.application.ports.package_source import PackageSource
@@ -22,7 +23,9 @@ class ImportPackage:
         clock: Clock,
         embed_model: str,
         dims: int,
+        assets: AssetRepo | None = None,
     ) -> None:
+        self._assets = assets
         self._source = source
         self._apis = apis
         self._builds = builds
@@ -61,6 +64,8 @@ class ImportPackage:
         if existing is None:
             self._builds.save(Build.start(info.api_id, self._clock.now(), spec=spec))
         self._documents.add_documents(build_id, package.documents)
+        if self._assets is not None and package.assets:
+            self._assets.put(build_id, package.assets)
         return ImportResult(
             api_id=info.api_id,
             build_id=build_id,

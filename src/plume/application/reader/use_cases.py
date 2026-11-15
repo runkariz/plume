@@ -6,6 +6,7 @@ from typing import Literal
 
 from plume.application.errors import ApplicationError, NotFoundError
 from plume.application.ports.api_repo import ApiRepo
+from plume.application.ports.asset_repo import AssetRepo
 from plume.application.ports.build_repo import BuildRepo
 from plume.application.ports.document_repo import DocumentRepo
 from plume.application.ports.embedder import Embedder
@@ -25,6 +26,7 @@ from plume.application.reader.dto import (
     TraceStep,
 )
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
+from plume.domain.knowledge.asset import ICON
 from plume.domain.knowledge.call_check import normalize_call_path, path_matches, specificity
 from plume.domain.knowledge.citation import Citation
 from plume.domain.knowledge.document import HTTP_METHODS, DocumentKind, FieldLocation
@@ -86,7 +88,9 @@ class ListApiOverviews:
         tags: TagRepo,
         index: SearchIndex,
         evals: EvalRepo | None = None,
+        assets: AssetRepo | None = None,
     ) -> None:
+        self._assets = assets
         self._evals = evals
         self._apis = apis
         self._resolver = BuildResolver(apis, builds, tags)
@@ -104,6 +108,7 @@ class ListApiOverviews:
             embed_model=spec.embed_model if spec else None,
             dims=spec.dims if spec else None,
             eval=self._evals.get(r.build.build_id) if self._evals else None,
+            has_icon=bool(self._assets and self._assets.get(r.build.build_id, ICON)),
         )
 
     def execute(self) -> list[ApiOverview]:
@@ -132,11 +137,14 @@ class BrowseDocuments:
         limit: int = 50,
         offset: int = 0,
         version: str | None = None,
+        tag: str | None = None,
     ) -> tuple[BuildRef, list[DocumentSummary], int]:
         if not 1 <= limit <= 500 or offset < 0:
             raise ReaderInputError("limit must be 1..500 and offset >= 0")
         r = self._resolver.resolve(api, version)
-        items, total = self._index.browse(r.build.build_id, _kinds(kind), query, limit, offset)
+        items, total = self._index.browse(
+            r.build.build_id, _kinds(kind), query, limit, offset, tag=tag or None
+        )
         return _ref(r), items, total
 
 

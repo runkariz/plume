@@ -10,8 +10,8 @@ class Schema(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, frozen=True)
 
 
-ItemKind = Literal["endpoint", "model", "guide", "auth", "app"]
-KindFilter = Literal["all", "endpoint", "model", "guide", "auth", "app"]
+ItemKind = Literal["endpoint", "model", "guide", "auth", "trigger", "app"]
+KindFilter = Literal["all", "endpoint", "model", "guide", "auth", "trigger", "app"]
 SearchMode = Literal["hybrid", "dense", "text"]
 HttpMethod = Literal["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]
 
@@ -80,6 +80,12 @@ class Quality(Schema):
     evaluated_at: str
 
 
+class SectionCounts(Schema):
+    auth: int
+    triggers: int
+    webhook_endpoints: int
+
+
 class ApiDetail(ApiSummary):
     chunks: int
     is_live: bool
@@ -90,6 +96,9 @@ class ApiDetail(ApiSummary):
     quality: Quality | None = Field(default=None, description="Null until the eval gate runs.")
     index: IndexInfo
     connect: Connect
+    sections: SectionCounts | None = Field(
+        default=None, description="What the package contains: auth schemes, triggers, webhooks."
+    )
 
 
 class BrowseItem(Schema):
@@ -100,6 +109,7 @@ class BrowseItem(Schema):
     path: str | None = None
     resource: str | None = None
     deprecated: bool = False
+    tags: list[str] = Field(default_factory=list, description="The package's tags, verbatim.")
 
 
 class BrowseResult(Schema):
@@ -273,6 +283,19 @@ class DocumentOut(Schema):
     text: str
     fields: list[FieldOut]
     scopes: list[str]
+    tags: list[str] = Field(default_factory=list)
+    responses: list[dict[str, Any]] = Field(
+        default_factory=list, description="Endpoint responses[] from the package, verbatim."
+    )
+    errors: list[dict[str, Any]] = Field(
+        default_factory=list, description="Endpoint errors[] from the package, verbatim."
+    )
+    raw: dict[str, Any] | None = Field(
+        default=None, description="The package's source JSON for this item, verbatim."
+    )
+    raw_truncated: bool = Field(
+        default=False, description="True when raw was over 256 KB and is omitted."
+    )
 
 
 class BuildOut(Schema):
@@ -433,3 +456,115 @@ class ModelListItem(Schema):
 
 class ModelList(Schema):
     items: list[ModelListItem]
+
+
+class AuthVariable(Schema):
+    name: str
+    description: str | None
+    type: str | None
+    required: bool
+
+
+class AuthScope(Schema):
+    scope: str | None
+    description: str | None
+
+
+class AuthSchemeSummary(Schema):
+    id: str
+    doc_id: str
+    name: str
+    type: str | None = Field(description="authorizationType from the package, verbatim.")
+    grant_type: str | None
+    header_name: str | None
+    query_param: str | None
+    scopes: int
+    variables: int
+
+
+class AuthList(Schema):
+    api: str
+    build: str
+    present: bool
+    note: str | None
+    schemes: list[AuthSchemeSummary]
+
+
+class AuthSchemeDetail(Schema):
+    api: str
+    build: str
+    id: str
+    doc_id: str
+    name: str
+    type: str | None
+    grant_type: str | None
+    header_name: str | None
+    query_param: str | None
+    scopes: list[AuthScope]
+    variables: list[AuthVariable]
+    setup_steps: list[Any] | None = Field(description="setupSteps verbatim (objects as given).")
+    token_lifetime: dict[str, Any] | None
+    test_url: str | None
+    scheme: dict[str, Any] = Field(description="The auth JSON from the package, verbatim.")
+    variables_schema: dict[str, Any] | None = Field(
+        description="The scheme's .variables.schema.json (JSON Schema), verbatim."
+    )
+    file: str | None
+
+
+class TriggerSummary(Schema):
+    key: str | None
+    doc_id: str
+    title: str
+    description: str | None
+    resource: str | None
+    delivery: str | None
+    sync_endpoint_id: str | None = None
+
+
+class TriggerList(Schema):
+    api: str
+    build: str
+    present: bool
+    note: str | None
+    total: int
+    items: list[TriggerSummary]
+    webhooks: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="connector/triggers/webhooks/*.json (subscribe/unsubscribe/list endpoints, "
+        "handshake, verification), verbatim; [] when the package has none.",
+    )
+
+
+class TriggerDetail(TriggerSummary):
+    api: str
+    build: str
+    source_url: str | None
+    event: dict[str, Any] = Field(description="The event JSON from the package, verbatim.")
+
+
+class EnvironmentsOut(Schema):
+    api: str
+    build: str
+    present: bool
+    note: str | None
+    environments: list[dict[str, Any]] = Field(
+        default_factory=list, description="app.json environments[], verbatim."
+    )
+    versioning: dict[str, Any] | None = Field(description="app.json apiVersioning, verbatim.")
+    base_urls: list[str] | None
+    variables_schema: dict[str, Any] | None = Field(
+        description="connector/environment.variables.schema.json, verbatim."
+    )
+
+
+class McpOut(Schema):
+    api: str
+    build: str
+    present: bool
+    note: str | None
+    servers: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="connector/mcp/: per server {id, server (servers/<id>.json), tools: [{tool, "
+        "inputSchema, outputSchema}]}, verbatim. Docs-only APIs have none.",
+    )

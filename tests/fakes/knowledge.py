@@ -10,6 +10,7 @@ from plume.application.ports.embedder import Vector
 from plume.application.ports.eval_repo import EvalRecord
 from plume.application.ports.job_events import JobEvent
 from plume.domain.knowledge.api import ApiId, ApiInfo
+from plume.domain.knowledge.asset import Asset
 from plume.domain.knowledge.build import Build
 from plume.domain.knowledge.chunk import Chunk
 from plume.domain.knowledge.document import Document
@@ -222,3 +223,18 @@ class InMemoryEvalRepo:
 
     def get(self, build_id: BuildId) -> EvalRecord | None:
         return self.records.get(build_id.value)
+
+
+class InMemoryAssetRepo:
+    def __init__(self) -> None:
+        self.assets: dict[tuple[str, str], Asset] = {}
+
+    def put(self, build_id: BuildId, assets: Sequence[Asset]) -> None:
+        for a in assets:
+            self.assets[(build_id.value, a.name)] = a
+
+    def get(self, build_id: BuildId, name: str) -> Asset | None:
+        return self.assets.get((build_id.value, name))
+
+    def list(self, build_id: BuildId) -> list[Asset]:
+        return [a for (b, _), a in sorted(self.assets.items()) if b == build_id.value]

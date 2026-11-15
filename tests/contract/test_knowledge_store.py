@@ -159,3 +159,44 @@ def test_facts_replace_and_list(store: Store) -> None:
     assert store.facts.list_facts(build.build_id) == sorted(facts, key=lambda f: f.fact_id)
     store.facts.replace_facts(build.build_id, facts[:1])
     assert store.facts.list_facts(build.build_id) == facts[:1]
+
+
+def test_documents_keep_raw_and_tags(store: Store) -> None:
+    from dataclasses import replace  # noqa: PLC0415
+
+    build = _draft(store)
+    raw = {
+        "endpointId": "get-orders",
+        "tags": [{"kind": "category", "name": "orders"}],
+        "nested": {"a": [1, 2, {"b": None}]},
+    }
+    doc = replace(DOC, tags=("v1", "orders"), raw=raw)
+    store.documents.add_documents(build.build_id, [doc])
+    got = store.documents.get_document(build.build_id, DOC.doc_id)
+    assert got == doc
+    assert got is not None
+    assert got.raw == raw
+    assert got.tags == ("v1", "orders")
+    items, total = store.search.browse(build.build_id, (), None, 10, 0, tag="orders")
+    assert (total, items[0].tags) == (1, ("v1", "orders"))
+    assert store.search.browse(build.build_id, (), None, 10, 0, tag="nope")[1] == 0
+
+
+def test_assets(store: Store, request: pytest.FixtureRequest) -> None:
+    from plume.domain.knowledge.asset import Asset  # noqa: PLC0415
+    from plume.infrastructure.db.repos.asset_repo import PostgresAssetRepo  # noqa: PLC0415
+    from tests.fakes.knowledge import InMemoryAssetRepo  # noqa: PLC0415
+
+    repo = (
+        InMemoryAssetRepo()
+        if store.kind == "fake"
+        else PostgresAssetRepo(request.getfixturevalue("clean_engine"))
+    )
+    build = _draft(store)
+    icon = Asset("icon", "image/png", b"\x89PNG\r\n\x1a\nxyz", "connector/icon.png")
+    repo.put(build.build_id, [icon])
+    assert repo.get(build.build_id, "icon") == icon
+    assert repo.get(build.build_id, "other") is None
+    assert repo.list(build.build_id) == [icon]
+    repo.put(build.build_id, [Asset("icon", "image/svg+xml", b"<svg/>", "connector/icon.svg")])
+    assert repo.get(build.build_id, "icon").content_type == "image/svg+xml"  # type: ignore[union-attr]

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "properties": {
+    "host": {
+      "description": "API host name only, without https:// and without a trailing slash (e.g. your-development-store.myshopify.com)",
+      "format": "hostname",
+      "type": "string"
+    }
+  },
+  "required": [
+    "host"
+  ],
+  "type": "object"
+}

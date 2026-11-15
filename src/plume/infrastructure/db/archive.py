@@ -9,6 +9,7 @@ from plume.domain.knowledge.tag import Tag, TagName
 from plume.domain.shared.ids import BuildId
 from plume.infrastructure.db.repos._codec import vector_literal
 from plume.infrastructure.db.repos.api_repo import upsert_api
+from plume.infrastructure.db.repos.asset_repo import put_assets
 from plume.infrastructure.db.repos.build_repo import save_build
 from plume.infrastructure.db.repos.document_repo import insert_documents, replace_chunks
 from plume.infrastructure.db.repos.eval_repo import save_eval
@@ -72,5 +73,7 @@ class PostgresBuildImporter:
             replace_facts(conn, b.build_id, snapshot.facts)
             if snapshot.eval is not None:
                 save_eval(conn, snapshot.eval)
+            if snapshot.assets:
+                put_assets(conn, b.build_id, snapshot.assets)
             for name in tags:
                 set_tag(conn, Tag.point(TagName(name), b))

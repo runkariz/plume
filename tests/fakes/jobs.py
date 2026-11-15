@@ -92,5 +92,7 @@ class InMemoryBuildImporter:
         s.facts.replace_facts(b.build_id, snapshot.facts)  # type: ignore[attr-defined]
         if snapshot.eval is not None:
             s.evals.save(snapshot.eval)  # type: ignore[attr-defined]
+        if snapshot.assets:
+            s.assets.put(b.build_id, snapshot.assets)  # type: ignore[attr-defined]
         for name in tags:
             s.tags.set(Tag.point(TagName(name), b))  # type: ignore[attr-defined]

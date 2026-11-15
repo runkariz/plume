@@ -18,6 +18,7 @@ from plume.application.models.sessions import ModelSessions
 from plume.application.ports.job_events import JobEvents
 from plume.application.ports.package_source import PackageSource
 from plume.application.reader.resolve import BuildResolver
+from plume.application.reader.sections import PackageSections
 from plume.application.reader.use_cases import (
     BrowseDocuments,
     CheckCall,
@@ -37,6 +38,7 @@ from tests.fakes.knowledge import (
     DeterministicEmbedder,
     FakeClock,
     InMemoryApiRepo,
+    InMemoryAssetRepo,
     InMemoryBuildRepo,
     InMemoryDocumentRepo,
     InMemoryEvalRepo,
@@ -67,6 +69,7 @@ class FakeStack:
     policy: GatePolicy = field(default_factory=GatePolicy)
     data_dir: Path | None = None
     models_repo: InMemoryModelRepo = field(default_factory=InMemoryModelRepo)
+    assets: InMemoryAssetRepo = field(default_factory=InMemoryAssetRepo)
 
     def __post_init__(self) -> None:
         self.vectors = InMemoryVectorIndex(self.documents)
@@ -82,6 +85,7 @@ class FakeStack:
             self.clock,
             self.embedder.model,
             self.embedder.dims,
+            self.assets,
         )
 
     def chunk(self) -> ChunkDocuments:
@@ -138,6 +142,7 @@ class FakeStack:
             self.facts,
             self.evals,
             self.dumps(),
+            self.assets,
         )
 
     def restore(self) -> RestoreDump:
@@ -171,7 +176,12 @@ class FakeStack:
         return BuildResolver(self.apis, self.builds, self.tags)
 
     def overviews(self) -> ListApiOverviews:
-        return ListApiOverviews(self.apis, self.builds, self.tags, self.search_index, self.evals)
+        return ListApiOverviews(
+            self.apis, self.builds, self.tags, self.search_index, self.evals, self.assets
+        )
+
+    def sections(self) -> PackageSections:
+        return PackageSections(self.resolver(), self.search_index, self.documents, self.assets)
 
     def browse(self) -> BrowseDocuments:
         return BrowseDocuments(self.resolver(), self.search_index)
