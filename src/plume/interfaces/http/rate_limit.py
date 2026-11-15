@@ -19,8 +19,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         clock: Callable[[], float] = time.monotonic,
         exempt: tuple[str, ...] = ("/health",),
         trusted_tokens: tuple[str, ...] = (),
+        trusted_proxy_hops: int = 0,
     ) -> None:
         super().__init__(app)
+        self._hops = max(0, trusted_proxy_hops)
         self._trusted = tuple(t.encode() for t in trusted_tokens)
         self._limit = per_minute
         self._clock = clock
@@ -43,7 +45,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         if self._trusted_request(request):
             return await call_next(request)  # authenticated maintainers are not rate limited
-        key = request.client.host if request.client else "unknown"
+        key = client_address(request, self._hops)
         now = self._clock()
         window = self._hits.setdefault(key, deque())
         while window and now - window[0] >= 60:
@@ -60,6 +62,24 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             for k in [k for k, v in self._hits.items() if not v or now - v[-1] >= 60]:
                 del self._hits[k]
         return await call_next(request)
+
+
+def client_address(request: Request, trusted_proxy_hops: int = 0) -> str:
+    """The client the limit counts. Without trusted proxies: the TCP peer. Behind N trusted
+    proxies, the client is the Nth X-Forwarded-For entry from the right (Werkzeug ProxyFix
+    x_for=N); entries further left could be written by the client. Fewer than N entries: the
+    peer. Example: Traefik replaces XFF with the client's address and nginx appends Traefik's,
+    so Plume sees "client, traefik"; with N=2 the limit counts "client"."""
+    peer = request.client.host if request.client else "unknown"
+    if trusted_proxy_hops <= 0:
+        return peer
+    hops = [
+        h.strip()
+        for v in request.headers.getlist("x-forwarded-for")
+        for h in v.split(",")
+        if h.strip()
+    ]
+    return hops[-trusted_proxy_hops] if len(hops) >= trusted_proxy_hops else peer
 
 
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):

@@ -65,6 +65,7 @@ from plume.infrastructure.search.postgres_search import PostgresFactQuery, Postg
 from plume.infrastructure.settings import Settings, get_settings
 from plume.infrastructure.sources.gold_file import JsonGoldSource
 from plume.infrastructure.sources.stream_package import StreamPackageSource
+from plume.infrastructure.vertex_auth import AdcTokenSource
 
 
 @dataclass
@@ -135,6 +136,17 @@ class Container:
         kind = s.resolved_embedder
         if kind == "hash":
             return HashEmbedder(s.embed_dims)
+        if kind == "vertex" and s.vertex_uses_adc():
+            return GeminiEmbedder(
+                api_key="",
+                backend="vertex",
+                model=s.embed_model,
+                dims=s.embed_dims,
+                batch_size=s.embed_batch_size,
+                token_source=self.vertex_tokens,
+                project=s.vertex_project,
+                location=s.vertex_embed_location,
+            )
         if kind == "vertex":
             api_key = s.vertex_key() or ""
         else:
@@ -146,6 +158,11 @@ class Container:
             dims=s.embed_dims,
             batch_size=s.embed_batch_size,
         )
+
+    @cached_property
+    def vertex_tokens(self) -> AdcTokenSource:
+        """Application Default Credentials, shared by embeddings and generation."""
+        return AdcTokenSource()
 
     @cached_property
     def events(self) -> JobEvents:
@@ -211,11 +228,14 @@ class Container:
 
     @cached_property
     def model_writer(self) -> VertexGeminiWriter:
+        s = self.settings
+        adc = s.vertex_uses_adc()
         return VertexGeminiWriter(
-            self.settings.vertex_key_file,
-            self.settings.model_llm,
-            project=self.settings.vertex_project,
-            location=self.settings.vertex_location,
+            None if adc else s.vertex_key_file,
+            s.model_llm,
+            project=s.vertex_project,
+            location=s.vertex_location,
+            token_source=self.vertex_tokens if adc else None,
         )
 
     @cached_property
