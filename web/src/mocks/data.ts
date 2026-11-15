@@ -1,7 +1,7 @@
 import type { ApiSummary } from '@/api/types';
 
 /** Sample data copied from the mockup pics/plume-src/01-home.html. */
-export const sampleApis: ApiSummary[] = [
+const baseApis: ApiSummary[] = [
   api(
     'shopify',
     'Shopify Admin REST',
@@ -82,6 +82,11 @@ export const sampleApis: ApiSummary[] = [
   ),
 ];
 
+/** Shopify's package has an icon (served by the API); the other sample APIs fall back to the letter tile. */
+export const sampleApis: ApiSummary[] = baseApis.map((a) =>
+  a.id === 'shopify' ? { ...a, logo: { ...a.logo, url: '/v1/apis/shopify/icon' } } : a,
+);
+
 function api(
   id: string,
   name: string,
@@ -109,6 +114,7 @@ function api(
   };
 }
 
+import { noSections, sectionCounts } from './sectionData';
 import type {
   ApiDetail,
   AskResponse,
@@ -153,7 +159,12 @@ export const shopifyDetail: ApiDetail = {
 };
 
 export function detailFor(id: string): ApiDetail | undefined {
-  if (id === 'shopify') return shopifyDetail;
+  if (id === 'shopify')
+    return {
+      ...shopifyDetail,
+      sections: sectionCounts.shopify,
+      logo: { ...shopifyDetail.logo, url: '/v1/apis/shopify/icon' },
+    };
   const base = sampleApis.find((a) => a.id === id);
   if (!base) return undefined;
   return {
@@ -161,6 +172,8 @@ export function detailFor(id: string): ApiDetail | undefined {
     ...base,
     chunks: base.endpoints + base.models + base.guides * 4,
     isLive: base.status.kind === 'ready',
+    sections: sectionCounts[id] ?? noSections,
+    logo: { ...base.logo, url: null },
   };
 }
 

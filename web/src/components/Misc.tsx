@@ -1,5 +1,7 @@
 import { readableOn } from '@/lib/color';
-import type { ReactNode } from 'react';
+import { useApiBaseUrl } from '@/api/context';
+import { iconSrc } from '@/lib/icon';
+import { useState, type ReactNode } from 'react';
 
 export function Metric({ label, value, tone }: { label: string; value: ReactNode; tone?: 'ok' }) {
   return (
@@ -19,7 +21,40 @@ export function Kv({ label, value, mono }: { label: string; value: ReactNode; mo
   );
 }
 
-export function Logo({ text, color, size = 42 }: { text: string; color: string; size?: number }) {
+export function Logo({
+  text,
+  color,
+  size = 42,
+  url,
+}: {
+  text: string;
+  color: string;
+  size?: number;
+  /** `logo.url` from the API: the package's own icon, a path on the API. Anything else is ignored. */
+  url?: string | null;
+}) {
+  const [failed, setFailed] = useState(false);
+  const base = useApiBaseUrl();
+  const src = iconSrc(url, base ?? undefined);
+  if (src && !failed)
+    return (
+      <div
+        className="logo logo-img"
+        style={{ width: size, height: size, padding: Math.round(size * 0.14) }}
+        aria-hidden
+      >
+        <img
+          src={src}
+          alt=""
+          width={size}
+          height={size}
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(true)}
+        />
+      </div>
+    );
   return (
     <div
       className="logo"

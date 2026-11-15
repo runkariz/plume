@@ -95,7 +95,7 @@ for (const theme of THEMES) {
         items: { concept: string }[];
       };
       test.skip(
-        existing.items.some((m) => m.concept === 'order'),
+        existing.items.some((m) => m.concept.toLowerCase() === 'order'),
         'an order snapshot already exists on these builds: this run exercises the "ready" path instead',
       );
       const idx = await conceptIndex(request, 'order');
@@ -177,7 +177,7 @@ for (const theme of THEMES) {
       const list = (await (await request.get(`${API}/v1/models?api=${APIS[0]}`)).json()) as {
         items: { id: string; concept: string }[];
       };
-      const item = list.items.find((m) => m.concept === 'order');
+      const item = list.items.find((m) => m.concept.toLowerCase() === 'order');
       expect(item, 'the order snapshot exists (created by the previous test)').toBeTruthy();
       const snap = (await (await request.get(`${API}/v1/models/${item?.id}`)).json()) as {
         name: string;

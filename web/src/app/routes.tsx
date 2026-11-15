@@ -1,6 +1,8 @@
 import type { RouteObject } from 'react-router-dom';
 import { ApiDetailPage } from '@/pages/ApiDetailPage';
 import { DocumentPage } from '@/pages/DocumentPage';
+import { AuthSchemePage } from '@/pages/sections/AuthSchemePage';
+import { TriggerPage } from '@/pages/sections/TriggerPage';
 import { Home } from '@/pages/Home';
 import { KitPage } from '@/pages/KitPage';
 import { NotFound } from '@/pages/NotFound';
@@ -23,6 +25,8 @@ export const routes: RouteObject[] = [
       { path: 'apis/:apiId', element: <ApiDetailPage /> },
       { path: 'apis/:apiId/try', element: <TryItPage /> },
       { path: 'apis/:apiId/documents/:docId', element: <DocumentPage /> },
+      { path: 'apis/:apiId/auth/:schemeId', element: <AuthSchemePage /> },
+      { path: 'apis/:apiId/triggers/:triggerKey', element: <TriggerPage /> },
       { path: 'maintainer', element: <MaintainerEntry /> },
       {
         element: <RequireMaintainer />,

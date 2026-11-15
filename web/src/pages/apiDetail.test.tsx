@@ -76,7 +76,7 @@ describe('API detail', () => {
   it('browses endpoints with method badges and filters them', async () => {
     renderApp('/apis/shopify');
     expect(
-      (await screen.findAllByText('/admin/api/latest/orders.json', { selector: 'div' })).length,
+      (await screen.findAllByText('/admin/api/latest/orders.json', { selector: 'a' })).length,
     ).toBe(2);
     await userEvent.click(screen.getByRole('radio', { name: 'Guides' }));
     expect(await screen.findByText('REST Admin API request rate limits')).toBeInTheDocument();
@@ -84,6 +84,46 @@ describe('API detail', () => {
     await userEvent.type(screen.getByRole('searchbox', { name: /Filter by path/ }), 'customers');
     expect(await screen.findByText('Retrieve a single customer')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('Create an order')).not.toBeInTheDocument());
+  });
+
+  it('every Browse item links to its detail page (endpoints, models, guides)', async () => {
+    renderApp('/apis/shopify');
+    await screen.findAllByText('Retrieve a list of orders');
+    const hrefs = [...document.querySelectorAll('.ep-link')].map((a) => a.getAttribute('href'));
+    expect(hrefs.length).toBeGreaterThanOrEqual(9);
+    expect(hrefs.every((h) => h?.startsWith('/apis/shopify/documents/'))).toBe(true);
+    expect(hrefs).toContain(`/apis/shopify/documents/${encodeURIComponent('endpoint:get-orders')}`);
+    // models and guides too
+    await userEvent.click(screen.getByRole('radio', { name: 'Models' }));
+    const browse = within(document.querySelector('.browse') as HTMLElement);
+    const model = await browse.findByRole('link', { name: 'Order' });
+    expect(model).toHaveAttribute(
+      'href',
+      `/apis/shopify/documents/${encodeURIComponent('model:order')}`,
+    );
+    await userEvent.click(screen.getByRole('radio', { name: 'Guides' }));
+    const guide = await browse.findByRole('link', { name: 'REST Admin API request rate limits' });
+    expect(guide).toHaveAttribute(
+      'href',
+      `/apis/shopify/documents/${encodeURIComponent('guide:rate-limits')}`,
+    );
+  });
+
+  it('opening an endpoint shows its detail: method, path, grouped parameters, responses, source JSON', async () => {
+    renderApp('/apis/shopify');
+    const link = (await screen.findAllByRole('link', { name: '/admin/api/latest/orders.json' }))[1];
+    expect(link).toBeTruthy();
+    await userEvent.click(link as HTMLElement);
+    expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument();
+    for (const name of ['Query parameters', 'Headers', 'Request body', 'Response fields'])
+      expect(screen.getByRole('region', { name })).toBeInTheDocument();
+    expect(screen.getByText('order.total')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Responses' })).toHaveTextContent('No such order.');
+    expect(screen.getByText('Source JSON, as in the package')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Back to Shopify Admin REST API' })).toHaveAttribute(
+      'href',
+      '/apis/shopify',
+    );
   });
 
   it('shows the empty state when the filter matches nothing', async () => {

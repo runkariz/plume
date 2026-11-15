@@ -17,6 +17,16 @@ import {
   sampleSuggestions,
   snapshots,
 } from './modelData';
+import {
+  authDetailFor,
+  authFor,
+  environmentsFor,
+  ICON_PNG_BASE64,
+  iconApis,
+  mcpFor,
+  triggerDetailFor,
+  triggersFor,
+} from './sectionData';
 import { buildScript, MID_BUILD_PAUSE, sampleJob, withEval, withReview } from './jobData';
 import {
   detailFor,
@@ -450,17 +460,19 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
       if (!detailFor(api)) return notFound();
       const prefix = `/v1/apis/${api}/documents/`;
       const docId = decodeURIComponent(new URL(request.url).pathname.split(prefix)[1] ?? '');
-      const kind = docId.split(':')[0] ?? 'document';
-      const path = docId.includes('~') ? docId.split('~')[1] : null;
-      const method = docId.includes('~') ? (docId.split(':')[1]?.split('~')[0] ?? null) : null;
+      const item = shopifyItems.find((i) => i.id === docId); // the Browse sample items resolve to their own detail
+      const kind = item?.kind ?? docId.split(':')[0] ?? 'document';
+      const path = item?.path ?? (docId.includes('~') ? docId.split('~')[1] : null);
+      const method =
+        item?.method ?? (docId.includes('~') ? (docId.split(':')[1]?.split('~')[0] ?? null) : null);
       return HttpResponse.json({
         api,
         build: 'b-6ff6063a275d40c14e4bcdd001f1c9ae',
         docsAsOf: '2026-11-14',
         id: docId,
         kind,
-        title: docId.split(/[:~]/).pop() ?? docId,
-        resource: 'orders',
+        title: item?.title ?? docId.split(/[:~]/).pop() ?? docId,
+        resource: item?.resource ?? 'orders',
         method,
         path: path ?? null,
         deprecated: false,
@@ -469,16 +481,131 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
         anchor: '#section',
         text: `# ${docId}\n\nSample text for this document in the mock backend.\nTotal amount billed for the order.`,
         fields: [
-          {
-            name: 'order_id',
-            location: 'path',
-            type: 'string',
-            required: true,
-            description: 'Unique identifier of the order.',
-          },
-          { name: 'limit', location: 'query', type: 'integer', required: false, description: null },
+          ...(path?.includes('{') || kind === 'model'
+            ? [
+                {
+                  name: 'order_id',
+                  location: kind === 'model' ? 'model' : 'path',
+                  type: 'string',
+                  required: true,
+                  description: 'Unique identifier of the order.',
+                },
+              ]
+            : []),
+          ...(kind === 'endpoint'
+            ? [
+                {
+                  name: 'limit',
+                  location: 'query',
+                  type: 'integer',
+                  required: false,
+                  description: null,
+                },
+                {
+                  name: 'X-Access-Token',
+                  location: 'header',
+                  type: 'string',
+                  required: true,
+                  description: 'Authentication token',
+                },
+              ]
+            : []),
+          ...(kind === 'endpoint' && method && method !== 'GET'
+            ? [
+                {
+                  name: 'order',
+                  location: 'body',
+                  type: 'object',
+                  required: true,
+                  description: null,
+                },
+                {
+                  name: 'order.total',
+                  location: 'body',
+                  type: 'string',
+                  required: false,
+                  description: 'Total amount billed.',
+                },
+              ]
+            : []),
+          ...(kind === 'endpoint'
+            ? [
+                {
+                  name: 'orders[].id',
+                  location: 'response',
+                  type: 'string',
+                  required: false,
+                  description: null,
+                },
+              ]
+            : []),
         ],
+        tags: kind === 'endpoint' ? ['v3', 'orders'] : [],
+        raw:
+          kind === 'guide'
+            ? null
+            : { operationId: docId, summary: 'Sample source JSON from the package' },
+        rawTruncated: false,
+        responses:
+          kind === 'endpoint'
+            ? [
+                { status: 200, description: 'The order.' },
+                { status: 404, description: 'No such order.' },
+              ]
+            : [],
         scopes: [],
+      });
+    }),
+    // package sections (shaped like the real API)
+    http.get(`${base}/v1/apis/:id/auth`, ({ params }) =>
+      detailFor(String(params.id)) ? HttpResponse.json(authFor(String(params.id))) : notFound(),
+    ),
+    http.get(`${base}/v1/apis/:id/auth/:scheme`, ({ params }) => {
+      const d =
+        detailFor(String(params.id)) && authDetailFor(String(params.id), String(params.scheme));
+      return d
+        ? HttpResponse.json(d)
+        : HttpResponse.json(
+            { error: 'not_found', message: 'No such auth scheme' },
+            { status: 404 },
+          );
+    }),
+    http.get(`${base}/v1/apis/:id/triggers`, ({ params, request }) => {
+      if (!detailFor(String(params.id))) return notFound();
+      const u = new URL(request.url);
+      return HttpResponse.json(
+        triggersFor(
+          String(params.id),
+          Number(u.searchParams.get('limit') ?? 50),
+          Number(u.searchParams.get('offset') ?? 0),
+        ),
+      );
+    }),
+    http.get(`${base}/v1/apis/:id/triggers/*`, ({ params, request }) => {
+      const prefix = `/v1/apis/${String(params.id)}/triggers/`;
+      const key = decodeURIComponent(new URL(request.url).pathname.split(prefix)[1] ?? '');
+      const d = triggerDetailFor(String(params.id), key);
+      return d
+        ? HttpResponse.json(d)
+        : HttpResponse.json({ error: 'not_found', message: 'No such event' }, { status: 404 });
+    }),
+    http.get(`${base}/v1/apis/:id/mcp`, ({ params }) =>
+      detailFor(String(params.id)) ? HttpResponse.json(mcpFor(String(params.id))) : notFound(),
+    ),
+    http.get(`${base}/v1/apis/:id/environments`, ({ params }) =>
+      detailFor(String(params.id))
+        ? HttpResponse.json(environmentsFor(String(params.id)))
+        : notFound(),
+    ),
+    http.get(`${base}/v1/apis/:id/icon`, ({ params }) => {
+      if (!iconApis.has(String(params.id)))
+        return HttpResponse.json(
+          { error: 'not_found', message: 'This package has no icon' },
+          { status: 404 },
+        );
+      const bytes = Uint8Array.from(atob(ICON_PNG_BASE64), (c) => c.charCodeAt(0));
+      return new HttpResponse(bytes, {
+        headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' },
       });
     }),
     http.get(`${base}/v1/apis/:id/items`, ({ params, request }) => {

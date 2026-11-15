@@ -165,12 +165,68 @@ describe('a small model keeps the mockup: graph first', () => {
 });
 
 describe('document page', () => {
+  it("groups an endpoint's fields by where they go, and keeps long text and raw JSON collapsed", async () => {
+    renderApp(
+      '/apis/shopify/documents/' + encodeURIComponent('endpoint:POST~/api/orders/{order_id}'),
+    );
+    expect(await screen.findByRole('heading', { level: 1 })).toBeInTheDocument();
+    expect(screen.getByText('POST')).toBeInTheDocument();
+    const path = within(screen.getByRole('region', { name: 'Path parameters' }));
+    expect(path.getByText('order_id')).toBeInTheDocument();
+    expect(path.getByText('required')).toBeInTheDocument();
+    const body = within(screen.getByRole('region', { name: 'Request body' }));
+    expect(body.getByText('order.total')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: 'Response fields' })).getByText('orders[].id'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('v3')).toBeInTheDocument(); // tags
+    expect(screen.getByText('Full text').closest('details')).not.toHaveAttribute('open');
+    expect(
+      screen.getByText('Source JSON, as in the package').closest('details'),
+    ).not.toHaveAttribute('open');
+  });
+
+  it('a guide shows its text, no parameter tables and no vendor link when the package has none', async () => {
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/:id/documents/*`, async () => {
+        const { sampleJob } = await import('@/mocks/jobData');
+        void sampleJob;
+        return HttpResponse.json({
+          api: 'shopify',
+          build: 'b-1',
+          docsAsOf: '2026-11-14',
+          id: 'guide:pagination',
+          kind: 'guide',
+          title: 'Pagination',
+          resource: null,
+          method: null,
+          path: null,
+          deprecated: false,
+          complete: true,
+          sourceUrl: null,
+          anchor: null,
+          text: '# Pagination\n\nUse page_info.',
+          fields: [],
+          scopes: [],
+        });
+      }),
+    );
+    renderApp('/apis/shopify/documents/guide%3Apagination');
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Pagination' }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Use page_info\./)).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByText('No vendor link in the package')).toBeInTheDocument();
+    expect(screen.queryByText('Source JSON, as in the package')).not.toBeInTheDocument();
+  });
+
   it('shows a stored document as plain text, with its fields and a link to the vendor page', async () => {
     renderApp('/apis/shopify/documents/' + encodeURIComponent('model:order'));
     expect(screen.getByRole('status')).toHaveTextContent('Loading the document');
-    expect(await screen.findByRole('heading', { level: 1, name: 'order' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Order' })).toBeInTheDocument();
     expect(screen.getByText(/Total amount billed for the order/)).toBeInTheDocument();
-    expect(screen.getByRole('table', { name: /Fields of/ })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Fields' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Open the vendor page' })).toHaveAttribute(
       'rel',
       'noreferrer',

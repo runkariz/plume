@@ -57,7 +57,7 @@ export class ApiError extends Error {
   }
 }
 
-export type ItemKind = 'endpoint' | 'model' | 'guide' | 'auth' | 'app';
+export type ItemKind = 'endpoint' | 'model' | 'guide' | 'auth' | 'trigger' | 'app';
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export interface ApiDetail extends ApiSummary {
@@ -88,11 +88,14 @@ export interface ApiDetail extends ApiSummary {
     build: string | null;
   };
   connect: { claudeCode: string; mcpUrl?: string };
+  /** How many auth schemes, trigger events and webhook endpoints the package has (shows or hides the sections). */
+  sections?: { auth: number; triggers: number; webhookEndpoints: number } | null;
 }
 
 export interface BrowseItem {
   id: string;
   kind: ItemKind;
+  tags?: string[];
   title: string;
   method?: HttpMethod;
   path?: string;
@@ -461,6 +464,16 @@ export interface DocumentOut {
   anchor: string | null;
   /** Plain text taken from the vendor docs: untrusted, render as text. */
   text: string;
+  /** Section tags from the package (e.g. "webhooks"); added with the package sections. */
+  tags?: string[];
+  /** The package's source JSON, verbatim (untrusted): request.json, the model schema, the scheme or event JSON. */
+  raw?: unknown;
+  /** True when `raw` was cut to the server's size cap. */
+  rawTruncated?: boolean;
+  /** Structured status codes, when the package has them. */
+  responses?: Record<string, unknown>[];
+  /** Documented errors, verbatim from the package (e.g. {status, meaning, retryable}); [] when none. */
+  errors?: Record<string, unknown>[];
   fields: {
     name: string;
     location: string;
@@ -469,4 +482,116 @@ export interface DocumentOut {
     description: string | null;
   }[];
   scopes: string[];
+}
+
+// ---- package sections: auth, triggers, environments (from the package, nothing invented) ----
+
+export interface AuthSchemeSummary {
+  id: string;
+  docId: string;
+  name: string;
+  type: string | null;
+  grantType: string | null;
+  headerName: string | null;
+  queryParam: string | null;
+  scopes: number;
+  variables: number;
+}
+
+export interface AuthList {
+  api: string;
+  build: string;
+  present: boolean;
+  /** "not in this package" when absent. */
+  note: string | null;
+  schemes: AuthSchemeSummary[];
+}
+
+export interface AuthSchemeDetail {
+  api: string;
+  build: string;
+  id: string;
+  docId: string;
+  name: string;
+  type: string | null;
+  grantType: string | null;
+  headerName: string | null;
+  queryParam: string | null;
+  scopes: { scope: string | null; description: string | null }[];
+  variables: { name: string; description: string | null; type: string | null; required: boolean }[];
+  /** Verbatim from the package: in Shopify a list of {order, text}; other shapes possible. */
+  setupSteps: unknown[] | null;
+  /** Verbatim object, e.g. {notes, refreshBehavior}. */
+  tokenLifetime: Record<string, unknown> | null;
+  testUrl: string | null;
+  /** The auth JSON and its variables JSON Schema, verbatim (untrusted). */
+  scheme: Record<string, unknown>;
+  variablesSchema: Record<string, unknown> | null;
+  file: string | null;
+}
+
+export interface TriggerSummary {
+  /** e.g. "app/scopes_update" (contains "/": URL-encode it in a path). */
+  key: string | null;
+  docId: string;
+  title: string;
+  description: string | null;
+  resource: string | null;
+  delivery: string | null;
+  /** Set when the event is delivered by polling this endpoint instead of a webhook. */
+  syncEndpointId?: string | null;
+}
+
+export interface TriggerList {
+  api: string;
+  build: string;
+  present: boolean;
+  note: string | null;
+  total: number;
+  items: TriggerSummary[];
+  /** The webhook delivery mechanism, verbatim from the package ([] when none). */
+  webhooks?: Record<string, unknown>[];
+}
+
+export interface TriggerDetail extends TriggerSummary {
+  api: string;
+  build: string;
+  sourceUrl: string | null;
+  /** The event JSON, verbatim (untrusted). */
+  event: Record<string, unknown>;
+}
+
+export interface Environment {
+  key?: string;
+  kind?: string;
+  name?: string;
+  baseUrl?: string;
+  servers?: Record<string, string>;
+  isDefault?: boolean;
+  [more: string]: unknown;
+}
+
+export interface EnvironmentsOut {
+  api: string;
+  build: string;
+  present: boolean;
+  note: string | null;
+  environments: Environment[];
+  versioning: { format?: string; scheme?: string; current?: string; versions?: string[] } | null;
+  baseUrls: string[] | null;
+  variablesSchema: Record<string, unknown> | null;
+}
+
+/** GET /v1/apis/{api}/mcp: only when the vendor runs an MCP server. Docs-only packages have none (present=false). */
+export interface McpOut {
+  api: string;
+  build: string;
+  present: boolean;
+  note: string | null;
+  servers: {
+    id: string;
+    /** The server JSON, verbatim (untrusted). */
+    server: Record<string, unknown>;
+    tools: { tool: string; inputSchema: unknown; outputSchema: unknown | null }[];
+  }[];
 }

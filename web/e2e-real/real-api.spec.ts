@@ -51,12 +51,13 @@ for (const theme of THEMES) {
       };
       await page.goto('/');
       await expect(page.getByRole('link', { name: 'Test Catalog API' })).toBeVisible();
-      await expect(page.locator('article.api-card')).toHaveCount(3);
-      await expect(page.getByRole('button', { name: 'All · 3' })).toHaveAttribute(
+      const count = list.items.length; // every loaded fixture: the API says how many
+      await expect(page.locator('article.api-card')).toHaveCount(count);
+      await expect(page.getByRole('button', { name: `All · ${count}` })).toHaveAttribute(
         'aria-pressed',
         'true',
       );
-      await expect(page.getByRole('button', { name: 'E-commerce · 3' })).toBeVisible();
+      await expect(page.getByRole('button', { name: /^E-commerce · \d+$/ })).toBeVisible();
       // the chips show exactly what the API reports: a recall number only for evaluated builds
       const evaluated = list.items.filter((a) => a.status.recallAt5 !== null);
       await expect(page.getByText(/^Recall@5 \d/)).toHaveCount(evaluated.length);
