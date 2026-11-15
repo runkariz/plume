@@ -1,10 +1,14 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { Blob as NodeBlob, File as NodeFile } from 'node:buffer';
 import { FormData as NodeFormData } from 'undici';
 import { afterAll, afterEach, beforeAll } from 'vitest';
 import { authStore } from '@/app/authStore';
 import { server } from './server';
+
+// A cold run (the first after files changed) compiles every module while the test waits: the default 1 s for
+// findBy*/waitFor was occasionally too tight for the heavy first render (React Flow), without anything being wrong.
+configure({ asyncUtilTimeout: 4000 });
 
 // jsdom's FormData cannot be serialized by Node's fetch (which MSW intercepts): use Node's own.
 class TestFormData extends NodeFormData {
