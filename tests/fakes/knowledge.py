@@ -246,5 +246,8 @@ class InMemoryAssetRepo:
     def get(self, build_id: BuildId, name: str) -> Asset | None:
         return self.assets.get((build_id.value, name))
 
+    def has(self, build_id: BuildId, name: str) -> bool:
+        return (build_id.value, name) in self.assets
+
     def list(self, build_id: BuildId) -> list[Asset]:
         return [a for (b, _), a in sorted(self.assets.items()) if b == build_id.value]

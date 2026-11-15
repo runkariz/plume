@@ -47,6 +47,14 @@ class PostgresAssetRepo:
             ).one_or_none()
         return _asset(r) if r else None
 
+    def has(self, build_id: BuildId, name: str) -> bool:
+        with self._engine.connect() as conn:
+            r = conn.execute(
+                text("SELECT 1 FROM build_assets WHERE build_id = :b AND name = :n"),
+                {"b": build_id.value, "n": name},
+            ).first()
+        return r is not None
+
     def list(self, build_id: BuildId) -> list[Asset]:
         with self._engine.connect() as conn:
             rows = conn.execute(

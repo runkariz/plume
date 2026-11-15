@@ -1,6 +1,46 @@
 {
   "components": {
     "schemas": {
+      "ApiConceptCounts": {
+        "properties": {
+          "endpoints": {
+            "description": "Endpoints of this resource in the API.",
+            "title": "Endpoints",
+            "type": "integer"
+          },
+          "fields": {
+            "description": "Distinct body/response field names of those documents.",
+            "title": "Fields",
+            "type": "integer"
+          },
+          "models": {
+            "description": "Model documents of this concept in the API.",
+            "title": "Models",
+            "type": "integer"
+          },
+          "operations": {
+            "items": {
+              "enum": [
+                "read",
+                "create",
+                "update",
+                "delete"
+              ],
+              "type": "string"
+            },
+            "title": "Operations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "models",
+          "endpoints",
+          "operations",
+          "fields"
+        ],
+        "title": "ApiConceptCounts",
+        "type": "object"
+      },
       "ApiDetail": {
         "properties": {
           "category": {
@@ -1173,6 +1213,13 @@
       },
       "Concept": {
         "properties": {
+          "apiCounts": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ApiConceptCounts"
+            },
+            "title": "Apicounts",
+            "type": "object"
+          },
           "coverage": {
             "additionalProperties": {
               "enum": [
@@ -1184,10 +1231,6 @@
             },
             "title": "Coverage",
             "type": "object"
-          },
-          "description": {
-            "title": "Description",
-            "type": "string"
           },
           "difficulty": {
             "$ref": "#/components/schemas/Difficulty"
@@ -1224,12 +1267,18 @@
             },
             "title": "Operations",
             "type": "array"
+          },
+          "reason": {
+            "description": "One factual paragraph built from the builds (no LLM): what each API documents, how many fields are likely to map, and the difficulty.",
+            "title": "Reason",
+            "type": "string"
           }
         },
         "required": [
           "id",
           "name",
-          "description",
+          "reason",
+          "apiCounts",
           "likelyFields",
           "coverage",
           "operations",
@@ -3220,6 +3269,36 @@
         "title": "StaleInput",
         "type": "object"
       },
+      "SuggestCounts": {
+        "properties": {
+          "all": {
+            "description": "Concepts in 2+ APIs matching q + require.",
+            "title": "All",
+            "type": "integer"
+          },
+          "inAll": {
+            "title": "Inall",
+            "type": "integer"
+          },
+          "single": {
+            "description": "Concepts in exactly one API matching q + require.",
+            "title": "Single",
+            "type": "integer"
+          },
+          "write": {
+            "title": "Write",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "all",
+          "inAll",
+          "write",
+          "single"
+        ],
+        "title": "SuggestCounts",
+        "type": "object"
+      },
       "SuggestRequest": {
         "properties": {
           "apis": {
@@ -3230,6 +3309,64 @@
             "minItems": 2,
             "title": "Apis",
             "type": "array"
+          },
+          "inAll": {
+            "default": false,
+            "description": "Only concepts present in every API.",
+            "title": "Inall",
+            "type": "boolean"
+          },
+          "limit": {
+            "default": 24,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "only": {
+            "default": "multi",
+            "description": "multi = in 2+ selected APIs; single = in exactly one; all = both.",
+            "enum": [
+              "multi",
+              "single",
+              "all"
+            ],
+            "title": "Only",
+            "type": "string"
+          },
+          "q": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Text filter over name, id and reason.",
+            "title": "Q"
+          },
+          "require": {
+            "description": "API ids (among `apis`) where the concept must be direct or derived.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 6,
+            "title": "Require",
+            "type": "array"
+          },
+          "writeOnly": {
+            "default": false,
+            "description": "Only concepts with write endpoints.",
+            "title": "Writeonly",
+            "type": "boolean"
           }
         },
         "required": [
@@ -3254,13 +3391,45 @@
             "title": "Concepts",
             "type": "array"
           },
+          "counts": {
+            "$ref": "#/components/schemas/SuggestCounts"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "nextOffset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nextoffset"
+          },
           "notModeled": {
             "$ref": "#/components/schemas/NotModeled"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total": {
+            "description": "Concepts matching every filter (all pages).",
+            "title": "Total",
+            "type": "integer"
           }
         },
         "required": [
           "apis",
           "concepts",
+          "total",
+          "limit",
+          "offset",
+          "nextOffset",
+          "counts",
           "notModeled"
         ],
         "title": "SuggestResponse",
@@ -6751,6 +6920,7 @@
     },
     "/v1/models/suggest": {
       "post": {
+        "description": "Concepts the selected APIs document, best first, paged and filtered (see the request\nfields). Deterministic: no LLM.",
         "operationId": "suggest_concepts_v1_models_suggest_post",
         "requestBody": {
           "content": {

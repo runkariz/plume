@@ -213,6 +213,8 @@ def test_assets(store: Store, request: pytest.FixtureRequest) -> None:
     repo.put(build.build_id, [icon])
     assert repo.get(build.build_id, "icon") == icon
     assert repo.get(build.build_id, "other") is None
+    assert repo.has(build.build_id, "icon") is True
+    assert repo.has(build.build_id, "other") is False
     assert repo.list(build.build_id) == [icon]
     repo.put(build.build_id, [Asset("icon", "image/svg+xml", b"<svg/>", "connector/icon.svg")])
     assert repo.get(build.build_id, "icon").content_type == "image/svg+xml"  # type: ignore[union-attr]

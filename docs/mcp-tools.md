@@ -29,7 +29,8 @@ DNS-rebinding protection (allowed hosts from `PLUME_MCP_ALLOWED_HOSTS`). Every r
 ## Maintainer server
 
 `http://127.0.0.1:18481/maintainer/mcp`, `Authorization: Bearer <token>` (401 without; 503 when
-no tokens are configured). Tools: `suggest_concepts`, the model tools above except
+no tokens are configured). Tools: `suggest_concepts(apis, q?, only?, require?, limit?,
+offset?)` (paged; see canonical-models.md), the model tools above except
 `list_my_models` (drafts are stored **unreleased**; `get_model` also shows unreleased models),
 `list_models(api?, visibility="all")` (official | unreleased | unlisted | all),
 `release_model`, `discard_model`, `generate_model(apis, concept)` (Plume's LLM; returns a job),

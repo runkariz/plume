@@ -5,7 +5,12 @@ from typing import Any
 import pytest
 
 from plume.application.errors import NotFoundError
-from plume.application.models.concepts import ModelInputError, concept_key
+from plume.application.models.concepts import (
+    ModelInputError,
+    SuggestFilter,
+    concept_key,
+    concept_label,
+)
 from plume.application.models.sessions import ModelDraftRefusedError
 from tests.fakes.knowledge import WordEmbedder
 from tests.fakes.stack import FakeStack
@@ -60,6 +65,81 @@ def test_suggest_validation(stack: FakeStack) -> None:
         stack.suggest().execute(["shopify", "shopify"])
     with pytest.raises(NotFoundError):
         stack.suggest().execute(["shopify", "nope"])
+    with pytest.raises(ModelInputError):
+        stack.suggest().execute(APIS, SuggestFilter(require=("shopify",)))
+    with pytest.raises(ModelInputError):
+        stack.suggest().execute(APIS, SuggestFilter(only="nope"))
+
+
+def test_suggest_reason_and_counts_are_factual(stack: FakeStack) -> None:
+    order = next(c for c in stack.suggest().execute(APIS).concepts if c.key == "order")
+    test_counts = order.api_counts["test-catalog-api"]
+    assert test_counts.models >= 1
+    assert test_counts.endpoints == sum(
+        d.startswith("endpoint:") for d in order.doc_ids["test-catalog-api"]
+    )
+    assert "read" in test_counts.operations
+    assert test_counts.fields > 0
+    assert order.reason.startswith("Test Catalog API has an Order model and ")
+    assert f"About {order.likely_fields} fields are likely to map." in order.reason
+    assert order.reason.endswith("Straightforward because every API documents Order directly.")
+    assert "as documented by" not in order.reason
+
+
+def test_suggest_paging_filters_and_single_api_concepts(stack: FakeStack) -> None:
+    apis = ["shopify", "test-catalog-api"]
+    everything = stack.suggest().execute(apis, SuggestFilter(only="all", limit=100))
+    multi = stack.suggest().execute(apis, SuggestFilter(limit=100))
+    single = stack.suggest().execute(apis, SuggestFilter(only="single", limit=100))
+    assert everything.total == multi.total + single.total
+    assert multi.counts.all == multi.total
+    assert multi.counts.single == single.total
+    assert single.total > 0
+    assert all(c.present == 1 for c in single.concepts)
+    assert all(c.present >= 2 for c in multi.concepts)
+    assert all(any(v == "direct" for v in c.coverage.values()) for c in everything.concepts)
+    page1 = stack.suggest().execute(apis, SuggestFilter(only="all", limit=2))
+    page2 = stack.suggest().execute(apis, SuggestFilter(only="all", limit=2, offset=2))
+    assert page1.next_offset == 2
+    assert [c.key for c in page1.concepts + page2.concepts] == [
+        c.key for c in everything.concepts[:4]
+    ]
+    last = stack.suggest().execute(apis, SuggestFilter(only="all", offset=everything.total - 1))
+    assert last.next_offset is None
+    hit = stack.suggest().execute(apis, SuggestFilter(only="all", q="PROD"))
+    assert "product" in [c.key for c in hit.concepts]
+    assert all("prod" in (c.name + c.key + c.reason).lower() for c in hit.concepts)
+    req = stack.suggest().execute(apis, SuggestFilter(only="all", require=("shopify",)))
+    assert all(c.coverage["shopify"] != "absent" for c in req.concepts)
+    in_all = stack.suggest().execute(apis, SuggestFilter(in_all=True))
+    assert in_all.total == multi.counts.in_all
+    writes = stack.suggest().execute(apis, SuggestFilter(write_only=True))
+    assert writes.total == multi.counts.write
+    assert all("write" in c.operations for c in writes.concepts)
+
+
+def test_concept_names_are_singular_and_generic_words_are_noise() -> None:
+    from plume.application.models.concepts import concept_docs  # noqa: PLC0415
+    from plume.application.ports.search_index import DocumentSummary  # noqa: PLC0415
+    from plume.domain.knowledge.document import DocumentKind  # noqa: PLC0415
+
+    assert concept_key("Taxes") == concept_key("tax") == "tax"
+    assert concept_key("Addresses") == "address"
+    assert concept_key("categories") == "category"
+    assert concept_label("line_items") == "Line Item"
+
+    def model(title: str) -> DocumentSummary:
+        return DocumentSummary(
+            f"model:{title}", DocumentKind.MODEL, title, title, None, None, False
+        )
+
+    groups = concept_docs(
+        [
+            model(t)
+            for t in ("Updated", "Attributes", "Data / Entities", "Orders / Updated", "Order")
+        ]
+    )
+    assert set(groups) == {"order"}
 
 
 def test_session_context_index_and_paged_evidence(stack: FakeStack) -> None:

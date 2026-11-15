@@ -366,6 +366,22 @@ class JobOut(BaseModel):
 
 class SuggestRequest(Schema):
     apis: list[str] = Field(min_length=2, max_length=6)
+    q: str | None = Field(
+        default=None, max_length=200, description="Text filter over name, id and reason."
+    )
+    only: Literal["multi", "single", "all"] = Field(
+        default="multi",
+        description="multi = in 2+ selected APIs; single = in exactly one; all = both.",
+    )
+    require: list[str] = Field(
+        default_factory=list,
+        max_length=6,
+        description="API ids (among `apis`) where the concept must be direct or derived.",
+    )
+    in_all: bool = Field(default=False, description="Only concepts present in every API.")
+    write_only: bool = Field(default=False, description="Only concepts with write endpoints.")
+    limit: int = Field(default=24, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
 
 
 class ApiRef(Schema):
@@ -381,10 +397,21 @@ class Difficulty(Schema):
     label: str
 
 
+class ApiConceptCounts(Schema):
+    models: int = Field(description="Model documents of this concept in the API.")
+    endpoints: int = Field(description="Endpoints of this resource in the API.")
+    operations: list[Literal["read", "create", "update", "delete"]]
+    fields: int = Field(description="Distinct body/response field names of those documents.")
+
+
 class Concept(Schema):
     id: str
     name: str
-    description: str
+    reason: str = Field(
+        description="One factual paragraph built from the builds (no LLM): what each API "
+        "documents, how many fields are likely to map, and the difficulty."
+    )
+    api_counts: dict[str, ApiConceptCounts]
     likely_fields: int
     coverage: dict[str, Literal["direct", "derived", "absent"]]
     operations: list[Literal["read", "write"]]
@@ -397,9 +424,21 @@ class NotModeled(Schema):
     summary: str
 
 
+class SuggestCounts(Schema):
+    all: int = Field(description="Concepts in 2+ APIs matching q + require.")
+    in_all: int
+    write: int
+    single: int = Field(description="Concepts in exactly one API matching q + require.")
+
+
 class SuggestResponse(Schema):
     apis: list[ApiRef]
     concepts: list[Concept]
+    total: int = Field(description="Concepts matching every filter (all pages).")
+    limit: int
+    offset: int
+    next_offset: int | None
+    counts: SuggestCounts
     not_modeled: NotModeled
 
 

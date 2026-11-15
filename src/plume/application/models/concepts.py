@@ -16,50 +16,131 @@ from plume.application.reader.resolve import BuildResolver, ResolvedBuild
 from plume.domain.knowledge.document import DocumentKind
 from plume.domain.knowledge.fact import FactKind
 
+# Generic and timestamp words: a model or resource with one of these names (e.g. Mirakl's
+# "Updated", "Attributes", "Data / Entities") is a part of something else, never a concept.
 _NOISE = frozenset(
-    {"general", "default", "misc", "other", "error", "errors", "api", "app", "data", "datum"}
-)
+    {
+        "general", "default", "misc", "other", "error", "errors", "api", "app", "data", "datum",
+        "updated", "created", "deleted", "modified", "date", "time", "timestamp", "from", "to",
+        "latest", "attribute", "entity", "value", "page", "pagination", "link", "input",
+        "output", "context", "detail", "summary", "reference", "range", "selection", "info",
+        "information", "meta", "metadata", "result", "response", "request", "list", "property",
+        "field", "parameter", "param", "option", "setting", "label", "period", "count", "total",
+        "status", "type", "key", "id", "name", "object", "body", "payload", "record", "item",
+        "filter", "query", "search", "batch", "bulk",
+    }
+)  # fmt: skip
 _WRITE = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+_OPERATION = {
+    "GET": "read",
+    "POST": "create",
+    "PUT": "update",
+    "PATCH": "update",
+    "DELETE": "delete",
+}
 MAX_APIS = 6
-MAX_CONCEPTS = 24
+DEFAULT_LIMIT = 24
+MAX_LIMIT = 100
 
 
 class ModelInputError(ApplicationError, ValueError):
     code = "invalid_input"
 
 
+def _singular(word: str) -> str:
+    """English plural -> singular for resource names (``taxes`` -> ``tax``, ``addresses`` ->
+    ``address``, ``categories`` -> ``category``, ``orders`` -> ``order``)."""
+    if word.endswith("ies") and len(word) > 4:
+        return word[:-3] + "y"
+    if word.endswith(("sses", "xes", "ches", "shes", "zes")) and len(word) > 4:
+        return word[:-2]
+    if word.endswith("s") and not word.endswith(("ss", "us", "is")) and len(word) > 3:
+        return word[:-1]
+    return word
+
+
 def concept_key(name: str) -> str:
-    key = re.sub(r"[^a-z0-9]", "", name.lower())
-    if key.endswith("ies") and len(key) > 4:
-        key = key[:-3] + "y"
-    elif key.endswith("s") and not key.endswith("ss") and len(key) > 3:
-        key = key[:-1]
-    return key
+    return _singular(re.sub(r"[^a-z0-9]", "", name.lower()))
 
 
 def concept_label(name: str) -> str:
-    words = re.sub(r"([a-z])([A-Z])", r"\1 \2", name).replace("_", " ").split()
-    return " ".join(w.capitalize() for w in words) or name
+    """``line_items`` / ``LineItems`` -> ``Line Item`` (the last word made singular)."""
+    words = re.sub(r"([a-z])([A-Z])", r"\1 \2", name).replace("_", " ").replace("-", " ").split()
+    if not words:
+        return name
+    words[-1] = _singular(words[-1].lower())
+    return " ".join(w.capitalize() for w in words)
+
+
+@dataclass(frozen=True, slots=True)
+class ApiConceptCounts:
+    """What one API documents about a concept (all 0 when it is derived or absent)."""
+
+    models: int
+    endpoints: int
+    operations: tuple[str, ...]  # read | create | update | delete
+    fields: int
 
 
 @dataclass(frozen=True, slots=True)
 class ConceptSuggestion:
     key: str
     name: str
-    description: str
+    reason: str
     likely_fields: int
     coverage: dict[str, str]  # api -> direct | derived | absent
     operations: tuple[str, ...]
     difficulty: tuple[str, str]  # (tone, label)
     doc_ids: dict[str, tuple[str, ...]]  # api -> documents of this concept
+    api_counts: dict[str, ApiConceptCounts]
+
+    @property
+    def present(self) -> int:
+        return sum(v != "absent" for v in self.coverage.values())
+
+    @property
+    def in_all(self) -> bool:
+        return all(v != "absent" for v in self.coverage.values())
+
+    @property
+    def writes(self) -> bool:
+        return "write" in self.operations
+
+
+@dataclass(frozen=True, slots=True)
+class SuggestFilter:
+    q: str | None = None
+    only: str = "multi"  # multi | single | all
+    require: tuple[str, ...] = ()
+    in_all: bool = False
+    write_only: bool = False
+    limit: int = DEFAULT_LIMIT
+    offset: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class SuggestCounts:
+    all: int  # multi-API concepts matching q + require
+    in_all: int
+    write: int
+    single: int
 
 
 @dataclass(frozen=True, slots=True)
 class Suggestions:
     apis: tuple[ResolvedBuild, ...]
-    concepts: tuple[ConceptSuggestion, ...]
-    not_modeled: int
+    concepts: tuple[ConceptSuggestion, ...]  # this page
+    total: int  # matching every filter
+    limit: int
+    offset: int
+    counts: SuggestCounts
+    not_modeled: int  # single-API concepts (matching q + require)
     not_modeled_examples: tuple[str, ...]
+
+    @property
+    def next_offset(self) -> int | None:
+        nxt = self.offset + len(self.concepts)
+        return nxt if nxt < self.total else None
 
 
 def resolve_apis(resolver: BuildResolver, apis: list[str]) -> tuple[ResolvedBuild, ...]:
@@ -123,6 +204,76 @@ def _operations(docs: list[DocumentSummary]) -> set[str]:
     return ops or {"read"}
 
 
+def _api_counts(docs: list[DocumentSummary], fields: int) -> ApiConceptCounts:
+    endpoints = [d for d in docs if d.kind is DocumentKind.ENDPOINT]
+    ops = {_OPERATION[d.method] for d in endpoints if d.method in _OPERATION}
+    return ApiConceptCounts(
+        models=sum(d.kind is DocumentKind.MODEL for d in docs),
+        endpoints=len(endpoints),
+        operations=tuple(o for o in ("read", "create", "update", "delete") if o in ops),
+        fields=fields,
+    )
+
+
+def _n(count: int, word: str) -> str:
+    return f"{count} {word}" + ("" if count == 1 else "s")
+
+
+def _api_sentence(api: str, name: str, coverage: str, c: ApiConceptCounts) -> str:
+    noun = name.lower()
+    ops = f" ({', '.join(c.operations)})" if c.operations else ""
+    if coverage == "absent":
+        return f"{api} does not document {noun}"
+    if coverage == "derived":
+        return f"{api} has no {name} model or endpoint; only field names mention it"
+    if c.models and c.endpoints:
+        models = (
+            f"an {name} model"
+            if c.models == 1 and name[:1] in "AEIOU"
+            else (f"a {name} model" if c.models == 1 else f"{c.models} {name} models")
+        )
+        return f"{api} has {models} and {_n(c.endpoints, noun + ' endpoint')}{ops}"
+    if c.endpoints:
+        return (
+            f"{api} documents {noun} through {_n(c.endpoints, 'endpoint')}{ops} "
+            f"but has no {name} model"
+        )
+    models = "a model" if c.models == 1 else f"{c.models} models"
+    return f"{api} documents {name} as {models} but has no {noun} endpoint"
+
+
+def build_reason(
+    name: str,
+    coverage: dict[str, str],
+    counts: dict[str, ApiConceptCounts],
+    labels: dict[str, str],
+    likely_fields: int,
+    difficulty: tuple[str, str],
+) -> str:
+    """One factual paragraph from the build's documents (no LLM, nothing invented)."""
+    parts = [_api_sentence(labels[a], name, coverage[a], counts[a]) for a in coverage]
+    text = "; ".join(parts) + "."
+    text += f" About {_n(likely_fields, 'field')} {'is' if likely_fields == 1 else 'are'}"
+    text += " likely to map."
+    derived = [labels[a] for a, v in coverage.items() if v == "derived"]
+    absent = [labels[a] for a, v in coverage.items() if v == "absent"]
+    if difficulty[0] == "ok":
+        text += f" {difficulty[1]} because every API documents {name} directly."
+    elif difficulty[0] == "warn":
+        text += f" {difficulty[1]} because {', '.join(derived)} only mention it in fields."
+    else:
+        text += f" {difficulty[1]}: {', '.join(absent)}."
+    return text
+
+
+def _matches(c: ConceptSuggestion, f: SuggestFilter) -> bool:
+    if f.q:
+        q = f.q.lower()
+        if q not in c.name.lower() and q not in c.key and q not in c.reason.lower():
+            return False
+    return all(c.coverage.get(a, "absent") != "absent" for a in f.require)
+
+
 class SuggestConcepts:
     def __init__(self, resolver: BuildResolver, index: SearchIndex, facts: FactIndex) -> None:
         self._resolver = resolver
@@ -155,13 +306,11 @@ class SuggestConcepts:
                 leaves[owner_key[f.owner_id]].add(leaf.lower())
         return _ApiScan(groups, words, leaves)
 
-    def execute(self, apis: list[str]) -> Suggestions:
-        resolved = resolve_apis(self._resolver, apis)
+    def _all(self, resolved: tuple[ResolvedBuild, ...]) -> list[ConceptSuggestion]:
         names: dict[str, str] = {}
         scans = {r.api.api_id.value: self._scan(r, names) for r in resolved}
-        api_ids = list(scans)
+        labels = {r.api.api_id.value: r.api.name for r in resolved}
         concepts: list[ConceptSuggestion] = []
-        single: list[str] = []
         for key in sorted({k for sc in scans.values() for k in sc.groups}):
             coverage = {
                 api: "direct"
@@ -173,42 +322,71 @@ class SuggestConcepts:
             }
             present = [a for a, c in coverage.items() if c != "absent"]
             direct = [a for a, c in coverage.items() if c == "direct"]
-            if len(present) < 2 or not direct:
-                single.append(concept_label(names[key]))
-                continue
             ops = _operations([d for a in direct for d in scans[a].groups[key]])
             fields = set().union(*(sc.leaves.get(key, set()) for sc in scans.values()))
             label = concept_label(names[key])
-            derived = sorted(set(present) - set(direct))
-            description = f"{label} as documented by {', '.join(direct)}"
-            if derived:
-                description += f"; referenced by fields in {', '.join(derived)}"
+            counts = {
+                a: _api_counts(sc.groups.get(key, []), len(sc.leaves.get(key, set())))
+                for a, sc in scans.items()
+            }
+            difficulty = _difficulty(len(direct), len(present), len(scans))
             concepts.append(
                 ConceptSuggestion(
                     key=key,
                     name=label,
-                    description=description,
+                    reason=build_reason(label, coverage, counts, labels, len(fields), difficulty),
                     likely_fields=len(fields),
                     coverage=coverage,
                     operations=tuple(o for o in ("read", "write") if o in ops),
-                    difficulty=_difficulty(len(direct), len(present), len(api_ids)),
+                    difficulty=difficulty,
                     doc_ids={
                         a: tuple(d.doc_id for d in sc.groups.get(key, []))
                         for a, sc in scans.items()
                     },
+                    api_counts=counts,
                 )
             )
         concepts.sort(
             key=lambda c: (
                 -sum(v == "direct" for v in c.coverage.values()),
-                -sum(v != "absent" for v in c.coverage.values()),
+                -c.present,
                 -c.likely_fields,
                 c.key,
             )
         )
+        return concepts
+
+    def execute(self, apis: list[str], f: SuggestFilter | None = None) -> Suggestions:
+        f = f or SuggestFilter()
+        resolved = resolve_apis(self._resolver, apis)
+        ids = [r.api.api_id.value for r in resolved]
+        unknown = [a for a in f.require if a not in ids]
+        if unknown:
+            raise ModelInputError(f"require must be among the selected APIs: {unknown}")
+        if f.only not in ("multi", "single", "all"):
+            raise ModelInputError("only must be multi, single or all")
+        limit = max(1, min(f.limit, MAX_LIMIT))
+        offset = max(0, f.offset)
+        matching = [c for c in self._all(resolved) if _matches(c, f)]
+        multi = [c for c in matching if c.present >= 2]
+        single = [c for c in matching if c.present == 1]
+        chosen = {"multi": multi, "single": single, "all": multi + single}[f.only]
+        if f.in_all:
+            chosen = [c for c in chosen if c.in_all]
+        if f.write_only:
+            chosen = [c for c in chosen if c.writes]
         return Suggestions(
             apis=resolved,
-            concepts=tuple(concepts[:MAX_CONCEPTS]),
-            not_modeled=len(single) + max(0, len(concepts) - MAX_CONCEPTS),
-            not_modeled_examples=tuple(single[:8]),
+            concepts=tuple(chosen[offset : offset + limit]),
+            total=len(chosen),
+            limit=limit,
+            offset=offset,
+            counts=SuggestCounts(
+                all=len(multi),
+                in_all=sum(c.in_all for c in multi),
+                write=sum(c.writes for c in multi),
+                single=len(single),
+            ),
+            not_modeled=len(single),
+            not_modeled_examples=tuple(c.name for c in single[:8]),
         )

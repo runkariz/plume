@@ -74,6 +74,53 @@ def test_candidates_and_suggest(client: TestClient) -> None:
     assert order["difficulty"] == {"tone": "ok", "label": "Straightforward"}
     assert {"count", "summary"} <= set(r["notModeled"])
     assert client.post("/v1/models/suggest", json={"apis": ["x"]}).status_code == 422
+    assert "description" not in order
+    assert order["reason"].startswith("Test Catalog API has an Order model")
+    assert set(order["apiCounts"]["test-catalog-api"]) == {
+        "models",
+        "endpoints",
+        "operations",
+        "fields",
+    }
+    assert (r["total"], r["limit"], r["offset"]) == (len(r["concepts"]), 24, 0)
+    assert r["nextOffset"] is None
+    assert set(r["counts"]) == {"all", "inAll", "write", "single"}
+    page = client.post("/v1/models/suggest", json={"apis": APIS, "limit": 1}).json()
+    assert (len(page["concepts"]), page["nextOffset"]) == (1, 1)
+    q = client.post("/v1/models/suggest", json={"apis": APIS, "q": "order"}).json()
+    assert [c["id"] for c in q["concepts"]][:1] == ["order"]
+    bad = client.post("/v1/models/suggest", json={"apis": APIS, "require": ["shopify"]})
+    assert bad.status_code == 400
+    assert r["apis"][0]["logo"]["url"] is None  # these fixtures have no icon
+
+
+def test_suggest_and_model_inputs_carry_the_icon(packages: Path, tmp_path: Path) -> None:
+    s = FakeStack(embedder=WordEmbedder(), data_dir=tmp_path)
+    for p in ("shopify-mini", "test-catalog"):
+        s.load(str(packages / p))
+    client = TestClient(
+        create_app(
+            HttpDependencies(
+                overviews=s.overviews,
+                browse=s.browse,
+                search=s.search,
+                get_document=s.get_document,
+                find_fact=s.find_fact,
+                check_call=s.check_call,
+                list_builds=lambda: ListBuilds(s.builds, s.tags),
+                diff_builds=lambda: DiffBuilds(s.builds),
+                resolver=s.resolver,
+                rate_limit_per_minute=0,
+                suggest=s.suggest,
+                models=s.models,
+                sections=s.sections,
+                maintainer_tokens=(TOKEN,),
+            )
+        )
+    )
+    r = client.post("/v1/models/suggest", json={"apis": ["shopify", "test-catalog-api"]}).json()
+    logos = {a["id"]: a["logo"]["url"] for a in r["apis"]}
+    assert logos == {"shopify": "/v1/apis/shopify/icon", "test-catalog-api": None}
 
 
 def test_maintainer_claude_flow_release(client: TestClient) -> None:  # noqa: PLR0915
