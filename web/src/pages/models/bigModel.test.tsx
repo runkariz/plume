@@ -94,7 +94,7 @@ describe('a big model (40 fields) opens as a readable table', () => {
   it('has no mapping detail card in the table view (the table is the detail)', async () => {
     renderApp(url);
     await screen.findByRole('table');
-    expect(screen.queryByRole('combobox', { name: 'Mapping' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('listbox', { name: 'Mappings' })).not.toBeInTheDocument();
   });
 });
 
@@ -103,7 +103,7 @@ describe('a big model in the graph view: focus on one field, or the whole model'
     renderApp(url);
     await screen.findByRole('table');
     await userEvent.click(screen.getByRole('radio', { name: 'Graph' }));
-    await screen.findByRole('combobox', { name: 'Mapping' });
+    await screen.findByRole('listbox', { name: 'Mappings' });
   }
 
   it('starts focused on the selected field, with only its API fields', async () => {
@@ -111,7 +111,7 @@ describe('a big model in the graph view: focus on one field, or the whole model'
     expect(screen.getByRole('radio', { name: 'Selected field' })).toBeChecked();
     await waitFor(() => expect(canonicalNodes()).toBe(1));
     expect(
-      screen.getByText('Pick a field in the Mapping list below to see it here.'),
+      screen.getByText('Pick a mapping in the list on the left to see it here.'),
     ).toBeInTheDocument();
   });
 
@@ -122,12 +122,9 @@ describe('a big model in the graph view: focus on one field, or the whole model'
     expect(screen.getByText(/Scroll to pan, Ctrl or ⌘ \+ scroll to zoom/)).toBeInTheDocument();
   });
 
-  it('follows the Mapping list: picking another field focuses the graph on it', async () => {
+  it('follows the mapping list: picking another field focuses the graph on it', async () => {
     await openGraph();
-    await userEvent.selectOptions(
-      screen.getByRole('combobox', { name: 'Mapping' }),
-      'display_number|woocommerce',
-    );
+    await userEvent.click(screen.getByRole('option', { name: /display_number.*WooCommerce/ }));
     expect(
       screen.getByRole('heading', { name: 'display_number ← WooCommerce' }),
     ).toBeInTheDocument();

@@ -33,6 +33,18 @@ export async function shot(page: Page, name: string, theme: Theme) {
   await page.screenshot({ path: join(SHOTS, `${name}-${theme}.png`), fullPage: true });
 }
 
+/** Picks a mapping in the control box of the graph (it is closed by default on a narrow screen). */
+export async function openControls(page: Page) {
+  const toggle = page.getByRole('button', { name: /Filter and mappings/ });
+  if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+}
+
+export async function pickMapping(page: Page, name: string | RegExp) {
+  await openControls(page);
+  await page.getByRole('option', { name }).click();
+}
+
 /** Wait for web fonts so screenshots and layout are stable. */
 export async function settle(page: Page) {
   await page.evaluate(() => document.fonts.ready);

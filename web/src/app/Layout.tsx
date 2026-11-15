@@ -1,5 +1,6 @@
 import { Link, NavLink, Outlet, useLocation, useMatches, useNavigate } from 'react-router-dom';
-import { GitHubIcon, MoonIcon, PlumeMark, SunIcon } from '@/icons';
+import { BrandMark } from '@/components';
+import { GitHubIcon, MoonIcon, SunIcon } from '@/icons';
 import { authStore, useIsMaintainer, useMaintainerName } from './authStore';
 import { useTheme } from './theme';
 
@@ -20,7 +21,7 @@ export function Layout() {
       <header className="site-header">
         <div className="wrap">
           <Link to="/" className="brand" aria-label="Plume home">
-            <PlumeMark /> Plume
+            <BrandMark /> Plume
           </Link>
           <nav className="site-nav" aria-label="Main">
             <button

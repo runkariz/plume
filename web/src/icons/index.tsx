@@ -11,15 +11,6 @@ const stroke = {
   'aria-hidden': true,
 };
 
-export function PlumeMark(props: IconProps) {
-  return (
-    <svg {...stroke} strokeWidth={1.7} {...props}>
-      <path d="M20.2 3.8C12 3.4 6.4 8.2 5.6 15.4L4 20l4.4-1.6c7.2-.8 12-6.4 11.8-14.6z" />
-      <path d="M4 20 14 10M9 15.5h5.2M11.6 12.4h4.6" />
-    </svg>
-  );
-}
-
 export function GitHubIcon(props: IconProps) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden {...props}>

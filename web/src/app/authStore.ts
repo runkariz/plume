@@ -7,6 +7,8 @@ import { useSyncExternalStore } from 'react';
 interface Session {
   key: string;
   name: string;
+  /** null = the server did not say */
+  generation: boolean | null;
 }
 
 let session: Session | null = null;
@@ -16,8 +18,8 @@ const emit = () => listeners.forEach((l) => l());
 export const authStore = {
   getKey: () => session?.key ?? null,
   getName: () => session?.name ?? null,
-  signIn(key: string, name = 'maintainer') {
-    session = { key, name };
+  signIn(key: string, name = 'maintainer', generation: boolean | null = null) {
+    session = { key, name, generation };
     emit();
   },
   signOut() {
@@ -36,4 +38,12 @@ export function useIsMaintainer(): boolean {
 
 export function useMaintainerName(): string | null {
   return useSyncExternalStore(authStore.subscribe, () => session?.name ?? null);
+}
+
+/**
+ * Whether server-side generation works: false when the server said it has no model key (then "Generate" goes
+ * straight to Claude), true when it said it has, null when unknown (older server, or signed out).
+ */
+export function useServerGeneration(): boolean | null {
+  return useSyncExternalStore(authStore.subscribe, () => session?.generation ?? null);
 }

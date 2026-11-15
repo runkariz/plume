@@ -105,6 +105,79 @@ describe('Generate on the server (signed-in maintainer)', () => {
   });
 });
 
+describe('where the result of a click on Generate appears', () => {
+  it('the 503 message sits right under the concept that was clicked, announced as an alert', async () => {
+    authStore.signIn('pl_ok', 'maintainer');
+    renderApp(suggest);
+    await userEvent.click(await screen.findByRole('button', { name: 'Generate Refund' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Server-side generation is not configured');
+    // in the list, directly after the Refund concept, not above the whole list
+    const card = screen.getByRole('article', { name: 'Refund' });
+    expect(card.nextElementSibling).toContainElement(alert);
+    expect(document.getElementById('concept-list')).toContainElement(alert);
+    // the button is usable again, and nothing else started
+    expect(screen.getByRole('button', { name: 'Generate Refund' })).toBeEnabled();
+  });
+
+  it('says Generating while the request runs (button busy, announced politely)', async () => {
+    authStore.signIn('pl_ok', 'maintainer');
+    server.use(
+      http.post(`${TEST_API_BASE}/v1/models/generate`, async () => {
+        await new Promise((r) => setTimeout(r, 150));
+        return HttpResponse.json({ error: 'llm_unavailable', message: 'x' }, { status: 503 });
+      }),
+    );
+    renderApp(suggest);
+    await userEvent.click(await screen.findByRole('button', { name: 'Generate Refund' }));
+    const busy = await screen.findByRole('button', { name: 'Generating Refund' });
+    expect(busy).toHaveAttribute('aria-busy', 'true');
+    expect(busy).toBeDisabled();
+    expect(screen.getAllByRole('status').some((e) => e.textContent === 'Generating Refund…')).toBe(
+      true,
+    );
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('the Claude session opens under its concept too', async () => {
+    renderApp(suggest);
+    await userEvent.click(await screen.findByRole('button', { name: 'Generate Shipment' }));
+    const panel = await screen.findByRole('region', { name: 'Generation session' });
+    expect(screen.getByRole('article', { name: 'Shipment' }).nextElementSibling).toContainElement(
+      panel,
+    );
+  });
+
+  it('a server that says it has no model key: Generate goes straight to Claude and says so', async () => {
+    authStore.signIn('pl_ok', 'maintainer', false); // the sign-in check said generation: false
+    renderApp(suggest);
+    const generate = await screen.findByRole('button', { name: 'Generate Refund with Claude' });
+    expect(generate).toHaveTextContent('Generate with Claude');
+    expect(
+      screen.queryByRole('button', { name: /^Use Claude instead to generate/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText(/This server has no model key/)).toBeInTheDocument();
+    await userEvent.click(generate);
+    // no failed request, no message: the Claude session (stored unreleased for a maintainer)
+    expect(await screen.findByRole('region', { name: 'Generation session' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('Stored unreleased.')).toBeInTheDocument();
+  });
+
+  it('a server that says it can generate, or says nothing, keeps Generate and the Claude link', async () => {
+    authStore.signIn('pl_ok', 'maintainer', true);
+    const { unmount } = renderApp(suggest);
+    expect(await screen.findByRole('button', { name: 'Generate Refund' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Use Claude instead to generate Refund' }),
+    ).toBeInTheDocument();
+    unmount();
+    authStore.signIn('pl_ok', 'maintainer'); // unknown (an older server)
+    renderApp(suggest);
+    expect(await screen.findByRole('button', { name: 'Generate Refund' })).toBeInTheDocument();
+  });
+});
+
 describe('Review: release or discard an unreleased model', () => {
   const open = async () => {
     authStore.signIn('pl_ok', 'maintainer');

@@ -106,6 +106,15 @@ Where to change what:
   (made without a token) open by their link; unreleased ones need a maintainer. The web never decides this: it shows
   what the API returns (`visibility`) and says so. A failed lazy chunk after a deploy reloads once, then shows
   the error page (`src/app/chunkReload.ts`, `RouteError.tsx`).
+- **Brand marks.** The header uses the owner's dark mark (light theme) and white mark (dark theme), small 96 px
+  variants of the original 1024 px files in `public/` (favicon, apple-touch icon and the web manifest too). To
+  change them, put new originals in, regenerate the small sizes (downscale in steps, see git history of
+  `public/`) and keep the file names.
+- **The model graph** (`ModelWorkbench`): the control box over the left of the canvas (filter by name, API
+  checkboxes, mapping list) and the detail panel beside it. The filter, the checked APIs, the view and the selected
+  mapping are in the URL (`f`, `show`, `view`, `scope`, `field`, `api`). Unchecked APIs and filtered-out mappings
+  are greyed out, never hidden. It takes the model and the state as props, so another page or an embedded view can
+  reuse it.
 - **Honest numbers.** Quality scores are shown only when the server sends them ("Not evaluated" otherwise);
   never invent a value to fill a mockup.
 - **Accessibility.** Inputs have labels, focus is visible, the graph has a keyboard alternative (the Mapping

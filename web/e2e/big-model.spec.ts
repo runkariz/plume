@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test';
-import { expectNoSeriousA11y, settle, shot, test, THEMES } from './helpers';
+import { expectNoSeriousA11y, settle, shot, test, THEMES, pickMapping } from './helpers';
 
 /** A real 40-field Order model (Shopify + WooCommerce + Mirakl), copied from a live snapshot into the mocks. */
 const MODEL = '/models/m-38f24111baf1076f44c9cfa7';
@@ -67,19 +67,17 @@ for (const width of [1440, 375]) {
         page,
       }) => {
         await page.goto(MODEL);
-        await page.getByRole('radio', { name: 'Graph' }).check({ force: true });
+        await page.getByRole('radio', { name: 'Graph' }).click({ force: true });
         await expect(page.getByRole('radio', { name: 'Selected field' })).toBeChecked();
         await expect(page.locator('.react-flow__node-canonical')).toHaveCount(1);
         await settle(page);
         await expectNoSeriousA11y(page);
         await shot(page, `w9-model-graph-focus-${width}`, theme);
 
-        await page
-          .getByRole('combobox', { name: 'Mapping' })
-          .selectOption({ label: 'display_number ← WooCommerce' });
+        await pickMapping(page, /^display_number ← WooCommerce/);
         await expect(page.locator('.react-flow__node-canonical')).toContainText('display_number');
 
-        await page.getByRole('radio', { name: 'Whole model' }).check({ force: true });
+        await page.getByRole('radio', { name: 'Whole model' }).click({ force: true });
         await expect(page.locator('.react-flow__node-canonical')).toHaveCount(40);
         // a readable zoom: node text is about 12 px or more (no "fit everything")
         await expect.poll(() => viewportScale(page)).toBeGreaterThanOrEqual(0.85);
@@ -96,7 +94,8 @@ for (const width of [1440, 375]) {
         if (width > 640) {
           // the wheel pans the graph vertically inside its window; the page stays put
           const box = await page.locator('.flow').boundingBox();
-          await page.mouse.move((box?.x ?? 0) + 300, (box?.y ?? 0) + 300);
+          // over the canvas, to the right of the control box that covers its left side
+          await page.mouse.move((box?.x ?? 0) + (box?.width ?? 800) - 150, (box?.y ?? 0) + 300);
           const y0 = await viewportY(page);
           const pageY0 = await page.evaluate(() => window.scrollY);
           await page.mouse.wheel(0, 500);
@@ -114,6 +113,6 @@ test('the Table / Graph choice is a labelled control and a small model still ope
   await page.goto('/models/snap_8f3a21');
   await expect(page.getByRole('radio', { name: 'Graph' })).toBeChecked();
   await expect(page.locator('.react-flow__node-canonical')).toHaveCount(7);
-  await page.getByRole('radio', { name: 'Table' }).check({ force: true });
+  await page.getByRole('radio', { name: 'Table' }).click({ force: true });
   await expect(page.getByRole('table')).toBeVisible();
 });
