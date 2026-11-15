@@ -28,13 +28,17 @@ async function save(
   request: APIRequestContext,
   name: string,
   collection?: string,
+  basedOn?: string,
 ): Promise<{ id: string; collection: Ref; raw: Record<string, unknown> }> {
   const started = (await (
     await request.post(`${API}/v1/models/generate`, {
       data: { apis: APIS, concept: 'Order', engine: 'claude', force: true },
     })
   ).json()) as { sessionId: string };
-  const q = collection ? `?collection=${encodeURIComponent(collection)}` : '';
+  const params = new URLSearchParams();
+  if (collection) params.set('collection', collection);
+  if (basedOn) params.set('basedOn', basedOn);
+  const q = params.size ? `?${params}` : '';
   const res = await request.post(`${API}/v1/models/sessions/${started.sessionId}/draft${q}`, {
     data: { ...good, name },
   });
@@ -145,6 +149,31 @@ for (const theme of THEMES) {
     });
   });
 }
+
+test('a version saved by someone else is named in the link that lists the older one, and is not in that link', async ({
+  page,
+  request,
+}) => {
+  const author = await save(request, `Order author ${RUN}`);
+  // a stranger who only has the model's link saves a new version of it (no link sent): it goes to THEIR own new link
+  const stranger = await save(request, `Order author ${RUN} (revised)`, undefined, author.id);
+  expect(stranger.collection.id).not.toBe(author.collection.id);
+  expect(stranger.collection.created).toBe(true);
+  const list = (await (
+    await request.get(`${API}/v1/collections/${author.collection.id}`)
+  ).json()) as {
+    models: { id: string; newerVersion: { id: string; version: number } | null }[];
+  };
+  expect(list.models).toHaveLength(1);
+  expect(list.models[0]?.id).toBe(author.id); // the version saved INTO the link
+  expect(list.models[0]?.newerVersion).toMatchObject({ id: stranger.id, version: 2 });
+  // the author's page says so, linking to the newer version
+  await page.goto(`/mine/${author.collection.id}`);
+  const link = page.getByRole('link', { name: 'A newer version exists (v2)' });
+  await expect(link).toBeVisible();
+  await expect(link).toHaveAttribute('href', `/models/${stranger.id}`);
+  await shotOf(page.getByRole('region', { name: 'Models' }), 'w21-real-newer-version', 'light');
+});
 
 test('a pasted draft in the browser starts the link it shows once, and the server holds the model under it', async ({
   page,

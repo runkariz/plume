@@ -35,6 +35,7 @@ import {
 import {
   decorate,
   jobScript,
+  lineageOf as lineageOfModel,
   listItem,
   seedModels,
   setJobScript,
@@ -247,13 +248,38 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
               !rows.some((o) => o.lineageId === x.lineageId && o.createdAt > x.createdAt),
           )
           .sort((x, y) => y.createdAt.localeCompare(x.createdAt));
+    // the version saved into this link is the listed one; a newer version of its lineage elsewhere is named
+    const newerModel = (m: StoredModel) => {
+      const latest = allM
+        .filter((o) => o.lineageId === m.lineageId && o.visibility !== 'discarded')
+        .sort((x, y) => y.createdAt.localeCompare(x.createdAt))[0];
+      return latest && latest.createdAt > m.createdAt
+        ? {
+            id: latest.model.id,
+            version: lineageOfModel(allM, latest).version,
+            url: `/models/${latest.model.id}`,
+          }
+        : null;
+    };
+    const newerSet = (x: StoredSet) => {
+      const latest = allS
+        .filter((o) => o.lineageId === x.lineageId && o.set.visibility !== 'discarded')
+        .sort((p, q) => q.createdAt.localeCompare(p.createdAt))[0];
+      return latest && latest.createdAt > x.createdAt
+        ? {
+            id: latest.set.id,
+            version: lineageOfSet(allS, latest).version,
+            url: `/model-sets/${latest.set.id}`,
+          }
+        : null;
+    };
     return {
       id,
       url: collectionUrl(id),
       mergedInto: c?.mergedInto ?? null,
       count: ms.length + ss.length,
-      models: ms.map((m) => listItem(allM, m)),
-      sets: ss.map((x) => setListItem(allS, x)),
+      models: ms.map((m) => ({ ...listItem(allM, m), newerVersion: newerModel(m) })),
+      sets: ss.map((x) => ({ ...setListItem(allS, x), newerVersion: newerSet(x) })),
     };
   };
   let jobCounter = 0;

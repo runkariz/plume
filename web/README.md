@@ -114,6 +114,8 @@ Where to change what:
   content (models and sets) with the link to copy; "Open another My models link" takes a link or its id and checks
   it first; `/mine/<id>` (`src/pages/mine/`) is the page of any link, with "Use this link in this browser" and "Merge
   my other link into this one" (`POST /v1/collections/{id}/merge`), and points to where a merged link's models went.
+  A link lists the version saved INTO it: when someone with the model's link saved a newer one (it goes to their own
+  link), the item says "A newer version exists (vN)" and links to it (`newerVersion`).
   Old owner keys (`plume-owner-keys`, `src/lib/ownerKeys.ts`) are read once, on /models: `POST /v1/models/mine`
   answers `collections`, the first link is kept (the others are merged into it) and the keys are forgotten.
 - **No third-party requests.** Fonts are self-hosted (`@fontsource-variable/*`); an API's icon is loaded only

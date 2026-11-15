@@ -564,6 +564,16 @@ export type ModelJobEvent =
       setId?: string | null;
     };
 
+/**
+ * In a My models list: a link lists the version saved INTO it. When the lineage has a newer version elsewhere (someone
+ * with the model's link saved one) this says which; `url` is the server's own address for it (the web links by id).
+ */
+export interface NewerVersion {
+  id: string;
+  version: number;
+  url?: string;
+}
+
 export interface ModelListItem {
   id: string;
   name: string;
@@ -577,6 +587,8 @@ export interface ModelListItem {
   versions?: number;
   stale?: boolean;
   staleInputs?: StaleInput[];
+  /** Only in a My models list: a newer version of this lineage exists elsewhere (null/absent: this is the latest). */
+  newerVersion?: NewerVersion | null;
 }
 
 /** GET /v1/models/sessions/{id}/context: a compact index of the evidence (field lists are paged separately). */
@@ -878,6 +890,8 @@ export interface SetListItem {
   version?: number;
   versions?: number;
   stale?: boolean;
+  /** Only in a My models list: a newer version of this lineage exists elsewhere (null/absent: this is the latest). */
+  newerVersion?: NewerVersion | null;
 }
 
 /** The design fields of a relation the editor may change (anything else is refused with 400). */

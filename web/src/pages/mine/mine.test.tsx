@@ -362,3 +362,81 @@ describe('saving joins the link, through the client', () => {
     ]);
   });
 });
+
+describe('a newer version elsewhere (the link lists the version saved into it)', () => {
+  it('names it in the list and on the page, linking to the newer version', async () => {
+    // someone with the model's link saved a new version: it joined THEIR own new link, not this one
+    const c = testClient();
+    const s1 = await c.generateModel({
+      apis: ['shopify', 'woocommerce'],
+      concept: 'shipment',
+      engine: 'claude',
+    });
+    const first = await c.submitModelDraft((s1 as { sessionId: string }).sessionId, {
+      name: 'Shipment',
+      fields: [{ name: 'x' }],
+    });
+    const mine = first.collection?.id ?? '';
+    const s2 = await c.generateModel({
+      apis: ['shopify', 'woocommerce'],
+      concept: 'shipment',
+      engine: 'claude',
+    });
+    // (the mock keeps versions of a lineage through `basedOn` of the session; the server answers a NEW link)
+    const second = await fetch(
+      `${TEST_API_BASE}/v1/models/sessions/${(s2 as { sessionId: string }).sessionId}/draft?basedOn=${first.model.id}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'Shipment v2', fields: [{ name: 'x' }] }),
+      },
+    ).then((r) => r.json() as Promise<{ model: { id: string }; collection: { id: string } }>);
+    expect(second.collection.id).not.toBe(mine);
+    const listed = await get(mine);
+    expect(listed.models).toHaveLength(1);
+    expect(listed.models[0]).toMatchObject({ newerVersion: { id: second.model.id, version: 2 } });
+    saveCollectionId(mine);
+    renderApp('/models');
+    const yours = await screen.findByRole('region', { name: 'Your models' });
+    const link = await within(yours).findByRole('link', { name: 'A newer version exists (v2)' });
+    expect(link).toHaveAttribute('href', `/models/${second.model.id}`);
+  });
+
+  it('says nothing for an item that is the latest', async () => {
+    saveCollectionId(DEMO_COLLECTION);
+    renderApp('/models');
+    const yours = await screen.findByRole('region', { name: 'Your models' });
+    await within(yours).findByRole('link', { name: 'Inventory, with a returns count' });
+    expect(within(yours).queryByText(/A newer version exists/)).not.toBeInTheDocument();
+  });
+
+  it('shows it for a model set on the My models page too', async () => {
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/collections/:id`, ({ params }) =>
+        HttpResponse.json({
+          id: params.id,
+          url: `/mine/${String(params.id)}`,
+          mergedInto: null,
+          count: 1,
+          models: [],
+          sets: [
+            {
+              id: 'u-set-old',
+              name: 'Shop (mine)',
+              apis: ['shopify'],
+              members: ['Order'],
+              relations: 0,
+              undecided: 0,
+              generatedAt: '2026-11-16T10:00:00Z',
+              visibility: 'unlisted',
+              newerVersion: { id: 'u-set-new', version: 3, url: '/model-sets/u-set-new' },
+            },
+          ],
+        }),
+      ),
+    );
+    renderApp(`/mine/${DEMO_COLLECTION}`);
+    const link = await screen.findByRole('link', { name: 'A newer version exists (v3)' });
+    expect(link).toHaveAttribute('href', '/model-sets/u-set-new');
+  });
+});

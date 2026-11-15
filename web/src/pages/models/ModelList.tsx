@@ -25,6 +25,11 @@ export function ModelRows({ items }: { items: ModelListItem[] }) {
               v{m.version} of {m.versions}
             </span>
           ) : null}
+          {m.newerVersion ? (
+            <Link to={`/models/${m.newerVersion.id}`} className="small newer-version">
+              A newer version exists (v{m.newerVersion.version})
+            </Link>
+          ) : null}
           {m.official ? <Chip tone="ok">Official</Chip> : null}
           {m.visibility === 'unlisted' ? <Chip tone="info">Unlisted</Chip> : null}
           {m.visibility === 'unreleased' ? <Chip tone="warn">Unreleased</Chip> : null}

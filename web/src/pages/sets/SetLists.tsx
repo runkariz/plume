@@ -27,6 +27,11 @@ export function SetRows({ items }: { items: SetListItem[] }) {
               v{s.version} of {s.versions}
             </span>
           ) : null}
+          {s.newerVersion ? (
+            <Link to={`/model-sets/${s.newerVersion.id}`} className="small newer-version">
+              A newer version exists (v{s.newerVersion.version})
+            </Link>
+          ) : null}
           {s.official ? <Chip tone="ok">Official</Chip> : null}
           {s.visibility === 'unlisted' ? <Chip tone="info">Unlisted</Chip> : null}
           {s.visibility === 'unreleased' ? <Chip tone="warn">Unreleased</Chip> : null}
