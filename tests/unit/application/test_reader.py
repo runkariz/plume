@@ -190,3 +190,21 @@ def test_check_call(shop: FakeStack) -> None:
         shop.check_call().execute("shopify", "FETCH", "/x")
     with pytest.raises(ReaderInputError):
         shop.check_call().execute("shopify", "GET", " ")
+
+
+def test_absence_without_model_schemas_is_not_proven(packages: Path, tmp_path: Path) -> None:
+    import shutil  # noqa: PLC0415
+
+    copy = tmp_path / "no-models"
+    shutil.copytree(packages / "test-catalog", copy)
+    shutil.rmtree(copy / "connector" / "models")
+    stack = FakeStack()
+    stack.load(str(copy))
+    r = stack.find_fact().execute("test-catalog-api", "fulfillment_status")
+    assert not r.found
+    assert not r.complete
+    assert r.reasons == ("no model schemas are indexed for test-catalog-api",)
+    assert "NOT proven" in r.wording
+    # Endpoint-level names (query/path/header) are still decided by the endpoint schemas.
+    q = stack.find_fact().execute("test-catalog-api", "nope", location="query")
+    assert q.complete

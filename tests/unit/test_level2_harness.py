@@ -4,7 +4,15 @@ import json
 import stat
 from pathlib import Path
 
-from tests.live_claude.harness import Run, Stack, ToolCall, check_reader, mcp_config, parse_stream
+from tests.live_claude.harness import (
+    NOT_DOCUMENTED_CHECK,
+    Run,
+    Stack,
+    ToolCall,
+    check_reader,
+    mcp_config,
+    parse_stream,
+)
 
 
 def _line(obj: object) -> str:
@@ -107,7 +115,7 @@ def test_reader_checks_pass_and_fail() -> None:
         "q", 0, "This field is not documented.", [ToolCall("mcp__plume__search_docs", {})]
     )
     names = {c.name: c.passed for c in check_reader(unproven, "shopify")}
-    assert names["'not documented' backed by find_fact(complete=true)"] is False
+    assert names[NOT_DOCUMENTED_CHECK] is False
     assert names["the answer cites Plume documents"] is False
 
 
@@ -123,3 +131,21 @@ def test_mcp_config_is_private_and_removed(tmp_path: Path) -> None:
         )
         assert data["mcpServers"]["plume"] == {"type": "http", "url": "http://m/mcp"}
     assert not cfg.exists()
+
+
+def test_hedged_answer_passes_when_absence_is_not_proven() -> None:
+    call = ToolCall(
+        "mcp__plume__find_fact",
+        {"api": "shopify", "name": "loyalty_points"},
+        {"found": False, "complete": False, "incomplete_reasons": ["model:customer"]},
+    )
+    hedged = Run(
+        "q",
+        0,
+        "loyalty_points is not documented in this build; the lookup is not "
+        "exhaustive (https://shopify.dev/x).",
+        [call],
+    )
+    flat = Run("q", 0, "loyalty_points is not documented.", [call])
+    assert {c.name: c.passed for c in check_reader(hedged, "shopify")}[NOT_DOCUMENTED_CHECK]
+    assert not {c.name: c.passed for c in check_reader(flat, "shopify")}[NOT_DOCUMENTED_CHECK]

@@ -86,6 +86,7 @@ class FindFactResult:
     text_mentions: tuple[SearchHit, ...]
     wording: str
     incomplete_sources: tuple[str, ...] = field(default=())
+    reasons: tuple[str, ...] = field(default=())
 
 
 @dataclass(frozen=True, slots=True)

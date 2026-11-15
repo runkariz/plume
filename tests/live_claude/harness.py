@@ -22,6 +22,21 @@ import httpx
 ROOT = Path(__file__).resolve().parents[2]
 PLUGIN = ROOT / "plugin"
 NOT_DOCUMENTED = ("not documented", "isn't documented", "is not documented", "no documented")
+NOT_DOCUMENTED_CHECK = "'not documented' backed by find_fact (complete, or hedged when not)"
+HEDGES = (
+    "not exhaustive",
+    "incomplete",
+    "partial",
+    "may exist",
+    "might exist",
+    "not proven",
+    "can't confirm",
+    "cannot confirm",
+    "couldn't confirm",
+    "could not confirm",
+    "not be complete",
+    "not complete",
+)
 
 
 @dataclass(frozen=True)
@@ -291,12 +306,20 @@ def check_reader(run: Run, api: str) -> list[Check]:
     cited = any(s and s.lower() in text for s in sources) or "doc_id" in text or "endpoint:" in text
     checks.append(Check("the answer cites Plume documents", cited, f"{len(sources)} sources seen"))
     if any(p in text for p in NOT_DOCUMENTED):
-        proven = any(
-            isinstance(c.result, dict)
-            and c.result.get("found") is False
-            and c.result.get("complete") is True
-            and c.input.get("api") == api
+        absent = [
+            c.result
             for c in run.tool("find_fact")
+            if isinstance(c.result, dict)
+            and c.result.get("found") is False
+            and c.input.get("api") == api
+        ]
+        proven = any(r.get("complete") is True for r in absent)
+        hedged = any(r.get("complete") is False for r in absent) and any(h in text for h in HEDGES)
+        checks.append(
+            Check(
+                NOT_DOCUMENTED_CHECK,
+                proven or hedged,
+                "complete" if proven else "hedged" if hedged else "no matching find_fact",
+            )
         )
-        checks.append(Check("'not documented' backed by find_fact(complete=true)", proven))
     return checks

@@ -1,5 +1,6 @@
 """Model sessions: pin builds, hand Claude the evidence pack, validate and store its draft."""
 
+import json
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -13,7 +14,7 @@ from plume.application.models.concepts import (
 )
 from plume.application.ports.document_repo import DocumentRepo
 from plume.application.ports.model_repo import ModelRepo, ModelSession
-from plume.application.ports.search_index import FactQuery, SearchIndex
+from plume.application.ports.search_index import DocumentSummary, FactQuery, SearchIndex
 from plume.application.reader.resolve import BuildResolver
 from plume.domain.knowledge.call_check import path_matches
 from plume.domain.knowledge.document import DocumentKind, FieldLocation
@@ -24,8 +25,10 @@ from plume.domain.models.validation import Issue, Oracle, validate
 from plume.domain.shared.clock import Clock
 from plume.domain.shared.ids import BuildId
 
-MAX_DOCS_PER_API = 12
-MAX_FIELDS_PER_DOC = 150
+MAX_DOCS_PER_API = 20
+EVIDENCE_BUDGET_CHARS = 20_000
+MAX_DESCRIPTION = 300
+_DATA_LOCATIONS = (FieldLocation.MODEL, FieldLocation.RESPONSE, FieldLocation.BODY)
 
 DRAFT_FORMAT: dict[str, Any] = {
     "name": "Order",
@@ -53,8 +56,9 @@ DRAFT_FORMAT: dict[str, Any] = {
 }
 
 INSTRUCTIONS = """\
-Write ONE canonical model for the concept from the evidence below, then submit it with
-submit_model_draft(session_id, draft). Rules (the submission is refused otherwise):
+Write ONE canonical model for the concept, then submit it with submit_model_draft(session_id,
+draft). get_model_context lists the documents per API; get_model_evidence(session_id, api)
+returns their fields page by page (follow next_cursor). Rules (refused otherwise):
 - Map an API under fields[].sources only with fields that appear in that API's evidence: copy
   `paths[].path` exactly as listed (dotted names, [] for arrays).
 - Every mapping needs evidence: `doc_id` from the evidence and a `quote` copied verbatim from
@@ -131,51 +135,44 @@ class ModelSessions:
             raise NotFoundError(f"model session {session_id} not found")
         return s
 
+    def _concept_docs(self, concept: str, build: BuildId) -> list[DocumentSummary]:
+        key = concept_key(concept)
+        summaries, _ = self._index.browse(build, (), None, 100_000, 0)
+        docs = list(concept_docs(summaries).get(key, []))
+        if not docs:  # derived: documents whose text mentions the concept
+            hits = self._index.text(
+                build, concept, MAX_DOCS_PER_API, (DocumentKind.ENDPOINT, DocumentKind.MODEL)
+            )
+            docs = list(self._index.summaries(build, [h.doc_id for h in hits]).values())
+        docs.sort(key=lambda d: (d.kind is not DocumentKind.MODEL, d.method != "GET", d.doc_id))
+        return docs[:MAX_DOCS_PER_API]
+
+    def _pin(self, session: ModelSession, api: str) -> BuildId:
+        for p in session.inputs:
+            if p.api == api:
+                return BuildId(p.build)
+        raise ModelInputError(f"{api} is not in session {session.session_id}")
+
     def context(self, session_id: str) -> dict[str, Any]:
-        """The evidence pack Claude reads: per API, the concept's documents with their fields."""
+        """A compact index of the evidence (small enough for any client): per API, the
+        concept's documents with their field counts. Read the fields with ``evidence``."""
         session = self.get(session_id)
-        key = concept_key(session.concept)
         per_api: list[dict[str, Any]] = []
         for pin in session.inputs:
             build = BuildId(pin.build)
-            summaries, _ = self._index.browse(build, (), None, 100_000, 0)
-            groups = concept_docs(summaries)
-            docs = list(groups.get(key, []))
-            if not docs:  # derived: documents whose fields mention the concept
-                hits = self._index.text(
-                    build,
-                    session.concept,
-                    MAX_DOCS_PER_API,
-                    (DocumentKind.ENDPOINT, DocumentKind.MODEL),
-                )
-                docs = list(self._index.summaries(build, [h.doc_id for h in hits]).values())
-            docs.sort(key=lambda d: (d.kind is not DocumentKind.MODEL, d.method != "GET", d.doc_id))
             items = []
-            for d in docs[:MAX_DOCS_PER_API]:
+            for d in self._concept_docs(session.concept, build):
                 full = self._documents.get_document(build, d.doc_id)
                 if full is None:  # pragma: no cover
                     continue
-                fields = [
-                    {
-                        "path": f.name,
-                        "type": f.type,
-                        "location": f.location.value,
-                        "required": f.required,
-                        "description": f.description,
-                    }
-                    for f in full.fields
-                    if f.location
-                    in (FieldLocation.MODEL, FieldLocation.RESPONSE, FieldLocation.BODY)
-                ][:MAX_FIELDS_PER_DOC]
                 items.append(
                     {
                         "doc_id": d.doc_id,
                         "kind": d.kind.value,
                         "title": d.title,
                         "endpoint": f"{d.method} {d.path}" if d.method else None,
-                        "source_url": full.source_url,
+                        "fields": sum(1 for f in full.fields if f.location in _DATA_LOCATIONS),
                         "complete": full.complete,
-                        "fields": fields,
                     }
                 )
             per_api.append({"api": pin.api, "build": pin.build, "documents": items})
@@ -183,9 +180,84 @@ class ModelSessions:
             "session_id": session.session_id,
             "concept": session.concept,
             "apis": per_api,
+            "next": "Call get_model_evidence(session_id, api) for each API (follow next_cursor) "
+            "to read the fields with their descriptions, then write the draft.",
             "instructions": INSTRUCTIONS,
             "draft_format": DRAFT_FORMAT,
             "status": "Plume validates citations; the result is generated, unverified.",
+        }
+
+    def evidence(
+        self,
+        session_id: str,
+        api: str,
+        doc_ids: list[str] | None = None,
+        cursor: int = 0,
+        budget_chars: int = EVIDENCE_BUDGET_CHARS,
+    ) -> dict[str, Any]:
+        """Fields (path, type, location, required, description) of the concept's documents in
+        one API (or of ``doc_ids``), paged: at most ``budget_chars`` of JSON per call."""
+        session = self.get(session_id)
+        build = self._pin(session, api)
+        if doc_ids:
+            wanted = list(dict.fromkeys(doc_ids))[:50]
+        else:
+            wanted = [d.doc_id for d in self._concept_docs(session.concept, build)]
+        rows: list[tuple[dict[str, Any], dict[str, Any]]] = []  # (doc header, field)
+        missing: list[str] = []
+        for doc_id in wanted:
+            full = self._documents.get_document(build, doc_id)
+            if full is None:
+                missing.append(doc_id)
+                continue
+            header = {
+                "doc_id": full.doc_id,
+                "title": full.title,
+                "endpoint": f"{full.method} {full.path}" if full.method else None,
+                "source_url": full.source_url,
+                "complete": full.complete,
+            }
+            for f in full.fields:
+                if f.location not in _DATA_LOCATIONS:
+                    continue
+                desc = f.description or ""
+                rows.append(
+                    (
+                        header,
+                        {
+                            "path": f.name,
+                            "type": f.type,
+                            "location": f.location.value,
+                            "required": f.required,
+                            "description": desc[:MAX_DESCRIPTION]
+                            + ("…" if len(desc) > MAX_DESCRIPTION else ""),
+                        },
+                    )
+                )
+        cursor = max(0, cursor)
+        out: dict[str, dict[str, Any]] = {}
+        used = 0
+        position = cursor
+        while position < len(rows):
+            header, field_row = rows[position]
+            cost = len(json.dumps(field_row, ensure_ascii=False)) + 2
+            if header["doc_id"] not in out:
+                cost += len(json.dumps(header, ensure_ascii=False)) + 20
+            if used + cost > budget_chars and position > cursor:
+                break
+            doc = out.setdefault(str(header["doc_id"]), {**header, "fields": []})
+            doc["fields"].append(field_row)
+            used += cost
+            position += 1
+        return {
+            "session_id": session.session_id,
+            "api": api,
+            "build": build.value,
+            "documents": list(out.values()),
+            "returned": position - cursor,
+            "total_fields": len(rows),
+            "next_cursor": position if position < len(rows) else None,
+            "missing_doc_ids": missing,
         }
 
     # -- drafts ----------------------------------------------------------------------------------

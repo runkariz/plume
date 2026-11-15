@@ -396,6 +396,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 s.FactMatch(**{**m, "evidence": _citation(m["evidence"])}) for m in p["matches"]
             ],
             incomplete_sources=list(r.incomplete_sources),
+            incomplete_reasons=list(r.reasons),
             text_mentions=[
                 s.SearchHit(
                     id=h.doc_id,
