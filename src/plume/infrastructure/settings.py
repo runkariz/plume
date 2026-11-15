@@ -85,6 +85,11 @@ class Settings(BaseSettings):
         default=(), description="Bearer tokens of maintainers (comma list in JSON). Never logged."
     )
     max_upload_bytes: int = Field(default=200 * 1024 * 1024, ge=1024)
+    mcp_debug: bool = Field(
+        default=False,
+        description="Log each MCP request's JSON-RPC method (initialize: client and whether it "
+        "declared MCP Apps; resources/read of ui://; tools/call names). No arguments or results.",
+    )
     mcp_cors_origins: tuple[str, ...] = Field(
         default=(),
         description="Browser origins allowed to call the MCP endpoints (for browser-based MCP "

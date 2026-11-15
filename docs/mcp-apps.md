@@ -162,6 +162,42 @@ What the sources say about local / stdio servers:
   negotiation (`capabilities.extensions["io.modelcontextprotocol/ui"]` in `initialize`, both
   directions) and `_meta` on tools and resources. If Claude Desktop shows only text for
   `get_model`, check that first. The text fallback (summary + link) still works.
+**First real run (2026-11-16).** The owner connected Claude Desktop on Windows through
+`cmd /c npx -y mcp-remote http://127.0.0.1:18491/mcp`. Tools worked, but no view appeared and
+Claude drew its own chart. Findings:
+
+- **`mcp-remote` is not the cause.** Tested with 0.16.6 (what `npx` pulls today) and a scripted
+  stdio client, at protocol 2025-06-18 and 2025-11-25. The client's
+  `capabilities.extensions["io.modelcontextprotocol/ui"]` reached Plume: the debug log shows
+  `ui_extension=True`, and mcp-remote appends " (via mcp-remote 0.16.6)" to the client name.
+  Tool `_meta`, the `ui://` resource with its MIME type and `_meta`, and `structuredContent`
+  all came back through the proxy intact.
+- **Claude Desktop renders MCP Apps for local servers.** Anthropic's MCP Apps getting-started
+  page (claude.com/docs/connectors/building/mcp-apps/getting-started) adds the example servers
+  to `claude_desktop_config.json` with `npx … --stdio`, and says the app "renders inline in the
+  conversation" after an **Allow once / Always allow** prompt. A Desktop with the message-box
+  permission set to **Auto** shows it without asking. No `.mcpb` or connectors-only rule is
+  stated.
+- **The likely cause is ours, and it's fixed.** Every official example sets the deprecated flat
+  key `_meta["ui/resourceUri"]` next to `_meta.ui.resourceUri`: `registerAppTool()` does it
+  "for backward compatibility", and the Python `qr-server` does it as "legacy support". Plume
+  sent only the nested key. Plume now sends both on every view-bound tool. **To be confirmed by
+  rerunning Desktop.**
+- **Server advertisement is not required.** Plume's initialize result carries no
+  `capabilities.extensions` at protocols up to 2025-11-25. The SDK only advertises extensions
+  on its 2026 protocol. None of the official example servers advertise it either, and they
+  render in Desktop.
+- **Debugging.** `PLUME_MCP_DEBUG=1` logs each request's JSON-RPC method, for `initialize` the
+  client name/version, protocol and whether it declared MCP Apps, `resources/read` of `ui://`
+  and `tools/call` names. It never logs arguments, results or tokens. If Desktop still shows
+  no view, look for `resources/read ui://plume/model-view` after `tools/call get_model`: no
+  read means the host never tried to render. The troubleshooting page also suggests connecting
+  the same server as a remote custom connector, but that needs a public HTTPS URL.
+- **Model-facing hint.** View-bound tool results end with: "If your host shows this result as
+  an interactive view (MCP App), the user already sees it: refer to it instead of redrawing it
+  as a chart or table." `content` is the model's text by spec. The wording stays true on hosts
+  without the view.
+
 - Claude web (claude.ai) cannot reach `127.0.0.1`. It needs a public HTTPS URL for the MCP; the
   guide suggests a `cloudflared` tunnel. That's the owner's decision; Plume opens none.
 

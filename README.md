@@ -175,6 +175,7 @@ Reader routes are public and rate limited; maintainer routes need `Authorization
 | `PLUME_READER_RATE_LIMIT_PER_MINUTE` | `120` | per client address; `0` = off |
 | `PLUME_CORS_ORIGINS` | the web dev server | JSON list |
 | `PLUME_MCP_ALLOWED_HOSTS` | loopback | Host headers the MCP server accepts |
+| `PLUME_MCP_DEBUG` | `false` | log each MCP request's method (initialize: client, protocol, MCP Apps declared; `ui://` reads; tool names). No arguments, results or tokens |
 | `PLUME_MCP_CORS_ORIGINS` | `[]` | browser origins allowed to call the MCP endpoints (browser-based MCP clients such as the ext-apps basic-host); off by default |
 | `PLUME_DATA_DIR` | `.plume` (`/data` in Docker) | uploads and dumps |
 | `PLUME_MAX_UPLOAD_BYTES` | 200 MiB | package uploads |
