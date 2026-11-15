@@ -46,7 +46,7 @@ export function reduce(p: Progress, e: ModelJobEvent): Progress {
         rounds: p.rounds.map((r) => (r.n === e.round ? { ...r, issues: e.issues } : r)),
       };
     case 'accepted':
-      return { ...p, snapshotId: e.snapshotId };
+      return { ...p, snapshotId: e.snapshotId ?? p.snapshotId };
     case 'failed':
       return { ...p, failure: e.message };
     case 'done':

@@ -158,6 +158,14 @@ export function ModelView() {
           <LineageLine snap={snap} />
         </div>
         <div className="row">
+          {snap.inputs.length >= 2 ? (
+            <Link
+              className="btn"
+              to={`/models/related?apis=${snap.inputs.map((i) => i.id).join(',')}&concept=${encodeURIComponent(snap.concept ?? snap.name)}`}
+            >
+              Related concepts
+            </Link>
+          ) : null}
           <Button onClick={() => void copy(prompt)}>Copy for Claude</Button>
           {/* claude.ai/new?q= pre-filling could not be verified, so: copy the prompt, then open a new chat to paste it. */}
           <a

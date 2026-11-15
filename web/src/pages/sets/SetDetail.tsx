@@ -1,8 +1,6 @@
-import { useId } from 'react';
-import { Link } from 'react-router-dom';
+import { useId, type ReactNode } from 'react';
 import type { ModelSet, RelationEdit, RelationOption, SetMember, SetRelation } from '@/api/types';
 import { ApiAvatar, Chip } from '@/components';
-import { docHref } from '@/lib/docHref';
 import { findMember, SUPPORT_TEXT } from './setGraph';
 
 /** The design choices staged on this page: a relation id and the index of the chosen option. */
@@ -40,7 +38,19 @@ export function optionText(o: RelationOption): string {
     : `${o.from} refers to ${o.to}${o.ref ? `, by "${o.ref.field}" (the ${o.to} ${o.ref.key})` : ''}`;
 }
 
-function MemberDetail({ set, member }: { set: ModelSet; member: SetMember }) {
+/** How the detail leaves this component: the web app passes router links, the embedded view none (no router). */
+export interface DetailLinks {
+  /** The way into a member's field mapping; null/undefined = none. */
+  renderMemberLink?: (member: SetMember) => ReactNode;
+  /** A cited document: a link in the web app, its id as text when omitted. */
+  renderDocLink?: (apiId: string, docId: string) => ReactNode;
+}
+
+function MemberDetail({
+  set,
+  member,
+  renderMemberLink,
+}: { set: ModelSet; member: SetMember } & DetailLinks) {
   const alias = set.aliases?.find((a) => a.concept.toLowerCase() === member.concept.toLowerCase());
   const touching = set.relations.filter(
     (r) =>
@@ -89,9 +99,7 @@ function MemberDetail({ set, member }: { set: ModelSet; member: SetMember }) {
               .
             </p>
           ) : null}
-          <Link className="btn primary" to={`/models/${member.modelId}`}>
-            Open the field mapping
-          </Link>
+          {renderMemberLink?.(member) ?? null}
         </>
       )}
       {touching.length ? (
@@ -109,14 +117,17 @@ function RelationDetail({
   relation: r,
   staged,
   canEdit,
+  readOnly,
   onChoose,
+  renderDocLink,
 }: {
   set: ModelSet;
   relation: SetRelation;
   staged: Staged;
   canEdit: boolean;
+  readOnly: boolean;
   onChoose: (relationId: string, index: number | null) => void;
-}) {
+} & DetailLinks) {
   const name = useId();
   const options = r.editableOptions ?? [];
   const stagedIndex = staged[r.id];
@@ -139,7 +150,12 @@ function RelationDetail({
         <Chip>{r.cardinality}</Chip>
       </p>
 
-      {options.length ? (
+      {readOnly && !r.confirmed ? (
+        <p className="small muted">
+          Not decided yet: open the set in Plume to pick how this relation is designed.
+        </p>
+      ) : null}
+      {options.length && !readOnly ? (
         <fieldset className="rel-design">
           <legend>Design of this relation</legend>
           {options.map((o, i) => {
@@ -207,7 +223,7 @@ function RelationDetail({
                       <p>“{e.quote}”</p>
                       {e.docId ? (
                         <cite className="faint small">
-                          <Link to={docHref(a.id, e.docId)}>{e.docId}</Link>
+                          {renderDocLink ? renderDocLink(a.id, e.docId) : e.docId}
                         </cite>
                       ) : null}
                     </blockquote>
@@ -228,14 +244,19 @@ export function SetDetail({
   selection,
   staged,
   canEdit,
+  readOnly = false,
   onChoose,
+  renderMemberLink,
+  renderDocLink,
 }: {
   set: ModelSet;
   selection: string | null;
   staged: Staged;
   canEdit: boolean;
+  /** The embedded view: no design choices, only what the docs say. */
+  readOnly?: boolean;
   onChoose: (relationId: string, index: number | null) => void;
-}) {
+} & DetailLinks) {
   const relation = selection?.startsWith('r:')
     ? set.relations.find((r) => `r:${r.id}` === selection)
     : undefined;
@@ -249,9 +270,11 @@ export function SetDetail({
         relation={relation}
         staged={staged}
         canEdit={canEdit}
+        readOnly={readOnly}
         onChoose={onChoose}
+        renderDocLink={renderDocLink}
       />
     );
-  if (member) return <MemberDetail set={set} member={member} />;
+  if (member) return <MemberDetail set={set} member={member} renderMemberLink={renderMemberLink} />;
   return <p className="muted">Pick a model or a relation in the diagram or in the list.</p>;
 }

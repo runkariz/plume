@@ -8,11 +8,15 @@ import type {
   RelationEdit,
   ReviewRequest,
   SearchRequest,
+  SetAlias,
+  SetSessionRequest,
   SuggestQuery,
 } from '@/api/types';
 import { apiRef, modelCandidates, productSnapshot, sampleSuggestions } from './modelData';
+import { relatedFor } from './relatedData';
 import {
   applyEdits,
+  newSet,
   seedSets,
   lineageOf as lineageOfSet,
   setJson,
@@ -24,6 +28,7 @@ import {
   jobScript,
   listItem,
   seedModels,
+  setJobScript,
   type MockJob,
   type MockSession,
   type StoredModel,
@@ -161,6 +166,11 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
   /** The model sets of the mock server, seeded ones included. */
   const sets = new Map<string, StoredSet>(seedSets().map((x) => [x.set.id, x]));
   const allSets = () => [...sets.values()];
+  /** Set sessions: what Claude is filling (a set is stored when a draft is submitted for one). */
+  const setSessions = new Map<
+    string,
+    { apis: string[]; concepts: string[]; aliases: SetAlias[]; setId: string | null }
+  >();
   let jobCounter = 0;
   let sessionCounter = 0;
   let counter = 0;
@@ -493,7 +503,13 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
             if (!e) break;
             const { type, ...data } = e;
             if (e.type === 'round') j.job = { ...j.job, status: 'running', round: e.n };
-            if (e.type === 'accepted' && !models.has(e.snapshotId))
+            if (e.type === 'accepted' && e.setId && !sets.has(e.setId)) {
+              const s = newSet(e.setId, j.job.concept.split('+'), j.job.apis, 'unreleased', {
+                generator: 'gemini:gemini-2.5-pro',
+              });
+              sets.set(e.setId, s);
+            }
+            if (e.type === 'accepted' && e.snapshotId && !models.has(e.snapshotId))
               models.set(e.snapshotId, {
                 model: {
                   ...productSnapshot,
@@ -512,7 +528,13 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
                 createdAt: '2026-11-15T08:05:00Z',
               });
             if (e.type === 'failed') j.job = { ...j.job, status: 'failed', error: e.message };
-            if (e.type === 'done') j.job = { ...j.job, status: e.status, snapshotId: e.snapshotId };
+            if (e.type === 'done')
+              j.job = {
+                ...j.job,
+                status: e.status,
+                snapshotId: e.snapshotId,
+                setId: e.setId ?? null,
+              };
             controller.enqueue(
               encoder.encode(`id: ${i + 1}\nevent: ${type}\ndata: ${JSON.stringify(data)}\n\n`),
             );
@@ -560,6 +582,133 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
         return HttpResponse.json(decorate(allModels(), stored));
       }),
     ),
+    // ---- related concepts, and creating a set: for Claude (a session) or on the server (a job, maintainer) ----
+    http.post(`${base}/v1/models/suggest-related`, async ({ request }) => {
+      const body = (await request.json()) as {
+        apis: string[];
+        concept: string;
+        limit?: number;
+        offset?: number;
+      };
+      if (!Array.isArray(body.apis) || body.apis.length < 2 || !body.concept)
+        return HttpResponse.json(
+          { error: 'invalid_request', message: 'Give two or more APIs and a concept.' },
+          { status: 422 },
+        );
+      return HttpResponse.json(relatedFor(body.apis, body.concept, body.limit, body.offset));
+    }),
+    http.post(`${base}/v1/model-sets/sessions`, async ({ request }) => {
+      const body = (await request.json()) as SetSessionRequest;
+      sessionCounter += 1;
+      const id = `ss-mock${sessionCounter}`;
+      setSessions.set(id, {
+        apis: body.apis,
+        concepts: body.concepts,
+        aliases: body.aliases ?? [],
+        setId: null,
+      });
+      return HttpResponse.json({
+        setSessionId: id,
+        inputs: body.apis.map((api) => ({ api, build: `b-${api}` })),
+        memberSessions: Object.fromEntries(body.concepts.map((c) => [c, `s-${id}-${c}`])),
+        contextUrl: `/v1/model-sets/sessions/${id}/context`,
+        claudePrompt: `Use the Plume MCP: get_set_context("${id}"), write or reuse a model for each of ${body.concepts.join(', ')}, ask me how each relation should be designed, then submit_model_set("${id}", draft).${
+          body.aliases?.length
+            ? ` Treat ${body.aliases
+                .map((a) =>
+                  Object.entries(a.names)
+                    .map(([api, n]) => `${api} "${n}"`)
+                    .join(' and '),
+                )
+                .join('; ')} as the same concept.`
+            : ''
+        }`,
+      });
+    }),
+    http.get(`${base}/v1/model-sets/sessions/:id`, ({ params, request }) => {
+      const x = setSessions.get(String(params.id));
+      if (!x)
+        return HttpResponse.json(
+          { error: 'not_found', message: 'No such session' },
+          { status: 404 },
+        );
+      const stored = x.setId ? sets.get(x.setId) : undefined;
+      void request;
+      // the server answers snake_case here
+      return HttpResponse.json({
+        set_session_id: params.id,
+        status: x.setId ? 'submitted' : 'open',
+        set_id: x.setId,
+        visibility: stored?.set.visibility ?? null,
+        concepts: x.concepts,
+        member_sessions: {},
+        based_on: null,
+      });
+    }),
+    // a stand-in for Claude's submit_model_set (tests call it from the page to finish a session)
+    http.post(`${base}/v1/model-sets/sessions/:id/draft`, ({ params, request }) => {
+      const x = setSessions.get(String(params.id));
+      if (!x)
+        return HttpResponse.json(
+          { error: 'not_found', message: 'No such session' },
+          { status: 404 },
+        );
+      const maintainer = isMaintainer(request);
+      const id = maintainer ? `set_mock${sets.size + 1}` : `u-set-mock${sets.size + 1}`;
+      const s = newSet(id, x.concepts, x.apis, maintainer ? 'unreleased' : 'unlisted', {
+        aliases: x.aliases.map((a) => ({ concept: a.concept, names: a.names })),
+      });
+      sets.set(id, s);
+      x.setId = id;
+      return HttpResponse.json(
+        {
+          created: true,
+          visibility: s.set.visibility,
+          ownerKey: s.ownerKey ?? null,
+          set: setJson(allSets(), s),
+        },
+        { status: 201 },
+      );
+    }),
+    // server generation of a set: the first concept names the job; `Refund` first = no model key (503),
+    // `Customer` among the members = the job fails
+    http.post(`${base}/v1/model-sets/generate`, async ({ request }) => {
+      if (!isMaintainer(request)) return unauthorized();
+      const body = (await request.json()) as SetSessionRequest;
+      if (body.concepts[0]?.toLowerCase() === 'refund')
+        return HttpResponse.json(
+          {
+            error: 'llm_unavailable',
+            message: 'Server-side generation is not configured on this Plume.',
+          },
+          { status: 503 },
+        );
+      jobCounter += 1;
+      const jobId = `mj-mockset${jobCounter}`;
+      const setId = `set_job${jobCounter}`;
+      const { events } = setJobScript(jobId, body.apis, body.concepts, setId);
+      modelJobs.set(jobId, {
+        events,
+        job: {
+          jobId,
+          kind: 'model_set',
+          status: 'queued',
+          apis: body.apis,
+          concept: body.concepts.join('+'),
+          round: 0,
+          maxRounds: 3,
+          snapshotId: null,
+          setId: null,
+          error: null,
+          createdAt: '2026-11-16T14:00:00Z',
+          updatedAt: '2026-11-16T14:00:00Z',
+        },
+      });
+      return HttpResponse.json(
+        { jobId, status: 'queued', eventsUrl: `/v1/models/jobs/${jobId}/events` },
+        { status: 202 },
+      );
+    }),
     // ---- model sets: official and unlisted ones are public, unreleased ones need the token (404 otherwise) ----
     http.get(`${base}/v1/model-sets`, ({ request }) => {
       const want = new URL(request.url).searchParams.get('visibility');

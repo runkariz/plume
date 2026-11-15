@@ -479,6 +479,9 @@ export interface ModelSessionStatus {
 
 export interface ModelJob {
   jobId: string;
+  /** "model_set" for a set; absent or "model" for a single model. */
+  kind?: 'model' | 'model_set';
+  setId?: string | null;
   status: 'queued' | 'running' | 'succeeded' | 'failed';
   apis: string[];
   concept: string;
@@ -497,9 +500,19 @@ export type ModelJobEvent =
   | { type: 'context'; id?: string; documents: number; fields: number }
   | { type: 'round'; id?: string; n: number; of: number }
   | { type: 'refused'; id?: string; round: number; issues: DraftIssue[] }
-  | { type: 'accepted'; id?: string; snapshotId: string }
+  | { type: 'accepted'; id?: string; snapshotId?: string; setId?: string }
+  /** A model set job: one member model was written and accepted (its own rounds ran before). */
+  | { type: 'member'; id?: string; concept: string; snapshotId: string; round?: number }
+  /** A model set job: the relations proposed from the documented candidates (all undecided). */
+  | { type: 'proposals'; id?: string; relations: string[]; openQuestions: number }
   | { type: 'failed'; id?: string; code: string; message: string }
-  | { type: 'done'; id?: string; status: ModelJob['status']; snapshotId: string | null };
+  | {
+      type: 'done';
+      id?: string;
+      status: ModelJob['status'];
+      snapshotId: string | null;
+      setId?: string | null;
+    };
 
 export interface ModelListItem {
   id: string;
@@ -827,4 +840,83 @@ export interface RelationEdit {
   from?: string;
   to?: string;
   confirmed?: boolean;
+}
+
+// ---- related concepts (POST /v1/models/suggest-related) and creating a set ----
+
+/** One place in an API's docs that connects two concepts. Deterministic: no LLM. */
+export interface RelatedEvidence {
+  kind: RelationSupport;
+  docId?: string | null;
+  quote: string;
+  paths: string[];
+  fetch?: string | null;
+  many?: boolean;
+}
+
+export interface RelatedCandidate {
+  id: string;
+  parent: { id: string; name: string };
+  child: { id: string; name: string };
+  /** The designs the evidence supports. */
+  options: { kind: 'embedded' | 'reference'; cardinality: RelationOption['cardinality'] }[];
+  /** Per API id: where its docs show it. */
+  sources: Record<string, RelatedEvidence[]>;
+}
+
+export interface RelatedConcept {
+  id: string;
+  name: string;
+  /** Per API id: how the docs connect it (nested, sub_resource, id_field, model_ref). */
+  kinds: Record<string, RelationSupport[]>;
+  candidates: RelatedCandidate[];
+}
+
+/** Different names at the same documented position (variant / variation): only the user may call them one. */
+export interface RelatedAlias {
+  parent: { id: string; name: string };
+  names: Record<string, { id: string; name: string }>;
+  evidence: Record<string, RelatedEvidence>;
+  note: string;
+}
+
+export interface RelatedConcepts {
+  apis: ApiRef[];
+  concept: { id: string; name: string };
+  related: RelatedConcept[];
+  total: number;
+  limit: number;
+  offset: number;
+  nextOffset: number | null;
+  aliases: RelatedAlias[];
+}
+
+/** Concepts the user decided are one thing: `names` is the name each API uses for `concept`. */
+export interface SetAlias {
+  concept: string;
+  names: Record<string, string>;
+}
+
+export interface SetSessionRequest {
+  apis: string[];
+  concepts: string[];
+  aliases?: SetAlias[];
+}
+
+/** POST /v1/model-sets/sessions: one model session per member, for Claude to fill. */
+export interface SetSessionResponse {
+  setSessionId: string;
+  inputs: { api: string; build: string }[];
+  memberSessions: Record<string, string>;
+  contextUrl: string;
+  claudePrompt: string;
+}
+
+/** GET /v1/model-sets/sessions/{id}: has the set been stored yet? (the server sends snake_case) */
+export interface SetSessionStatus {
+  setSessionId: string;
+  status: 'open' | 'submitted';
+  setId: string | null;
+  visibility: ModelVisibility | null;
+  concepts: string[];
 }

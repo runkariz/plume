@@ -52,6 +52,11 @@ const PAGES: { name: string; path: string; ready: (p: Page) => Promise<void> }[]
     ready: (p) => expect(p.getByLabel('Event JSON')).toBeVisible(),
   },
   {
+    name: 'related-concepts',
+    path: '/models/related?apis=shopify,woocommerce&concept=Product',
+    ready: (p) => expect(p.getByRole('region', { name: 'Create a model set' })).toBeVisible(),
+  },
+  {
     name: 'model-set',
     path: '/model-sets/set_shop00000000000000000?sel=r:order-items',
     ready: (p) =>

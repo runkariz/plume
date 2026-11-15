@@ -246,6 +246,19 @@ for (const theme of THEMES) {
       );
       await expect(frame.getByRole('heading', { name: 'Shop', level: 1 })).toBeVisible();
       await expect(frame.locator('.react-flow__node-member')).toHaveCount(3);
+      // the control box and the detail: pick the proposal in the list
+      await frame.getByRole('button', { name: /Filter models and relations/ }).click();
+      await frame
+        .getByRole('listbox', { name: 'Models and relations' })
+        .getByRole('option', { name: /Product → Variant/ })
+        .click();
+      const detail = frame.getByRole('region', { name: 'Selected model or relation' });
+      await expect(detail.getByRole('heading', { name: 'Product → Variant' })).toBeVisible();
+      await expect(detail.getByText('Proposal: to decide')).toBeVisible();
+      await expect(detail.getByText(/open the set in Plume to pick how/)).toBeVisible();
+      await expect(detail.getByRole('radio')).toHaveCount(0);
+      // the same as text, for hosts and screen readers
+      await frame.getByText('The models and relations as text').click();
       await expect(
         frame.getByRole('region', { name: 'Relations' }).getByText('Order → Product'),
       ).toBeVisible();

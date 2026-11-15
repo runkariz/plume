@@ -11,6 +11,10 @@ import {
   type GenerateJobResponse,
   type GenerateResponse,
   type ModelJob,
+  type RelatedConcepts,
+  type SetSessionRequest,
+  type SetSessionResponse,
+  type SetSessionStatus,
   type ModelJobEvent,
   type ModelSet,
   type RelationEdit,
@@ -143,6 +147,17 @@ export interface PlumeApi {
     signal?: AbortSignal,
   ): Promise<{ set: ModelSet; releasedMembers: string[] }>;
   discardModelSet(id: string, signal?: AbortSignal): Promise<ModelSet>;
+  /** Concepts related to one concept in these APIs, from documented evidence only (no LLM). */
+  suggestRelated(
+    req: { apis: string[]; concept: string; limit?: number; offset?: number },
+    signal?: AbortSignal,
+  ): Promise<RelatedConcepts>;
+  /** For Claude: one model session per member (anyone; the set is stored unlisted without the token). */
+  startSetSession(req: SetSessionRequest, signal?: AbortSignal): Promise<SetSessionResponse>;
+  /** Public poll: has the set been stored for this session yet? */
+  getSetSession(id: string, signal?: AbortSignal): Promise<SetSessionStatus>;
+  /** Maintainer token: Plume writes the members and proposes the relations (undecided). 202 with the job. */
+  generateModelSet(req: SetSessionRequest, signal?: AbortSignal): Promise<GenerateJobResponse>;
   /**
    * Saves the chosen design of relations as a NEW version of the set (409 when `id` is not the latest version,
    * 422 {issues} when the design does not validate, 400 for anything but design fields).
@@ -461,6 +476,32 @@ export function createApiClient(
       });
       return 'set' in r ? r.set : r;
     },
+    suggestRelated: async (req, signal) => {
+      const r = await call<RelatedConcepts>('/v1/models/suggest-related', {
+        method: 'POST',
+        body: req,
+        signal,
+      });
+      return { ...r, apis: r.apis.map(withLabel) };
+    },
+    startSetSession: (req, signal) =>
+      call<SetSessionResponse>('/v1/model-sets/sessions', { method: 'POST', body: req, signal }),
+    getSetSession: async (id, signal) => {
+      // the server answers snake_case here; both spellings are accepted
+      const r = await call<Record<string, unknown>>(`/v1/model-sets/sessions/${enc(id)}`, {
+        signal,
+      });
+      const pick = (a: string, b: string) => r[a] ?? r[b];
+      return {
+        setSessionId: String(pick('set_session_id', 'setSessionId') ?? id),
+        status: r.status === 'submitted' ? 'submitted' : 'open',
+        setId: (pick('set_id', 'setId') as string | null | undefined) ?? null,
+        visibility: (r.visibility as ModelVisibility | null | undefined) ?? null,
+        concepts: Array.isArray(r.concepts) ? (r.concepts as string[]) : [],
+      };
+    },
+    generateModelSet: (req, signal) =>
+      call<GenerateJobResponse>('/v1/model-sets/generate', { method: 'POST', body: req, signal }),
     saveSetRelations: (id, relations, signal) =>
       call<{
         created: boolean;

@@ -118,6 +118,13 @@ function ConceptRow({
               Generating {concept.name}…
             </span>
           ) : null}
+          <Link
+            className="linkbtn small"
+            to={`/models/related?apis=${apis.map((a) => a.id).join(',')}&concept=${encodeURIComponent(concept.name)}`}
+            aria-label={`Related concepts of ${concept.name}`}
+          >
+            Related concepts
+          </Link>
           {onGenerateWithClaude ? (
             <button
               type="button"
