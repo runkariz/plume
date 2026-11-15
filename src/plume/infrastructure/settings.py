@@ -4,12 +4,13 @@ All variables use the ``PLUME_`` prefix; a ``.env`` file in the working director
 Defaults match the local docker compose stack (Plume's port block is 18400-18499).
 """
 
+import json
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, PostgresDsn, SecretStr, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 MIN_TOKEN_LENGTH = 16
 
@@ -103,7 +104,7 @@ class Settings(BaseSettings):
     mcp_public_url: str = Field(
         default="http://127.0.0.1:18481/mcp", description="MCP URL shown to users (connect hint)."
     )
-    mcp_allowed_hosts: tuple[str, ...] = Field(
+    mcp_allowed_hosts: Annotated[tuple[str, ...], NoDecode] = Field(
         default=("127.0.0.1:*", "localhost:*", "[::1]:*"),
         description="Host headers the MCP server accepts (DNS-rebinding protection).",
     )
@@ -111,7 +112,7 @@ class Settings(BaseSettings):
     data_dir: Path = Field(
         default=Path(".plume"), description="Uploaded packages and dumps (maintainer jobs)."
     )
-    gold_dirs: tuple[Path, ...] = Field(
+    gold_dirs: Annotated[tuple[Path, ...], NoDecode] = Field(
         default=(), description="Directories of gold sets (<api>.json) for the eval gate."
     )
     gate_min_recall: float = Field(default=0.6, ge=0, le=1)
@@ -121,7 +122,7 @@ class Settings(BaseSettings):
         description='Per-embedder recall floor, e.g. {"vertex": 0.75}; others use '
         "PLUME_GATE_MIN_RECALL (0.6, set for the offline hash embedder).",
     )
-    maintainer_tokens: tuple[SecretStr, ...] = Field(
+    maintainer_tokens: Annotated[tuple[SecretStr, ...], NoDecode] = Field(
         default=(), description="Bearer tokens of maintainers (comma list in JSON). Never logged."
     )
     max_upload_bytes: int = Field(default=200 * 1024 * 1024, ge=1024)
@@ -130,13 +131,48 @@ class Settings(BaseSettings):
         description="Log each MCP request's JSON-RPC method (initialize: client and whether it "
         "declared MCP Apps; resources/read of ui://; tools/call names). No arguments or results.",
     )
-    mcp_cors_origins: tuple[str, ...] = Field(
+    mcp_cors_origins: Annotated[tuple[str, ...], NoDecode] = Field(
         default=(),
         description="Browser origins allowed to call the MCP endpoints (for browser-based MCP "
         "clients such as the ext-apps basic-host). Empty = no CORS (Claude web/Desktop/Code "
         "connect without it).",
     )
-    cors_origins: tuple[str, ...] = ("http://127.0.0.1:18473", "http://localhost:18473")
+    cors_origins: Annotated[tuple[str, ...], NoDecode] = (
+        "http://127.0.0.1:18473",
+        "http://localhost:18473",
+    )
+
+    @field_validator(
+        "mcp_allowed_hosts",
+        "gold_dirs",
+        "maintainer_tokens",
+        "mcp_cors_origins",
+        "cors_origins",
+        mode="before",
+    )
+    @classmethod
+    def _list_or_commas(cls, value: Any) -> Any:
+        """A JSON list (["a","b"]) or a comma-separated string (a,b): container platforms
+        make plain strings easier than JSON."""
+        if isinstance(value, str):
+            text = value.strip()
+            if text.startswith("["):
+                return json.loads(text)
+            return [part.strip() for part in text.split(",") if part.strip()]
+        return value
+
+    @field_validator("api_port", "mcp_port", mode="before")
+    @classmethod
+    def _not_a_service_link(cls, value: Any) -> Any:
+        """Kubernetes injects PLUME_API_PORT=tcp://10.0.0.1:18480 for a Service named
+        plume-api (service links), which collides with Plume's PLUME_ prefix."""
+        if isinstance(value, str) and "://" in value:
+            raise ValueError(
+                f"{value!r} looks like a Kubernetes service link (a Service named plume-api or "
+                "plume-mcp): set enableServiceLinks: false on the pod, or name the Service "
+                "differently, or set the port explicitly"
+            )
+        return value
 
     @field_validator("maintainer_tokens")
     @classmethod
