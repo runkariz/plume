@@ -25,6 +25,31 @@ describe('API detail', () => {
     );
   });
 
+  it('shows only what the server measured: no invented-endpoints row when it is null', async () => {
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/:id`, async () => {
+        const { shopifyDetail } = await import('@/mocks/data');
+        return HttpResponse.json({
+          ...shopifyDetail,
+          quality: {
+            ...shopifyDetail.quality,
+            inventedEndpoints: null,
+            citationHitRate: 0.88,
+            factAccuracy: 0.9,
+            missingExpected: 2,
+          },
+        });
+      }),
+    );
+    renderApp('/apis/shopify');
+    expect(await screen.findByText('Citation hit rate')).toBeInTheDocument();
+    expect(screen.getByText('0.88')).toBeInTheDocument();
+    expect(screen.getByText('Fact accuracy')).toBeInTheDocument();
+    expect(screen.getByText('Expected docs missing')).toBeInTheDocument();
+    expect(screen.queryByText('Invented endpoints')).not.toBeInTheDocument();
+    expect(screen.queryByText(/null/)).not.toBeInTheDocument();
+  });
+
   it('breadcrumb links back to the list', async () => {
     renderApp('/apis/shopify');
     await screen.findByRole('heading', { level: 1 });

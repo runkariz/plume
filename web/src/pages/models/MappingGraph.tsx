@@ -12,6 +12,7 @@ import {
 } from '@xyflow/react';
 import { ApiAvatar } from '@/components';
 import { useTheme } from '@/app/theme';
+import { shortBuild } from '@/lib/format';
 import type { ModelSnapshot } from '@/api/types';
 import {
   buildGraph,
@@ -31,7 +32,9 @@ function GroupNode({ data }: NodeProps<ModelNode>) {
       <div className="g-group-head">
         <ApiAvatar text={d.text} color={d.color} size={26} />
         <b>{d.name}</b>
-        <span className="muted small">build {d.build}</span>
+        <span className="muted small" title={d.build}>
+          build {shortBuild(d.build)}
+        </span>
       </div>
     </div>
   );

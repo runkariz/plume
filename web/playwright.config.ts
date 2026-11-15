@@ -17,6 +17,8 @@ const realApi = process.env.PLUME_E2E_API_URL;
 export default defineConfig({
   testDir: realApi ? './e2e-real' : './e2e',
   outputDir: process.env.PLUME_E2E_OUTPUT_DIR ?? '/tmp/plume-web-e2e-results',
+  // the first page load of a run compiles the app on a cold dev server; give assertions room
+  expect: { timeout: 10_000 },
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,

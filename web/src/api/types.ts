@@ -26,12 +26,29 @@ export interface ApiList {
   items: ApiSummary[];
 }
 
+export interface DraftIssue {
+  code: string;
+  field: string;
+  api: string | null;
+  message: string;
+}
+
 export class ApiError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  /** The server's error code, e.g. "invalid_state", "gate_failed", "draft_refused". */
+  readonly code?: string;
+  /** Present on a refused model draft (422 draft_refused). */
+  readonly issues?: DraftIssue[];
+  constructor(
+    status: number,
+    message: string,
+    extra: { code?: string; issues?: DraftIssue[] } = {},
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.code = extra.code;
+    this.issues = extra.issues;
   }
 }
 
@@ -49,9 +66,15 @@ export interface ApiDetail extends ApiSummary {
   quality: {
     recallAt5: number;
     mrr: number;
-    inventedEndpoints: number;
+    /** null: not measured by the server yet (needs a Claude-driven run). */
+    inventedEndpoints: number | null;
     goldQuestions: number;
     evaluatedAt: string; // ISO date
+    citationHitRate?: number;
+    factAccuracy?: number;
+    /** Gold questions whose expected document was not found. */
+    missingExpected?: number;
+    gatePassed?: boolean;
   } | null;
   index: {
     embedding: string | null;
@@ -261,6 +284,8 @@ export type JobEvent =
 
 export interface ApiRef {
   id: string;
+  /** The pinned build, when the server says which one it looked at. */
+  build?: string | null;
   name: string;
   /** Short label for chips and avatars, e.g. "Shopify". */
   shortName: string;
@@ -278,6 +303,8 @@ export interface Concept {
   coverage: Record<string, CoverageKind>; // by api id
   operations: Operation[];
   difficulty: { tone: 'ok' | 'warn' | 'bad'; label: string };
+  /** The documents behind the concept, per API (evidence the model is built from). */
+  documents?: Record<string, string[]>;
 }
 
 export interface SuggestResponse {
@@ -296,15 +323,17 @@ export type FieldSupport = 'supported' | 'derived' | 'unsupported';
 export interface FieldSource {
   paths: { path: string; type: string }[];
   /** Edge label for derived mappings, e.g. "not null = true" or "join: inventory_item_id". */
-  transform?: string;
-  fetch?: { endpoint: string };
+  transform?: string | null;
+  fetch?: { endpoint: string } | null;
   join?: string[];
-  evidence?: { quote: string; anchor: string }[];
+  /** `anchor` is "" when there is none; `docId` names the cited document. */
+  evidence?: { quote: string; anchor: string; docId?: string }[];
 }
 
 export interface ModelField {
   name: string;
   type: string;
+  description?: string | null;
   required: boolean;
   support: Record<string, FieldSupport>; // by api id
   sources: Record<string, FieldSource>;
@@ -313,6 +342,8 @@ export interface ModelField {
 export interface ModelSnapshot {
   id: string;
   name: string;
+  concept?: string;
+  sessionId?: string;
   description: string;
   status: 'generated_unverified';
   generatedAt: string;
@@ -320,7 +351,27 @@ export interface ModelSnapshot {
   inputs: (ApiRef & { build: string })[];
   fields: ModelField[];
   /** Question text may contain **bold** spans. */
-  openQuestions: { question: string; detail?: string }[];
+  openQuestions: { question: string; detail?: string | null; options?: string[] }[];
   coverage: Record<string, { mapped: number; total: number }>;
   citations: { checked: number; found: number; missing: string[] };
+}
+
+/** POST /v1/models/generate: the server runs no LLM, it opens a session for Claude (or a maintainer) to answer. */
+export interface GenerateResponse {
+  sessionId: string;
+  /** ready: a snapshot already exists for the current builds; awaiting_draft: a draft is needed. */
+  status: 'awaiting_draft' | 'ready';
+  snapshotId: string | null;
+  inputs: { api: string; build: string }[];
+  contextUrl: string;
+  claudePrompt: string;
+  mcpUrl: string;
+}
+
+export interface ModelListItem {
+  id: string;
+  name: string;
+  concept: string;
+  apis: string[];
+  generatedAt: string;
 }

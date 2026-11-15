@@ -136,6 +136,10 @@ export const shopifyDetail: ApiDetail = {
     inventedEndpoints: 0,
     goldQuestions: 40,
     evaluatedAt: '2026-11-14',
+    citationHitRate: 0.97,
+    factAccuracy: 1,
+    missingExpected: 0,
+    gatePassed: true,
   },
   index: {
     embedding: 'gemini-embedding-001',
