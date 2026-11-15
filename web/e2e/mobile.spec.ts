@@ -32,6 +32,26 @@ const PAGES: { name: string; path: string; ready: (p: Page) => Promise<void> }[]
     ready: (p) => expect(p.getByRole('heading', { name: 'Inventory' })).toBeVisible(),
   },
   {
+    name: 'endpoint-detail',
+    path: '/apis/shopify/documents/endpoint%3Acreate-order',
+    ready: (p) => expect(p.getByRole('region', { name: 'Request body' })).toBeVisible(),
+  },
+  {
+    name: 'auth-scheme',
+    path: '/apis/shopify/auth/oauth2-authorization-code',
+    ready: (p) => expect(p.getByRole('region', { name: 'Scopes' })).toBeVisible(),
+  },
+  {
+    name: 'triggers',
+    path: '/apis/shopify?section=triggers',
+    ready: (p) => expect(p.getByRole('region', { name: 'Webhook delivery' })).toBeVisible(),
+  },
+  {
+    name: 'trigger-detail',
+    path: '/apis/shopify/triggers/app%2Fscopes_update',
+    ready: (p) => expect(p.getByLabel('Event JSON')).toBeVisible(),
+  },
+  {
     name: 'model-view-big-table',
     path: '/models/m-38f24111baf1076f44c9cfa7',
     ready: (p) => expect(p.getByRole('table')).toBeVisible(),

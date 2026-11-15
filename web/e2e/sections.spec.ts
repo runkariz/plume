@@ -46,6 +46,7 @@ for (const theme of THEMES) {
       await page.getByRole('link', { name: 'OAuth2 authorization code' }).click();
       await expect(page.getByRole('region', { name: 'Scopes' })).toBeVisible();
       await expect(page.getByRole('region', { name: 'Setup steps' })).toBeVisible();
+      await expect(page.getByRole('rowheader').first()).toHaveCSS('text-transform', 'none'); // scopes keep their case
       await settle(page);
       await expectNoSeriousA11y(page);
       await shot(page, 'w11-auth-scheme', theme);

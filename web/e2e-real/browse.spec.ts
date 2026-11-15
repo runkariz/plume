@@ -50,6 +50,7 @@ for (const theme of THEMES) {
           locations.has(loc) ? 1 : 0,
         );
       await expect(page.getByRole('link', { name: 'Open the vendor page' })).toBeVisible();
+      await expect(page.getByRole('rowheader').first()).toHaveCSS('text-transform', 'none'); // names keep their case
       await settle(page);
       await expectNoSeriousA11y(page);
       await shot(page, 'w11-endpoint-detail', theme);

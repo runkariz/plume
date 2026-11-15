@@ -372,8 +372,7 @@ pre.code {
   background: var(--surface);
   border: 1px solid var(--line);
   overflow: hidden;
-  padding: 12%;
-  box-sizing: border-box;
+  box-sizing: border-box; /* padding is set inline in px: a % would be relative to the card */
 }
 .logo-img img {
   width: 100%;

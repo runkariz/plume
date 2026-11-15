@@ -38,7 +38,11 @@ export function Logo({
   const src = iconSrc(url, base ?? undefined);
   if (src && !failed)
     return (
-      <div className="logo logo-img" style={{ width: size, height: size }} aria-hidden>
+      <div
+        className="logo logo-img"
+        style={{ width: size, height: size, padding: Math.round(size * 0.14) }}
+        aria-hidden
+      >
         <img
           src={src}
           alt=""

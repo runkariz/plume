@@ -86,6 +86,8 @@ for (const theme of THEMES) {
         `(${scheme?.scopes})`,
       );
       await expect(page.getByRole('searchbox', { name: 'Filter scopes' })).toBeVisible(); // more than 12
+      // identifiers are shown as the package spells them (never uppercased by a table style)
+      await expect(page.getByRole('rowheader').first()).toHaveCSS('text-transform', 'none');
       await settle(page);
       await expectNoSeriousA11y(page);
       await shot(page, 'w11-real-auth-scheme', theme);

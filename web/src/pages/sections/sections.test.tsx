@@ -250,6 +250,8 @@ describe('the package icon', () => {
     const img = card.querySelector('img') as HTMLImageElement;
     expect(img.getAttribute('src')).toBe('http://api.test/v1/apis/shopify/icon');
     expect(img).toHaveAttribute('alt', '');
+    // the image box has a pixel padding (a percentage would be relative to the card and collapse the image)
+    expect((img.parentElement as HTMLElement).style.padding).toMatch(/^\d+px$/);
     expect(img).toHaveAttribute('referrerpolicy', 'no-referrer');
     // an API without an icon keeps the letter tile
     const stripe = (await screen.findByRole('link', { name: 'Stripe API' })).closest(

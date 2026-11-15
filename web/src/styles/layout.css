@@ -1760,3 +1760,12 @@ th {
   flex-direction: column;
   gap: 8px;
 }
+
+/* Row headers hold identifiers (field names, scopes, variables): API names are case-sensitive, so they are shown
+   exactly as the package spells them, never in capitals. Only column headings get the small-caps style. */
+th[scope='row'] {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+  color: var(--ink);
+}
