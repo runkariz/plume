@@ -30,7 +30,7 @@ export function ApiCard({ api }: { api: ApiSummary }) {
   return (
     <article className="card api-card">
       <div className="api-top">
-        <Logo text={api.logo.text} color={api.logo.color} />
+        <Logo text={api.logo.text} color={api.logo.color} url={api.logo.url} />
         <div>
           <h3 className="api-name">
             <Link to={`/apis/${api.id}`} className="stretched">

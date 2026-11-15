@@ -30,7 +30,7 @@ export function MaintainerHome() {
           <ul className="m-list">
             {state.data.items.map((a) => (
               <li key={a.id} className="m-row">
-                <Logo text={a.logo.text} color={a.logo.color} size={36} />
+                <Logo text={a.logo.text} color={a.logo.color} url={a.logo.url} size={36} />
                 <div className="m-main">
                   <b>{a.name}</b>
                   <span className="muted small">

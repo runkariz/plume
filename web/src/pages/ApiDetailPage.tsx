@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
 import {
@@ -25,7 +25,11 @@ import {
 } from '@/components';
 import { SearchIcon } from '@/icons';
 import { breakable } from '@/lib/breakable';
+import { docHref } from './models/MappingTable';
 import { ModelList } from './models/ModelList';
+import { AuthPanel } from './sections/AuthPanel';
+import { EnvironmentsCard } from './sections/EnvironmentsCard';
+import { TriggersPanel } from './sections/TriggersPanel';
 import { categoryLabel, formatDate, formatScore, modelCount } from '@/lib/format';
 
 type Tab = 'all' | ItemKind;
@@ -95,7 +99,10 @@ function Browse({ api }: { api: ApiSummary }) {
                 )}
                 <div className="ep-main">
                   <div className={it.path ? 'mono ep-path' : 'ep-path'}>
-                    {it.path ? breakable(it.path) : it.title}
+                    {/* the whole row is clickable (stretched link); the link text names the item */}
+                    <Link className="ep-link" to={docHref(api.id, it.id)}>
+                      {it.path ? breakable(it.path) : it.title}
+                    </Link>
                   </div>
                   {it.path ? <div className="muted small">{it.title}</div> : null}
                 </div>
@@ -118,11 +125,15 @@ function Browse({ api }: { api: ApiSummary }) {
 }
 
 function Detail({ api }: { api: ApiDetail }) {
+  const [params, setParams] = useSearchParams();
+  const raw = params.get('section');
+  const section: 'browse' | 'auth' | 'triggers' =
+    raw === 'auth' || raw === 'triggers' ? raw : 'browse';
   return (
     <>
       <div className="titlerow">
         <div className="title-left">
-          <Logo text={api.logo.text} color={api.logo.color} size={76} />
+          <Logo text={api.logo.text} color={api.logo.color} url={api.logo.url} size={76} />
           <div>
             <h1 className="h1-sm">{api.name}</h1>
             <div className="row" style={{ gap: 8 }}>
@@ -178,7 +189,27 @@ function Detail({ api }: { api: ApiDetail }) {
         <Tile value={api.chunks} label="Searchable chunks" />
       </div>
       <div className="cols">
-        <Browse api={api} />
+        <div className="stack">
+          <Segmented
+            label="Section"
+            value={section}
+            onChange={(v) => setParams(v === 'browse' ? {} : { section: v })}
+            options={[
+              { value: 'browse', label: 'Browse' },
+              {
+                value: 'auth',
+                label: `Authentication${api.sections ? ` (${api.sections.auth})` : ''}`,
+              },
+              {
+                value: 'triggers',
+                label: `Triggers${api.sections ? ` (${api.sections.triggers})` : ''}`,
+              },
+            ]}
+          />
+          {section === 'auth' ? <AuthPanel apiId={api.id} /> : null}
+          {section === 'triggers' ? <TriggersPanel apiId={api.id} /> : null}
+          {section === 'browse' ? <Browse api={api} /> : null}
+        </div>
         <div className="stack">
           <Card className="pad">
             <h2 style={{ marginBottom: 12 }}>Answer quality</h2>
@@ -223,6 +254,7 @@ function Detail({ api }: { api: ApiDetail }) {
             <Kv label="Store" value={api.index.store} />
             <Kv label="Build" value={api.index.build ?? '–'} mono />
           </Card>
+          <EnvironmentsCard apiId={api.id} />
           <ModelList api={api.id} title="Canonical models" />
           <Card className="pad" id="connect">
             <h2 style={{ marginBottom: 12 }}>Connect</h2>

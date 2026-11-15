@@ -18,6 +18,11 @@ import {
   type ReviewRequest,
   type ApiDetail,
   type ApiList,
+  type AuthList,
+  type AuthSchemeDetail,
+  type EnvironmentsOut,
+  type TriggerDetail,
+  type TriggerList,
   type AskResponse,
   type BrowseResult,
   type CheckCallRequest,
@@ -28,12 +33,24 @@ import {
 } from './types';
 
 export interface PlumeApi {
+  /** The API base URL this client talks to (no trailing slash). */
+  readonly baseUrl: string;
   listApis(signal?: AbortSignal): Promise<ApiList>;
   getApi(id: string, signal?: AbortSignal): Promise<ApiDetail>;
   getDocument(api: string, docId: string, signal?: AbortSignal): Promise<DocumentOut>;
+  getAuth(api: string, signal?: AbortSignal): Promise<AuthList>;
+  getAuthScheme(api: string, schemeId: string, signal?: AbortSignal): Promise<AuthSchemeDetail>;
+  getTriggers(
+    api: string,
+    q?: { limit?: number; offset?: number },
+    signal?: AbortSignal,
+  ): Promise<TriggerList>;
+  /** `key` is the trigger key (it contains "/"); it is URL-encoded here. */
+  getTrigger(api: string, key: string, signal?: AbortSignal): Promise<TriggerDetail>;
+  getEnvironments(api: string, signal?: AbortSignal): Promise<EnvironmentsOut>;
   browse(
     id: string,
-    q: { kind?: ItemKind; query?: string; limit?: number },
+    q: { kind?: ItemKind; query?: string; limit?: number; tag?: string },
     signal?: AbortSignal,
   ): Promise<BrowseResult>;
   search(id: string, req: SearchRequest, signal?: AbortSignal): Promise<SearchResponse>;
@@ -210,16 +227,32 @@ export function createApiClient(
   }
 
   return {
+    baseUrl,
     listApis: async (signal) => normaliseList(await call<ApiList>('/v1/apis', { signal })),
     getApi: async (id, signal) =>
       withTitle(await call<ApiDetail>(`/v1/apis/${enc(id)}`, { signal })),
     getDocument: (api, docId, signal) =>
       call<DocumentOut>(`/v1/apis/${enc(api)}/documents/${enc(docId)}`, { signal }),
+    getAuth: (api, signal) => call<AuthList>(`/v1/apis/${enc(api)}/auth`, { signal }),
+    getAuthScheme: (api, schemeId, signal) =>
+      call<AuthSchemeDetail>(`/v1/apis/${enc(api)}/auth/${enc(schemeId)}`, { signal }),
+    getTriggers: (api, q = {}, signal) => {
+      const p = new URLSearchParams();
+      if (q.limit) p.set('limit', String(q.limit));
+      if (q.offset) p.set('offset', String(q.offset));
+      const qs = p.toString();
+      return call<TriggerList>(`/v1/apis/${enc(api)}/triggers${qs ? `?${qs}` : ''}`, { signal });
+    },
+    getTrigger: (api, key, signal) =>
+      call<TriggerDetail>(`/v1/apis/${enc(api)}/triggers/${enc(key)}`, { signal }),
+    getEnvironments: (api, signal) =>
+      call<EnvironmentsOut>(`/v1/apis/${enc(api)}/environments`, { signal }),
     browse: (id, q, signal) => {
       const p = new URLSearchParams();
       if (q.kind) p.set('kind', q.kind);
       if (q.query) p.set('q', q.query);
       if (q.limit) p.set('limit', String(q.limit));
+      if (q.tag) p.set('tag', q.tag);
       const qs = p.toString();
       return call<BrowseResult>(`/v1/apis/${enc(id)}/items${qs ? `?${qs}` : ''}`, { signal });
     },

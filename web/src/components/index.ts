@@ -13,3 +13,4 @@ export type { SegOption } from './Segmented';
 export { Stepper } from './Stepper';
 export { Banner } from './Banner';
 export { ApiAvatar } from './ApiAvatar';
+export { RawJson } from './RawJson';

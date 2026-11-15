@@ -1471,9 +1471,6 @@ th {
   width: 100%;
 }
 
-.doc-cols {
-  grid-template-columns: 1.4fr 1fr;
-}
 .doc-text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -1649,4 +1646,117 @@ th {
 }
 .pick-grid {
   padding-bottom: 24px;
+}
+
+/* ---- browse rows are links ---- */
+.ep {
+  position: relative;
+}
+.ep-link {
+  color: inherit;
+}
+.ep-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+.ep:hover {
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.ep-link:hover {
+  text-decoration: underline;
+}
+.ep-link:focus-visible {
+  outline: none;
+}
+.ep:has(.ep-link:focus-visible) {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
+/* ---- document page (endpoint / model / guide / auth / trigger) ---- */
+.doc-fields,
+.doc-scopes,
+.doc-text-card {
+  margin-bottom: 18px;
+}
+.doc-field-name {
+  font-weight: 600;
+  width: 28%;
+}
+.doc-responses {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.doc-text-card summary,
+.doc-raw summary {
+  cursor: pointer;
+}
+.doc-path {
+  overflow-wrap: anywhere;
+}
+
+/* ---- package sections: auth, triggers, environments ---- */
+.sec-list {
+  list-style: none;
+}
+.sec-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 0;
+  border-top: 1px solid var(--line2);
+}
+.sec-item:first-child {
+  border-top: 0;
+}
+.sec-main {
+  flex: 1;
+  min-width: 220px;
+}
+.sec-link {
+  font-weight: 600;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+.sec-counts {
+  white-space: nowrap;
+}
+.env-url {
+  overflow-wrap: anywhere;
+  margin-top: 4px;
+}
+.section-tabs {
+  margin-bottom: 14px;
+}
+
+.facts {
+  display: flex;
+  flex-direction: column;
+}
+.fact {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line2);
+  font-size: 14px;
+}
+.fact:first-child {
+  border-top: 0;
+}
+.fact dd {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.setup-steps {
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
