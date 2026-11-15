@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
-import type { TriggerSummary } from '@/api/types';
+import type { EndpointRefs, TriggerSummary } from '@/api/types';
 import { Button, Card, Chip, EmptyState, ErrorState, LoadingState } from '@/components';
+import { EndpointRef } from './EndpointRef';
 import { WebhookMechanism } from './WebhookMechanism';
 
 const PAGE = 50;
@@ -17,6 +18,7 @@ type State =
       total: number;
       items: TriggerSummary[];
       webhooks: Record<string, unknown>[];
+      refs: EndpointRefs;
     };
 
 /**
@@ -40,6 +42,7 @@ export function TriggersPanel({ apiId }: { apiId: string }) {
           total: r.total,
           items: r.items,
           webhooks: r.webhooks ?? [],
+          refs: r.endpointRefs ?? {},
         }),
       (e: unknown) => {
         if (!ctrl.signal.aborted)
@@ -76,7 +79,14 @@ export function TriggersPanel({ apiId }: { apiId: string }) {
   return (
     <>
       {state.status === 'ready'
-        ? state.webhooks.map((m, i) => <WebhookMechanism key={String(m.id ?? i)} mechanism={m} />)
+        ? state.webhooks.map((m, i) => (
+            <WebhookMechanism
+              key={String(m.id ?? i)}
+              apiId={apiId}
+              mechanism={m}
+              refs={state.refs}
+            />
+          ))
         : null}
       <Card className="pad" role="region" aria-label="Triggers and webhooks">
         <h2 className="h2-sm">Triggers and webhooks</h2>
@@ -124,6 +134,16 @@ export function TriggersPanel({ apiId }: { apiId: string }) {
                         {t.title}
                       </Link>
                       {t.description ? <div className="muted small">{t.description}</div> : null}
+                      {t.syncEndpointId ? (
+                        <div className="muted small">
+                          Polled via{' '}
+                          <EndpointRef
+                            apiId={apiId}
+                            endpointId={t.syncEndpointId}
+                            refs={state.refs}
+                          />
+                        </div>
+                      ) : null}
                     </div>
                     <div className="row" style={{ gap: 8 }}>
                       {t.resource ? <Chip>{t.resource}</Chip> : null}

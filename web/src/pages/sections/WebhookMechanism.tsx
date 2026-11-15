@@ -1,4 +1,7 @@
+import type { ReactNode } from 'react';
+import type { EndpointRefs } from '@/api/types';
 import { Card, Chip, RawJson } from '@/components';
+import { EndpointRef } from './EndpointRef';
 
 const obj = (v: unknown): Record<string, unknown> =>
   v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
@@ -24,7 +27,15 @@ function whereText(v: unknown): string {
  * How the package says events are delivered (the webhook mechanism): how to subscribe, unsubscribe and list,
  * the handshake and verification, and the events available. Everything is shown as the package states it.
  */
-export function WebhookMechanism({ mechanism }: { mechanism: Record<string, unknown> }) {
+export function WebhookMechanism({
+  apiId,
+  mechanism,
+  refs,
+}: {
+  apiId: string;
+  mechanism: Record<string, unknown>;
+  refs?: EndpointRefs;
+}) {
   const subscribe = obj(mechanism.subscribe);
   const unsubscribe = obj(mechanism.unsubscribe);
   const list = obj(mechanism.list);
@@ -35,21 +46,31 @@ export function WebhookMechanism({ mechanism }: { mechanism: Record<string, unkn
   const evidence = strs(prov.evidence);
   const evidenceUrl = str(prov.evidenceUrl);
 
-  const rows: [string, string][] = [
-    ['Subscribe', str(subscribe.endpointId)],
-    ['Callback URL', whereText(subscribe.callbackUrl)],
-    ['Events to subscribe to', whereText(subscribe.events)],
+  const endpoint = (id: string) =>
+    id ? <EndpointRef apiId={apiId} endpointId={id} refs={refs} /> : '';
+  const rows: [string, ReactNode][] = (
     [
-      'Unsubscribe',
+      ['Subscribe', endpoint(str(subscribe.endpointId))],
+      ['Callback URL', whereText(subscribe.callbackUrl)],
+      ['Events to subscribe to', whereText(subscribe.events)],
       [
-        str(unsubscribe.endpointId),
-        str(unsubscribe.idVar) && `(id variable ${str(unsubscribe.idVar)})`,
-      ]
-        .filter(Boolean)
-        .join(' '),
-    ],
-    ['List subscriptions', str(list.endpointId)],
-  ].filter((r): r is [string, string] => Boolean(r[1]));
+        'Unsubscribe',
+        str(unsubscribe.endpointId) ? (
+          <>
+            {endpoint(str(unsubscribe.endpointId))}
+            {str(unsubscribe.idVar) ? (
+              <span className="faint small"> (id variable {str(unsubscribe.idVar)})</span>
+            ) : null}
+          </>
+        ) : (
+          ''
+        ),
+      ],
+      ['List subscriptions', endpoint(str(list.endpointId))],
+      ['Handshake endpoint', endpoint(str(handshake.endpointId))],
+      ['Verification endpoint', endpoint(str(verification.endpointId))],
+    ] as [string, ReactNode][]
+  ).filter((r) => r[1] !== '');
 
   return (
     <Card className="pad doc-fields" role="region" aria-label="Webhook delivery">
@@ -65,7 +86,7 @@ export function WebhookMechanism({ mechanism }: { mechanism: Record<string, unkn
           {rows.map(([k, v]) => (
             <div key={k} className="fact">
               <dt className="muted">{k}</dt>
-              <dd className="mono">{v}</dd>
+              <dd className={typeof v === 'string' ? 'mono' : undefined}>{v}</dd>
             </div>
           ))}
         </dl>

@@ -551,7 +551,11 @@ export interface TriggerList {
   items: TriggerSummary[];
   /** The webhook delivery mechanism, verbatim from the package ([] when none). */
   webhooks?: Record<string, unknown>[];
+  /** The stream endpoint ids mentioned by the mechanism and the events, resolved to a document; null = not in this build. */
+  endpointRefs?: EndpointRefs;
 }
+
+export type EndpointRefs = Record<string, { docId: string; method: string; path: string } | null>;
 
 export interface TriggerDetail extends TriggerSummary {
   api: string;
