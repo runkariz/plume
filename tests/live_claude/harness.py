@@ -267,7 +267,7 @@ def check_model(stack: Stack, run: Run, before: set[str], min_coverage: float) -
             )
         )
     with stack_client(stack) as http:
-        listed = request_json(http, "GET", "/v1/models", params={"limit": 200})
+        listed = request_json(http, "GET", "/v1/models", params={"limit": 200, "visibility": "all"})
         after = {m["id"] for m in listed["items"]}
         new = sorted(after - before)
         checks.append(Check("a snapshot was stored", bool(new), ", ".join(new)))

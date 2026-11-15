@@ -51,6 +51,8 @@ def http_app(c: Container) -> FastAPI:
             models=c.models,
             maintainer_tokens=tuple(t.get_secret_value() for t in s.maintainer_tokens),
             max_upload_bytes=s.max_upload_bytes,
+            generate_models=c.generate,
+            web_public_url=s.web_public_url,
         )
     )
 
@@ -68,6 +70,7 @@ def reader_server(c: Container) -> MCPServer:
             resolver=c.resolver,
             models=c.models,
             sections=c.sections,
+            web_public_url=c.settings.web_public_url,
         )
     )
 
@@ -80,6 +83,8 @@ def maintainer_mcp_server(c: Container) -> MCPServer:
             resolver=c.resolver,
             tag_build=c.tag_build,
             jobs=c.maintainer,
+            generate=c.generate,
+            web_public_url=c.settings.web_public_url,
         )
     )
 
@@ -156,6 +161,13 @@ def recover_jobs(c: Container) -> None:
         return
     if ids:
         logger.warning("marked %d interrupted job(s) as failed: %s", len(ids), ", ".join(ids))
+    try:
+        model_ids = c.generate().recover()
+    except Exception:
+        logger.exception("model job recovery skipped")
+        return
+    if model_ids:
+        logger.warning("marked %d interrupted model job(s) as failed", len(model_ids))
 
 
 def serve_api(c: Container, host: str | None = None, port: int | None = None) -> None:

@@ -9,10 +9,10 @@ this review and have tests in `tests/unit/interfaces/test_hardening.py`.
 | Surface | Auth | Writes |
 |---|---|---|
 | HTTP reader `/v1/apis/**`, `/health`, `/docs`, `/openapi.json` | none | none |
-| HTTP models: `candidates`, `suggest`, `generate`, `sessions/{id}/context`, `GET /v1/models/**` | none | `generate` inserts one session row |
-| HTTP models: `POST /v1/models/sessions/{id}/draft` | bearer | snapshot (validated) |
+| HTTP models: `candidates`, `suggest`, `generate` (engine claude), `sessions/**`, `GET /v1/models`, `GET /v1/models/{id}`, `revise`, `mine` | none | sessions; `draft` stores an **unlisted** snapshot (validated) |
+| HTTP models: `generate` (engine server), `release`, `discard`, `jobs/**`, unreleased lists and models | bearer | jobs, unreleased snapshots, visibility |
 | HTTP maintainer `/v1/maintainer/me`, `/v1/packages`, `/v1/jobs/**` | bearer | jobs, builds, tags |
-| MCP reader `/mcp` | none | none |
+| MCP reader `/mcp` | none | model sessions and unlisted snapshots only |
 | MCP maintainer `/maintainer/mcp` | bearer | sessions, snapshots, tags |
 | CLI (`plume load/tag/export/restore/migrate`) | database access | everything |
 
@@ -57,12 +57,22 @@ this review and have tests in `tests/unit/interfaces/test_hardening.py`.
   `int()`-cast setting. `LIKE` patterns escape `%`, `_` and `\`. Full-text input goes through
   `plainto_tsquery`.
 - **Integrity**: sealed builds are immutable (domain + storage refuse changes); model snapshots
-  are insert-only and a database trigger refuses `UPDATE`; dumps are verified (chunk hashes →
+  are insert-only and a database trigger refuses any `UPDATE` other than `visibility` /
+  `released_at` (release, discard); a change to a model is a new version; dumps are verified (chunk hashes →
   sealed content hash, dims, facts) before a restore writes anything, in one transaction.
   Restore is CLI-only.
 - **Untrusted text**: document text, titles, quotes and package file names come from third-party
   docs or uploads. Clients must render them as text (the web UI does; MCP clients receive
   JSON). Model drafts are parsed into typed values and every citation is re-checked.
+- **Model access**: an unlisted model's id is its share link: `u-` + 128 random bits from
+  `secrets`, so ids cannot be guessed or derived from content. Unreleased and discarded models
+  answer 404 without the token (existence is not revealed). Owner keys (`pk_` + 192 random
+  bits) are returned once and stored only as SHA-256; they can only list (POST body, never a
+  URL). Only a maintainer can make a model official; a user revising an official model gets
+  their own unlisted copy. Drafts are capped at 1,000,000 characters.
+- **LLM key**: server-side generation reads the Vertex key from `PLUME_VERTEX_KEY_FILE` on each
+  call and sends it only in the `x-goog-api-key` header; errors carry the HTTP status, never the
+  key or the provider's body. Without a readable key file generation answers 503.
 - **Secrets**: keys and tokens come only from the environment (`settings.py` is the only env
   reader, enforced by a test). In Docker they are visible to anyone who can run
   `docker inspect`; for anything beyond local use, pass them through a secrets mechanism.
@@ -70,8 +80,12 @@ this review and have tests in `tests/unit/interfaces/test_hardening.py`.
 
 ## Known gaps (not fixed)
 
-- `POST /v1/models/generate` and `suggest` are public and do database work; they are rate
-  limited but sessions are never pruned. Add retention or move generate behind auth if abused.
+- `POST /v1/models/generate`, `suggest` and draft submission are public and do database work;
+  they are rate limited, but sessions and unlisted snapshots are never pruned, so an abuser can
+  fill storage at the rate limit (each draft at most ~1 MB). Add retention, per-client quotas or
+  auth for submissions if abused.
+- Anyone holding an unlisted model's link can add a version to it (by design: "anyone with the
+  link"); the owner cannot lock a model.
 - The maintainer API has one role and no per-token audit trail.
 - Builds run in-process in the API server (one worker); a slow build occupies it until done.
 - No TLS termination: run behind a proxy for anything but localhost.
