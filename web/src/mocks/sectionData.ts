@@ -4,6 +4,7 @@ import type {
   EnvironmentsOut,
   TriggerDetail,
   TriggerList,
+  McpOut,
   TriggerSummary,
 } from '@/api/types';
 
@@ -176,9 +177,40 @@ const SHOPIFY_EVENTS: TriggerSummary[] = [
   },
 ];
 
+/** The webhook delivery mechanism of the Shopify package, as the real API sends it (verbatim shape). */
+export const SHOPIFY_WEBHOOK_MECHANISM: Record<string, unknown> = {
+  id: 'post-admin-api-latest-webhooks-json-2026-10',
+  mode: 'api',
+  handshake: { kind: 'none' },
+  list: { endpointId: 'get-admin-api-latest-webhooks-json' },
+  subscribe: {
+    endpointId: 'post-admin-api-latest-webhooks-json-2026-10',
+    callbackUrl: { in: 'body', pointer: '/webhook/address' },
+    events: { in: 'body', pointer: '/webhook/topic', shape: 'array' },
+  },
+  unsubscribe: {
+    idVar: 'webhook_id',
+    endpointId: 'delete-admin-api-latest-webhooks-webhook-id-json-2026-10',
+  },
+  eventsAvailable: ['app/scopes_update', 'app/uninstalled', 'orders/create', 'orders/updated'],
+  provenance: {
+    source: 'docs',
+    evidence: ['Create a new webhook subscription by specifying both an address and a topic.'],
+    evidenceUrl: 'https://shopify.dev/docs/api/admin-rest/latest/resources/webhook',
+  },
+};
+
 export function triggersFor(api: string, limit = 50, offset = 0): TriggerList {
   if (api !== 'shopify')
-    return { api, build: BUILD, present: false, note: 'not in this package', total: 0, items: [] };
+    return {
+      api,
+      build: BUILD,
+      present: false,
+      note: 'not in this package',
+      total: 0,
+      items: [],
+      webhooks: [],
+    };
   return {
     api,
     build: BUILD,
@@ -186,6 +218,37 @@ export function triggersFor(api: string, limit = 50, offset = 0): TriggerList {
     note: null,
     total: SHOPIFY_EVENTS.length,
     items: SHOPIFY_EVENTS.slice(offset, offset + limit),
+    webhooks: [SHOPIFY_WEBHOOK_MECHANISM],
+  };
+}
+
+/** Only the "stripe" sample pretends to have an MCP server (real docs-only packages never do). */
+export function mcpFor(api: string): McpOut {
+  if (api !== 'stripe')
+    return { api, build: BUILD, present: false, note: 'not in this package', servers: [] };
+  return {
+    api,
+    build: BUILD,
+    present: true,
+    note: null,
+    servers: [
+      {
+        id: 'stripe-mcp',
+        server: { name: 'Stripe MCP', url: 'https://mcp.stripe.example/mcp' },
+        tools: [
+          {
+            tool: 'list_customers',
+            inputSchema: { type: 'object', properties: { limit: { type: 'integer' } } },
+            outputSchema: null,
+          },
+          {
+            tool: 'create_invoice',
+            inputSchema: { type: 'object', required: ['customer'] },
+            outputSchema: { type: 'object' },
+          },
+        ],
+      },
+    ],
   };
 }
 

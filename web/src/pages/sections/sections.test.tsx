@@ -290,3 +290,135 @@ describe('the package icon', () => {
     expect(card.querySelector('img')).toBeNull();
   });
 });
+
+describe('webhook delivery mechanism', () => {
+  it('shows how events are delivered, as the package states it', async () => {
+    renderApp('/apis/shopify?section=triggers');
+    const card = await screen.findByRole('region', { name: 'Webhook delivery' });
+    expect(within(card).getByText('mode: api')).toBeInTheDocument();
+    expect(within(card).getByText('handshake: none')).toBeInTheDocument();
+    expect(within(card).getByText('Callback URL')).toBeInTheDocument();
+    expect(within(card).getByText('in body at /webhook/address')).toBeInTheDocument();
+    expect(within(card).getByText('in body at /webhook/topic (array)')).toBeInTheDocument();
+    expect(
+      within(card).getByText(
+        /delete-admin-api-latest-webhooks-webhook-id-json-2026-10 \(id variable webhook_id\)/,
+      ),
+    ).toBeInTheDocument();
+    expect(within(card).getByText('get-admin-api-latest-webhooks-json')).toBeInTheDocument();
+    // the events available and the evidence stay collapsed
+    expect(within(card).getByText('events available').closest('details')).not.toHaveAttribute(
+      'open',
+    );
+    expect(
+      within(card).getByText('Where the docs say this').closest('details'),
+    ).not.toHaveAttribute('open');
+    expect(within(card).getByText('Mechanism JSON, as in the package')).toBeInTheDocument();
+  });
+
+  it('says only what is documented: a package with events but no mechanism shows none', async () => {
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/:id/triggers`, () =>
+        HttpResponse.json({
+          api: 'shopify',
+          build: 'b-1',
+          present: true,
+          note: null,
+          total: 1,
+          webhooks: [],
+          items: [
+            {
+              key: 'a/b',
+              docId: 'trigger:a-b',
+              title: 'a/b',
+              description: null,
+              resource: null,
+              delivery: null,
+            },
+          ],
+        }),
+      ),
+    );
+    renderApp('/apis/shopify?section=triggers');
+    await screen.findByRole('link', { name: 'a/b' });
+    expect(screen.queryByRole('region', { name: 'Webhook delivery' })).not.toBeInTheDocument();
+  });
+
+  it('a package with only the mechanism says no events are listed (not "not in this package")', async () => {
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/:id/triggers`, async () => {
+        const { SHOPIFY_WEBHOOK_MECHANISM } = await import('@/mocks/sectionData');
+        return HttpResponse.json({
+          api: 'shopify',
+          build: 'b-1',
+          present: true,
+          note: null,
+          total: 0,
+          items: [],
+          webhooks: [SHOPIFY_WEBHOOK_MECHANISM],
+        });
+      }),
+    );
+    renderApp('/apis/shopify?section=triggers');
+    expect(await screen.findByText('No events listed')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Webhook delivery' })).toBeInTheDocument();
+    expect(screen.queryByText('Not in this package')).not.toBeInTheDocument();
+  });
+
+  it('marks an event that is delivered by polling an endpoint', async () => {
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/:id/triggers`, () =>
+        HttpResponse.json({
+          api: 'shopify',
+          build: 'b-1',
+          present: true,
+          note: null,
+          total: 1,
+          webhooks: [],
+          items: [
+            {
+              key: 'orders/poll',
+              docId: 'trigger:orders-poll',
+              title: 'orders/poll',
+              description: null,
+              resource: null,
+              delivery: 'polling',
+              syncEndpointId: 'get-orders',
+            },
+          ],
+        }),
+      ),
+    );
+    renderApp('/apis/shopify?section=triggers');
+    const chip = await screen.findByText('polled');
+    expect(chip.parentElement?.getAttribute('title')).toBe('get-orders');
+  });
+});
+
+describe('MCP section', () => {
+  it('appears only when the vendor runs an MCP server, with its tools', async () => {
+    renderApp('/apis/stripe');
+    const tab = await screen.findByRole('radio', { name: 'MCP (1)' });
+    await userEvent.click(tab);
+    const card = await screen.findByRole('region', { name: 'MCP' });
+    expect(within(card).getByText('Stripe MCP')).toBeInTheDocument();
+    expect(within(card).getByText('list_customers')).toBeInTheDocument();
+    expect(within(card).getByText('create_invoice')).toBeInTheDocument();
+    expect(within(card).getAllByText('Input schema')).toHaveLength(2);
+    expect(within(card).getAllByText('Output schema')).toHaveLength(1);
+  });
+
+  it('renders nothing for a docs-only package: no tab, no empty state', async () => {
+    renderApp('/apis/shopify');
+    await screen.findByRole('radio', { name: 'Triggers (3)' });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(screen.queryByRole('radio', { name: /MCP/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/MCP/)).not.toBeInTheDocument();
+  });
+
+  it('ignores ?section=mcp when the package has no MCP server', async () => {
+    renderApp('/apis/shopify?section=mcp');
+    expect(await screen.findByRole('heading', { name: 'Browse' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'MCP' })).not.toBeInTheDocument();
+  });
+});

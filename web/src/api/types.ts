@@ -538,6 +538,8 @@ export interface TriggerSummary {
   description: string | null;
   resource: string | null;
   delivery: string | null;
+  /** Set when the event is delivered by polling this endpoint instead of a webhook. */
+  syncEndpointId?: string | null;
 }
 
 export interface TriggerList {
@@ -547,6 +549,8 @@ export interface TriggerList {
   note: string | null;
   total: number;
   items: TriggerSummary[];
+  /** The webhook delivery mechanism, verbatim from the package ([] when none). */
+  webhooks?: Record<string, unknown>[];
 }
 
 export interface TriggerDetail extends TriggerSummary {
@@ -576,4 +580,18 @@ export interface EnvironmentsOut {
   versioning: { format?: string; scheme?: string; current?: string; versions?: string[] } | null;
   baseUrls: string[] | null;
   variablesSchema: Record<string, unknown> | null;
+}
+
+/** GET /v1/apis/{api}/mcp: only when the vendor runs an MCP server. Docs-only packages have none (present=false). */
+export interface McpOut {
+  api: string;
+  build: string;
+  present: boolean;
+  note: string | null;
+  servers: {
+    id: string;
+    /** The server JSON, verbatim (untrusted). */
+    server: Record<string, unknown>;
+    tools: { tool: string; inputSchema: unknown; outputSchema: unknown | null }[];
+  }[];
 }

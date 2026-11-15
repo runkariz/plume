@@ -29,6 +29,7 @@ import { docHref } from './models/MappingTable';
 import { ModelList } from './models/ModelList';
 import { AuthPanel } from './sections/AuthPanel';
 import { EnvironmentsCard } from './sections/EnvironmentsCard';
+import { McpPanel } from './sections/McpPanel';
 import { TriggersPanel } from './sections/TriggersPanel';
 import { categoryLabel, formatDate, formatScore, modelCount } from '@/lib/format';
 
@@ -125,10 +126,21 @@ function Browse({ api }: { api: ApiSummary }) {
 }
 
 function Detail({ api }: { api: ApiDetail }) {
+  const client = useApiClient();
   const [params, setParams] = useSearchParams();
   const raw = params.get('section');
-  const section: 'browse' | 'auth' | 'triggers' =
-    raw === 'auth' || raw === 'triggers' ? raw : 'browse';
+  const loadMcp = useCallback(
+    (signal: AbortSignal) => client.getMcp(api.id, signal),
+    [client, api.id],
+  );
+  const { state: mcpState } = useAsync(loadMcp);
+  // an MCP section exists only when the vendor runs an MCP server: otherwise no tab, no empty state
+  const mcp =
+    mcpState.status === 'ready' && mcpState.data.present && mcpState.data.servers.length > 0
+      ? mcpState.data
+      : null;
+  const section: 'browse' | 'auth' | 'triggers' | 'mcp' =
+    raw === 'auth' || raw === 'triggers' || (raw === 'mcp' && mcp) ? raw : 'browse';
   return (
     <>
       <div className="titlerow">
@@ -204,10 +216,12 @@ function Detail({ api }: { api: ApiDetail }) {
                 value: 'triggers',
                 label: `Triggers${api.sections ? ` (${api.sections.triggers})` : ''}`,
               },
+              ...(mcp ? [{ value: 'mcp' as const, label: `MCP (${mcp.servers.length})` }] : []),
             ]}
           />
           {section === 'auth' ? <AuthPanel apiId={api.id} /> : null}
           {section === 'triggers' ? <TriggersPanel apiId={api.id} /> : null}
+          {section === 'mcp' && mcp ? <McpPanel mcp={mcp} /> : null}
           {section === 'browse' ? <Browse api={api} /> : null}
         </div>
         <div className="stack">

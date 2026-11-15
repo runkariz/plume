@@ -23,6 +23,7 @@ import {
   environmentsFor,
   ICON_PNG_BASE64,
   iconApis,
+  mcpFor,
   triggerDetailFor,
   triggersFor,
 } from './sectionData';
@@ -588,6 +589,9 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
         ? HttpResponse.json(d)
         : HttpResponse.json({ error: 'not_found', message: 'No such event' }, { status: 404 });
     }),
+    http.get(`${base}/v1/apis/:id/mcp`, ({ params }) =>
+      detailFor(String(params.id)) ? HttpResponse.json(mcpFor(String(params.id))) : notFound(),
+    ),
     http.get(`${base}/v1/apis/:id/environments`, ({ params }) =>
       detailFor(String(params.id))
         ? HttpResponse.json(environmentsFor(String(params.id)))

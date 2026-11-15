@@ -21,6 +21,7 @@ import {
   type AuthList,
   type AuthSchemeDetail,
   type EnvironmentsOut,
+  type McpOut,
   type TriggerDetail,
   type TriggerList,
   type AskResponse,
@@ -48,6 +49,7 @@ export interface PlumeApi {
   /** `key` is the trigger key (it contains "/"); it is URL-encoded here. */
   getTrigger(api: string, key: string, signal?: AbortSignal): Promise<TriggerDetail>;
   getEnvironments(api: string, signal?: AbortSignal): Promise<EnvironmentsOut>;
+  getMcp(api: string, signal?: AbortSignal): Promise<McpOut>;
   browse(
     id: string,
     q: { kind?: ItemKind; query?: string; limit?: number; tag?: string },
@@ -245,6 +247,7 @@ export function createApiClient(
     },
     getTrigger: (api, key, signal) =>
       call<TriggerDetail>(`/v1/apis/${enc(api)}/triggers/${enc(key)}`, { signal }),
+    getMcp: (api, signal) => call<McpOut>(`/v1/apis/${enc(api)}/mcp`, { signal }),
     getEnvironments: (api, signal) =>
       call<EnvironmentsOut>(`/v1/apis/${enc(api)}/environments`, { signal }),
     browse: (id, q, signal) => {
