@@ -6,7 +6,7 @@ import type { ApiSummary } from '@/api/types';
 import { ApiAvatar, Button, EmptyState, ErrorState, LoadingState } from '@/components';
 import { CheckIcon } from '@/icons';
 import { categoryLabel, modelCount } from '@/lib/format';
-import { ModelList } from './ModelList';
+import { ModelList, MyModels, UnreleasedModels } from './ModelList';
 
 function PickCard({
   api,
@@ -130,6 +130,8 @@ export function PickApps() {
         ) : null}
       </section>
       <section className="existing-models">
+        <UnreleasedModels />
+        <MyModels />
         <ModelList />
       </section>
       {selected.length > 0 ? (

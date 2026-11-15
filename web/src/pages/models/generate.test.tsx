@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import { http, HttpResponse } from 'msw';
 import userEvent from '@testing-library/user-event';
+import { isGenerateJob } from '@/api/types';
 import { authStore } from '@/app/authStore';
 import { renderApp, testClient } from '@/test/render';
 import { createHandlers } from '@/mocks/handlers';
@@ -11,9 +12,26 @@ const url = '/models/suggest?apis=shopify,woocommerce,mirakl';
 
 async function openSession() {
   renderApp(url);
-  // "Order" has no snapshot yet in the mock: the server opens a session and waits for a draft
-  await userEvent.click(await screen.findByRole('button', { name: 'Generate Order' }));
+  // "Order" has no current model yet in the mock: the server opens a session and waits for a draft. A signed-in
+  // maintainer would get a server job from "Generate", so the Claude session is asked for explicitly.
+  const maintainer = authStore.getKey() !== null;
+  await userEvent.click(
+    await screen.findByRole('button', {
+      name: maintainer ? 'Use Claude instead to generate Order' : 'Generate Order',
+    }),
+  );
   return screen.findByRole('region', { name: 'Generation session' });
+}
+
+/** The Claude session as a client sees it (never a server job). */
+async function claudeSession(c: ReturnType<typeof testClient>, concept = 'order') {
+  const r = await c.generateModel({
+    apis: ['shopify', 'woocommerce', 'mirakl'],
+    concept,
+    engine: 'claude',
+  });
+  if (isGenerateJob(r)) throw new Error('a job was not expected');
+  return r;
 }
 
 beforeEach(() => {
@@ -127,14 +145,49 @@ describe('Generate: waiting for a draft (P5 sessions)', () => {
     expect(await within(pack).findByText('3 of 5 fields shown')).toBeInTheDocument();
   });
 
-  it('asks signed-out visitors to sign in before pasting a draft', async () => {
+  it('lets anyone paste a draft, and says where it will be stored', async () => {
     const panel = await openSession();
-    expect(within(panel).getByText('Maintainers can paste a draft')).toBeInTheDocument();
-    expect(within(panel).getByRole('link', { name: 'Sign in as a maintainer' })).toHaveAttribute(
-      'href',
-      '/maintainer',
+    expect(within(panel).getByLabelText('Draft JSON')).toBeInTheDocument();
+    expect(
+      within(panel).getByText('Stored unlisted: only people with the link.'),
+    ).toBeInTheDocument();
+    expect(within(panel).queryByText('Maintainers can paste a draft')).not.toBeInTheDocument();
+    // without a token the reader connector is enough (no maintainer token needed)
+    expect(within(panel).getByLabelText('Command to add the Plume connector')).toHaveTextContent(
+      'claude mcp add --transport http plume http://127.0.0.1:18481/mcp',
     );
-    expect(within(panel).queryByLabelText('Draft JSON')).not.toBeInTheDocument();
+    expect(within(panel).getByText('unlisted', { selector: 'b' })).toBeInTheDocument();
+  });
+
+  it('shows the reader connector to a signed-out visitor even if the server sends the maintainer URL', async () => {
+    server.use(
+      http.post(`${TEST_API_BASE}/v1/models/generate`, () =>
+        HttpResponse.json({
+          sessionId: 's-x1',
+          status: 'awaiting_draft',
+          snapshotId: null,
+          inputs: [{ api: 'shopify', build: 'b-1' }],
+          contextUrl: '/v1/models/sessions/s-x1/context',
+          claudePrompt: 'Use the connector.',
+          mcpUrl: 'http://127.0.0.1:18481/mcp',
+          maintainerMcpUrl: 'http://127.0.0.1:18481/maintainer/mcp',
+        }),
+      ),
+    );
+    const panel = await openSession();
+    const line = within(panel).getByLabelText('Command to add the Plume connector');
+    expect(line).toHaveTextContent(
+      'claude mcp add --transport http plume http://127.0.0.1:18481/mcp',
+    );
+    expect(line.textContent).not.toContain('Bearer');
+    expect(within(panel).queryByText(/It needs a maintainer token/)).not.toBeInTheDocument();
+  });
+
+  it('says a signed-in maintainer gets an unreleased model', async () => {
+    authStore.signIn('pl_ok', 'maintainer');
+    const panel = await openSession();
+    expect(within(panel).getByText('Stored unreleased.')).toBeInTheDocument();
+    expect(within(panel).getByText('unreleased', { selector: 'b' })).toBeInTheDocument();
   });
 
   it('can be cancelled', async () => {
@@ -183,12 +236,14 @@ describe('Generate: pasting a draft (maintainer)', () => {
     expect(await within(panel).findByText('INVALID_FORMAT')).toBeInTheDocument();
   });
 
-  it('opens the stored model after an accepted draft', async () => {
+  it('opens the stored model after an accepted draft: unreleased, with Release and Discard', async () => {
     const panel = await signedInPanel();
     await paste(panel, '{"name":"Order","fields":[{"name":"sku"}]}');
     await userEvent.click(within(panel).getByRole('button', { name: 'Submit draft' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Order' })).toBeInTheDocument();
     expect(screen.getByText('Generated, unverified')).toBeInTheDocument();
+    expect(screen.getByText('Unreleased')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Release' })).toBeInTheDocument();
   });
 
   it('tells the person to sign in again when the token is rejected', async () => {
@@ -197,6 +252,49 @@ describe('Generate: pasting a draft (maintainer)', () => {
     await paste(panel, '{"name":"Order","fields":[{"name":"sku"}]}');
     await userEvent.click(within(panel).getByRole('button', { name: 'Submit draft' }));
     expect(await within(panel).findByRole('alert')).toHaveTextContent('Sign in again');
+  });
+});
+
+describe('Generate: pasting a draft (signed out)', () => {
+  beforeEach(() => localStorage.clear());
+  const submit = async (text: string) => {
+    const panel = await openSession();
+    const box = within(panel).getByLabelText('Draft JSON');
+    await userEvent.click(box);
+    await userEvent.paste(text);
+    await userEvent.click(within(panel).getByRole('button', { name: 'Submit draft' }));
+  };
+
+  it('stores the model unlisted, keeps the owner key in this browser and shows the share link', async () => {
+    await submit('{"name":"Order","fields":[{"name":"sku"}]}');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Order' })).toBeInTheDocument();
+    expect(screen.getByText('Unlisted: anyone with the link')).toBeInTheDocument();
+    // shown once, with the key
+    const notice = screen
+      .getByText('Your model is saved, and unlisted')
+      .closest('div') as HTMLElement;
+    expect(notice).toBeInTheDocument();
+    const key = /ok-mock\d+/.exec(document.body.textContent ?? '')?.[0];
+    expect(key).toBeTruthy();
+    expect(JSON.parse(localStorage.getItem('plume-owner-keys') ?? '[]')).toEqual([key]);
+    // the share link is this site's origin + the model's path
+    const link = within(screen.getByRole('region', { name: 'Share this model' })).getByLabelText(
+      'Link to this model',
+    ) as HTMLInputElement;
+    expect(link.value).toMatch(new RegExp(`^${window.location.origin}/models/u-mock\\d+$`));
+    // no Release / Discard for an unlisted model
+    expect(screen.queryByRole('button', { name: 'Release' })).not.toBeInTheDocument();
+    // a reload of the same page does not show the key again
+    await userEvent.click(
+      within(notice.parentElement as HTMLElement).getByRole('button', { name: 'Dismiss' }),
+    );
+    expect(screen.queryByText('Your model is saved, and unlisted')).not.toBeInTheDocument();
+  });
+
+  it('shows the refusal for a bad draft and stores nothing', async () => {
+    await submit('{"name":"Order","fields":[{"name":"total"}],"refuse":"quote"}');
+    expect(await screen.findByText('QUOTE_NOT_FOUND')).toBeInTheDocument();
+    expect(localStorage.getItem('plume-owner-keys')).toBeNull();
   });
 });
 
@@ -218,17 +316,31 @@ describe('Generate: noticing a model created elsewhere (Claude over MCP)', () =>
     ).toBeInTheDocument();
   });
 
-  it('opens an existing model straight away when the server says ready', async () => {
+  it('opens a released model straight away when the server says ready', async () => {
     authStore.signIn('pl_claude', 'claude');
     const c = testClient();
-    const apis = ['shopify', 'woocommerce', 'mirakl'];
-    const first = await c.generateModel({ apis, concept: 'order' });
+    const first = await claudeSession(c);
     expect(first.status).toBe('awaiting_draft');
-    await c.submitModelDraft(first.sessionId, { name: 'Order', fields: [{ name: 'sku' }] });
+    const { model } = await c.submitModelDraft(first.sessionId, {
+      name: 'Order',
+      fields: [{ name: 'sku' }],
+    });
+    await c.releaseModel(model.id); // official: ready for everyone
     authStore.signOut();
     renderApp(url);
     await userEvent.click(await screen.findByRole('button', { name: 'Generate Order' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Order' })).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Generation session' })).not.toBeInTheDocument();
+  });
+
+  it('an unreleased model is not "ready" for a signed-out visitor: the session opens', async () => {
+    authStore.signIn('pl_claude', 'claude');
+    const c = testClient();
+    const first = await claudeSession(c);
+    await c.submitModelDraft(first.sessionId, { name: 'Order', fields: [{ name: 'sku' }] });
+    authStore.signOut();
+    renderApp(url);
+    await userEvent.click(await screen.findByRole('button', { name: 'Generate Order' }));
+    expect(await screen.findByRole('region', { name: 'Generation session' })).toBeInTheDocument();
   });
 });

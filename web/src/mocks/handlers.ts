@@ -5,18 +5,19 @@ import type {
   GenerateRequest,
   ItemKind,
   Job,
-  ModelSnapshot,
   ReviewRequest,
   SearchRequest,
 } from '@/api/types';
+import { apiRef, modelCandidates, productSnapshot, sampleSuggestions } from './modelData';
 import {
-  apiRef,
-  modelCandidates,
-  order40Snapshot,
-  productSnapshot,
-  sampleSuggestions,
-  snapshots,
-} from './modelData';
+  decorate,
+  jobScript,
+  listItem,
+  seedModels,
+  type MockJob,
+  type MockSession,
+  type StoredModel,
+} from './modelStore';
 import {
   authDetailFor,
   authFor,
@@ -135,8 +136,12 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
   const eventDelay = opts.eventDelayMs ?? 0;
   /** In-memory job store: one sample job per upload, advanced by the endpoints below. */
   const jobs = new Map<string, Job>();
-  const modelSessions = new Map<string, { apis: string[]; concept: string }>();
-  const made = new Map<string, { model: ModelSnapshot; apis: string[]; concept: string }>();
+  const modelSessions = new Map<string, MockSession>();
+  /** Every model of the mock server, seeded ones included, with who may see it. */
+  const models = new Map<string, StoredModel>(seedModels().map((m) => [m.model.id, m]));
+  const allModels = () => [...models.values()];
+  const modelJobs = new Map<string, MockJob>();
+  let jobCounter = 0;
   let sessionCounter = 0;
   let counter = 0;
   const guard = (req: Request, id: string) => {
@@ -157,30 +162,95 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
         return HttpResponse.json({ detail: 'Unknown API in the selection' }, { status: 404 });
       return HttpResponse.json(sampleSuggestions(apis));
     }),
-    // P5: the server runs no LLM. Inventory and Product already have a snapshot ("ready"); any other
-    // concept opens a session that waits for a draft, which a maintainer can submit (token pl_...).
+    // W12: signed in, "Generate" runs on the server (a job, 202); without the token it is the Claude session and the
+    // model is stored unlisted. `ready` only names a model the caller may see (official, or unreleased with the token).
+    // Mock behaviour by concept: `location` = no server model key (503), `customer` = the job fails, `shipment` = refused once.
     http.post(`${base}/v1/models/generate`, async ({ request }) => {
       const body = (await request.json()) as GenerateRequest;
-      const existing =
-        body.concept === 'inventory'
-          ? 'snap_8f3a21'
-          : body.concept === 'product'
-            ? 'snap_prod01'
-            : [...made.values()].find(
-                (m) => m.concept === body.concept && sameSet(m.apis, body.apis),
-              )?.model.id;
+      const maintainer = isMaintainer(request);
+      const engine = body.engine ?? (maintainer ? 'server' : 'claude');
+      if (engine === 'server' && !maintainer)
+        return HttpResponse.json(
+          { error: 'unauthorized', message: 'Sign in as a maintainer to generate on the server.' },
+          { status: 401 },
+        );
+      const existing = allModels().find(
+        (m) =>
+          m.concept.toLowerCase() === body.concept.toLowerCase() &&
+          sameSet(m.apis, body.apis) &&
+          !m.model.stale &&
+          (m.visibility === 'official' || (maintainer && m.visibility === 'unreleased')),
+      )?.model.id;
+      if (engine === 'server' && !existing) {
+        if (body.concept === 'location')
+          return HttpResponse.json(
+            {
+              error: 'llm_unavailable',
+              message: 'Server-side generation is not configured on this Plume.',
+            },
+            { status: 503 },
+          );
+        jobCounter += 1;
+        const jobId = `mj-mock${jobCounter}`;
+        const snapshotId = `m-job${jobCounter}`;
+        const { events, status } = jobScript(jobId, body.apis, body.concept, snapshotId);
+        modelJobs.set(jobId, {
+          events,
+          job: {
+            jobId,
+            status: 'queued',
+            apis: body.apis,
+            concept: body.concept,
+            round: 0,
+            maxRounds: 3,
+            snapshotId: null,
+            error: null,
+            createdAt: '2026-11-15T08:00:00Z',
+            updatedAt: '2026-11-15T08:00:00Z',
+          },
+        });
+        void status;
+        return HttpResponse.json(
+          { jobId, status: 'queued', eventsUrl: `/v1/models/jobs/${jobId}/events` },
+          { status: 202 },
+        );
+      }
       sessionCounter += 1;
       const sessionId = `s-mock${sessionCounter}`;
-      modelSessions.set(sessionId, { apis: body.apis, concept: body.concept });
+      modelSessions.set(sessionId, {
+        apis: body.apis,
+        concept: body.concept,
+        basedOn: null,
+        snapshotId: null,
+      });
       return HttpResponse.json({
         sessionId,
         status: existing ? 'ready' : 'awaiting_draft',
         snapshotId: existing ?? null,
         inputs: body.apis.map((api) => ({ api, build: 'b-6ff6063a275d40c14e4bcdd001f1c9ae' })),
         contextUrl: `/v1/models/sessions/${sessionId}/context`,
-        claudePrompt: `Use the Plume maintainer MCP: get_model_context("${sessionId}"), write the canonical ${body.concept} model for ${body.apis.join(', ')}, then submit_model_draft("${sessionId}", draft).`,
+        claudePrompt: `Use the Plume connector: get_model_context("${sessionId}"), write the canonical ${body.concept} model for ${body.apis.join(', ')}, then submit_model_draft("${sessionId}", draft).`,
         mcpUrl: 'http://127.0.0.1:18481/mcp',
-        maintainerMcpUrl: 'http://127.0.0.1:18481/maintainer/mcp',
+        maintainerMcpUrl: maintainer ? 'http://127.0.0.1:18481/maintainer/mcp' : undefined,
+      });
+    }),
+    http.get(`${base}/v1/models/sessions/:id`, ({ params }) => {
+      const session = modelSessions.get(String(params.id));
+      if (!session)
+        return HttpResponse.json(
+          { error: 'not_found', message: 'No such session' },
+          { status: 404 },
+        );
+      return HttpResponse.json({
+        sessionId: params.id,
+        status: session.snapshotId ? 'submitted' : 'open',
+        snapshotId: session.snapshotId,
+        visibility: session.snapshotId
+          ? (models.get(session.snapshotId)?.visibility ?? null)
+          : null,
+        apis: session.apis,
+        concept: session.concept,
+        basedOn: session.basedOn,
       });
     }),
     http.get(`${base}/v1/models/sessions/:id/context`, ({ params }) => {
@@ -253,7 +323,12 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
       });
     }),
     http.post(`${base}/v1/models/sessions/:id/draft`, async ({ params, request }) => {
-      if (!isMaintainer(request)) return unauthorized();
+      // open to everyone, but a token that is sent and is not valid is refused
+      if (request.headers.get('authorization') && !isMaintainer(request))
+        return HttpResponse.json(
+          { error: 'unauthorized', message: 'The token is not valid.' },
+          { status: 401 },
+        );
       const session = modelSessions.get(String(params.id));
       if (!session)
         return HttpResponse.json(
@@ -296,52 +371,166 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
           },
           { status: 422 },
         );
-      const model = {
-        ...productSnapshot,
-        id: `m-mock${made.size + 1}`,
-        name: String(draft.name),
+      // Open to everyone: with the token the model is stored unreleased, without it unlisted (its link is its id).
+      // A new lineage returns an ownerKey once; a revision of a model that is not official stays in its lineage.
+      const maintainer = isMaintainer(request);
+      const basedOn = new URL(request.url).searchParams.get('basedOn') ?? session.basedOn;
+      const base = basedOn ? models.get(basedOn) : undefined;
+      const sameLineage = base && base.visibility !== 'official' ? base : undefined;
+      const n = models.size + 1;
+      const id = maintainer ? `m-mock${n}` : `u-mock${String(n).padStart(28, '0')}`;
+      const ownerKey = maintainer || sameLineage ? undefined : `ok-mock${n}`;
+      const stored: StoredModel = {
+        model: {
+          ...productSnapshot,
+          id,
+          name: String(draft.name),
+          concept: session.concept,
+          sessionId: String(params.id),
+          generatedAt: '2026-11-15T09:00:00Z',
+        },
+        apis: session.apis,
         concept: session.concept,
-        sessionId: String(params.id),
+        visibility: maintainer ? 'unreleased' : 'unlisted',
+        lineageId: sameLineage?.lineageId ?? `L-${id}`,
+        origin: maintainer ? 'maintainer' : 'user',
+        generator: 'claude',
+        basedOn: base?.model.id ?? null,
+        ownerKey: ownerKey ?? sameLineage?.ownerKey,
+        createdAt: new Date(Date.UTC(2026, 10, 15, 9, 0, models.size)).toISOString(),
       };
-      made.set(model.id, { model, apis: session.apis, concept: session.concept });
-      return HttpResponse.json({ created: true, model }, { status: 201 });
+      models.set(id, stored);
+      session.snapshotId = id;
+      return HttpResponse.json(
+        {
+          created: true,
+          model: decorate(allModels(), stored),
+          visibility: stored.visibility,
+          ...(ownerKey ? { ownerKey } : {}),
+        },
+        { status: 201 },
+      );
     }),
     http.get(`${base}/v1/models`, ({ request }) => {
-      const api = new URL(request.url).searchParams.get('api');
-      const all = ['shopify', 'woocommerce', 'mirakl'];
-      const seeded: { m: ModelSnapshot; concept: string; apis: string[] }[] = [
-        { m: order40Snapshot, concept: 'Order', apis: all },
-      ];
-      const inventory = snapshots['snap_8f3a21'];
-      if (inventory) seeded.unshift({ m: inventory, concept: 'inventory', apis: all });
-      const items = [
-        ...[...made.values()].map((m) => ({
-          id: m.model.id,
-          name: m.model.name,
-          concept: m.concept,
-          apis: m.apis,
-          generatedAt: '2026-11-15T01:00:00Z',
-          stale: false,
-        })),
-        ...seeded.map((x) => ({
-          id: x.m.id,
-          name: x.m.name,
-          concept: x.concept,
-          apis: x.apis,
-          generatedAt: x.m.generatedAt,
-          stale: x.m.stale ?? false,
-          staleInputs: x.m.staleInputs ?? [],
-        })),
-      ].filter((m) => !api || m.apis.includes(api));
-      return HttpResponse.json({ items });
+      const url = new URL(request.url);
+      const api = url.searchParams.get('api');
+      const want = url.searchParams.get('visibility');
+      const maintainer = isMaintainer(request);
+      const all = allModels();
+      // the public list is the latest official version of each lineage; the token can ask for the others
+      const vis = maintainer && want ? want : 'official';
+      let rows = all.filter((m) => vis === 'all' || m.visibility === vis);
+      if (vis === 'official')
+        rows = rows.filter(
+          (m) => !rows.some((o) => o.lineageId === m.lineageId && o.createdAt > m.createdAt),
+        );
+      rows = rows
+        .filter((m) => !api || m.apis.includes(api))
+        .sort((x, y) => y.createdAt.localeCompare(x.createdAt));
+      return HttpResponse.json({ items: rows.map((m) => listItem(all, m)) });
     }),
-    http.get(`${base}/v1/models/:id`, ({ params }) => {
-      const id = String(params.id);
-      const snap = snapshots[id] ?? made.get(id)?.model;
-      return snap
-        ? HttpResponse.json(snap)
-        : HttpResponse.json({ error: 'not_found', message: 'Snapshot not found' }, { status: 404 });
+    http.post(`${base}/v1/models/mine`, async ({ request }) => {
+      const { ownerKeys } = (await request.json()) as { ownerKeys?: string[] };
+      const keys = Array.isArray(ownerKeys) ? ownerKeys : [];
+      const all = allModels();
+      const mine = all
+        .filter((m) => m.ownerKey && keys.includes(m.ownerKey) && m.visibility !== 'discarded')
+        .filter(
+          (m, _i, rows) =>
+            !rows.some((o) => o.lineageId === m.lineageId && o.createdAt > m.createdAt),
+        )
+        .sort((x, y) => y.createdAt.localeCompare(x.createdAt));
+      return HttpResponse.json({ items: mine.map((m) => listItem(all, m)) });
     }),
+    http.get(`${base}/v1/models/jobs/:id`, ({ params, request }) => {
+      if (!isMaintainer(request)) return unauthorized();
+      const j = modelJobs.get(String(params.id));
+      return j
+        ? HttpResponse.json(j.job)
+        : HttpResponse.json({ error: 'not_found', message: 'No such job' }, { status: 404 });
+    }),
+    http.get(`${base}/v1/models/jobs/:id/events`, ({ params, request }) => {
+      if (!isMaintainer(request)) return unauthorized();
+      const j = modelJobs.get(String(params.id));
+      if (!j)
+        return HttpResponse.json({ error: 'not_found', message: 'No such job' }, { status: 404 });
+      const from = Number(request.headers.get('last-event-id') ?? 0);
+      const replay = j.job.status === 'succeeded' || j.job.status === 'failed';
+      const stream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          for (let i = from; i < j.events.length; i += 1) {
+            if (!replay && eventDelay > 0) await delay(eventDelay);
+            const e = j.events[i];
+            if (!e) break;
+            const { type, ...data } = e;
+            if (e.type === 'round') j.job = { ...j.job, status: 'running', round: e.n };
+            if (e.type === 'accepted' && !models.has(e.snapshotId))
+              models.set(e.snapshotId, {
+                model: {
+                  ...productSnapshot,
+                  id: e.snapshotId,
+                  name: j.job.concept.charAt(0).toUpperCase() + j.job.concept.slice(1),
+                  concept: j.job.concept,
+                  generatedAt: '2026-11-15T08:05:00Z',
+                },
+                apis: j.job.apis,
+                concept: j.job.concept,
+                visibility: 'unreleased',
+                lineageId: `L-${e.snapshotId}`,
+                origin: 'maintainer',
+                generator: 'gemini:gemini-2.5-pro',
+                basedOn: null,
+                createdAt: '2026-11-15T08:05:00Z',
+              });
+            if (e.type === 'failed') j.job = { ...j.job, status: 'failed', error: e.message };
+            if (e.type === 'done') j.job = { ...j.job, status: e.status, snapshotId: e.snapshotId };
+            controller.enqueue(
+              encoder.encode(`id: ${i + 1}\nevent: ${type}\ndata: ${JSON.stringify(data)}\n\n`),
+            );
+          }
+          controller.close();
+        },
+      });
+      return new HttpResponse(stream, {
+        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+      });
+    }),
+    http.get(`${base}/v1/models/:id`, ({ params, request }) => {
+      const stored = models.get(String(params.id));
+      // unreleased and discarded models are not leaked: 404 without the token
+      if (
+        !stored ||
+        ((stored.visibility === 'unreleased' || stored.visibility === 'discarded') &&
+          !isMaintainer(request))
+      )
+        return HttpResponse.json(
+          { error: 'not_found', message: 'Snapshot not found' },
+          { status: 404 },
+        );
+      return HttpResponse.json(decorate(allModels(), stored));
+    }),
+    ...(['release', 'discard'] as const).map((action) =>
+      http.post(`${base}/v1/models/:id/${action}`, ({ params, request }) => {
+        if (!isMaintainer(request))
+          return HttpResponse.json(
+            { error: 'unauthorized', message: 'Missing or invalid token' },
+            { status: 401 },
+          );
+        const stored = models.get(String(params.id));
+        if (!stored)
+          return HttpResponse.json(
+            { error: 'not_found', message: 'Snapshot not found' },
+            { status: 404 },
+          );
+        if (stored.visibility !== 'unreleased')
+          return HttpResponse.json(
+            { error: 'invalid_state', message: `Only an unreleased model can be ${action}d.` },
+            { status: 409 },
+          );
+        stored.visibility = action === 'release' ? 'official' : 'discarded';
+        return HttpResponse.json(decorate(allModels(), stored));
+      }),
+    ),
     http.get(`${base}/v1/maintainer/me`, ({ request }) =>
       isMaintainer(request) ? HttpResponse.json({ name: 'maintainer' }) : unauthorized(),
     ),

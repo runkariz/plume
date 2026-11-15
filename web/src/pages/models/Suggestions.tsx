@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
+import { useIsMaintainer } from '@/app/authStore';
 import { GenerateSession } from './GenerateSession';
+import { ModelJobProgress } from './ModelJobProgress';
 import { useAsync } from '@/api/useAsync';
 import {
   ApiError,
   type ApiRef,
   type Concept,
   type GenerateResponse,
+  isGenerateJob,
   type SuggestResponse,
 } from '@/api/types';
 import {
@@ -31,12 +34,15 @@ function ConceptRow({
   busy,
   disabled,
   onGenerate,
+  onGenerateWithClaude,
 }: {
   concept: Concept;
   apis: ApiRef[];
   busy: boolean;
   disabled: boolean;
   onGenerate: () => void;
+  /** Signed in only: the same model through your own Claude instead of the server. */
+  onGenerateWithClaude?: () => void;
 }) {
   return (
     <article className="card concept">
@@ -62,16 +68,29 @@ function ConceptRow({
       <span>
         <Chip tone={concept.difficulty.tone}>{concept.difficulty.label}</Chip>
       </span>
-      <Button
-        variant="primary"
-        size="lg"
-        onClick={onGenerate}
-        disabled={disabled}
-        aria-busy={busy}
-        aria-label={busy ? `Generating ${concept.name}` : `Generate ${concept.name}`}
-      >
-        {busy ? 'Generating…' : 'Generate'}
-      </Button>
+      <span className="concept-actions">
+        <Button
+          variant="primary"
+          size="lg"
+          onClick={onGenerate}
+          disabled={disabled}
+          aria-busy={busy}
+          aria-label={busy ? `Generating ${concept.name}` : `Generate ${concept.name}`}
+        >
+          {busy ? 'Generating…' : 'Generate'}
+        </Button>
+        {onGenerateWithClaude ? (
+          <button
+            type="button"
+            className="linkbtn small"
+            disabled={disabled}
+            onClick={onGenerateWithClaude}
+            aria-label={`Use Claude instead to generate ${concept.name}`}
+          >
+            Use Claude instead
+          </button>
+        ) : null}
+      </span>
     </article>
   );
 }
@@ -102,9 +121,20 @@ export function Suggestions() {
   const [session, setSession] = useState<{ concept: Concept; response: GenerateResponse } | null>(
     null,
   );
+  const [job, setJob] = useState<{ concept: Concept; jobId: string } | null>(null);
+  // server generation is not configured (503): offer the Claude flow for this concept
+  const [fallback, setFallback] = useState<Concept | null>(null);
+  const maintainer = useIsMaintainer();
   const [error, setError] = useState<string | null>(null);
   const ctrl = useRef<AbortController | null>(null);
-  const openModel = useCallback((id: string) => navigate(`/models/${id}`), [navigate]);
+  const openModel = useCallback(
+    (id: string, extra?: { ownerKey?: string }) =>
+      navigate(
+        `/models/${id}`,
+        extra?.ownerKey ? { state: { ownerKey: extra.ownerKey } } : undefined,
+      ),
+    [navigate],
+  );
   // "Regenerate" on a stale model lands here with ?regenerate=<concept>: open that concept's session once
   const regenerateWanted = params.get('regenerate');
   const autoStarted = useRef(false);
@@ -143,14 +173,24 @@ export function Suggestions() {
       </>
     );
 
-  async function generate(concept: Concept) {
+  async function generate(concept: Concept, engine?: 'claude' | 'server') {
     ctrl.current?.abort();
     const c = new AbortController();
     ctrl.current = c;
     setGenerating(concept.id);
     setError(null);
+    setFallback(null);
     try {
-      const res = await client.generateModel({ apis: apiIds, concept: concept.id }, c.signal);
+      const res = await client.generateModel(
+        { apis: apiIds, concept: concept.id, ...(engine ? { engine } : {}) },
+        c.signal,
+      );
+      if (isGenerateJob(res)) {
+        // signed in: the model is written on the server, the page follows the job
+        setJob({ concept, jobId: res.jobId });
+        setGenerating(null);
+        return;
+      }
       if (res.status === 'ready' && res.snapshotId) {
         // a snapshot already exists for these builds: open it
         navigate(`/models/${res.snapshotId}`);
@@ -160,14 +200,17 @@ export function Suggestions() {
       setGenerating(null);
     } catch (e) {
       if (c.signal.aborted) return;
+      if (e instanceof ApiError && e.code === 'llm_unavailable') setFallback(concept);
       setError(
-        e instanceof ApiError && e.status === 401
-          ? 'Sign in as a maintainer to generate a model, or ask Claude through the Plume connector.'
-          : e instanceof ApiError && e.status === 429
-            ? 'Too many generations right now. Try again in a minute.'
-            : e instanceof Error
-              ? e.message
-              : 'Generation failed.',
+        e instanceof ApiError && e.code === 'llm_unavailable'
+          ? 'Server-side generation is not configured on this Plume. You can generate it with Claude instead.'
+          : e instanceof ApiError && e.status === 401
+            ? 'Your session is not valid any more. Sign in again, or generate it with Claude.'
+            : e instanceof ApiError && e.status === 429
+              ? 'Too many generations right now. Try again in a minute.'
+              : e instanceof Error
+                ? e.message
+                : 'Generation failed.',
       );
       setGenerating(null);
     }
@@ -251,7 +294,33 @@ export function Suggestions() {
           {error ? (
             <p role="alert" className="form-error">
               {error}
+              {fallback ? (
+                <>
+                  {' '}
+                  <button
+                    type="button"
+                    className="linkbtn"
+                    onClick={() => void generate(fallback, 'claude')}
+                  >
+                    Use Claude instead
+                  </button>
+                </>
+              ) : null}
             </p>
+          ) : null}
+          {job ? (
+            <ModelJobProgress
+              key={job.jobId}
+              concept={job.concept}
+              jobId={job.jobId}
+              onOpen={openModel}
+              onCancel={() => setJob(null)}
+              onUseClaude={() => {
+                const c = job.concept;
+                setJob(null);
+                void generate(c, 'claude');
+              }}
+            />
           ) : null}
           {session ? (
             <GenerateSession
@@ -272,17 +341,33 @@ export function Suggestions() {
                   concept={c}
                   apis={data.apis}
                   busy={generating === c.id}
-                  disabled={generating !== null || session !== null}
+                  disabled={generating !== null || session !== null || job !== null}
                   onGenerate={() => void generate(c)}
+                  onGenerateWithClaude={maintainer ? () => void generate(c, 'claude') : undefined}
                 />
               ))
             )}
           </div>
           <div className="two even">
-            <Banner tone="accent" title="Using Claude instead?">
-              Ask “which models can I create from {data.apis.map((a) => a.shortName).join(', ')}?”
-              The same suggestions come back through the Plume connector, and Claude can generate
-              the model for you.
+            <Banner
+              tone="accent"
+              title={maintainer ? 'Generate runs on the server' : 'Using Claude instead?'}
+            >
+              {maintainer ? (
+                <>
+                  You are signed in: Generate writes the model on the server and the result stays{' '}
+                  <b>unreleased</b> until you release it. Prefer your own Claude? Ask “which models
+                  can I create from {data.apis.map((a) => a.shortName).join(', ')}?” through the
+                  connector.
+                </>
+              ) : (
+                <>
+                  Ask “which models can I create from {data.apis.map((a) => a.shortName).join(', ')}
+                  ?” The same suggestions come back through the Plume connector, and Claude can
+                  generate the model for you. Models made this way are <b>unlisted</b>: only people
+                  with the link can open them.
+                </>
+              )}
             </Banner>
             <Card className="pad">
               <h2 className="h2-sm">Not modeled</h2>

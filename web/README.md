@@ -52,6 +52,10 @@ PLUME_MAINTAINER_TOKENS='["pl_dev_local_web_e2e"]' make up
 PLUME_E2E_API_URL=http://127.0.0.1:18480 PLUME_E2E_TOKEN=pl_dev_local_web_e2e npm run e2e:real:docker
 ```
 
+The models spec (`e2e-real/models.spec.ts`) creates models and needs a **fresh stack** (`down -v`, up, load the
+fixtures): once an Order model exists for the current builds, Generate answers "ready" and skips the generation
+flows. Without a model key on the server, server-side generation answers 503 (the spec checks that state).
+
 Useful variables: `PLUME_E2E_SHOTS_DIR` (a folder **outside the repo**, mounted into the container, receives
 light/dark screenshots), `PLUME_E2E_BASE_URL` (use an already running web server), `PLUME_E2E_OUTPUT_DIR`.
 The docker scripts mount the whole repo (`/repo`) because some specs read `tests/fixtures`.
@@ -90,10 +94,18 @@ Where to change what:
 - **No secrets in the app.** The maintainer token is typed at sign-in and kept in memory only
   (`src/app/authStore.ts`): a reload signs out on purpose. Never put it in local or session storage. E2E specs
   therefore navigate inside the app after signing in (a `page.goto` reload would sign out).
-- **No third-party requests.** Fonts are self-hosted (`@fontsource-variable/*`); API logos from `logo.url` are
-  never loaded (the letter logo is used). Do not add analytics or CDNs.
+  The one thing kept in `localStorage` is the list of **owner keys** (`plume-owner-keys`, `src/lib/ownerKeys.ts`): the
+  server hands one out once when someone without a token creates a model, and it only lists "Your models" (it
+  cannot change or release anything; a model's link works without it).
+- **No third-party requests.** Fonts are self-hosted (`@fontsource-variable/*`); an API's icon is loaded only
+  from a relative `/v1/...` path on the API (`src/lib/icon.ts`), never from an external URL, with the letter logo
+  as the fallback. Do not add analytics or CDNs.
 - **All server text is untrusted.** Quotes, snippets, file names and model text render as plain text; the only
   markup allowed is `**bold**` in open questions (`src/lib/richText.tsx`).
+- **Who sees which model.** Released models are **Official** and the only ones in public lists; unlisted models
+  (made without a token) open by their link; unreleased ones need a maintainer. The web never decides this: it shows
+  what the API returns (`visibility`) and says so. A failed lazy chunk after a deploy reloads once, then shows
+  the error page (`src/app/chunkReload.ts`, `RouteError.tsx`).
 - **Honest numbers.** Quality scores are shown only when the server sends them ("Not evaluated" otherwise);
   never invent a value to fill a mockup.
 - **Accessibility.** Inputs have labels, focus is visible, the graph has a keyboard alternative (the Mapping

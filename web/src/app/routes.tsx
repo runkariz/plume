@@ -16,37 +16,45 @@ import { PublishStep } from '@/pages/maintainer/PublishStep';
 import { ReviewStep } from '@/pages/maintainer/ReviewStep';
 import { UploadStep } from '@/pages/maintainer/UploadStep';
 import { Layout } from './Layout';
+import { RootError, RouteError } from './RouteError';
 
 export const routes: RouteObject[] = [
   {
     element: <Layout />,
+    errorElement: <RootError />,
     children: [
-      { index: true, element: <Home /> },
-      { path: 'apis/:apiId', element: <ApiDetailPage /> },
-      { path: 'apis/:apiId/try', element: <TryItPage /> },
-      { path: 'apis/:apiId/documents/:docId', element: <DocumentPage /> },
-      { path: 'apis/:apiId/auth/:schemeId', element: <AuthSchemePage /> },
-      { path: 'apis/:apiId/triggers/:triggerKey', element: <TriggerPage /> },
-      { path: 'maintainer', element: <MaintainerEntry /> },
       {
-        element: <RequireMaintainer />,
+        // a page that crashes or fails to load shows the error page inside the layout (header kept)
+        errorElement: <RouteError />,
         children: [
-          { path: 'maintainer/apis/:apiId/update', element: <UploadStep /> },
-          { path: 'maintainer/jobs/:jobId/review', element: <ReviewStep /> },
-          { path: 'maintainer/jobs/:jobId/build', element: <BuildStep /> },
-          { path: 'maintainer/jobs/:jobId/publish', element: <PublishStep /> },
+          { index: true, element: <Home /> },
+          { path: 'apis/:apiId', element: <ApiDetailPage /> },
+          { path: 'apis/:apiId/try', element: <TryItPage /> },
+          { path: 'apis/:apiId/documents/:docId', element: <DocumentPage /> },
+          { path: 'apis/:apiId/auth/:schemeId', element: <AuthSchemePage /> },
+          { path: 'apis/:apiId/triggers/:triggerKey', element: <TriggerPage /> },
+          { path: 'maintainer', element: <MaintainerEntry /> },
+          {
+            element: <RequireMaintainer />,
+            children: [
+              { path: 'maintainer/apis/:apiId/update', element: <UploadStep /> },
+              { path: 'maintainer/jobs/:jobId/review', element: <ReviewStep /> },
+              { path: 'maintainer/jobs/:jobId/build', element: <BuildStep /> },
+              { path: 'maintainer/jobs/:jobId/publish', element: <PublishStep /> },
+            ],
+          },
+          { path: 'models', element: <PickApps /> },
+          { path: 'models/suggest', element: <Suggestions /> },
+          {
+            path: 'models/:snapshotId',
+            // React Flow is large: load it only when a model is opened
+            lazy: async () => ({ Component: (await import('@/pages/models/ModelView')).ModelView }),
+            handle: { wide: true },
+          },
+          { path: 'kit', element: <KitPage /> },
+          { path: '*', element: <NotFound /> },
         ],
       },
-      { path: 'models', element: <PickApps /> },
-      { path: 'models/suggest', element: <Suggestions /> },
-      {
-        path: 'models/:snapshotId',
-        // React Flow is large: load it only when a model is opened
-        lazy: async () => ({ Component: (await import('@/pages/models/ModelView')).ModelView }),
-        handle: { wide: true },
-      },
-      { path: 'kit', element: <KitPage /> },
-      { path: '*', element: <NotFound /> },
     ],
   },
 ];

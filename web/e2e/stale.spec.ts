@@ -33,10 +33,10 @@ for (const theme of THEMES) {
 
     test('the models page lists models with their stale mark', async ({ page }) => {
       await page.goto('/models');
-      const list = page.getByRole('region', { name: 'Existing models' });
+      const list = page.getByRole('region', { name: 'Official models' });
       await expect(list.getByRole('link', { name: 'Order' })).toBeVisible();
       await expect(list.getByText('Stale')).toBeVisible();
-      await expect(list.getByText('Current')).toBeVisible();
+      await expect(list.getByText('Official').first()).toBeVisible();
       await settle(page);
       await expectNoSeriousA11y(page);
       await shot(page, 'w10-model-list', theme);

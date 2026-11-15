@@ -4,11 +4,14 @@ import { createApiClient } from '@/api/client';
 import { mocksEnabled } from '@/api/config';
 import { App } from '@/app/App';
 import { authStore } from '@/app/authStore';
+import { installChunkReload } from '@/app/chunkReload';
 import '@fontsource-variable/fraunces/opsz.css';
 import '@fontsource-variable/fraunces/opsz-italic.css';
 import '@fontsource-variable/instrument-sans';
 import '@fontsource-variable/jetbrains-mono';
 import '@/styles/index.css';
+
+installChunkReload();
 
 async function start() {
   if (mocksEnabled()) {

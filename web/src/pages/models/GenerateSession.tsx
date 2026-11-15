@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import {
   ApiError,
@@ -9,16 +8,13 @@ import {
   type GenerateResponse,
 } from '@/api/types';
 import { useIsMaintainer } from '@/app/authStore';
-import { Banner, Button, Card, Chip } from '@/components';
+import { Button, Card, Chip } from '@/components';
+import { saveOwnerKey } from '@/lib/ownerKeys';
 import { shortBuild } from '@/lib/format';
 import { EvidencePack } from './EvidencePack';
 
 /** How often the open session checks for the new model (tests lower it). */
 export const pollConfig = { ms: 3000 };
-
-function sameSet(a: string[], b: string[]): boolean {
-  return a.length === b.length && a.every((x) => b.includes(x));
-}
 
 function Issues({ issues }: { issues: DraftIssue[] }) {
   return (
@@ -42,9 +38,9 @@ function Issues({ issues }: { issues: DraftIssue[] }) {
 }
 
 /**
- * Shown after "Generate" when the server needs a draft. Plume runs no LLM: Claude reads the evidence pack and
- * submits a draft through the maintainer MCP, or a signed-in maintainer pastes one. The page notices a new
- * snapshot by polling the model list and opens it.
+ * Shown after "Generate" with Claude: Claude reads the evidence pack and submits a draft through the connector,
+ * or the person pastes a draft (anyone can). Without a maintainer token the model is stored unlisted (its link
+ * is its id), with one it is stored unreleased. The page notices the new model by polling the session and opens it.
  */
 export function GenerateSession({
   concept,
@@ -56,7 +52,7 @@ export function GenerateSession({
   concept: Concept;
   apis: ApiRef[];
   session: GenerateResponse;
-  onOpen: (snapshotId: string) => void;
+  onOpen: (snapshotId: string, extra?: { ownerKey?: string }) => void;
   onCancel: () => void;
 }) {
   const client = useApiClient();
@@ -74,26 +70,14 @@ export function GenerateSession({
     ref.current?.focus();
   }, []);
 
-  // Poll for the snapshot Claude (or a maintainer) will create for this concept on these APIs.
-  const apiIds = apis.map((a) => a.id);
-  const key = apiIds.join(',');
-  const firstApi = apiIds[0];
+  // Poll the session: a draft accepted for it (by Claude or pasted elsewhere) names the model to open.
+  const sessionId = session.sessionId;
   useEffect(() => {
-    if (!firstApi) return;
-    const ids = key.split(',');
     const ctrl = new AbortController();
     const timer = setInterval(() => {
-      client.listModels(firstApi, ctrl.signal).then(
+      client.getModelSession(sessionId, ctrl.signal).then(
         (r) => {
-          // the server's concept spelling varies ("Order" / "order"): compare without case. An older model of the
-          // same concept is stale (built on previous docs): the one we wait for is current.
-          const hit = r.items.find(
-            (m) =>
-              !m.stale &&
-              m.concept.toLowerCase() === concept.id.toLowerCase() &&
-              sameSet(m.apis, ids),
-          );
-          if (hit && !ctrl.signal.aborted) onOpen(hit.id);
+          if (r.snapshotId && !ctrl.signal.aborted) onOpen(r.snapshotId);
         },
         () => undefined, // a missed poll is not an error: try again on the next tick
       );
@@ -102,7 +86,7 @@ export function GenerateSession({
       clearInterval(timer);
       ctrl.abort();
     };
-  }, [client, firstApi, key, concept.id, onOpen]);
+  }, [client, sessionId, onOpen]);
 
   async function copy() {
     try {
@@ -115,9 +99,14 @@ export function GenerateSession({
   }
 
   // A copy-ready connect line. The token is a placeholder: the web app never writes a real token into text.
-  const connectLine = session.maintainerMcpUrl
+  // Signed in: the maintainer connector (needs the token). Otherwise the reader connector, whatever the server
+  // sent: it returns the maintainer URL to everyone.
+  const maintainerConnector = maintainer && Boolean(session.maintainerMcpUrl);
+  const connectLine = maintainerConnector
     ? `claude mcp add --transport http plume-maintainer ${session.maintainerMcpUrl} --header "Authorization: Bearer <your maintainer token>"`
-    : null;
+    : session.mcpUrl
+      ? `claude mcp add --transport http plume ${session.mcpUrl}`
+      : null;
 
   async function copyLine() {
     if (!connectLine) return;
@@ -143,12 +132,16 @@ export function GenerateSession({
     }
     setBusy(true);
     try {
-      const { model } = await client.submitModelDraft(session.sessionId, parsed);
-      onOpen(model.id);
+      const { model, ownerKey } = await client.submitModelDraft(session.sessionId, parsed);
+      // a new lineage of someone without a token: the key lists "Your models" in this browser
+      if (ownerKey) saveOwnerKey(ownerKey);
+      onOpen(model.id, ownerKey ? { ownerKey } : undefined);
     } catch (err) {
       if (err instanceof ApiError && err.issues?.length) setIssues(err.issues);
       else if (err instanceof ApiError && err.status === 401)
         setError('Your session is not valid any more. Sign in again.');
+      else if (err instanceof ApiError && err.status === 413)
+        setError('That draft is too large for the server.');
       else setError(err instanceof Error ? err.message : 'Could not submit the draft.');
     } finally {
       setBusy(false);
@@ -165,16 +158,33 @@ export function GenerateSession({
           </span>
         </div>
         <p className="muted">
-          Plume does not write models itself. Claude reads the evidence below, writes the canonical
-          model, and Plume checks every citation before it stores anything. This page opens the
-          model as soon as it exists.
+          Claude reads the evidence below, writes the canonical model, and Plume checks every
+          citation before it stores anything. This page opens the model as soon as it exists.{' '}
+          {maintainer ? (
+            <>
+              Because you are signed in, the result is <b>unreleased</b> until you release it.
+            </>
+          ) : (
+            <>
+              The model is stored <b>unlisted</b>: only people with its link can open it, and it
+              stays out of the public list.
+            </>
+          )}
         </p>
         <ol className="session-steps">
           <li>
-            <b>Add the Plume maintainer connector to Claude</b> (once). It needs a maintainer token.
+            <b>Add the Plume connector to Claude</b> (once).
+            {maintainerConnector ? ' It needs a maintainer token.' : null}
             {connectLine ? (
               <>
-                <pre className="code prompt" aria-label="Command to add the maintainer connector">
+                <pre
+                  className="code prompt"
+                  aria-label={
+                    maintainerConnector
+                      ? 'Command to add the maintainer connector'
+                      : 'Command to add the Plume connector'
+                  }
+                >
                   {connectLine}
                 </pre>
                 <div className="row">
@@ -228,43 +238,34 @@ export function GenerateSession({
         </ul>
         <div className="session-draft">
           <h3>Or paste a draft yourself</h3>
-          {maintainer ? (
-            <form onSubmit={submit} noValidate>
-              <label htmlFor="draft-json" className="sr-only">
-                Draft JSON
-              </label>
-              <textarea
-                id="draft-json"
-                className="input mono draft-box"
-                rows={7}
-                spellCheck={false}
-                placeholder='{ "name": "Order", "fields": [ … ] }'
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-              />
-              {error ? (
-                <p role="alert" className="form-error">
-                  {error}
-                </p>
-              ) : null}
-              {issues.length ? <Issues issues={issues} /> : null}
-              <div className="row" style={{ marginTop: 12 }}>
-                <Button type="submit" variant="primary" disabled={busy || draft.trim() === ''}>
-                  {busy ? 'Checking the draft…' : 'Submit draft'}
-                </Button>
-              </div>
-            </form>
-          ) : (
-            <Banner tone="accent" title="Maintainers can paste a draft">
-              <Link to="/maintainer">Sign in as a maintainer</Link> to submit a draft here. The
-              evidence pack format is in the pack above.
-            </Banner>
-          )}
-          {!maintainer && error ? (
-            <p role="alert" className="form-error">
-              {error}
-            </p>
-          ) : null}
+          <form onSubmit={submit} noValidate>
+            <label htmlFor="draft-json" className="sr-only">
+              Draft JSON
+            </label>
+            <textarea
+              id="draft-json"
+              className="input mono draft-box"
+              rows={7}
+              spellCheck={false}
+              placeholder='{ "name": "Order", "fields": [ … ] }'
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+            />
+            {error ? (
+              <p role="alert" className="form-error">
+                {error}
+              </p>
+            ) : null}
+            {issues.length ? <Issues issues={issues} /> : null}
+            <div className="row" style={{ marginTop: 12 }}>
+              <Button type="submit" variant="primary" disabled={busy || draft.trim() === ''}>
+                {busy ? 'Checking the draft…' : 'Submit draft'}
+              </Button>
+              <span className="faint small">
+                {maintainer ? 'Stored unreleased.' : 'Stored unlisted: only people with the link.'}
+              </span>
+            </div>
+          </form>
         </div>
         <div className="actions session-actions">
           <button type="button" className="linkbtn muted-link" onClick={onCancel}>

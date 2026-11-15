@@ -205,7 +205,7 @@ describe('Suggested models', () => {
     );
     renderApp(url);
     await userEvent.click(await screen.findByRole('button', { name: 'Generate Product' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('Sign in as a maintainer');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sign in again');
     expect(screen.getByRole('button', { name: 'Generate Product' })).toBeEnabled();
   });
 });
