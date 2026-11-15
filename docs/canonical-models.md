@@ -74,6 +74,75 @@ no LLM; each **candidate** is built only from documented evidence, cited per API
 
 
 
+## Model sets
+
+A **model set** groups 1..8 member models (each an ordinary model snapshot, validated on its
+own and pinned by id) over the same 2..6 APIs, with **relations** designed by the user. The
+design is in [design/model-relations.md](design/model-relations.md).
+
+- **Relation:** `{id, from, to, kind: embedded|reference, cardinality: 1:1|1:n|n:1|n:m, embed
+  {field} | ref {field, key}, confirmed, candidate, sources {api: {as:
+  nested|sub_resource|id_field|model_ref, paths, fetch, evidence[]}}}`.
+- **Validation (new codes):**
+  - `RELATION_END_NOT_FOUND`;
+  - `RELATION_FIELD_NOT_FOUND`: the embed field, or the ref field/key, isn't a field of that
+    member model;
+  - `RELATION_SHAPE_MISMATCH`: 1:n/n:m embedded needs an array field, 1:1 an object;
+  - `API_NOT_IN_SET`;
+  - `MEMBER_NOT_VISIBLE`, `MEMBER_CONCEPT_MISMATCH`, `MEMBER_STALE`: members must be pinned to
+    the set's builds.
+
+  Relation evidence gets the same field, endpoint, document and quote checks as model fields.
+  A `sub_resource` source needs `fetch`.
+- **Access:** as for models.
+  - Without the token, a set is stored unlisted (`us-` random id, owner key once,
+    `POST /v1/model-sets/mine`).
+  - With the token, it's stored unreleased. Releasing makes the set official **and releases
+    its unreleased members** (listed in `releasedMembers`). That's refused while any relation is
+    undecided (`confirmed: false`).
+  - Members must be official or unlisted for a user's set, and official or unreleased for a
+    maintainer's.
+- **Versions:** `revise` opens a set session on the current builds with the set as the
+  starting draft; members on older builds must be revised. Submitting with `basedOn` stores
+  the next version.
+- **HTTP:**
+  - `POST /v1/model-sets/sessions {apis, concepts}`
+  - `GET /v1/model-sets/sessions/{id}` and `.../context` (members + relation candidates)
+  - `POST /v1/model-sets/sessions/{id}/draft?basedOn=`
+  - `GET /v1/model-sets` (official; `?visibility=` with the token) and `GET /v1/model-sets/{id}`
+  - `POST /v1/model-sets/{id}/revise`, `POST /v1/model-sets/mine`
+  - `POST /v1/model-sets/{id}/release` and `/discard` (token)
+- **MCP:**
+  - both servers: `start_set_session`, `get_set_context`, `get_set_session`,
+    `submit_model_set`, `get_model_set` (the view), `revise_model_set`, `list_model_sets`;
+  - reader: `list_my_model_sets`;
+  - maintainer: `release_model_set` and `discard_model_set`.
+- **Web relation edit:** `POST /v1/model-sets/{id}/relations {relations: [{id, kind?,
+  cardinality?, embed?, ref?, from?, to?, confirmed?}]}`. It changes only the design of
+  existing relations of the **latest** version; their evidence stays. Each relation in the set
+  JSON carries `editableOptions [{kind, from, to, cardinality, embed|ref, editable, missing[],
+  current}]`, and only designs whose fields already exist in the members pass validation. A new
+  version is stored (unlisted without the token, unreleased with it). Errors:
+  - 409 when the set isn't the latest version;
+  - 422 with the usual codes for a design the members can't express (that's a revision with
+    Claude);
+  - 400 when trying to change the evidence or the members.
+- **Server generation (maintainer):** `POST /v1/model-sets/generate {apis, concepts}` (token)
+  or the maintainer MCP `generate_model_set`.
+  - Plume's LLM writes every member model with the same loop and validation as single models.
+  - Plume then proposes relations from the documented candidates, using only a design whose
+    fields exist in the generated members, always `confirmed: false`. Candidates no design
+    fits become open questions.
+  - The job reports `kind: "model_set"` and `setId`. Its events include `member {concept,
+    snapshotId}` and `proposals`. Release stays blocked until a maintainer decides every
+    relation (on the web or via the edit endpoint).
+- **Set JSON** (`kind: "model_set"`):
+  - members `{concept, modelId, name, fieldCount, coverage, visibility, version}`;
+  - relations with `support {api: as|null}`, plus `undecided` (relation ids) and lineage;
+  - `sharePath` `/model-sets/{id}`, `shareUrl` and `revisePrompt`.
+
+## Who sees what
+
 | Visibility | Written by | Readable by | Listed |
 |---|---|---|---|
 | `official` | a maintainer, then released | anyone | yes (`GET /v1/models`, `list_models`) |

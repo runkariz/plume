@@ -4,11 +4,13 @@ from dataclasses import replace
 from datetime import datetime
 
 from plume.application.ports.model_repo import ModelJob, ModelSession
+from plume.application.ports.model_set_repo import SetSession
 from plume.application.ports.model_writer import (
     ModelWriterError,
     ModelWriterUnavailableError,
     Turn,
 )
+from plume.domain.models.model_set import ModelSetSnapshot
 from plume.domain.models.snapshot import ModelSnapshot, Visibility
 
 
@@ -124,3 +126,71 @@ class ScriptedModelWriter:
             raise ModelWriterError("no scripted reply left")
         reply = self.replies.pop(0)
         return reply if isinstance(reply, str) else json.dumps(reply)
+
+
+class InMemoryModelSetRepo:
+    def __init__(self) -> None:
+        self.sessions: dict[str, SetSession] = {}
+        self.sets: dict[str, ModelSetSnapshot] = {}
+        self.owners: dict[str, str | None] = {}
+
+    def save_session(self, session: SetSession) -> None:
+        if session.session_id in self.sessions:
+            raise ValueError("duplicate session")
+        self.sessions[session.session_id] = session
+
+    def get_session(self, session_id: str) -> SetSession | None:
+        return self.sessions.get(session_id)
+
+    def save_set(self, snapshot: ModelSetSnapshot, owner_key_hash: str | None = None) -> bool:
+        if snapshot.set_id in self.sets or any(
+            s.lineage == snapshot.lineage and s.version == snapshot.version
+            for s in self.sets.values()
+        ):
+            return False
+        self.sets[snapshot.set_id] = snapshot
+        if snapshot.lineage == snapshot.set_id:
+            self.owners.setdefault(snapshot.set_id, owner_key_hash)
+        return True
+
+    def get_set(self, set_id: str) -> ModelSetSnapshot | None:
+        return self.sets.get(set_id)
+
+    def list_sets(
+        self,
+        api: str | None = None,
+        limit: int = 50,
+        visibilities: Sequence[str] = (Visibility.OFFICIAL,),
+    ) -> list[ModelSetSnapshot]:
+        items = [
+            s
+            for s in self.sets.values()
+            if (api is None or api in {i.api for i in s.inputs}) and s.visibility in visibilities
+        ]
+        return sorted(items, key=lambda s: (-s.created_at.timestamp(), s.set_id))[:limit]
+
+    def lineage(self, lineage_id: str) -> list[ModelSetSnapshot]:
+        return sorted(
+            (s for s in self.sets.values() if s.lineage == lineage_id), key=lambda s: s.version
+        )
+
+    def by_session(self, session_id: str) -> list[ModelSetSnapshot]:
+        return sorted(
+            (s for s in self.sets.values() if s.session_id == session_id),
+            key=lambda s: (-s.created_at.timestamp(), -s.version),
+        )
+
+    def set_visibility(self, set_id: str, visibility: str, released_at: datetime | None) -> None:
+        s = self.sets[set_id]
+        self.sets[set_id] = replace(s, visibility=visibility, released_at=released_at)
+
+    def lineages_for_owner(self, key_hashes: Sequence[str]) -> list[str]:
+        wanted = set(key_hashes)
+        return [lin for lin, h in self.owners.items() if h is not None and h in wanted]
+
+    def sets_using(self, snapshot_id: str) -> list[str]:
+        return sorted(
+            s.set_id
+            for s in self.sets.values()
+            if any(m.model_id == snapshot_id for m in s.draft.members)
+        )

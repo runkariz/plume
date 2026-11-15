@@ -473,6 +473,8 @@ class ModelJobOut(Schema):
     created_at: str
     updated_at: str
     events_url: str
+    kind: Literal["model", "model_set"] = "model"
+    set_id: str | None = None
 
 
 class SessionStatus(Schema):
@@ -682,3 +684,17 @@ class SuggestRelatedRequest(Schema):
     concept: str = Field(min_length=1, max_length=100)
     limit: int = Field(default=24, ge=1, le=100)
     offset: int = Field(default=0, ge=0)
+
+
+class SetSessionRequest(Schema):
+    apis: list[str] = Field(min_length=2, max_length=6)
+    concepts: list[str] = Field(min_length=1, max_length=8)
+
+
+class RelationEditRequest(Schema):
+    relations: list[dict[str, Any]] = Field(
+        min_length=1,
+        max_length=64,
+        description="[{id, kind?, cardinality?, embed?, ref?, from?, to?, confirmed?}]: design "
+        "changes for existing relations (their evidence stays).",
+    )

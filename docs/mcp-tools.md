@@ -17,6 +17,9 @@ DNS-rebinding protection (allowed hosts from `PLUME_MCP_ALLOWED_HOSTS`). Every r
 | `list_triggers` / `get_trigger` | `api[, key], version?` | trigger events / webhook topics; `present: false` when the package has none |
 | `get_environments` | `api, version?` | environments, base URLs, versioning and the variables schema, verbatim |
 | `get_vendor_mcp` | `api, version?` | the vendor's own MCP server(s) and tools when the package lists them; `present: false` otherwise |
+| `start_set_session` / `get_set_context` / `get_set_session` | `apis, concepts` / `set_session_id` | a model set: pinned builds, one model session per member, relation candidates. **Ask the user about every relation** |
+| `submit_model_set` / `get_model_set` / `revise_model_set` | `set_session_id, draft, based_on?` / `set_id` | the set (members + relations, validated); `get_model_set` renders the view |
+| `list_model_sets` / `list_my_model_sets` | `api?` / `owner_keys` | official sets / the user's own |
 | `suggest_related` | `apis, concept, limit?, offset?` | related concepts with relation candidates (documented evidence only, cited per API) and the designs it supports; `aliases` for differently named concepts at the same position. The user decides |
 | `start_model_session` | `apis, concept` | a session pinned to the current builds (2..6 APIs) |
 | `get_model_context` / `get_model_evidence` | `session_id[, api, doc_ids?, cursor?]` | the evidence index; the fields, paged |
@@ -35,7 +38,7 @@ offset?)` (paged; see canonical-models.md), the model tools above except
 `list_my_models` (drafts are stored **unreleased**; `get_model` also shows unreleased models),
 `list_models(api?, visibility="all")` (official | unreleased | unlisted | all),
 `release_model`, `discard_model`, `generate_model(apis, concept)` (Plume's LLM; returns a job),
-`get_generation(job_id)`, `publish_build`, `get_job`. See
+`get_generation(job_id)`, `generate_model_set(apis, concepts)` (members by the LLM, relations proposed undecided), `release_model_set` / `discard_model_set`, `publish_build`, `get_job`. See
 [canonical-models.md](canonical-models.md).
 
 The same use cases back the HTTP API (`docs/openapi.json`); `POST /v1/apis/{api}/search`

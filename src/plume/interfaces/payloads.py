@@ -21,6 +21,7 @@ from plume.application.reader.dto import (
 )
 from plume.domain.knowledge.citation import Citation
 from plume.domain.models.canonical_model import CanonicalField
+from plume.domain.models.model_set import ModelSetSnapshot
 from plume.domain.models.snapshot import ModelSnapshot, Visibility
 from plume.domain.models.validation import Issue
 
@@ -393,4 +394,133 @@ def refusal_payload(issues: list[Issue]) -> Json:
             {"code": i.code, "field": i.field, "api": i.api, "message": i.message} for i in issues
         ],
         "next": "Fix the listed mappings (or drop them) and call submit_model_draft again.",
+    }
+
+
+def set_share_path(set_id: str) -> str:
+    return f"/model-sets/{set_id}"
+
+
+def set_payload(
+    s: ModelSetSnapshot,
+    members: dict[str, ModelSnapshot | None],
+    lineage: Json,
+    stale_inputs: list[dict[str, str | None]],
+    names: dict[str, str],
+    web_url: str | None,
+) -> Json:
+    """A model set (HTTP and MCP; the MCP App view branches on kind == "model_set")."""
+
+    def member(m: Any) -> Json:
+        snap = members.get(m.concept)
+        if snap is None:
+            return {"concept": m.concept, "modelId": m.model_id, "missing": True}
+        return {
+            "concept": m.concept,
+            "modelId": m.model_id,
+            "name": snap.draft.name,
+            "fieldCount": len(snap.draft.leaves()),
+            "coverage": {a: {"mapped": n, "total": t} for a, (n, t) in snap.coverage().items()},
+            "visibility": snap.visibility,
+            "version": snap.version,
+        }
+
+    apis = [i.api for i in s.inputs]
+    path = set_share_path(s.set_id)
+    return {
+        "kind": "model_set",
+        "id": s.set_id,
+        "name": s.draft.name,
+        "description": s.draft.description,
+        "visibility": s.visibility,
+        "official": s.visibility == Visibility.OFFICIAL,
+        "origin": s.origin,
+        "generator": s.generator,
+        "generatedAt": s.created_at.isoformat(),
+        "releasedAt": s.released_at.isoformat() if s.released_at else None,
+        "basedOn": s.based_on,
+        "inputs": [api_ref(i.api, names.get(i.api, i.api)) | {"build": i.build} for i in s.inputs],
+        "stale": bool(stale_inputs),
+        "staleInputs": stale_inputs,
+        "members": [member(m) for m in s.draft.members],
+        "relations": [
+            {
+                "id": r.id,
+                "from": r.from_,
+                "to": r.to,
+                "kind": r.kind,
+                "cardinality": r.cardinality,
+                "embed": {"field": r.embed_field} if r.embed_field else None,
+                "ref": {"field": r.ref_field, "key": r.ref_key} if r.ref_field else None,
+                "confirmed": r.confirmed,
+                "candidate": r.candidate,
+                "support": {
+                    a: dict(r.sources)[a].as_ if a in dict(r.sources) else None for a in apis
+                },
+                "sources": {
+                    api: {
+                        "as": src.as_,
+                        "paths": [p.path for p in src.paths],
+                        "fetch": src.fetch,
+                        "evidence": [
+                            {"docId": e.doc_id, "quote": e.quote, "anchor": e.anchor or ""}
+                            for e in src.evidence
+                        ],
+                    }
+                    for api, src in r.sources
+                },
+            }
+            for r in s.draft.relations
+        ],
+        "undecided": s.undecided,
+        "aliases": [{"names": dict(a.names), "concept": a.concept} for a in s.draft.aliases],
+        "openQuestions": [
+            {"question": q.question, "detail": q.detail, "options": list(q.options)}
+            for q in s.draft.open_questions
+        ],
+        "lineage": {
+            "id": lineage["id"],
+            "version": lineage["version"],
+            "versions": lineage["versions"],
+            "basedOn": lineage["based_on"],
+            "latestId": lineage["latest_id"],
+            "history": [
+                {
+                    "id": h["id"],
+                    "version": h["version"],
+                    "createdAt": h["created_at"],
+                    "visibility": h["visibility"],
+                }
+                for h in lineage["history"]
+            ],
+        },
+        "sharePath": path,
+        "shareUrl": web_url.rstrip("/") + path if web_url else None,
+        "revisePrompt": (
+            f'Use the Plume MCP: revise_model_set("{s.set_id}") opens a set session on the '
+            "current docs with this set as the starting draft. Ask me about every relation you "
+            f'change, then submit_model_set(set_session_id, draft, based_on="{s.set_id}").'
+        ),
+    }
+
+
+def _support_as(sources: Any, api: str) -> str | None:
+    found = dict(sources).get(api)
+    return found.as_ if found else None
+
+
+def set_list_item(s: ModelSetSnapshot, stale: list[dict[str, str | None]], versions: int) -> Json:
+    return {
+        "id": s.set_id,
+        "name": s.draft.name,
+        "apis": [i.api for i in s.inputs],
+        "members": [m.concept for m in s.draft.members],
+        "relations": len(s.draft.relations),
+        "undecided": len(s.undecided),
+        "generatedAt": s.created_at.isoformat(),
+        "visibility": s.visibility,
+        "official": s.visibility == Visibility.OFFICIAL,
+        "version": s.version,
+        "versions": versions,
+        "stale": bool(stale),
     }

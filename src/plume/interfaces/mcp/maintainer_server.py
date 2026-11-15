@@ -17,6 +17,7 @@ from plume.application.jobs.maintainer import MaintainerJobs, job_payload
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.models.concepts import SuggestConcepts, SuggestFilter
 from plume.application.models.generate import GenerateModels
+from plume.application.models.model_sets import ModelSets
 from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import ModelSessions
 from plume.application.reader.resolve import BuildResolver
@@ -29,6 +30,7 @@ from plume.interfaces.mcp.apps.model_view import (
 )
 from plume.interfaces.mcp.model_tools import register_model_tools
 from plume.interfaces.mcp.reader_server import _run
+from plume.interfaces.mcp.set_tools import register_set_tools
 
 INSTRUCTIONS = """\
 Plume maintainer tools. Canonical models across 2..N APIs:
@@ -68,6 +70,7 @@ class McpMaintainerDependencies:
     generate: Callable[[], GenerateModels] | None = None
     web_public_url: str | None = None
     suggest_related: Callable[[], SuggestRelated] | None = None
+    model_sets: Callable[[], ModelSets] | None = None
     mcp_app_html: str | None = None
 
 
@@ -115,6 +118,16 @@ def create_maintainer_server(deps: McpMaintainerDependencies) -> MCPServer:
         deps.generate,
         deps.suggest_related,
     )
+    if deps.model_sets is not None:
+        register_set_tools(
+            server,
+            deps.model_sets,
+            deps.resolver,
+            _run,
+            True,
+            deps.web_public_url,
+            deps.generate,
+        )
 
     @server.tool(annotations=WRITE, structured_output=True, meta=MODEL_ONLY_META)
     async def publish_build(api: str, build: str, tag: str = "latest") -> dict[str, Any]:
