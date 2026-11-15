@@ -25,10 +25,16 @@ this review and have tests in `tests/unit/interfaces/test_hardening.py`.
 - **Rate limits**: per client address, sliding minute window
   (`PLUME_READER_RATE_LIMIT_PER_MINUTE`, default 120) on every HTTP route except `/health`.
   *Fixed*: the MCP endpoints (reader and maintainer) are rate limited the same way (they had
-  none). Limitation: the limiter keys on the TCP peer. Behind Docker's port publishing or a
-  reverse proxy every client may appear as one address, so the limit becomes global; put a
-  proxy that enforces per-client limits in front for a public deployment (Plume does not trust
-  `X-Forwarded-For`).
+  none). The limiter keys on the TCP peer by default (`PLUME_TRUSTED_PROXY_HOPS=0`): behind a
+  proxy every client then appears as one address and the limit becomes global. Behind N
+  trusted proxies set `PLUME_TRUSTED_PROXY_HOPS=N`: the client is the Nth
+  `X-Forwarded-For` entry from the right (Werkzeug ProxyFix `x_for=N`); fewer than N entries
+  fall back to the peer. Example (GKE): Traefik REPLACES any client `X-Forwarded-For` with the
+  remote address, nginx appends Traefik's pod IP, so Plume receives `X-Forwarded-For: client,
+  traefik` with nginx as the peer: `PLUME_TRUSTED_PROXY_HOPS=2` counts `client`. Only set it
+  behind proxies that overwrite or append the header; otherwise any client can pick the
+  address it is counted under. `GET /health` on the API and on the MCP process is exempt (for
+  probes; no auth, no database call).
 - **Body size**: *fixed*: requests that declare a body over 1 MiB (over
   `PLUME_MAX_UPLOAD_BYTES`, default 200 MiB, for `POST /v1/packages`) are refused with 413
   before the body is read; previously an upload was spooled in full before the size check.
@@ -80,6 +86,11 @@ this review and have tests in `tests/unit/interfaces/test_hardening.py`.
   only if the save created it or the browser sent it. A link lists the version saved into it,
   not a later one someone else added (`newerVersion` points to that). Only a maintainer can make a model official; a user revising an official model gets
   their own unlisted copy. Drafts are capped at 1,000,000 characters.
+- **Vertex without a key**: with `PLUME_VERTEX_AUTH=adc` (or `auto` with no key and
+  `PLUME_VERTEX_PROJECT` set) embeddings and generation use Application Default Credentials
+  (Workload Identity on GKE): a Bearer token refreshed 5 minutes before expiry, sent only in
+  the `Authorization` header, never logged; errors name only the exception type. Grant the
+  workload's service account `roles/aiplatform.user`, nothing more.
 - **LLM key**: server-side generation reads the Vertex key from `PLUME_VERTEX_KEY_FILE` on each
   call and sends it only in the `x-goog-api-key` header; errors carry the HTTP status, never the
   key or the provider's body. Without a readable key file generation answers 503.

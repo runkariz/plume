@@ -58,6 +58,26 @@ class Settings(BaseSettings):
         "at 'global'); without it the location-less express URL.",
     )
     vertex_location: str = Field(default="global", pattern=r"^[a-z0-9-]{2,40}$")
+    vertex_auth: Literal["auto", "key", "adc"] = Field(
+        default="auto",
+        description="How Plume authenticates to Vertex: key = PLUME_VERTEX_API_KEY / "
+        "PLUME_VERTEX_KEY_FILE; adc = Application Default Credentials (Workload Identity on "
+        "GKE), which needs PLUME_VERTEX_PROJECT; auto = a key when one is configured, else ADC "
+        "when a project is set.",
+    )
+    vertex_embed_location: str = Field(
+        default="us-central1",
+        pattern=r"^[a-z0-9-]{2,40}$",
+        description="Location of the embedding model when Vertex is reached through ADC (the "
+        "project URL); a key uses the express URL and ignores it.",
+    )
+    trusted_proxy_hops: int = Field(
+        default=0,
+        ge=0,
+        le=5,
+        description="Behind N trusted proxies that append to X-Forwarded-For, the rate limiter "
+        "takes the client address N entries from the right. 0 = the TCP peer (no proxy).",
+    )
     mcp_app_html: Path | None = Field(
         default=None,
         description="The MCP App bundle (model view, one self-contained HTML file). Unset = the "
@@ -138,6 +158,14 @@ class Settings(BaseSettings):
     def gate_floor(self) -> float:
         """The eval gate's recall floor for the embedder in use (per-embedder override)."""
         return self.gate_min_recall_by_embedder.get(self.resolved_embedder, self.gate_min_recall)
+
+    def vertex_uses_adc(self) -> bool:
+        """Vertex through Application Default Credentials (no key; a project is required)."""
+        if self.vertex_auth == "key":
+            return False
+        if self.vertex_auth == "adc":
+            return True
+        return not self.vertex_key() and bool(self.vertex_project)
 
     @property
     def resolved_embedder(self) -> Literal["hash", "vertex", "gemini"]:

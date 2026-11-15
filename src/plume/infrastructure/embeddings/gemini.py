@@ -4,6 +4,8 @@
 - ``vertex``: ``POST aiplatform.googleapis.com/v1/publishers/google/models/<model>:predict``
 
 Both take the key in the ``x-goog-api-key`` header (never in the URL, so it can't reach logs).
+Vertex can instead use Application Default Credentials (Workload Identity): a Bearer token on
+the project URL ``{location}-aiplatform.googleapis.com/v1/projects/<p>/locations/<l>/...``.
 Vectors are requested at ``dims`` and re-normalised to unit length (reduced-size Gemini
 embeddings are not normalised). 429 and 5xx are retried with exponential backoff.
 """
@@ -17,12 +19,22 @@ import httpx
 
 from plume.application.errors import EmbeddingError
 from plume.application.ports.embedder import Vector
+from plume.infrastructure.vertex_auth import (
+    TokenSource,
+    VertexAuthError,
+    auth_headers,
+    vertex_host,
+)
 
 Backend = Literal["gemini", "vertex"]
 TaskType = Literal["RETRIEVAL_DOCUMENT", "RETRIEVAL_QUERY"]
 
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:batchEmbedContents"
 VERTEX_URL = "https://aiplatform.googleapis.com/v1/publishers/google/models/{model}:predict"
+VERTEX_PROJECT_URL = (
+    "https://{host}/v1/projects/{project}/locations/{location}/publishers/google/models/"
+    "{model}:predict"
+)
 _RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 
 
@@ -45,10 +57,18 @@ class GeminiEmbedder:
         timeout: float = 60.0,
         client: httpx.Client | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        token_source: TokenSource | None = None,
+        project: str | None = None,
+        location: str = "us-central1",
     ) -> None:
-        if not api_key:
-            raise EmbeddingError("an API key is required for the Gemini embedder")
+        if not api_key and token_source is None:
+            raise EmbeddingError("an API key (or Vertex ADC) is required for the Gemini embedder")
+        if token_source is not None and not api_key and (backend != "vertex" or not project):
+            raise EmbeddingError("Vertex ADC needs PLUME_VERTEX_PROJECT (and backend vertex)")
         self._key = api_key
+        self._tokens = None if api_key else token_source
+        self._project = project
+        self._location = location
         self._backend = backend
         self._model = model
         self._dims = dims
@@ -72,7 +92,10 @@ class GeminiEmbedder:
         for attempt in range(self._retries + 1):
             self.requests += 1
             try:
-                response = self._client.post(url, json=body, headers={"x-goog-api-key": self._key})
+                headers = auth_headers(self._key, self._tokens)
+                response = self._client.post(url, json=body, headers=headers)
+            except VertexAuthError as exc:
+                raise EmbeddingError(str(exc)) from None
             except httpx.TransportError as exc:
                 if attempt == self._retries:
                     raise EmbeddingError(
@@ -97,6 +120,16 @@ class GeminiEmbedder:
             return data
         raise EmbeddingError("retries exhausted")  # pragma: no cover
 
+    def _vertex_url(self) -> str:
+        if self._tokens is None:  # a key: express mode, as before
+            return VERTEX_URL.format(model=self._model)
+        return VERTEX_PROJECT_URL.format(
+            host=vertex_host(self._location),
+            project=self._project,
+            location=self._location,
+            model=self._model,
+        )
+
     def _embed_batch(self, texts: Sequence[str], task: TaskType) -> list[Vector]:
         if self._backend == "gemini":
             data = self._post(
@@ -116,7 +149,7 @@ class GeminiEmbedder:
             raw = [e.get("values") for e in data.get("embeddings", [])]
         else:
             data = self._post(
-                VERTEX_URL.format(model=self._model),
+                self._vertex_url(),
                 {
                     "instances": [{"content": t, "task_type": task} for t in texts],
                     "parameters": {"outputDimensionality": self._dims, "autoTruncate": True},

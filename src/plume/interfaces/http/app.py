@@ -72,6 +72,7 @@ class HttpDependencies:
     sections: Callable[[], PackageSections] | None = None
     mcp_url: str = "http://127.0.0.1:18481/mcp"
     rate_limit_per_minute: int = 120
+    trusted_proxy_hops: int = 0
     cors_origins: tuple[str, ...] = ("http://127.0.0.1:18473", "http://localhost:18473")
     maintainer: Callable[[], MaintainerJobs] | None = None
     suggest: Callable[[], SuggestConcepts] | None = None
@@ -147,6 +148,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
     app.add_middleware(
         RateLimitMiddleware,
         per_minute=deps.rate_limit_per_minute,
+        trusted_proxy_hops=deps.trusted_proxy_hops,
         trusted_tokens=deps.maintainer_tokens,
     )
     app.add_middleware(SecurityHeadersMiddleware)

@@ -190,12 +190,15 @@ Reader routes are public and rate limited; maintainer routes need `Authorization
 | `PLUME_GATE_MIN_RECALL` / `PLUME_GATE_MAX_DROP` | `0.6` / `0.05` | the quality gate |
 | `PLUME_GATE_MIN_RECALL_BY_EMBEDDER` | `{}` | per-embedder recall floor, e.g. `{"vertex": 0.75}`; others use `PLUME_GATE_MIN_RECALL` |
 | `PLUME_READER_RATE_LIMIT_PER_MINUTE` | `120` | per client address; `0` = off |
+| `PLUME_TRUSTED_PROXY_HOPS` | `0` | behind N proxies that append to `X-Forwarded-For`, the limiter counts the Nth entry from the right (e.g. `client, traefik` with `2` → `client`); `0` = the TCP peer. See docs/security.md |
 | `PLUME_CORS_ORIGINS` | the web dev server | JSON list |
 | `PLUME_MCP_ALLOWED_HOSTS` | loopback | Host headers the MCP server accepts |
 | `PLUME_MCP_DEBUG` | `false` | log each MCP request's method (initialize: client, protocol, MCP Apps declared; `ui://` reads; tool names). No arguments, results or tokens |
 | `PLUME_MCP_CORS_ORIGINS` | `[]` | browser origins allowed to call the MCP endpoints (browser-based MCP clients such as the ext-apps basic-host); off by default |
 | `PLUME_DATA_DIR` | `.plume` (`/data` in Docker) | uploads and dumps |
 | `PLUME_MAX_UPLOAD_BYTES` | 200 MiB | package uploads |
+| `PLUME_VERTEX_AUTH` | `auto` | `key` (`PLUME_VERTEX_API_KEY` / `PLUME_VERTEX_KEY_FILE`), `adc` (Application Default Credentials, e.g. Workload Identity on GKE; needs `PLUME_VERTEX_PROJECT`), `auto` = a key if one is set, else ADC with a project. With ADC also set `PLUME_EMBEDDER=vertex` |
+| `PLUME_VERTEX_EMBED_LOCATION` | `us-central1` | the embedding model's location when Vertex is reached through ADC |
 | `PLUME_VERTEX_PROJECT` / `PLUME_VERTEX_LOCATION` | – / `global` | with a project, generation calls the model at that location (gemini-4-argon answers only at `global`); without one, the location-less express URL |
 | `PLUME_MODEL_LLM` / `PLUME_MODEL_MAX_ROUNDS` | `gemini-4-argon` / `3` | the generation model and its repair rounds |
 | `PLUME_MCP_APP_HTML` | the packaged file | the MCP App bundle (model view) served as `ui://plume/model-view`; see [docs/mcp-apps.md](docs/mcp-apps.md) |
