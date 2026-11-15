@@ -54,6 +54,7 @@ class ModelSnapshot:
     based_on: str | None = None
     content_key: str = ""  # snapshot_id_for(...) of the content ("" = the snapshot id)
     released_at: datetime | None = None
+    generator_usage: dict[str, int] | None = None  # LLM tokens spent writing it (server generation)
 
     @property
     def lineage(self) -> str:

@@ -279,9 +279,16 @@ def test_server_generation_job(stack: FakeStack, client: TestClient) -> None:
         line.removeprefix("event: ") for line in text.splitlines() if line.startswith("event: ")
     ]
     assert kinds == [
-        "queued", "started", "context", "round", "refused", "round", "refused", "round",
-        "accepted", "done",
+        "queued", "started", "context", "round", "usage", "refused", "round", "usage",
+        "refused", "round", "usage", "accepted", "done",
     ]  # fmt: skip
+    usage_events = [
+        json.loads(line.removeprefix("data: "))
+        for line in text.splitlines()
+        if line.startswith("data: ") and '"type": "usage"' in line
+    ]
+    assert all(e["totalTokens"] > 0 for e in usage_events)
+    assert done["usage"]["total"] == sum(e["totalTokens"] for e in usage_events)
     refused = [
         json.loads(line.removeprefix("data: "))
         for line in text.splitlines()
@@ -292,6 +299,7 @@ def test_server_generation_job(stack: FakeStack, client: TestClient) -> None:
     assert set(refused[1]["issues"][0]) == {"code", "field", "api", "message"}
     model = client.get(f"/v1/models/{done['snapshotId']}", headers=AUTH).json()
     assert (model["visibility"], model["generator"]) == ("unreleased", "fake:scripted")
+    assert model["generatorUsage"]["total"] > 0  # tokens of all its rounds
     # the LLM saw the evidence pack and, after a refusal, the issues
     system, turns = stack.writer.calls[-1]
     assert "verbatim" in system

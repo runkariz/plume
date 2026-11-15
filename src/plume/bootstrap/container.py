@@ -133,9 +133,12 @@ class Container:
         kind = s.resolved_embedder
         if kind == "hash":
             return HashEmbedder(s.embed_dims)
-        key = s.vertex_api_key if kind == "vertex" else s.gemini_api_key
+        if kind == "vertex":
+            api_key = s.vertex_key() or ""
+        else:
+            api_key = s.gemini_api_key.get_secret_value() if s.gemini_api_key is not None else ""
         return GeminiEmbedder(
-            api_key=key.get_secret_value() if key is not None else "",
+            api_key=api_key,
             backend=kind,
             model=s.embed_model,
             dims=s.embed_dims,
@@ -294,7 +297,7 @@ class Container:
             self.embedder,
             self.evals,
             self.clock,
-            GatePolicy(min_recall=s.gate_min_recall, max_drop=s.gate_max_drop),
+            GatePolicy(min_recall=s.gate_floor(), max_drop=s.gate_max_drop),
         )
 
     def export_dump(self) -> ExportDump:

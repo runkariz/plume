@@ -2620,6 +2620,21 @@
           "updatedAt": {
             "title": "Updatedat",
             "type": "string"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "LLM tokens so far: {prompt, response, thoughts?, total}.",
+            "title": "Usage"
           }
         },
         "required": [

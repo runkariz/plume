@@ -829,7 +829,12 @@ def _apply_export(
             if r.rule_id not in used_rules and (r.source_url or "").rstrip("/") == url
         ]
         used_rules.update(r.rule_id for r in page_rules)
-        guide = _page_guide(page, page_rules)
+        endpoints = [
+            out[i].doc_id
+            for item_id, _ in page.items
+            if (i := by_source.get(endpoint_key(item_id, versions))) is not None
+        ]
+        guide = _page_guide(page, page_rules, endpoints)
         if guide is not None:
             out.append(guide)
     leftover = [r for r in export.rules if r.rule_id not in used_rules]
@@ -839,7 +844,9 @@ def _apply_export(
 
 
 def _page_guide(
-    page: "knowledge_export.ExportPage", rules: "list[knowledge_export.Rule]"
+    page: "knowledge_export.ExportPage",
+    rules: "list[knowledge_export.Rule]",
+    endpoints: list[str] | None = None,
 ) -> Document | None:
     """The page's guide. A page that could not be cut into endpoint sections keeps only its
     rules and an endpoint index: its whole text would duplicate every endpoint on it and
@@ -861,4 +868,6 @@ def _page_guide(
         text="\n\n".join(p for p in parts if p),
         source_url=page.source_url or None,
         source_id=page.file,
+        # the endpoints documented on this page (search keeps one next to the page)
+        raw={"endpoints": list(dict.fromkeys(endpoints or ()))} if endpoints else None,
     )

@@ -323,6 +323,7 @@ def snapshot_payload(
         "staleInputs": list(stale_inputs or []),
         "generatedAt": m.created_at.isoformat(),
         "promptVersion": m.prompt_version,
+        "generatorUsage": m.generator_usage,
         "sessionId": m.session_id,
         "inputs": [api_ref(i.api, names.get(i.api, i.api)) | {"build": i.build} for i in m.inputs],
         "fields": fields,

@@ -88,6 +88,11 @@ class Settings(BaseSettings):
     )
     gate_min_recall: float = Field(default=0.6, ge=0, le=1)
     gate_max_drop: float = Field(default=0.05, ge=0, le=1)
+    gate_min_recall_by_embedder: dict[str, float] = Field(
+        default_factory=dict,
+        description='Per-embedder recall floor, e.g. {"vertex": 0.75}; others use '
+        "PLUME_GATE_MIN_RECALL (0.6, set for the offline hash embedder).",
+    )
     maintainer_tokens: tuple[SecretStr, ...] = Field(
         default=(), description="Bearer tokens of maintainers (comma list in JSON). Never logged."
     )
@@ -120,11 +125,25 @@ class Settings(BaseSettings):
     def sqlalchemy_url(self) -> str:
         return str(self.database_url)
 
+    def vertex_key(self) -> str | None:
+        """The Vertex key: PLUME_VERTEX_API_KEY, else the file PLUME_VERTEX_KEY_FILE (read here,
+        never logged), so a container can mount the key instead of carrying it in its env."""
+        if self.vertex_api_key is not None and self.vertex_api_key.get_secret_value():
+            return self.vertex_api_key.get_secret_value()
+        if self.vertex_key_file is not None and self.vertex_key_file.is_file():
+            key = self.vertex_key_file.read_text(encoding="utf-8").strip()
+            return key or None
+        return None
+
+    def gate_floor(self) -> float:
+        """The eval gate's recall floor for the embedder in use (per-embedder override)."""
+        return self.gate_min_recall_by_embedder.get(self.resolved_embedder, self.gate_min_recall)
+
     @property
     def resolved_embedder(self) -> Literal["hash", "vertex", "gemini"]:
         if self.embedder != "auto":
             return self.embedder
-        if self.vertex_api_key is not None and self.vertex_api_key.get_secret_value():
+        if self.vertex_key():
             return "vertex"
         if self.gemini_api_key is not None and self.gemini_api_key.get_secret_value():
             return "gemini"

@@ -79,6 +79,7 @@ class ModelJob:
     snapshot_id: str | None = None
     error: str | None = None
     generator: str = ""
+    usage: dict[str, int] | None = None  # LLM tokens so far: {prompt, response, total, ...}
     extra: dict[str, object] = field(default_factory=dict, compare=False)
 
 
