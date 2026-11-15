@@ -428,6 +428,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
             ],
             checked=s.Checked(**r.checked),
             evidence=_citation(p["evidence"]) if p["evidence"] else None,
+            alternatives=list(r.alternatives),
         )
 
     @app.post(

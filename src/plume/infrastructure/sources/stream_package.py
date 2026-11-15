@@ -445,10 +445,13 @@ class StreamPackageSource:
             seen.add(doc.doc_id)
             documents.append(doc)
 
-        for folder in sorted((connector / "endpoints").glob("*/")):
-            request = folder / "request.json"
-            if request.is_file():
-                add(self._endpoint(folder, _read_json(request), versions), folder.name)
+        endpoints = [
+            (folder, self._endpoint(folder, _read_json(folder / "request.json"), versions))
+            for folder in sorted((connector / "endpoints").glob("*/"))
+            if (folder / "request.json").is_file()
+        ]
+        for doc, origin in _distinct_endpoint_ids(endpoints):
+            add(doc, origin)
         returned_by = _response_titles(connector, versions)
         for model in self._models(connector):
             add(_with_operations(model, returned_by), model.doc_id)
@@ -756,6 +759,25 @@ class StreamPackageSource:
             source_url=source_url,
             source_id=rel,
         )
+
+
+def _distinct_endpoint_ids(
+    endpoints: list[tuple[Path, Document]],
+) -> list[tuple[Document, str]]:
+    """Operations that share METHOD + path (Mirakl's OF54 / OR15 / TL05 all GET /{file_path}:
+    a URL taken from response data) stay distinct: each gets ``<id>@<package endpoint id>``
+    (``@`` is safe in a URL path segment, ``#`` is not),
+    stable across builds and independent of order."""
+    count: dict[str, int] = {}
+    for _, d in endpoints:
+        count[d.doc_id] = count.get(d.doc_id, 0) + 1
+    out = []
+    for folder, d in endpoints:
+        key = _slug(d.source_id or folder.name)
+        out.append(
+            (replace(d, doc_id=f"{d.doc_id}@{key}") if count[d.doc_id] > 1 else d, folder.name)
+        )
+    return out
 
 
 def _title_key(title: str) -> str:

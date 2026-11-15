@@ -219,6 +219,10 @@ class CheckCallResponse(Schema):
     param_checks: list[ParamCheck]
     checked: Checked
     evidence: Citation | None
+    alternatives: list[str] = Field(
+        default_factory=list,
+        description="Other operations documented at the same METHOD + path (their ids).",
+    )
 
 
 class FindFactRequest(Schema):

@@ -1080,6 +1080,14 @@
       },
       "CheckCallResponse": {
         "properties": {
+          "alternatives": {
+            "description": "Other operations documented at the same METHOD + path (their ids).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Alternatives",
+            "type": "array"
+          },
           "api": {
             "title": "Api",
             "type": "string"

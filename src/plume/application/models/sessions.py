@@ -754,7 +754,7 @@ def _returned_by(doc: Document) -> str | None:
     ops = doc.raw.get("x-plume-returned-by") if isinstance(doc.raw, dict) else None
     if not ops:
         return None
-    method, _, path = str(ops[0]).removeprefix("endpoint:").partition("~")
+    method, _, path = str(ops[0]).removeprefix("endpoint:").split("@", 1)[0].partition("~")
     return f"{method} {path}"
 
 
