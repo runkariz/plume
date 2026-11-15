@@ -2,7 +2,10 @@ import { apiBaseUrl } from './config';
 import { createSseParser } from './sse';
 import {
   ApiError,
+  type GenerateRequest,
   type Job,
+  type ModelSnapshot,
+  type SuggestResponse,
   type JobEvent,
   type MaintainerIdentity,
   type ReviewRequest,
@@ -28,6 +31,11 @@ export interface PlumeApi {
   search(id: string, req: SearchRequest, signal?: AbortSignal): Promise<SearchResponse>;
   ask(id: string, question: string, signal?: AbortSignal): Promise<AskResponse>;
   checkCall(id: string, req: CheckCallRequest, signal?: AbortSignal): Promise<CheckCallResponse>;
+  // canonical models
+  listModelCandidates(signal?: AbortSignal): Promise<ApiList>;
+  suggestModels(apis: string[], signal?: AbortSignal): Promise<SuggestResponse>;
+  generateModel(req: GenerateRequest, signal?: AbortSignal): Promise<{ snapshotId: string }>;
+  getSnapshot(id: string, signal?: AbortSignal): Promise<ModelSnapshot>;
   // maintainer (the key is sent as a bearer token)
   verifyMaintainer(key: string, signal?: AbortSignal): Promise<MaintainerIdentity>;
   uploadPackage(file: File, signal?: AbortSignal): Promise<Job>;
@@ -39,6 +47,19 @@ export interface PlumeApi {
   downloadDump(id: string, signal?: AbortSignal): Promise<Blob>;
   /** Streams build events; resolves after a `done` event, rejects after repeated connection loss. */
   watchJob(id: string, onEvent: (e: JobEvent) => void, signal?: AbortSignal): Promise<void>;
+}
+
+export function errorMessage(body: unknown): string | undefined {
+  if (!body || typeof body !== 'object') return undefined;
+  const b = body as Record<string, unknown>;
+  if (typeof b.message === 'string') return b.message;
+  if (typeof b.detail === 'string') return b.detail;
+  if (Array.isArray(b.detail)) {
+    const first: unknown = b.detail[0];
+    if (first && typeof first === 'object' && 'msg' in first && typeof first.msg === 'string')
+      return first.msg;
+  }
+  return undefined;
 }
 
 /** Typed fetch client. The maintainer key, when present, is passed in by the caller (never stored here). */
@@ -59,16 +80,19 @@ export function createApiClient(
     return key ? { Authorization: `Bearer ${key}` } : {};
   }
 
+  /** Plume errors are {error, message}; FastAPI validation errors are {detail: [...]}; mocks use {detail: string}. */
   async function fail(res: Response): Promise<never> {
-    let detail = res.statusText;
+    let message = res.statusText;
     try {
-      const body: unknown = await res.json();
-      if (body && typeof body === 'object' && 'detail' in body && typeof body.detail === 'string')
-        detail = body.detail;
+      message = errorMessage(await res.json()) ?? message;
     } catch {
       /* non-JSON error body */
     }
-    throw new ApiError(res.status, detail || `Request failed (${res.status})`);
+    if (res.status === 429) {
+      const wait = res.headers.get('Retry-After');
+      message = `${message || 'Too many requests'}${wait ? ` Try again in ${wait} s.` : ''}`;
+    }
+    throw new ApiError(res.status, message || `Request failed (${res.status})`);
   }
 
   async function raw(
@@ -159,6 +183,12 @@ export function createApiClient(
       call<AskResponse>(`/v1/apis/${enc(id)}/ask`, { method: 'POST', body: { question }, signal }),
     checkCall: (id, body, signal) =>
       call<CheckCallResponse>(`/v1/apis/${enc(id)}/check-call`, { method: 'POST', body, signal }),
+    listModelCandidates: (signal) => call<ApiList>('/v1/models/candidates', { signal }),
+    suggestModels: (apis, signal) =>
+      call<SuggestResponse>('/v1/models/suggest', { method: 'POST', body: { apis }, signal }),
+    generateModel: (body, signal) =>
+      call<{ snapshotId: string }>('/v1/models/generate', { method: 'POST', body, signal }),
+    getSnapshot: (id, signal) => call<ModelSnapshot>(`/v1/models/${enc(id)}`, { signal }),
     verifyMaintainer: (key, signal) =>
       call<MaintainerIdentity>('/v1/maintainer/me', { key, signal }),
     uploadPackage: (file, signal) => {

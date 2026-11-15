@@ -33,7 +33,9 @@ export function MaintainerHome() {
                 <Logo text={a.logo.text} color={a.logo.color} size={36} />
                 <div className="m-main">
                   <b>{a.name}</b>
-                  <span className="muted small">Docs as of {formatDate(a.docsAsOf)}</span>
+                  <span className="muted small">
+                    {a.docsAsOf ? `Docs as of ${formatDate(a.docsAsOf)}` : 'No docs published yet'}
+                  </span>
                 </div>
                 <Link className="btn" to={`/apis/${a.id}/try`}>
                   Try it

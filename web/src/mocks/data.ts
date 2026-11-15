@@ -5,7 +5,7 @@ export const sampleApis: ApiSummary[] = [
   api(
     'shopify',
     'Shopify Admin REST',
-    'E-commerce',
+    'e-commerce',
     'Products, orders, customers, inventory and fulfillment for Shopify stores.',
     137,
     31,
@@ -18,7 +18,7 @@ export const sampleApis: ApiSummary[] = [
   api(
     'stripe',
     'Stripe API',
-    'Payments',
+    'payments',
     'Payments, subscriptions, invoices, payouts and the events that tie them together.',
     412,
     96,
@@ -31,7 +31,7 @@ export const sampleApis: ApiSummary[] = [
   api(
     'github',
     'GitHub REST',
-    'Developer tools',
+    'developer-tools',
     'Repositories, issues, pull requests, actions, checks and organization admin.',
     603,
     140,
@@ -44,7 +44,7 @@ export const sampleApis: ApiSummary[] = [
   api(
     'twilio',
     'Twilio Messaging',
-    'Communication',
+    'communication',
     'Send and receive SMS, MMS and WhatsApp messages, with status callbacks.',
     74,
     18,
@@ -57,7 +57,7 @@ export const sampleApis: ApiSummary[] = [
   api(
     'slack',
     'Slack Web API',
-    'Communication',
+    'communication',
     'Channels, messages, users, files and workflows for Slack workspaces.',
     218,
     52,
@@ -70,7 +70,7 @@ export const sampleApis: ApiSummary[] = [
   api(
     'notion',
     'Notion API',
-    'Productivity',
+    'productivity',
     'Pages, databases, blocks and users, with the search and comments endpoints.',
     46,
     22,
@@ -127,6 +127,9 @@ export const shopifyDetail: ApiDetail = {
   chunks: 409,
   isLive: true,
   tag: 'latest',
+  tags: ['latest'],
+  versions: ['2026-11-14'],
+  docLink: 'https://shopify.dev/docs/api/admin-rest',
   quality: {
     recallAt5: 0.94,
     mrr: 0.81,

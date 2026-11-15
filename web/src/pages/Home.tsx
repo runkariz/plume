@@ -5,7 +5,7 @@ import { useAsync } from '@/api/useAsync';
 import type { ApiSummary } from '@/api/types';
 import { Card, Chip, EmptyState, ErrorState, Logo } from '@/components';
 import { SearchIcon } from '@/icons';
-import { formatDate, formatScore } from '@/lib/format';
+import { categoryLabel, formatDate, formatScore } from '@/lib/format';
 
 /** Matches the mockup: 0.89 is green, 0.88 is amber. */
 const RECALL_OK_MIN = 0.89;
@@ -17,6 +17,8 @@ function StatusChip({ status }: { status: ApiSummary['status'] }) {
         Updating · {Math.round(status.progress * 100)}%
       </Chip>
     );
+  if (status.kind === 'unpublished') return <Chip dot>Not published</Chip>;
+  if (status.recallAt5 == null) return <Chip dot>Not evaluated</Chip>;
   return (
     <Chip tone={status.recallAt5 >= RECALL_OK_MIN ? 'ok' : 'warn'} dot>
       Recall@5 {formatScore(status.recallAt5)}
@@ -35,7 +37,7 @@ export function ApiCard({ api }: { api: ApiSummary }) {
               {api.name}
             </Link>
           </h3>
-          <span className="faint small">{api.category}</span>
+          <span className="faint small">{categoryLabel(api.category)}</span>
         </div>
       </div>
       <div className="api-desc muted">{api.summary}</div>
@@ -51,7 +53,9 @@ export function ApiCard({ api }: { api: ApiSummary }) {
         </span>
       </div>
       <div className="api-foot">
-        <span>Docs as of {formatDate(api.docsAsOf)}</span>
+        <span>
+          {api.docsAsOf ? `Docs as of ${formatDate(api.docsAsOf)}` : 'No docs published yet'}
+        </span>
         <StatusChip status={api.status} />
       </div>
     </article>
@@ -94,7 +98,7 @@ export function Home() {
     return (items ?? []).filter(
       (a) =>
         (!category || a.category === category) &&
-        (!q || `${a.name} ${a.summary} ${a.category}`.toLowerCase().includes(q)),
+        (!q || `${a.name} ${a.summary} ${categoryLabel(a.category)}`.toLowerCase().includes(q)),
     );
   }, [items, query, category]);
 
@@ -141,7 +145,7 @@ export function Home() {
                 aria-pressed={category === name}
                 onClick={() => setCategory(name)}
               >
-                {name} · {count}
+                {categoryLabel(name)} · {count}
               </button>
             ))}
           </div>

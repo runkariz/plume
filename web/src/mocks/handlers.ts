@@ -1,6 +1,14 @@
 import { delay, http, HttpResponse } from 'msw';
 import { apiBaseUrl } from '@/api/config';
-import type { CheckCallRequest, ItemKind, Job, ReviewRequest, SearchRequest } from '@/api/types';
+import type {
+  CheckCallRequest,
+  GenerateRequest,
+  ItemKind,
+  Job,
+  ReviewRequest,
+  SearchRequest,
+} from '@/api/types';
+import { apiRef, modelCandidates, sampleSuggestions, snapshots } from './modelData';
 import { buildScript, MID_BUILD_PAUSE, sampleJob, withEval, withReview } from './jobData';
 import {
   detailFor,
@@ -54,6 +62,26 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
   const script = buildScript(opts.failBuild);
 
   return [
+    http.get(`${base}/v1/models/candidates`, () => HttpResponse.json({ items: modelCandidates })),
+    http.post(`${base}/v1/models/suggest`, async ({ request }) => {
+      const { apis } = (await request.json()) as { apis: string[] };
+      if (!Array.isArray(apis) || apis.length < 2)
+        return HttpResponse.json({ detail: 'Pick at least two APIs' }, { status: 422 });
+      if (apis.some((id) => !apiRef(id)))
+        return HttpResponse.json({ detail: 'Unknown API in the selection' }, { status: 404 });
+      return HttpResponse.json(sampleSuggestions(apis));
+    }),
+    http.post(`${base}/v1/models/generate`, async ({ request }) => {
+      const body = (await request.json()) as GenerateRequest;
+      const snapshotId = body.concept === 'inventory' ? 'snap_8f3a21' : 'snap_prod01';
+      return HttpResponse.json({ snapshotId });
+    }),
+    http.get(`${base}/v1/models/:id`, ({ params }) => {
+      const snap = snapshots[String(params.id)];
+      return snap
+        ? HttpResponse.json(snap)
+        : HttpResponse.json({ detail: 'Snapshot not found' }, { status: 404 });
+    }),
     http.get(`${base}/v1/maintainer/me`, ({ request }) =>
       isMaintainer(request) ? HttpResponse.json({ name: 'maintainer' }) : unauthorized(),
     ),

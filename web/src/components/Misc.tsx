@@ -1,3 +1,4 @@
+import { readableOn } from '@/lib/color';
 import type { ReactNode } from 'react';
 
 export function Metric({ label, value, tone }: { label: string; value: ReactNode; tone?: 'ok' }) {
@@ -20,7 +21,11 @@ export function Kv({ label, value, mono }: { label: string; value: ReactNode; mo
 
 export function Logo({ text, color, size = 42 }: { text: string; color: string; size?: number }) {
   return (
-    <div className="logo" style={{ background: color, width: size, height: size }} aria-hidden>
+    <div
+      className="logo"
+      style={{ background: color, color: readableOn(color), width: size, height: size }}
+      aria-hidden
+    >
       {text}
     </div>
   );
