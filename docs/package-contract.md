@@ -18,8 +18,16 @@ using it: `PLUME_CONTRACT_PACKAGES=/path/to/pkg uv run pytest tests/contract/tes
 | `connector/models/<name>.schema.json` | `title`, `description`, `properties` (as above), `x-complete` (false = partial: absence is not proven), `x-source-url` |
 | `connector/knowledge/<id>.json` + `<id>.md` | `id`, `title`, `sourceUrl`; the markdown is the guide text |
 | `connector/auth/<id>.json` | `id`, `name`, `authorizationType`, `grantType`, `headerName`, `scopes[] {scope, description}` |
-| `knowledge-export/**/*.md` (optional) | page text; front matter `source_url`; first `# ` heading is the title |
+| `knowledge-export/` v1 (optional; `index.json` `schema: plume.knowledge-export.v1`) | `index.json` `pages[].file`, `complete`; `pages/*.md` front matter `source` and `items[] {id, anchor}` + the page text; `rules.json` `rules[] {id, scope (endpoint id or "resource"), type, text, quote, anchor, sourceUrl, confidence}`; `gold-questions.json` (for `plume gold-import`) |
+| `knowledge-export/**/*.md` (optional, without `index.json`) | page text; front matter `source_url`; first `# ` heading is the title |
 | `manifest.json` (package root, optional) | `runId` only |
+
+With a v1 knowledge export, each endpoint document gets the section of its page that its
+anchor points at (code examples and JSON payloads stripped) and the rules scoped to it, each
+with its verified quote; each page's remaining text (intro, property tables) and its
+resource-level rules become one guide (`guide:page-<url>`). The API's display name is
+`app.json` `name`, or, when that is an all-lowercase id, the spelling the package's own
+summary uses (`woocommerce` → "WooCommerce").
 
 The endpoint document id is `endpoint:METHOD~<path>`, built from `url` with `{{req_vars.x}}` →
 `{x}`, the server prefix removed and the version segment replaced by `{version}`. `endpointId`

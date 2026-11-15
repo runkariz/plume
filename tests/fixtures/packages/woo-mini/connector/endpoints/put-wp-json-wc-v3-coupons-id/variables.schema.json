@@ -1,0 +1,28 @@
+{
+  "title": "Variables",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "format": "int32",
+      "description": "Unique identifier for the coupon.",
+      "examples": [719
+      ],
+      "title": "Coupon ID"
+    },
+    "host": {
+      "type": "string",
+      "description": "API host name only, without https:// and without a trailing slash (e.g. example.com)",
+      "default": "{{ auth?.apikey?.host }}",
+      "examples": [
+        "example.com"
+      ],
+      "title": "API Host"
+    }
+  },
+  "required": [
+    "id",
+    "host"
+  ],
+  "description": "Path and host variables identifying the target WooCommerce instance and coupon."
+}

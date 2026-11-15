@@ -107,7 +107,8 @@ Then either load it with the CLI (`uv run plume load /path/to/my-api`) or upload
 in the web UI's maintainer wizard (upload → review the diff and embedding plan → build with
 live progress → publish). The API id comes from `app.json` `name` (slugged).
 
-- **Gate it.** Write a gold set `<api>.json` (search questions with the expected document ids,
+- **Gate it.** If the package has `knowledge-export/gold-questions.json`, convert it with
+  `uv run plume gold-import <package> --out <api>.json`. Or write a gold set `<api>.json` (search questions with the expected document ids,
   plus present/absent facts; see `tests/fixtures/gold/`) and load with `--gold`, or put it in a
   folder listed in `PLUME_GOLD_DIRS` (the compose API mounts `tests/fixtures/gold`, override
   with `PLUME_GOLD_DIR`). A failing build is sealed but not published (`plume load` exits 2).
@@ -148,7 +149,7 @@ releases. See [docs/package-contract.md](docs/package-contract.md).
 ## Reference
 
 **CLI** (`uv run plume --help`): `migrate`, `load`, `apis`, `builds`, `diff`, `tag`, `eval`,
-`export`, `restore`, `serve` (HTTP), `mcp` (MCP), `openapi`.
+`gold-import`, `export`, `restore`, `serve` (HTTP), `mcp` (MCP), `openapi`.
 
 **HTTP**: [docs/openapi.json](docs/openapi.json) (also served at `/openapi.json` and `/docs`).
 Reader routes are public and rate limited; maintainer routes need `Authorization: Bearer

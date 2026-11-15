@@ -1,0 +1,22 @@
+{
+  "authorizationType": "BASIC",
+  "headerName": "Authorization",
+  "id": "basic-authorization",
+  "name": "Basic (Authorization header)",
+  "setupSteps": [
+    {
+      "order": 1,
+      "text": "Go to WooCommerce > Settings > Advanced > REST API and click 'Add Key'."
+    },
+    {
+      "order": 2,
+      "text": "Add a description, select the WordPress user, choose the level of access, and generate the API keys."
+    }
+  ],
+  "testSuccess": {
+    "status": 200
+  },
+  "testUrl": "https://{{apikey.host}}/wp-json/wc/v3/data",
+  "testUrlMethod": "GET",
+  "variableContractRef": "auth/basic-authorization.variables.schema.json"
+}

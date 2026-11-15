@@ -1,0 +1,13 @@
+{
+  "title": "Parameters",
+  "type": "object",
+  "properties": {
+    "force": {
+      "type": "string",
+      "description": "Use true whether to permanently delete the coupon, Default is false.",
+      "default": "false",
+      "title": "Force Delete"
+    }
+  },
+  "description": "Query parameters for deleting the coupon."
+}

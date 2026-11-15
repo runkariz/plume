@@ -1,0 +1,42 @@
+[
+  {
+    "_links": {},
+    "amount": "<amount>",
+    "code": "<code>",
+    "date_created": "<date_created>",
+    "date_created_gmt": "<date_created_gmt>",
+    "date_expires": "<date_expires>",
+    "date_expires_gmt": "<date_expires_gmt>",
+    "date_modified": "<date_modified>",
+    "date_modified_gmt": "<date_modified_gmt>",
+    "description": "<description>",
+    "discount_type": "<discount_type>",
+    "email_restrictions": [
+      "<string>"
+    ],
+    "exclude_sale_items": false,
+    "excluded_product_categories": [0
+    ],
+    "excluded_product_ids": [0
+    ],
+    "free_shipping": false,
+    "id": 0,
+    "individual_use": false,
+    "limit_usage_to_x_items": 0,
+    "maximum_amount": "<maximum_amount>",
+    "meta_data": [
+      {}
+    ],
+    "minimum_amount": "<minimum_amount>",
+    "product_categories": [0
+    ],
+    "product_ids": [0
+    ],
+    "usage_count": 0,
+    "usage_limit": 0,
+    "usage_limit_per_user": 0,
+    "used_by": [
+      "<string>"
+    ]
+  }
+]

@@ -35,6 +35,7 @@ from plume.domain.knowledge.document import (
     slug_doc_id,
 )
 from plume.domain.knowledge.model_names import display_names, parse_bundled_title
+from plume.infrastructure.sources import knowledge_export
 
 JsonObj = dict[str, Any]
 MAX_FIELD_DEPTH = 6
@@ -130,6 +131,20 @@ def shape_hash(schema: Any) -> str:
     """Structure of a JSON schema, ignoring titles, descriptions, examples and x- keys."""
     canonical = json.dumps(_shape_of(schema), sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()[:16]
+
+
+def display_name(name: str, texts: list[str]) -> str:
+    """The product's own spelling: app.json ``name`` when it has capitals or spaces; for an
+    all-lowercase id, the casing the package's own summary uses ("woocommerce" ->
+    "WooCommerce"); else capitalised."""
+    if name != name.lower() or " " in name.strip():
+        return name
+    pattern = re.compile(rf"(?<![A-Za-z0-9]){re.escape(name)}(?![A-Za-z0-9])", re.I)
+    for text in texts:
+        m = pattern.search(text)
+        if m is not None and m.group(0) != name:
+            return m.group(0)
+    return name[:1].upper() + name[1:]
 
 
 def _fields_section(title: str, fields: list[FieldSpec]) -> str:
@@ -285,18 +300,12 @@ class StreamPackageSource:
                 add(self._endpoint(folder, _read_json(request), versions), folder.name)
         for model in self._models(connector):
             add(model, model.doc_id)
-        for path in sorted((connector / "knowledge").glob("*.json")):
-            doc = self._guide(path)
-            if doc is not None:
-                add(doc, path.name)
-            else:
-                warnings.append(f"knowledge {path.stem}: no markdown body, skipped")
-        for path in sorted((connector / "auth").glob("*.json")):
-            if path.name.endswith((".variables.schema.json", ".variables.sample.json")):
-                continue
-            add(self._auth(path), path.name)
+        for doc, origin in self._guides_and_auth(connector, warnings):
+            add(doc, origin)
         export = package_root / "knowledge-export"
-        if export.is_dir():
+        if export.is_dir() and knowledge_export.detect(export):
+            documents = _apply_export(documents, knowledge_export.load(export), warnings)
+        elif export.is_dir():
             for path in sorted(export.rglob("*.md")):
                 add(self._export_page(path, export), str(path.relative_to(export)))
 
@@ -348,7 +357,7 @@ class StreamPackageSource:
         summary = _str(app.get("summary")) or _str(app.get("description")) or ""
         return ApiInfo(
             api_id=ApiId.from_name(name),
-            name=name,
+            name=display_name(name, [summary, _str(app.get("description")) or ""]),
             summary=summary,
             doc_link=_str(app.get("docLink")),
             icon_url=_str(app.get("iconUrl")),
@@ -415,6 +424,19 @@ class StreamPackageSource:
             scopes=scopes,
             source_id=_str(req.get("endpointId")),
         )
+
+    def _guides_and_auth(self, connector: Path, warnings: list[str]) -> list[tuple[Document, str]]:
+        out: list[tuple[Document, str]] = []
+        for path in sorted((connector / "knowledge").glob("*.json")):
+            doc = self._guide(path)
+            if doc is not None:
+                out.append((doc, path.name))
+            else:
+                warnings.append(f"knowledge {path.stem}: no markdown body, skipped")
+        for path in sorted((connector / "auth").glob("*.json")):
+            if not path.name.endswith((".variables.schema.json", ".variables.sample.json")):
+                out.append((self._auth(path), path.name))
+        return out
 
     def _models(self, connector: Path) -> list[Document]:
         """Models, with readable names for bundler-generated titles."""
@@ -533,3 +555,65 @@ def _renamed(model: Document, name: str) -> Document:
     body = model.text.split("\n\n", 1)[1] if "\n\n" in model.text else ""
     text = f"# {name} (model)\n\nSource title: {original}" + (f"\n\n{body}" if body else "")
     return replace(model, title=name, resource=resource, text=text, source_id=original)
+
+
+def _apply_export(
+    documents: list[Document], export: "knowledge_export.KnowledgeExport", warnings: list[str]
+) -> list[Document]:
+    """Enrich endpoints with their page section and rules; add one guide per page."""
+    by_source = {d.source_id: i for i, d in enumerate(documents) if d.kind is DocumentKind.ENDPOINT}
+    rules_by_scope: dict[str, list[knowledge_export.Rule]] = {}
+    for rule in export.rules:
+        rules_by_scope.setdefault(rule.scope, []).append(rule)
+    out = list(documents)
+    used_rules: set[str] = set()
+    for page in export.pages:
+        for item_id, (anchor, section) in page.sections.items():
+            index = by_source.get(item_id)
+            if index is None:
+                warnings.append(f"knowledge-export: {page.file} names unknown endpoint {item_id}")
+                continue
+            doc = out[index]
+            extra = [f"## From the documentation page ({page.source_url}{anchor})", section]
+            rules = rules_by_scope.get(item_id, [])
+            if rules:
+                extra.append("## Rules\n" + "\n".join(r.line() for r in rules))
+                used_rules.update(r.rule_id for r in rules)
+            out[index] = replace(
+                doc, text=doc.text + "\n\n" + "\n\n".join(extra), anchor=doc.anchor or anchor
+            )
+    for scope, rules in rules_by_scope.items():  # endpoint rules whose page section was not found
+        index = by_source.get(scope)
+        pending = [r for r in rules if r.rule_id not in used_rules]
+        if index is not None and pending:
+            doc = out[index]
+            out[index] = replace(
+                doc, text=doc.text + "\n\n## Rules\n" + "\n".join(r.line() for r in pending)
+            )
+            used_rules.update(r.rule_id for r in pending)
+    for page in export.pages:
+        page_rules = [
+            r
+            for r in export.rules
+            if r.rule_id not in used_rules
+            and (r.source_url or "").rstrip("/") == page.source_url.rstrip("/")
+        ]
+        used_rules.update(r.rule_id for r in page_rules)
+        parts = [f"# {page.title} (documentation page)", page.intro]
+        if page_rules:
+            parts.append("## Rules\n" + "\n".join(r.line() for r in page_rules))
+        slug = _slug(page.source_url.rstrip("/").split("://", 1)[-1].replace("/", "-"))
+        out.append(
+            Document(
+                doc_id=slug_doc_id(DocumentKind.GUIDE, f"page-{slug}"[:200]),
+                kind=DocumentKind.GUIDE,
+                title=page.title,
+                text="\n\n".join(p for p in parts if p),
+                source_url=page.source_url or None,
+                source_id=page.file,
+            )
+        )
+    leftover = [r for r in export.rules if r.rule_id not in used_rules]
+    if leftover:
+        warnings.append(f"knowledge-export: {len(leftover)} rule(s) matched no endpoint or page")
+    return out

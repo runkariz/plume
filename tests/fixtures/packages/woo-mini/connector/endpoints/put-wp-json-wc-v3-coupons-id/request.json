@@ -1,0 +1,67 @@
+{
+  "actionName": "Coupon",
+  "apiVersion": "v3",
+  "authorizationType": "BASIC",
+  "bodyContentType": "application/json",
+  "bodyContractRef": "body.schema.json",
+  "bodyType": "RAW",
+  "description": "This API lets you make changes to a coupon.",
+  "docLink": "https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons/",
+  "endpointId": "put-wp-json-wc-v3-coupons-id",
+  "examples": [
+    {
+      "request": {
+        "body": "{",
+        "headers": {
+          "Content-Type": "application/json"
+        }
+      },
+      "source": "https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons/",
+      "title": "Example 1"
+    }
+  ],
+  "headersContractRef": "headers.schema.json",
+  "idempotency": {
+    "safeToRetry": true
+  },
+  "isAdvanced": false,
+  "isDataSource": false,
+  "isDeprecated": false,
+  "isPreRelease": false,
+  "method": "PUT",
+  "name": "Replace coupon",
+  "operationKind": "update",
+  "permissionNote": "Basic Auth using consumer_key and consumer_secret",
+  "provenance": {
+    "docAnchor": "#update-a-coupon",
+    "extractedAt": "2026-11-15T00:53:37Z",
+    "sourceUrl": "https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons/"
+  },
+  "rawBodyType": "JSON",
+  "resource": "Coupon",
+  "responses": [
+    {
+      "contentContractRef": "responses/200.schema.json",
+      "contentType": "application/json",
+      "statusCode": 200
+    }
+  ],
+  "sideEffects": [
+    "updates"
+  ],
+  "summary": "This API lets you make changes to a coupon.",
+  "tags": [
+    {
+      "colorSetId": 43,
+      "kind": "version",
+      "name": "v3"
+    },
+    {
+      "colorSetId": 30,
+      "kind": "category",
+      "name": "coupons"
+    }
+  ],
+  "url": "https://{{req_vars.host}}/wp-json/wc/v3/coupons/{{req_vars.id}}",
+  "variablesContractRef": "variables.schema.json"
+}

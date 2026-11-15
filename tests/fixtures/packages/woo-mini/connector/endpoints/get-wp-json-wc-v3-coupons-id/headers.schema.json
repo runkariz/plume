@@ -1,0 +1,19 @@
+{
+  "title": "Headers",
+  "type": "object",
+  "properties": {
+    "Authorization": {
+      "type": "string",
+      "description": "Credentials of the connected authorization: API key or Basic (username:password)",
+      "default": "{{ auth?.apikey?.access_token ? auth.apikey.access_token : auth?.basic?.token }}",
+      "examples": [
+        "{{ auth?.apikey?.access_token ? auth.apikey.access_token : auth?.basic?.token }}"
+      ],
+      "title": "Authorization"
+    }
+  },
+  "required": [
+    "Authorization"
+  ],
+  "description": "Request headers required for authenticating the request."
+}
