@@ -5,6 +5,7 @@ Defaults match the local docker compose stack (Plume's port block is 18400-18499
 """
 
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field, PostgresDsn, SecretStr
@@ -52,6 +53,18 @@ class Settings(BaseSettings):
         description="Host headers the MCP server accepts (DNS-rebinding protection).",
     )
     reader_rate_limit_per_minute: int = Field(default=120, ge=0)
+    data_dir: Path = Field(
+        default=Path(".plume"), description="Uploaded packages and dumps (maintainer jobs)."
+    )
+    gold_dirs: tuple[Path, ...] = Field(
+        default=(), description="Directories of gold sets (<api>.json) for the eval gate."
+    )
+    gate_min_recall: float = Field(default=0.6, ge=0, le=1)
+    gate_max_drop: float = Field(default=0.05, ge=0, le=1)
+    maintainer_tokens: tuple[SecretStr, ...] = Field(
+        default=(), description="Bearer tokens of maintainers (comma list in JSON). Never logged."
+    )
+    max_upload_bytes: int = Field(default=200 * 1024 * 1024, ge=1024)
     cors_origins: tuple[str, ...] = ("http://127.0.0.1:18473", "http://localhost:18473")
 
     @property

@@ -41,6 +41,11 @@ def build_app(container: Container | None = None) -> typer.Typer:
             serve_api=serve_api,
             serve_mcp=serve_mcp,
             openapi=openapi,
+            resolver=lambda: c().resolver(),
+            run_eval=lambda: c().run_eval(),
+            gold=lambda: c().gold,
+            export_dump=lambda: c().export_dump(),
+            restore_dump=lambda: c().restore_dump(),
         )
     )
 

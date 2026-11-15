@@ -1,8 +1,21 @@
-from sqlalchemy import Engine, text
+from sqlalchemy import Connection, Engine, text
 
 from plume.domain.knowledge.api import ApiId
 from plume.domain.knowledge.tag import Tag, TagName
 from plume.domain.shared.ids import BuildId
+
+
+def set_tag(conn: Connection, tag: Tag) -> None:
+    conn.execute(
+        text(
+            """
+            INSERT INTO tags (api_id, name, build_id) VALUES (:a, :n, :b)
+            ON CONFLICT (api_id, name)
+            DO UPDATE SET build_id = EXCLUDED.build_id, updated_at = now()
+            """
+        ),
+        {"a": tag.api_id.value, "n": tag.name.value, "b": tag.build_id.value},
+    )
 
 
 class PostgresTagRepo:
@@ -19,16 +32,7 @@ class PostgresTagRepo:
 
     def set(self, tag: Tag) -> None:
         with self._engine.begin() as conn:
-            conn.execute(
-                text(
-                    """
-                    INSERT INTO tags (api_id, name, build_id) VALUES (:a, :n, :b)
-                    ON CONFLICT (api_id, name)
-                    DO UPDATE SET build_id = EXCLUDED.build_id, updated_at = now()
-                    """
-                ),
-                {"a": tag.api_id.value, "n": tag.name.value, "b": tag.build_id.value},
-            )
+            set_tag(conn, tag)
 
     def list(self, api_id: ApiId) -> list[Tag]:
         with self._engine.connect() as conn:

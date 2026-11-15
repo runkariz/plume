@@ -12,8 +12,9 @@ Claude (and any MCP client) so answers about the API come with citations.
 - **MCP.** A read-only reader server for questions, a maintainer server for builds and tags.
 
 Status: early. In place: ingest (read a connector package, chunk, embed, extract exact facts,
-seal, tag) and the reader (hybrid search, exact facts, documents, call checks) over HTTP and MCP.
-The eval gate, export/restore, canonical models and the web UI follow.
+seal, tag), the reader (hybrid search, exact facts, documents, call checks) over HTTP and MCP,
+the quality gate on gold questions, export/restore of builds, and the maintainer API (upload,
+review, build with live events, publish). Canonical models and the web UI follow.
 
 ## Quick start
 
@@ -55,6 +56,20 @@ runs import -> chunk -> embed -> facts -> seal -> tag.
   the source flags the schema as partial.
 - `plume diff <old> <new>` lists added/changed/removed chunk ids; `plume tag <build> latest`
   publishes or rolls back.
+
+## Quality gate, export and restore
+
+```bash
+uv run plume load <package> --gold tests/fixtures/gold/<api>.json   # exit 2 if the gate fails
+uv run plume eval shopify --gold tests/fixtures/gold/shopify.json   # re-run the gate on latest
+uv run plume export shopify --out shopify.plume.jsonl.gz           # verified, deterministic dump
+uv run plume restore shopify.plume.jsonl.gz --tag latest           # one transaction, verified
+make eval                                                           # gold sets of the fixtures
+```
+
+A dump is gzipped JSON lines (manifest, documents, chunks with vectors, facts). Restore checks
+every chunk hash against the build's sealed content hash before writing anything. Maintainers
+can drive the same flow over HTTP: see [docs/maintainer-api.md](docs/maintainer-api.md).
 
 ## Serve and connect Claude
 

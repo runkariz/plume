@@ -26,16 +26,17 @@ test: ## Architecture + unit + contract (fakes) tests (fast, no Docker)
 test-int: ## Contract (Postgres) + integration tests (testcontainers pgvector; needs Docker)
 	$(UV) run pytest tests/contract tests/integration -q -m "integration and not live"
 
+E2E_TOKEN ?= pl_e2e_local_only
 e2e: ## End-to-end against the docker compose stack (Postgres, API, MCP)
-	$(COMPOSE) up -d --build --wait
-	$(UV) run pytest tests/e2e -q -m e2e; status=$$?; $(COMPOSE) down; exit $$status
+	PLUME_MAINTAINER_TOKENS='["$(E2E_TOKEN)"]' $(COMPOSE) up -d --build --wait
+	PLUME_E2E_TOKEN=$(E2E_TOKEN) $(UV) run pytest tests/e2e -q -m e2e; status=$$?; $(COMPOSE) down; exit $$status
 
 e2e-live: ## Live tests (real embeddings; needs PLUME_VERTEX_API_KEY or PLUME_GEMINI_API_KEY)
 	$(UV) run pytest tests/integration tests/e2e -q -m live
+	PLUME_EVAL_LIVE=1 $(UV) run pytest tests/eval -q -m eval -s
 
-eval: ## Release eval gate (gold questions); arrives with slice 4
-	@if [ -d tests/eval ]; then $(UV) run pytest tests/eval -q -m eval; \
-	else echo "eval: no gold-question suite yet (slice 4)"; fi
+eval: ## Release gate on the gold sets (offline; PLUME_EVAL_LIVE=1 + a key for live embeddings)
+	$(UV) run pytest tests/eval -q -m eval -s
 
 up: ## Start the compose stack (Postgres, API on 18480, MCP on 18481)
 	$(COMPOSE) up -d --build --wait

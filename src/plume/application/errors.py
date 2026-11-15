@@ -23,3 +23,9 @@ class SourcePackageError(ApplicationError, ValueError):
 
 class EmbeddingError(ApplicationError):
     code = "embedding_failed"
+
+
+class GateFailedError(ApplicationError):
+    """The build failed its quality gate; it cannot be published without force."""
+
+    code = "gate_failed"

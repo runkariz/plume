@@ -10,10 +10,14 @@ import typer
 
 from plume import __version__
 from plume.application.errors import ApplicationError
+from plume.application.eval.run_eval_gate import RunEvalGate
 from plume.application.jobs.build_pipeline import BuildPipeline
 from plume.application.knowledge.diff_builds import DiffBuilds
+from plume.application.knowledge.export_dump import ExportDump, RestoreDump
 from plume.application.knowledge.list_builds import ListApis, ListBuilds
 from plume.application.knowledge.tag_build import TagBuild
+from plume.application.ports.eval_repo import GoldSource
+from plume.application.reader.resolve import BuildResolver
 from plume.application.system.migrate_schema import MigrateSchema
 from plume.domain.knowledge.api import ApiId
 from plume.domain.shared.errors import DomainError
@@ -34,6 +38,11 @@ class CliDependencies:
     serve_api: Callable[[str | None, int | None], None] | None = None
     serve_mcp: Callable[[str | None, int | None], None] | None = None
     openapi: Callable[[], str] | None = None
+    resolver: Callable[[], BuildResolver] | None = None
+    run_eval: Callable[[], RunEvalGate] | None = None
+    gold: Callable[[], GoldSource] | None = None
+    export_dump: Callable[[], ExportDump] | None = None
+    restore_dump: Callable[[], RestoreDump] | None = None
 
 
 def _need[T](factory: Callable[[], T] | None, name: str) -> T:
@@ -82,9 +91,14 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         tag: Annotated[str | None, typer.Option(help="Tag to point at the build")] = "latest",
         no_tag: Annotated[bool, typer.Option("--no-tag", help="Build only, no tag")] = False,
         api: Annotated[str | None, typer.Option(help="Expected API id (safety check)")] = None,
+        gold: Annotated[
+            str | None, typer.Option(help="Gold set file (default: PLUME_GOLD_DIRS/<api>.json)")
+        ] = None,
         as_json: Annotated[bool, typer.Option("--json", help="Machine-readable output")] = False,
     ) -> None:
-        """Import a package: build -> chunk -> embed -> facts -> seal -> tag."""
+        """Import a package: build -> chunk -> embed -> facts -> seal -> eval gate -> tag.
+
+        Exit code 2 when the quality gate fails (the build is sealed but not tagged)."""
         pipeline = _need(deps.build_pipeline, "load")
         try:
             result = pipeline.execute(
@@ -92,6 +106,7 @@ def create_app(deps: CliDependencies) -> typer.Typer:
                 package,
                 tag=None if no_tag else tag,
                 api_id=ApiId(api) if api else None,
+                gold_ref=gold,
             )
         except (ApplicationError, DomainError) as exc:
             raise fail(exc) from exc
@@ -106,9 +121,22 @@ def create_app(deps: CliDependencies) -> typer.Typer:
             "facts": result.facts,
             "tag": result.tag.tag if result.tag else None,
             "previous": result.tag.previous.value if result.tag and result.tag.previous else None,
+            "gate": (
+                {
+                    "passed": result.gate.passed,
+                    "message": result.gate.message,
+                    "metrics": result.gate.metrics,
+                    "baseline": result.gate.baseline,
+                }
+                if result.gate
+                else None
+            ),
         }
+        gate_failed = result.gate is not None and not result.gate.passed
         if as_json:
             typer.echo(json.dumps(summary))
+            if gate_failed:
+                raise typer.Exit(code=2)
             return
         state = "reused sealed build" if result.reused else "sealed"
         typer.echo(f"{result.api_id}: {result.build_id} {state}")
@@ -116,8 +144,17 @@ def create_app(deps: CliDependencies) -> typer.Typer:
             f"  documents {result.documents}, chunks {result.chunks}, embedded {result.embedded}"
             f" (+{result.from_cache} cached), facts {result.facts}"
         )
+        if result.gate:
+            m = result.gate.metrics
+            typer.echo(
+                f"  eval: recall@{m['k']} {m['recall_at_k']}, MRR {m['mrr']}, "
+                f"facts {m['fact_accuracy']} - {result.gate.message}"
+            )
         if result.tag:
             typer.echo(f"  tag {result.tag.tag} -> {result.build_id}")
+        if gate_failed:
+            typer.echo("  not tagged: the quality gate failed", err=True)
+            raise typer.Exit(code=2)
 
     @app.command()
     def apis() -> None:
@@ -161,14 +198,76 @@ def create_app(deps: CliDependencies) -> typer.Typer:
     def tag_cmd(
         build: Annotated[str, typer.Argument(help="Build id")],
         name: Annotated[str, typer.Argument(help="Tag name")] = "latest",
+        force: Annotated[bool, typer.Option(help="Tag even if the quality gate failed")] = False,
     ) -> None:
         """Point a tag at a sealed build (publish or roll back)."""
         try:
-            result = _need(deps.tag_build, "tag").execute(BuildId(build), name)
+            result = _need(deps.tag_build, "tag").execute(BuildId(build), name, force=force)
         except (ApplicationError, DomainError) as exc:
             raise fail(exc) from exc
         prev = result.previous.value if result.previous else "<none>"
         typer.echo(f"{result.api_id} {result.tag}: {prev} -> {result.build_id}")
+
+    @app.command("eval")
+    def eval_cmd(
+        api: Annotated[str, typer.Argument(help="API id")],
+        version: Annotated[str | None, typer.Option(help="Tag or build id")] = None,
+        gold: Annotated[str | None, typer.Option(help="Gold set file")] = None,
+        as_json: Annotated[bool, typer.Option("--json")] = False,
+    ) -> None:
+        """Run the gold questions against a build and print the gate decision (exit 2 on fail)."""
+        try:
+            build = _need(deps.resolver, "eval").resolve(api, version).build
+            source = _need(deps.gold, "eval")
+            ref = gold or source.for_api(api)
+            if ref is None:
+                raise typer.BadParameter(f"no gold set for {api}; pass --gold")
+            gold_set, gold_hash = source.load(ref)
+            run = _need(deps.run_eval, "eval").execute(build.build_id, gold_set, gold_hash)
+        except (ApplicationError, DomainError) as exc:
+            raise fail(exc) from exc
+        out = {
+            "api": api,
+            "build": build.build_id.value,
+            "passed": run.decision.passed,
+            "message": run.decision.message,
+            "metrics": run.record.metrics.as_dict(),
+            "baseline": run.baseline.build_id.value if run.baseline else None,
+            "details": list(run.record.details),
+        }
+        typer.echo(json.dumps(out, indent=None if as_json else 2))
+        if not run.decision.passed:
+            raise typer.Exit(code=2)
+
+    @app.command("export")
+    def export_cmd(
+        api: Annotated[str, typer.Argument(help="API id")],
+        version: Annotated[str | None, typer.Option(help="Tag or build id")] = None,
+        out: Annotated[str | None, typer.Option(help="Output file")] = None,
+    ) -> None:
+        """Write a sealed build as a dump (gzip JSON lines, verified)."""
+        try:
+            build = _need(deps.resolver, "export").resolve(api, version).build
+            ref = _need(deps.export_dump, "export").execute(build.build_id, out)
+        except (ApplicationError, DomainError) as exc:
+            raise fail(exc) from exc
+        typer.echo(ref)
+
+    @app.command("restore")
+    def restore_cmd(
+        dump: Annotated[str, typer.Argument(help="Dump file")],
+        tag: Annotated[list[str] | None, typer.Option(help="Tags to set (repeatable)")] = None,
+    ) -> None:
+        """Restore a dump into the database in one transaction (verified first)."""
+        try:
+            r = _need(deps.restore_dump, "restore").execute(dump, tag or [])
+        except (ApplicationError, DomainError) as exc:
+            raise fail(exc) from exc
+        state = "restored" if r.restored else "already present"
+        typer.echo(
+            f"{r.api}: {r.build} {state} ({r.documents} documents, {r.chunks} chunks, "
+            f"{r.facts} facts){' tags ' + ','.join(r.tags) if r.tags else ''}"
+        )
 
     @app.command()
     def serve(

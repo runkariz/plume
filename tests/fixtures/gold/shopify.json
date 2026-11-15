@@ -1,0 +1,18 @@
+{
+  "api": "shopify",
+  "version": "1",
+  "questions": [
+    {"id": "list-products", "kind": "search", "question": "How do I retrieve a list of products?", "expect": ["endpoint:GET~/admin/api/{version}/products.json"]},
+    {"id": "create-product", "kind": "search", "question": "create a new product", "expect": ["endpoint:POST~/admin/api/{version}/products.json"]},
+    {"id": "delete-product", "kind": "search", "question": "delete a product", "expect": ["endpoint:DELETE~/admin/api/{version}/products/{product_id}.json"]},
+    {"id": "update-product", "kind": "search", "question": "update an existing product's title", "expect": ["endpoint:PUT~/admin/api/{version}/products/{product_id}.json"]},
+    {"id": "assigned-fo", "kind": "search", "question": "fulfillment orders assigned to my app's location", "expect": ["endpoint:GET~/admin/api/{version}/assigned_fulfillment_orders.json"]},
+    {"id": "one-fo", "kind": "search", "question": "retrieve a specific fulfillment order", "expect": ["endpoint:GET~/admin/api/{version}/fulfillment_orders/{fulfillment_order_id}.json"]},
+    {"id": "rate-limits", "kind": "search", "question": "What are the REST Admin API rate limits?", "expect": ["guide:rate-limit-admin-rest-rest-admin-api-request-rate-limits"]},
+    {"id": "auth", "kind": "search", "question": "How do I authenticate with an access token?", "expect": ["guide:authentication", "auth:oauth2-authorization-code"]},
+    {"id": "versioning", "kind": "search", "question": "API versioning and version release schedule", "expect": ["guide:versioning"]},
+    {"id": "address", "kind": "search", "question": "address fields like province code and zip", "expect": ["model:address"]},
+    {"id": "has-since-id", "kind": "present", "name": "since_id"},
+    {"id": "has-scope", "kind": "present", "name": "read_assigned_fulfillment_orders"}
+  ]
+}

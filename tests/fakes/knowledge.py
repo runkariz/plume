@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 
 from plume.application.errors import EmbeddingError
 from plume.application.ports.embedder import Vector
+from plume.application.ports.eval_repo import EvalRecord
 from plume.application.ports.job_events import JobEvent
 from plume.domain.knowledge.api import ApiId, ApiInfo
 from plume.domain.knowledge.build import Build
@@ -134,6 +135,9 @@ class InMemoryVectorIndex:
             if cid in chunks:
                 store[cid] = v
 
+    def vectors_of(self, build_id: BuildId) -> dict[str, Vector]:
+        return dict(self._documents.vectors.get(build_id.value, {}))
+
     def missing(self, build_id: BuildId) -> list[str]:
         chunks = self._documents.chunks.get(build_id.value, {})
         have = self._documents.vectors.get(build_id.value, {})
@@ -207,3 +211,14 @@ class WordEmbedder(DeterministicEmbedder):
 
     def _vector(self, text: str) -> Vector:
         return self._inner.embed_query(text)
+
+
+class InMemoryEvalRepo:
+    def __init__(self) -> None:
+        self.records: dict[str, EvalRecord] = {}
+
+    def save(self, record: EvalRecord) -> None:
+        self.records[record.build_id.value] = record
+
+    def get(self, build_id: BuildId) -> EvalRecord | None:
+        return self.records.get(build_id.value)

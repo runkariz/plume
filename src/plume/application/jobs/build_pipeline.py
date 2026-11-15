@@ -8,13 +8,15 @@ join in slice 4.
 from collections.abc import Callable
 from typing import TypeVar
 
-from plume.application.dto import PipelineResult, TagResult
+from plume.application.dto import GateSummary, PipelineResult, TagResult
+from plume.application.eval.run_eval_gate import RunEvalGate
 from plume.application.knowledge.chunk_documents import ChunkDocuments
 from plume.application.knowledge.embed_build import EmbedBuild
 from plume.application.knowledge.extract_facts import ExtractFacts
 from plume.application.knowledge.import_package import ImportPackage
 from plume.application.knowledge.seal_build import SealBuild
 from plume.application.knowledge.tag_build import TagBuild
+from plume.application.ports.eval_repo import GoldSource
 from plume.application.ports.job_events import EventStatus, JobEvent, JobEvents
 from plume.domain.knowledge.api import ApiId
 
@@ -31,6 +33,8 @@ class BuildPipeline:
         seal: SealBuild,
         tag: TagBuild,
         events: JobEvents,
+        evaluate: RunEvalGate | None = None,
+        gold: GoldSource | None = None,
     ) -> None:
         self._import = import_package
         self._chunk = chunk
@@ -39,6 +43,8 @@ class BuildPipeline:
         self._seal = seal
         self._tag = tag
         self._events = events
+        self._evaluate = evaluate
+        self._gold = gold
 
     def _step(self, job_id: str, step: str, run: Callable[[], T], source: str = "plume") -> T:
         self._events.emit(JobEvent(job_id, step, EventStatus.STARTED, source=source))
@@ -53,7 +59,12 @@ class BuildPipeline:
         return result
 
     def execute(
-        self, job_id: str, ref: str, tag: str | None = "latest", api_id: ApiId | None = None
+        self,
+        job_id: str,
+        ref: str,
+        tag: str | None = "latest",
+        api_id: ApiId | None = None,
+        gold_ref: str | None = None,
     ) -> PipelineResult:
         imported = self._step(job_id, "import", lambda: self._import.execute(ref, api_id))
         build_id = imported.build_id
@@ -87,9 +98,40 @@ class BuildPipeline:
                 job_id, "facts", lambda: self._facts.execute(build_id), source="postgres"
             )
             self._step(job_id, "seal", lambda: self._seal.execute(build_id), source="postgres")
+        gate: GateSummary | None = None
+        gold_ref = gold_ref or (self._gold.for_api(imported.api_id.value) if self._gold else None)
+        evaluate = self._evaluate
+        if gold_ref is not None and evaluate is not None and self._gold is not None:
+            gold, gold_hash = self._gold.load(gold_ref)
+            run = self._step(
+                job_id, "evaluate", lambda: evaluate.execute(build_id, gold, gold_hash)
+            )
+            gate = GateSummary(
+                passed=run.decision.passed,
+                message=run.decision.message,
+                metrics=run.record.metrics.as_dict(),
+                baseline=run.baseline.build_id.value if run.baseline else None,
+            )
+            self._events.emit(
+                JobEvent(
+                    job_id,
+                    "evaluate",
+                    EventStatus.PROGRESS,
+                    message=gate.message,
+                    data=dict(gate.metrics),
+                )
+            )
+        else:
+            self._events.emit(
+                JobEvent(job_id, "evaluate", EventStatus.SKIPPED, message="no gold questions")
+            )
         tagged: TagResult | None = None
-        if tag is not None:
+        if tag is not None and (gate is None or gate.passed):
             tagged = self._step(job_id, "tag", lambda: self._tag.execute(build_id, tag))
+        elif tag is not None:
+            self._events.emit(
+                JobEvent(job_id, "tag", EventStatus.SKIPPED, message="quality gate failed")
+            )
         return PipelineResult(
             api_id=imported.api_id,
             build_id=build_id,
@@ -100,4 +142,5 @@ class BuildPipeline:
             from_cache=from_cache,
             facts=facts,
             tag=tagged,
+            gate=gate,
         )

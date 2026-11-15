@@ -1,0 +1,115 @@
+"""Use case: run a gold set against a build (draft or sealed) and decide the release gate.
+
+The baseline is the build the ``latest`` tag points at (the live release), when it has an eval
+for the same gold set.
+"""
+
+from dataclasses import dataclass
+
+from plume.application.knowledge._builds import require_build
+from plume.application.ports.build_repo import BuildRepo
+from plume.application.ports.document_repo import DocumentRepo
+from plume.application.ports.embedder import Embedder
+from plume.application.ports.eval_repo import EvalRecord, EvalRepo
+from plume.application.ports.search_index import FactQuery, SearchIndex
+from plume.application.ports.tag_repo import TagRepo
+from plume.application.reader.use_cases import fuse_hits
+from plume.domain.eval.gate import GateDecision, GatePolicy, decide
+from plume.domain.eval.gold import GoldKind, GoldSet
+from plume.domain.eval.metrics import K, QuestionOutcome, score
+from plume.domain.knowledge.tag import LATEST, TagName
+from plume.domain.shared.clock import Clock
+from plume.domain.shared.ids import BuildId
+
+POOL = 20
+
+
+@dataclass(frozen=True, slots=True)
+class EvalRun:
+    record: EvalRecord
+    decision: GateDecision
+    outcomes: tuple[QuestionOutcome, ...]
+    baseline: EvalRecord | None
+
+
+class RunEvalGate:
+    def __init__(
+        self,
+        builds: BuildRepo,
+        tags: TagRepo,
+        documents: DocumentRepo,
+        index: SearchIndex,
+        facts: FactQuery,
+        embedder: Embedder,
+        evals: EvalRepo,
+        clock: Clock,
+        policy: GatePolicy | None = None,
+    ) -> None:
+        self._builds = builds
+        self._tags = tags
+        self._documents = documents
+        self._index = index
+        self._facts = facts
+        self._embedder = embedder
+        self._evals = evals
+        self._clock = clock
+        self._policy = policy or GatePolicy()
+
+    def execute(self, build_id: BuildId, gold: GoldSet, gold_hash: str) -> EvalRun:
+        build = require_build(self._builds, build_id)
+        known = {s.doc_id for s in self._index.browse(build_id, (), None, 100_000, 0)[0]}
+        outcomes: list[QuestionOutcome] = []
+        details: list[dict[str, object]] = []
+        for q in gold.questions:
+            if q.kind is GoldKind.SEARCH:
+                vector = self._embedder.embed_query(q.question)
+                dense = self._index.dense(build_id, vector, POOL)
+                text = self._index.text(build_id, q.question, POOL)
+                ranked = tuple(h.doc_id for h in fuse_hits(dense, text, q.question, POOL))
+                missing = tuple(d for d in q.expect_docs if d not in known)
+                o = QuestionOutcome(q.qid, q.kind, ranked=ranked, missing_expected=missing)
+                rank = o.first_hit_rank(q.expect_docs)
+                details.append(
+                    {
+                        "qid": q.qid,
+                        "kind": q.kind.value,
+                        "rank": rank,
+                        "top": list(ranked[:K]),
+                        "missing": list(missing),
+                    }
+                )
+            else:
+                found = self._facts.find(build_id, q.fact_name or "")
+                incomplete = self._facts.incomplete_owners(build_id)
+                o = QuestionOutcome(q.qid, q.kind, found=bool(found), complete=not incomplete)
+                details.append(
+                    {
+                        "qid": q.qid,
+                        "kind": q.kind.value,
+                        "found": bool(found),
+                        "complete": not incomplete,
+                    }
+                )
+            outcomes.append(o)
+        metrics = score(gold.questions, outcomes)
+
+        baseline: EvalRecord | None = None
+        live = self._tags.get(build.api_id, TagName(LATEST))
+        if live is not None and live.build_id != build_id:
+            candidate = self._evals.get(live.build_id)
+            if candidate is not None and candidate.gold_hash == gold_hash:
+                baseline = candidate
+        decision = decide(self._policy, metrics, baseline.metrics if baseline else None)
+        record = EvalRecord(
+            build_id=build_id,
+            api_id=build.api_id,
+            gold_hash=gold_hash,
+            metrics=metrics,
+            passed=decision.passed,
+            message=decision.message,
+            baseline_build=baseline.build_id if baseline else None,
+            evaluated_at=self._clock.now(),
+            details=tuple(details),
+        )
+        self._evals.save(record)
+        return EvalRun(record, decision, tuple(outcomes), baseline)
