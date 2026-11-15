@@ -56,6 +56,13 @@ def job_payload(job: ModelJob) -> dict[str, Any]:
     }
 
 
+def _leaf_count(model: dict[str, Any]) -> int:
+    def count(fields: list[dict[str, Any]]) -> int:
+        return sum(count(f["fields"]) if f.get("fields") else 1 for f in fields)
+
+    return count(model.get("fields", []))
+
+
 def model_text(model: dict[str, Any], full: bool = False) -> str:
     """What the model (and hosts without MCP Apps, e.g. Claude Code) read: a summary, the
     link, and with ``full`` the model JSON itself."""
@@ -69,7 +76,7 @@ def model_text(model: dict[str, Any], full: bool = False) -> str:
         f"{model['name']} ({model['concept']}) model {model['id']}: {model.get('visibility')}, "
         f"version {lineage.get('version', 1)} of {lineage.get('versions', 1)}, across "
         f"{', '.join(apis)}.",
-        f"{len(model.get('fields', []))} fields; coverage {coverage}; "
+        f"{_leaf_count(model)} fields; coverage {coverage}; "
         f"{len(model.get('openQuestions', []))} open question(s); every citation checked "
         f"({model.get('citations', {}).get('checked', 0)}). Generated, unverified.",
     ]

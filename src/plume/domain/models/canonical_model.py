@@ -12,7 +12,10 @@ from typing import Any
 from plume.domain.shared.errors import DomainError
 
 _FIELD_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_.\[\]]{0,127}$")
-MAX_FIELDS = 200
+_SUB_FIELD_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
+MAX_FIELDS = 200  # all fields, nested ones included
+MAX_DEPTH = 3  # a top-level field is depth 1
+CONTAINER_TYPES = ("object", "array")
 MAX_QUOTE = 2000
 
 
@@ -55,9 +58,19 @@ class CanonicalField:
     description: str
     required: bool
     sources: tuple[tuple[str, FieldSource], ...]  # (api id, source), sorted by api
+    fields: tuple["CanonicalField", ...] = ()  # sub-fields of an object / array field
 
     def source(self, api: str) -> FieldSource | None:
         return dict(self.sources).get(api)
+
+    @property
+    def is_container(self) -> bool:
+        return bool(self.fields)
+
+    def child_path(self, parent: str) -> str:
+        """``variants`` (array) + ``sku`` -> ``variants[].sku``; ``address`` (object) +
+        ``city`` -> ``address.city``."""
+        return f"{parent}[]" if self.type == "array" else parent
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +86,24 @@ class ModelDraft:
     description: str
     fields: tuple[CanonicalField, ...]
     open_questions: tuple[OpenQuestion, ...] = ()
+
+    def walk(self) -> list[tuple[str, CanonicalField]]:
+        """Every field with its canonical path (``variants[].sku``), parents before children."""
+        out: list[tuple[str, CanonicalField]] = []
+
+        def visit(fields: tuple[CanonicalField, ...], prefix: str) -> None:
+            for f in fields:
+                path = f"{prefix}.{f.name}" if prefix else f.name
+                out.append((path, f))
+                if f.fields:
+                    visit(f.fields, f.child_path(path))
+
+        visit(self.fields, "")
+        return out
+
+    def leaves(self) -> list[tuple[str, CanonicalField]]:
+        """Fields without sub-fields: what coverage counts."""
+        return [(p, f) for p, f in self.walk() if not f.fields]
 
 
 def _str(d: dict[str, Any], key: str, where: str, required: bool = True) -> str | None:
@@ -127,6 +158,53 @@ def _source(raw: Any, where: str) -> FieldSource:
     return FieldSource(tuple(paths), tuple(evidence), fetch, join, transform)
 
 
+def _fields(raw: list[Any], where: str, depth: int, count: list[int]) -> tuple[CanonicalField, ...]:
+    out = []
+    seen: set[str] = set()
+    for i, f in enumerate(raw):
+        here = f"{where}[{i}]"
+        count[0] += 1
+        if count[0] > MAX_FIELDS:
+            raise DraftFormatError(f"at most {MAX_FIELDS} fields (nested ones included)")
+        if not isinstance(f, dict):
+            raise DraftFormatError(f"{here} must be an object")
+        fname = _str(f, "name", here) or ""
+        pattern = _FIELD_NAME if depth == 1 else _SUB_FIELD_NAME
+        if not pattern.fullmatch(fname):
+            raise DraftFormatError(f"{here}.name {fname!r} is not a valid field name")
+        if fname in seen:
+            raise DraftFormatError(f"duplicate field {fname!r} in {where}")
+        seen.add(fname)
+        sources_raw = f.get("sources", {})
+        if not isinstance(sources_raw, dict):
+            raise DraftFormatError(f"{here}.sources must be an object keyed by api id")
+        sources = tuple(
+            sorted(
+                (str(api), _source(src, f"{here}.sources.{api}"))
+                for api, src in sources_raw.items()
+            )
+        )
+        ftype = _str(f, "type", here) or ""
+        children_raw = _list(f, "fields", here)
+        if children_raw and ftype not in CONTAINER_TYPES:
+            raise DraftFormatError(f"{here}: only object or array fields can have sub-fields")
+        if children_raw and depth >= MAX_DEPTH:
+            raise DraftFormatError(f"{here}: fields nest at most {MAX_DEPTH} levels deep")
+        out.append(
+            CanonicalField(
+                name=fname,
+                type=ftype,
+                description=_str(f, "description", here, required=False) or "",
+                required=bool(f.get("required", False)),
+                sources=sources,
+                fields=_fields(children_raw, f"{here}.fields", depth + 1, count)
+                if children_raw
+                else (),
+            )
+        )
+    return tuple(out)
+
+
 def parse_draft(raw: Any) -> ModelDraft:
     """Parse draft JSON (the shape documented in the model context) into a ``ModelDraft``."""
     if not isinstance(raw, dict):
@@ -136,38 +214,8 @@ def parse_draft(raw: Any) -> ModelDraft:
     fields_raw = _list(raw, "fields", "model")
     if not fields_raw:
         raise DraftFormatError("model.fields must not be empty")
-    if len(fields_raw) > MAX_FIELDS:
-        raise DraftFormatError(f"at most {MAX_FIELDS} fields")
-    fields = []
-    seen: set[str] = set()
-    for i, f in enumerate(fields_raw):
-        where = f"fields[{i}]"
-        if not isinstance(f, dict):
-            raise DraftFormatError(f"{where} must be an object")
-        fname = _str(f, "name", where) or ""
-        if not _FIELD_NAME.fullmatch(fname):
-            raise DraftFormatError(f"{where}.name {fname!r} is not a valid field name")
-        if fname in seen:
-            raise DraftFormatError(f"duplicate field {fname!r}")
-        seen.add(fname)
-        sources_raw = f.get("sources", {})
-        if not isinstance(sources_raw, dict):
-            raise DraftFormatError(f"{where}.sources must be an object keyed by api id")
-        sources = tuple(
-            sorted(
-                (str(api), _source(src, f"{where}.sources.{api}"))
-                for api, src in sources_raw.items()
-            )
-        )
-        fields.append(
-            CanonicalField(
-                name=fname,
-                type=_str(f, "type", where) or "",
-                description=_str(f, "description", where, required=False) or "",
-                required=bool(f.get("required", False)),
-                sources=sources,
-            )
-        )
+    count = [0]
+    fields = _fields(fields_raw, "fields", 1, count)
     questions = []
     for i, q in enumerate(_list(raw, "open_questions", "model")):
         if isinstance(q, str):

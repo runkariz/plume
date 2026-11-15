@@ -15,6 +15,7 @@ from plume.application.reader.dto import (
     SearchResult,
 )
 from plume.domain.knowledge.citation import Citation
+from plume.domain.models.canonical_model import CanonicalField
 from plume.domain.models.snapshot import ModelSnapshot, Visibility
 from plume.domain.models.validation import Issue
 
@@ -198,8 +199,9 @@ def snapshot_payload(
     m: ModelSnapshot, names: dict[str, str], stale_inputs: list[dict[str, str | None]] | None = None
 ) -> Json:
     """The ModelSnapshot JSON (HTTP and MCP). ``stale`` = a pinned build is no longer latest."""
-    fields = []
-    for f in m.draft.fields:
+    supports = {i.api: m.support(i.api) for i in m.inputs}
+
+    def field(f: CanonicalField, path: str) -> Json:
         sources = {}
         for api, src in f.sources:
             sources[api] = {
@@ -212,17 +214,20 @@ def snapshot_payload(
                     for e in src.evidence
                 ],
             }
-        support = {i.api: m.support(i.api)[f.name] for i in m.inputs}
-        fields.append(
-            {
-                "name": f.name,
-                "type": f.type,
-                "description": f.description,
-                "required": f.required,
-                "support": support,
-                "sources": sources,
-            }
-        )
+        out: Json = {
+            "name": f.name,
+            "path": path,
+            "type": f.type,
+            "description": f.description,
+            "required": f.required,
+            "support": {api: s[path] for api, s in supports.items()},
+            "sources": sources,
+        }
+        if f.fields:
+            out["fields"] = [field(c, f"{f.child_path(path)}.{c.name}") for c in f.fields]
+        return out
+
+    fields = [field(f, f.name) for f in m.draft.fields]
     coverage = {api: {"mapped": n, "total": t} for api, (n, t) in m.coverage().items()}
     return {
         "id": m.snapshot_id,

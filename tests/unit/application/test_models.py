@@ -385,3 +385,52 @@ def test_oversized_draft_is_refused(stack: FakeStack) -> None:
     with pytest.raises(ModelDraftRefusedError) as exc:
         models.submit(session.session_id, {"name": "x" * 1_100_000})
     assert exc.value.issues[0].code == "INVALID_FORMAT"
+
+
+def test_nested_fields_are_validated_against_the_builds(stack: FakeStack) -> None:
+    from plume.application.models.sessions import ModelDraftRefusedError  # noqa: PLC0415
+    from plume.interfaces.payloads import snapshot_payload  # noqa: PLC0415
+
+    models = stack.models()
+    session = models.start(APIS, "Order")
+    sources = {}
+    for api in APIS:
+        build = next(p.build for p in session.inputs if p.api == api)
+        from plume.domain.shared.ids import BuildId  # noqa: PLC0415
+
+        doc_id = "endpoint:GET~/api/{version}/products"
+        doc = stack.documents.get_document(BuildId(build), doc_id)
+        assert doc is not None
+        spec = next(f for f in doc.fields if f.name == "items[].price")
+        sources[api] = {
+            "paths": [{"path": "items[].price"}],
+            "evidence": [{"doc_id": doc_id, "quote": spec.description}],
+        }
+    draft = _draft("good")
+    draft["fields"].append(
+        {
+            "name": "items",
+            "type": "array",
+            "description": "Catalog items of the order's shop.",
+            "fields": [{"name": "price", "type": "decimal", "sources": sources}],
+        }
+    )
+    snap = models.submit(session.session_id, draft, maintainer=True).snapshot
+    assert snap.coverage()["test-catalog-api"] == (6, 6)
+    assert snap.citations_checked == 12
+    payload = snapshot_payload(snap, {})
+    items = next(f for f in payload["fields"] if f["name"] == "items")
+    assert items["path"] == "items"
+    assert items["support"]["test-catalog-api"] == "derived"
+    assert items["fields"][0]["path"] == "items[].price"
+    assert items["fields"][0]["support"]["second-catalog-api"] == "supported"
+    bad = dict(draft)
+    bad["fields"] = [*draft["fields"][:-1], {**draft["fields"][-1]}]
+    bad["fields"][-1]["fields"] = [
+        {"name": "price", "type": "decimal", "sources": {
+            "test-catalog-api": {**sources["test-catalog-api"], "paths": [{"path": "items[].nope"}]}
+        }}
+    ]  # fmt: skip
+    with pytest.raises(ModelDraftRefusedError) as exc:
+        models.submit(session.session_id, bad, maintainer=True)
+    assert [(i.code, i.field) for i in exc.value.issues] == [("FIELD_NOT_FOUND", "items[].price")]
