@@ -15,7 +15,7 @@ from mcp.types import ToolAnnotations
 from plume import __version__
 from plume.application.jobs.maintainer import MaintainerJobs, job_payload
 from plume.application.knowledge.tag_build import TagBuild
-from plume.application.models.concepts import SuggestConcepts
+from plume.application.models.concepts import SuggestConcepts, SuggestFilter
 from plume.application.models.generate import GenerateModels
 from plume.application.models.sessions import ModelSessions
 from plume.application.reader.resolve import BuildResolver
@@ -82,9 +82,19 @@ def create_maintainer_server(deps: McpMaintainerDependencies) -> MCPServer:
     )
 
     @server.tool(annotations=READ, structured_output=True)
-    async def suggest_concepts(apis: list[str]) -> dict[str, Any]:
-        """Concepts shared by 2..6 APIs (deterministic), with coverage per API."""
-        return await _run(lambda: payloads.suggestions_payload(deps.suggest().execute(apis)))
+    async def suggest_concepts(
+        apis: list[str],
+        q: str | None = None,
+        only: str = "multi",
+        require: list[str] | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        """Concepts the APIs document (deterministic), best first: coverage per API, a factual
+        reason and counts. only = multi (in 2+ APIs) | single | all; q filters by text;
+        require = API ids where the concept must exist. Follow nextOffset for more."""
+        f = SuggestFilter(q=q, only=only, require=tuple(require or ()), limit=limit, offset=offset)
+        return await _run(lambda: payloads.suggestions_payload(deps.suggest().execute(apis, f)))
 
     register_model_tools(
         server, deps.models, deps.resolver, _run, True, deps.web_public_url, deps.generate

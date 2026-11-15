@@ -20,7 +20,7 @@ from plume.application.errors import (
 from plume.application.jobs.maintainer import JobStateError, MaintainerJobs
 from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
-from plume.application.models.concepts import SuggestConcepts
+from plume.application.models.concepts import ModelInputError, SuggestConcepts
 from plume.application.models.generate import GenerateModels
 from plume.application.models.sessions import ModelSessions
 from plume.application.ports.model_writer import ModelWriterError, ModelWriterUnavailableError
@@ -183,6 +183,10 @@ def create_app(deps: HttpDependencies) -> FastAPI:
     @app.exception_handler(JobStateError)
     async def job_state(_: Request, exc: JobStateError) -> JSONResponse:
         return error(409, exc.code, str(exc))
+
+    @app.exception_handler(ModelInputError)
+    async def model_input(_: Request, exc: ModelInputError) -> JSONResponse:
+        return error(400, exc.code, str(exc))
 
     @app.exception_handler(ModelWriterUnavailableError)
     async def llm_unavailable(_: Request, exc: ModelWriterUnavailableError) -> JSONResponse:
@@ -515,6 +519,16 @@ def create_app(deps: HttpDependencies) -> FastAPI:
 
     if deps.sections is not None:
         app.include_router(sections_router(deps.sections))
+
+    def _icon_url(api: str) -> str | None:
+        """The package icon's path when the API's latest build has one (else the letter tile)."""
+        if deps.sections is None:
+            return None
+        try:
+            return f"/v1/apis/{api}/icon" if deps.sections().has_icon(api) else None
+        except ApplicationError:
+            return None
+
     if deps.suggest is not None and deps.models is not None:
         app.include_router(
             models_router(
@@ -523,7 +537,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 deps.resolver,
                 deps.overviews,
                 _summary,
-                lambda api, name: _logo(api, name, None).model_dump(by_alias=True),
+                lambda api, name: _logo(api, name, _icon_url(api)).model_dump(by_alias=True),
                 deps.maintainer_tokens,
                 deps.mcp_url,
                 deps.generate_models,

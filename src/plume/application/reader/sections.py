@@ -128,6 +128,10 @@ class PackageSections:
             "variables_schema": raw.get("environment_variables_schema"),
         }
 
+    def has_icon(self, api: str, version: str | None = None) -> bool:
+        r = self._resolver.resolve(api, version)
+        return self._assets.has(r.build.build_id, ICON)
+
     def icon(self, api: str, version: str | None = None) -> tuple[BuildRef, Asset | None]:
         r = self._resolver.resolve(api, version)
         return _ref(r), self._assets.get(r.build.build_id, ICON)

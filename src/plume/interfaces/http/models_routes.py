@@ -15,6 +15,7 @@ import anyio
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from plume.application.models.concepts import SuggestFilter
 from plume.application.models.generate import ENDED, GenerateModels
 from plume.application.models.sessions import (
     ModelDraftRefusedError,
@@ -152,7 +153,18 @@ def models_router(  # noqa: PLR0915
 
     @router.post("/v1/models/suggest", response_model=s.SuggestResponse, responses=errors)
     def suggest_concepts(body: s.SuggestRequest) -> dict[str, Any]:
-        out = payloads.suggestions_payload(suggest().execute(body.apis))
+        """Concepts the selected APIs document, best first, paged and filtered (see the request
+        fields). Deterministic: no LLM."""
+        f = SuggestFilter(
+            q=body.q,
+            only=body.only,
+            require=tuple(body.require),
+            in_all=body.in_all,
+            write_only=body.write_only,
+            limit=body.limit,
+            offset=body.offset,
+        )
+        out = payloads.suggestions_payload(suggest().execute(body.apis, f))
         out["apis"] = [_logo_for(logo, a) for a in out["apis"]]
         return out
 

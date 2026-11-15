@@ -159,7 +159,16 @@ def suggestions_payload(s: Suggestions) -> Json:
             {
                 "id": c.key,
                 "name": c.name,
-                "description": c.description,
+                "reason": c.reason,
+                "apiCounts": {
+                    a: {
+                        "models": n.models,
+                        "endpoints": n.endpoints,
+                        "operations": list(n.operations),
+                        "fields": n.fields,
+                    }
+                    for a, n in c.api_counts.items()
+                },
                 "likelyFields": c.likely_fields,
                 "coverage": c.coverage,
                 "operations": list(c.operations),
@@ -168,6 +177,16 @@ def suggestions_payload(s: Suggestions) -> Json:
             }
             for c in s.concepts
         ],
+        "total": s.total,
+        "limit": s.limit,
+        "offset": s.offset,
+        "nextOffset": s.next_offset,
+        "counts": {
+            "all": s.counts.all,
+            "inAll": s.counts.in_all,
+            "write": s.counts.write,
+            "single": s.counts.single,
+        },
         "notModeled": {
             "count": s.not_modeled,
             "summary": ", ".join(s.not_modeled_examples) or "none",

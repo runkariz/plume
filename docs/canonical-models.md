@@ -8,7 +8,8 @@ mapping needs a verbatim quote from a document of the pinned build. Mapping *cod
 Claude.
 
 ```
-suggest_concepts(apis)              deterministic: shared resources/models, coverage per API
+suggest_concepts(apis, q?, only?, require?, limit?, offset?)
+                                    deterministic: concepts, coverage per API, a factual reason
 start_model_session(apis, concept)  pins the current build of each API
 get_model_context(session_id)       index of the evidence, the draft format and the rules
 get_model_evidence(session_id, api) the fields with descriptions, paged (next_cursor)
@@ -16,6 +17,28 @@ submit_model_draft(session_id, d[, based_on])  validated -> snapshot | refused w
 revise_model(snapshot_id)           a session on the current builds, the model as starting draft
 get_model(snapshot_id)              the stored model with its versions and link
 ```
+
+## Concept suggestions
+
+`POST /v1/models/suggest` (and the maintainer MCP `suggest_concepts`) lists the concepts the
+selected APIs document, with no LLM. A concept is a normalised, singular resource or model name
+(`Orders`, `order` → `Order`; `Taxes` → `Tax`). Per API it is `direct` (an endpoint resource
+or a model has that name), `derived` (only field names mention it) or `absent`. A concept needs
+at least one `direct` API: field words alone never make one. Generic and timestamp words
+(`Updated`, `Attributes`, `Entities`, `Date`, `Page`, `Value`, ...) are never concepts, even
+as model names.
+
+- All concepts, paged: `limit` (default 24, max 100), `offset`, `total`, `nextOffset`. Order:
+  most `direct` APIs, then most present, then likely fields.
+- `only`: `multi` (default; present in 2+ selected APIs), `single` (present in exactly one),
+  `all`. `q`: text over name, id and reason. `require`: API ids where the concept must be direct
+  or derived. `inAll`, `writeOnly`: present in every API / has create-update-delete endpoints.
+- `counts {all, inAll, write, single}` honour `q` and `require` (for the filter chips).
+- Each concept: `coverage`, `operations`, `difficulty`, `likelyFields`, `documents` per API,
+  `apiCounts {api: {models, endpoints, operations, fields}}`, and `reason`: one paragraph built
+  from those counts, e.g. "Shopify has an Order model and 30 order endpoints (read, create,
+  update, delete); ... About 532 fields are likely to map. Straightforward because every API
+  documents Order directly."
 
 ## Who sees what
 
