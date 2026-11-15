@@ -30,7 +30,7 @@ export const modelCandidates: ApiSummary[] = [
   candidate(
     'shopify',
     'Shopify Admin REST',
-    'E-commerce',
+    'e-commerce',
     'Products, orders, customers, inventory and fulfillment for Shopify stores.',
     137,
     31,
@@ -41,7 +41,7 @@ export const modelCandidates: ApiSummary[] = [
   candidate(
     'woocommerce',
     'WooCommerce REST',
-    'E-commerce',
+    'e-commerce',
     'Products, orders, customers, coupons, taxes and shipping for WordPress stores.',
     168,
     44,
@@ -52,7 +52,7 @@ export const modelCandidates: ApiSummary[] = [
   candidate(
     'mirakl',
     'Mirakl Seller API',
-    'E-commerce',
+    'e-commerce',
     'Offers, orders, shipments, products and messages for marketplace sellers.',
     96,
     38,
@@ -63,7 +63,7 @@ export const modelCandidates: ApiSummary[] = [
   candidate(
     'bigcommerce',
     'BigCommerce Catalog',
-    'E-commerce',
+    'e-commerce',
     'Catalog, pricing, inventory and channel listings for BigCommerce stores.',
     211,
     57,
@@ -74,7 +74,7 @@ export const modelCandidates: ApiSummary[] = [
   candidate(
     'stripe',
     'Stripe API',
-    'Payments',
+    'payments',
     'Payments, subscriptions, invoices, payouts and the events that tie them together.',
     412,
     96,
@@ -85,7 +85,7 @@ export const modelCandidates: ApiSummary[] = [
   candidate(
     'github',
     'GitHub REST',
-    'Developer tools',
+    'developer-tools',
     'Repositories, issues, pull requests, actions, checks and organization admin.',
     603,
     140,

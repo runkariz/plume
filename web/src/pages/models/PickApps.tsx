@@ -5,6 +5,7 @@ import { useAsync } from '@/api/useAsync';
 import type { ApiSummary } from '@/api/types';
 import { ApiAvatar, Button, EmptyState, ErrorState, LoadingState } from '@/components';
 import { CheckIcon } from '@/icons';
+import { categoryLabel } from '@/lib/format';
 
 function PickCard({
   api,
@@ -26,7 +27,7 @@ function PickCard({
         <span>
           <span className="api-name">{api.name}</span>
           <br />
-          <span className="faint small">{api.category}</span>
+          <span className="faint small">{categoryLabel(api.category)}</span>
         </span>
       </span>
       <span className="api-desc muted">{api.summary}</span>
@@ -101,7 +102,7 @@ export function PickApps() {
                 aria-pressed={category === name}
                 onClick={() => setCategory(name)}
               >
-                {name} · {count}
+                {categoryLabel(name)} · {count}
               </button>
             ))}
           </div>

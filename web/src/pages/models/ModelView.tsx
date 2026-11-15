@@ -4,6 +4,7 @@ import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
 import { ApiError, type ModelSnapshot } from '@/api/types';
 import { Button, Card, Chip, Crumbs, ErrorState, LoadingState } from '@/components';
+import { readableOn } from '@/lib/color';
 import { richText } from '@/lib/richText';
 import { defaultSelection, type Selection } from './graph';
 import { MappingGraph } from './MappingGraph';
@@ -160,17 +161,19 @@ export function ModelView() {
         </div>
         <div className="row">
           <Button onClick={() => void copy(prompt)}>Copy for Claude</Button>
+          {/* claude.ai/new?q= pre-filling could not be verified, so: copy the prompt, then open a new chat to paste it. */}
           <a
             className="btn primary"
-            href={`https://claude.ai/new?q=${encodeURIComponent(prompt)}`}
+            href="https://claude.ai/new"
             target="_blank"
             rel="noreferrer"
+            onClick={() => void copy(prompt)}
           >
             Open in Claude
           </a>
           <span role="status" className="faint small">
             {copied === 'ok'
-              ? 'Copied'
+              ? 'Prompt copied: paste it into Claude'
               : copied === 'fail'
                 ? 'Copy failed: select the text instead'
                 : ''}
@@ -245,7 +248,11 @@ export function ModelView() {
               return (
                 <li key={a.id}>
                   <span className="cov-name">
-                    <span aria-hidden className="cov-dot" style={{ background: a.logo.color }}>
+                    <span
+                      aria-hidden
+                      className="cov-dot"
+                      style={{ background: a.logo.color, color: readableOn(a.logo.color) }}
+                    >
                       {a.logo.text}
                     </span>
                     {a.shortName}

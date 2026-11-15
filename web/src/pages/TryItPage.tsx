@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
+import { formatMs } from '@/lib/format';
 import {
   ApiError,
   type AskResponse,
@@ -50,6 +51,7 @@ const TOP_K = 5;
 
 const SOURCE_LABEL: Record<TraceStep['source'], string> = {
   gemini: 'Gemini',
+  embedder: 'Embedder',
   postgres: 'Postgres',
   plume: 'Plume',
 };
@@ -63,12 +65,12 @@ export function QueryTrace({ trace, totalMs }: { trace: TraceStep[]; totalMs: nu
           <li key={i} className="trace-row">
             <span className={`log-src ${t.source}`}>{SOURCE_LABEL[t.source]}</span>
             <span>{t.label}</span>
-            <span className="ms mono">{t.ms} ms</span>
+            <span className="ms mono">{formatMs(t.ms)}</span>
           </li>
         ))}
         <li className="trace-row total">
           <b>Total</b>
-          <span className="ms mono">{totalMs} ms</span>
+          <span className="ms mono">{formatMs(totalMs)}</span>
         </li>
       </ul>
     </Card>
@@ -213,7 +215,11 @@ function SearchTool({ apiId }: { apiId: string }) {
               <QueryTrace trace={run.data.trace} totalMs={run.data.totalMs} />
               <Card className="pad">
                 <h2 className="h2-sm">What Claude receives</h2>
-                <pre className="code">{run.data.claudePayload}</pre>
+                {/* a scrollable region must be reachable with the keyboard */}
+                {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+                <pre className="code payload" tabIndex={0} aria-label="Reader tool response">
+                  {run.data.claudePayload}
+                </pre>
               </Card>
             </>
           ) : null}
@@ -270,9 +276,16 @@ function AskTool({ apiId }: { apiId: string }) {
                         <div className="res-body">
                           <h3>{p.title}</h3>
                           <blockquote className="quote">{p.quote}</blockquote>
-                          <a className="small" href={p.sourceUrl} rel="noreferrer" target="_blank">
-                            Source
-                          </a>
+                          {p.sourceUrl ? (
+                            <a
+                              className="small"
+                              href={p.sourceUrl}
+                              rel="noreferrer"
+                              target="_blank"
+                            >
+                              Source
+                            </a>
+                          ) : null}
                         </div>
                       </Card>
                     </li>
@@ -438,7 +451,12 @@ export function TryItPage() {
         <div className="row">
           {state.status === 'ready' ? (
             <span className="chip build-chip">
-              Build {state.data.index.build} · {state.data.isLive ? 'live' : 'updating'}
+              Build {state.data.index.build ?? 'none'} ·{' '}
+              {state.data.isLive
+                ? 'live'
+                : state.data.status.kind === 'unpublished'
+                  ? 'not published'
+                  : 'updating'}
             </span>
           ) : null}
           <Segmented label="Tool" options={[...TOOLS]} value={tool} onChange={setTool} />

@@ -8,6 +8,25 @@ export function formatDate(iso: string): string {
   return month ? `${m[3]} ${month} ${m[1]}` : iso;
 }
 
+const CATEGORY_LABELS: Record<string, string> = {
+  'e-commerce': 'E-commerce',
+  'developer-tools': 'Developer tools',
+  other: 'Other',
+};
+
+/** Shows a producer category key: known keys get their label, others are title-cased ("dev_tools" -> "Dev tools"). */
+export function categoryLabel(key: string): string {
+  const known = CATEGORY_LABELS[key];
+  if (known) return known;
+  const text = key.replace(/_/g, ' ').trim();
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : 'Other';
+}
+
+/** 47 -> "47 ms", 3.2 -> "3.2 ms", 0.4 -> "0.4 ms". */
+export function formatMs(ms: number): string {
+  return `${ms >= 10 ? Math.round(ms) : Math.round(ms * 10) / 10} ms`;
+}
+
 export function formatScore(n: number, digits = 2): string {
   return n.toFixed(digits);
 }
