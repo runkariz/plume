@@ -27,7 +27,6 @@ from plume.interfaces.mcp.model_tools import (
     WRITE,
     apps_shown,
     job_payload,
-    owner_key_text,
     session_arg,
 )
 
@@ -143,16 +142,20 @@ def register_set_tools(  # noqa: PLR0915
         set_session: str | None = None,
         based_on: str | None = None,
         set_session_id: str | None = None,
+        collection: str | None = None,
     ) -> Annotated[CallToolResult, dict[str, Any]]:
         """Submit the set (members by model id + relations the user decided; undecided ones as
         confirmed:false). Plume checks the members, that relation fields exist in them, and every
-        relation citation. based_on (a set id) makes it the next version of that set."""
+        relation citation. based_on (a set id) makes it the next version of that set.
+        collection: the user's "My models" link id from an earlier save in this conversation."""
 
         sid = session_arg(set_session, set_session_id, "set_session")
 
         def go() -> dict[str, Any]:
             try:
-                result = sets().submit(sid, draft, based_on, maintainer)
+                result = sets().submit(
+                    sid, draft, based_on, maintainer, collection=None if maintainer else collection
+                )
             except ModelDraftRefusedError as exc:
                 return payloads.refusal_payload(exc.issues)
             x = result.snapshot
@@ -164,8 +167,9 @@ def register_set_tools(  # noqa: PLR0915
                 "version": x.version,
                 "set": set_json(x),
             }
-            if result.owner_key:
-                out["owner_key"] = result.owner_key
+            link = payloads.collection_payload(result.collection, web_public_url)
+            if link:
+                out["collection"] = link
             return out
 
         out = await run(go)
@@ -173,10 +177,8 @@ def register_set_tools(  # noqa: PLR0915
             issues = json.dumps(out.get("issues", []), ensure_ascii=False)
             return ui_result(out, f"Refused: {len(out.get('issues', []))} issue(s).\n{issues}")
         text = ("Stored" if out["created"] else "Already stored") + ". " + set_text(out["set"])
-        shown = apps_shown(ctx)
-        if out.get("owner_key"):
-            text += owner_key_text(out["owner_key"], shown)
-        return ui_result(out, text, shown)
+        text += payloads.collection_text(out.get("collection"))
+        return ui_result(out, text, apps_shown(ctx))
 
     @server.tool(annotations=READ, structured_output=True, meta=UI_META)
     async def get_model_set(ctx: Context, set_id: str) -> Annotated[CallToolResult, dict[str, Any]]:
@@ -250,5 +252,5 @@ def register_set_tools(  # noqa: PLR0915
 
         @server.tool(annotations=READ, structured_output=True)
         async def list_my_model_sets(owner_keys: list[str]) -> dict[str, Any]:
-            """The user's own sets (owner keys from submit_model_set, kept locally)."""
+            """TRANSITION: sets started with old owner keys. Use list_my_models(collection)."""
             return await run(lambda: {"sets": [item(x) for x in sets().mine(owner_keys)]})

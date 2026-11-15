@@ -124,16 +124,18 @@ def test_set_session_and_context(stack: FakeStack) -> None:
         sets.start(APIS, [f"c{i}" for i in range(9)])
 
 
-def test_user_set_unlisted_with_owner_key_and_versions(stack: FakeStack) -> None:
+def test_user_set_unlisted_in_my_models_link_and_versions(stack: FakeStack) -> None:
     sets = stack.model_sets()
     session, pins, ids = _setup(stack)
     result = sets.submit(session.session_id, _set(ids, _relation(stack, pins)))
     x = result.snapshot
     assert (x.visibility, x.version, x.set_id[:3]) == ("unlisted", 1, "us-")
-    assert result.owner_key
+    assert result.owner_key is None  # no more owner keys: the My models link
+    assert result.collection is not None
+    link = result.collection.collection_id
     assert sets.visible(x.set_id) == x
     assert sets.list() == []
-    assert [m.set_id for m in sets.mine([result.owner_key])] == [x.set_id]
+    assert [m.set_id for m in stack.collections().content(link).sets] == [x.set_id]
     assert stack.sets_repo.sets_using(ids["Order"]) == [x.set_id]
     revision = sets.revise(x.set_id)
     assert revision["members_current"] == {"Order": True, "Product": True}
@@ -141,10 +143,11 @@ def test_user_set_unlisted_with_owner_key_and_versions(stack: FakeStack) -> None
         revision["set_session_id"],
         {**_set(ids, _relation(stack, pins)), "description": "v2"},
         based_on=x.set_id,
+        collection=link,
     ).snapshot
     assert (v2.lineage, v2.version) == (x.set_id, 2)
     assert sets.lineage_info(v2)["versions"] == 2
-    assert [m.set_id for m in sets.mine([result.owner_key])] == [v2.set_id]
+    assert [m.set_id for m in stack.collections().content(link).sets] == [v2.set_id]
 
 
 @pytest.mark.parametrize(

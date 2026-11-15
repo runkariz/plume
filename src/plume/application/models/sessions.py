@@ -1,6 +1,5 @@
 """Model sessions: pin builds, hand Claude the evidence pack, validate and store its draft."""
 
-import hashlib
 import json
 import secrets
 import uuid
@@ -9,6 +8,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from plume.application.errors import ApplicationError, NotFoundError
+from plume.application.models.collections import (
+    KIND_MODEL,
+    CollectionRef,
+    Collections,
+    owner_key_hash,
+)
 from plume.application.models.concepts import (
     ModelInputError,
     concept_docs,
@@ -133,10 +138,6 @@ class ModelStateError(ApplicationError):
     code = "invalid_state"
 
 
-def owner_key_hash(key: str) -> str:
-    return hashlib.sha256(key.strip().encode()).hexdigest()
-
-
 def new_owner_key() -> str:
     return "pk_" + secrets.token_urlsafe(24)
 
@@ -184,7 +185,8 @@ class ModelDraftRefusedError(ApplicationError):
 class SubmitResult:
     snapshot: ModelSnapshot
     created: bool
-    owner_key: str | None = None  # shown once, when a user's submit starts a new lineage
+    owner_key: str | None = None  # no longer issued (My models link); kept for the shape
+    collection: CollectionRef | None = None  # the user's My models link
 
 
 class ModelSessions:
@@ -196,7 +198,9 @@ class ModelSessions:
         documents: DocumentRepo,
         models: ModelRepo,
         clock: Clock,
+        collections: Collections | None = None,
     ) -> None:
+        self._collections = collections
         self._resolver = resolver
         self._index = index
         self._facts = facts
@@ -544,6 +548,7 @@ class ModelSessions:
         maintainer: bool = False,
         generator: str = "claude",
         generator_usage: dict[str, int] | None = None,
+        collection: str | None = None,
     ) -> SubmitResult:
         """Validate and store a draft. A maintainer's model is stored unreleased (official only
         after ``release``); a user's is unlisted (readable by anyone with its id). ``based_on``
@@ -574,10 +579,11 @@ class ModelSessions:
         if not maintainer:  # a retry of the same draft returns the stored model
             for prior in self._models.by_session(session.session_id):
                 if prior.key == content_key and prior.visibility != Visibility.DISCARDED:
-                    return SubmitResult(prior, False, self._reissue_key(prior))
+                    return SubmitResult(
+                        prior, False, collection=self._collect(collection, prior.lineage)
+                    )
         visibility = Visibility.UNRELEASED if maintainer else Visibility.UNLISTED
         origin = Origin.MAINTAINER if maintainer else Origin.USER
-        owner_key = None if maintainer or same_lineage else new_owner_key()
         for _ in range(_SAVE_ATTEMPTS):
             lineage = self._models.lineage(base.lineage) if base and same_lineage else []
             snapshot = ModelSnapshot(
@@ -598,24 +604,18 @@ class ModelSessions:
                 generator_usage=generator_usage,
                 warnings=tuple(found_warnings),
             )
-            created = self._models.save_snapshot(
-                snapshot, owner_key_hash(owner_key) if owner_key else None
-            )
-            if created:
-                return SubmitResult(snapshot, True, owner_key)
+            if self._models.save_snapshot(snapshot):
+                ref = None if maintainer else self._collect(collection, snapshot.lineage)
+                return SubmitResult(snapshot, True, collection=ref)
             stored = self._models.get_snapshot(snapshot.snapshot_id)
             if stored is not None:  # same content already stored (maintainer ids are hashes)
                 return SubmitResult(stored, False)
         raise ModelStateError("the model was changed concurrently; submit again")
 
-    def _reissue_key(self, prior: ModelSnapshot) -> str | None:
-        """A retry in the same session gets a new owner key for the model it started: the first
-        response (the only copy of the old key) may never have arrived (a bridge timeout). The
-        old key stops working; the session id is what proves the caller made the model."""
-        if prior.lineage != prior.snapshot_id:
-            return None  # a new version of an existing model: the owner keeps their key
-        key = new_owner_key()
-        return key if self._models.replace_owner_key(prior.lineage, owner_key_hash(key)) else None
+    def _collect(self, collection: str | None, lineage: str) -> CollectionRef | None:
+        return (
+            self._collections.save(collection, KIND_MODEL, lineage) if self._collections else None
+        )
 
     # -- snapshots -------------------------------------------------------------------------------
 

@@ -68,9 +68,10 @@ this review and have tests in `tests/unit/interfaces/test_hardening.py`.
   JSON). Model drafts are parsed into typed values and every citation is re-checked.
 - **Model access**: an unlisted model's id is its share link: `u-` + 128 random bits from
   `secrets`, so ids cannot be guessed or derived from content. Unreleased and discarded models
-  answer 404 without the token (existence is not revealed). Owner keys (`pk_` + 192 random
-  bits) are returned once and stored only as SHA-256; they can only list (POST body, never a
-  URL). Only a maintainer can make a model official; a user revising an official model gets
+  answer 404 without the token (existence is not revealed). A user's "My models" link
+  (collection, `c-` + 128 random bits) lists their models and sets; it grants nothing else
+  (each model is readable by its own link anyway) and holds at most 500. Old owner keys
+  (`pk_`, stored only as SHA-256) still find their collection during the transition. Only a maintainer can make a model official; a user revising an official model gets
   their own unlisted copy. Drafts are capped at 1,000,000 characters.
 - **LLM key**: server-side generation reads the Vertex key from `PLUME_VERTEX_KEY_FILE` on each
   call and sends it only in the `x-goog-api-key` header; errors carry the HTTP status, never the
@@ -82,7 +83,7 @@ this review and have tests in `tests/unit/interfaces/test_hardening.py`.
   only. The trade-off: a script injected into the page (XSS) could read `sessionStorage`; the UI renders all
   package text as text and the app loads nothing from third parties, which keeps that risk small, but it is not
   zero. A public deployment should move to an `httpOnly`, `SameSite` session cookie set by the API (follow-up,
-  not done). The models page also keeps owner keys (list-only, see Model access) in `localStorage`.
+  not done). The models page also keeps the My models link (list-only, see Model access) in `localStorage`.
 - **Secrets**: keys and tokens come only from the environment (`settings.py` is the only env
   reader, enforced by a test). In Docker they are visible to anyone who can run
   `docker inspect`; for anything beyond local use, pass them through a secrets mechanism.
@@ -92,8 +93,9 @@ this review and have tests in `tests/unit/interfaces/test_hardening.py`.
 
 - `POST /v1/models/generate`, `suggest` and draft submission are public and do database work;
   they are rate limited, but sessions and unlisted snapshots are never pruned, so an abuser can
-  fill storage at the rate limit (each draft at most ~1 MB). Add retention, per-client quotas or
-  auth for submissions if abused.
+  fill storage at the rate limit (each draft at most ~1 MB). Collections are created only by a
+  save and never pruned either. Add retention, per-client quotas or auth for submissions if
+  abused.
 - Anyone holding an unlisted model's link can add a version to it (by design: "anyone with the
   link"); the owner cannot lock a model.
 - The web UI keeps the maintainer token in `sessionStorage` (see Web UI session): an XSS could read it. Move to an

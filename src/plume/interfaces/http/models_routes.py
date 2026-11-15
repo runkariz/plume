@@ -15,8 +15,10 @@ import anyio
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from plume.application.models.collections import Collections
 from plume.application.models.concepts import SuggestFilter
 from plume.application.models.generate import ENDED, GenerateModels
+from plume.application.models.model_sets import ModelSets
 from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import (
     ModelDraftRefusedError,
@@ -98,6 +100,8 @@ def models_router(  # noqa: PLR0915
     generate_models: Callable[[], GenerateModels] | None = None,
     web_public_url: str | None = None,
     suggest_related: Callable[[], SuggestRelated] | None = None,
+    sets: Callable[[], ModelSets] | None = None,
+    collections: Callable[[], Collections] | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["models"])
     auth = make_auth(tokens)
@@ -331,12 +335,14 @@ def models_router(  # noqa: PLR0915
         draft: Annotated[dict[str, Any], Body()],
         maintainer: Annotated[bool, Depends(optional)],
         based_on: Annotated[str | None, Query(alias="basedOn")] = None,
+        collection: Annotated[str | None, Query(max_length=100)] = None,
     ) -> JSONResponse:
-        """Validate and store a draft: unlisted without the token (the response carries the
-        model's link and, for a new model, its `ownerKey`, shown once), unreleased with it.
-        `basedOn` makes it the next version of that model when you may add to it."""
+        """Validate and store a draft: unlisted without the token, saved into the user's "My
+        models" link (`collection`; a new one when omitted or unknown, returned as
+        `collection: {id, url, created, note?}`), unreleased with it. `basedOn` makes it the
+        next version of that model when you may add to it."""
         try:
-            result = models().submit(session_id, draft, based_on, maintainer)
+            result = models().submit(session_id, draft, based_on, maintainer, collection=collection)
         except ModelDraftRefusedError as exc:
             body = payloads.refusal_payload(exc.issues)
             return JSONResponse(
@@ -348,7 +354,7 @@ def models_router(  # noqa: PLR0915
             {
                 "created": result.created,
                 "visibility": snap.visibility,
-                "ownerKey": result.owner_key,
+                "collection": payloads.collection_payload(result.collection, web_public_url),
                 "model": snapshot_json(snap, maintainer),
             },
             status_code=201 if result.created else 200,
@@ -356,9 +362,52 @@ def models_router(  # noqa: PLR0915
 
     @router.post("/v1/models/mine", response_model=s.ModelList, responses=errors)
     def mine(body: s.MineRequest) -> s.ModelList:
-        """The latest version of each model started with one of these owner keys (POST so the
-        keys stay out of URLs and logs)."""
-        return s.ModelList(items=[list_item(m, False) for m in models().mine(body.owner_keys)])
+        """TRANSITION: the latest version of each model started with one of these old owner
+        keys (POST so the keys stay out of URLs and logs), plus `collections`: the "My models"
+        links those keys became. Use GET /v1/collections/{id} from now on."""
+        links = collections().for_owner_keys(body.owner_keys) if collections else []
+        return s.ModelList(
+            items=[list_item(m, False) for m in models().mine(body.owner_keys)],
+            collections=[
+                s.CollectionLink(id=c, url=payloads.collection_url(c, web_public_url))
+                for c in links
+            ],
+        )
+
+    if collections is not None:
+        mine_links = collections
+
+        def collection_json(c: Any) -> dict[str, Any]:
+            set_items = []
+            if sets is not None:
+                service = sets()
+                set_items = [
+                    payloads.set_list_item(
+                        x, service.stale_inputs(x), service.lineage_info(x, False)["versions"]
+                    )
+                    for x in c.sets
+                ]
+            return {
+                "id": c.collection_id,
+                "url": payloads.collection_url(c.collection_id, web_public_url),
+                "mergedInto": c.merged_into,
+                "count": len(c.models) + len(c.sets),
+                "models": [list_item(m, False).model_dump(by_alias=True) for m in c.models],
+                "sets": set_items,
+            }
+
+        @router.get("/v1/collections/{collection_id}", responses=errors)
+        def get_collection(collection_id: str) -> dict[str, Any]:
+            """A "My models" link: the latest version of each model and set in it, newest
+            first (unlisted ones included: they are readable by their own links anyway). It
+            lists only; it grants nothing else."""
+            return collection_json(mine_links().content(collection_id))
+
+        @router.post("/v1/collections/{collection_id}/merge", responses=errors)
+        def merge_collections(collection_id: str, body: s.MergeRequest) -> dict[str, Any]:
+            """Move every model and set of the `from` links into this one (for a user who ended
+            up with two links). The old links then list nothing and carry `mergedInto`."""
+            return collection_json(mine_links().merge(collection_id, body.sources))
 
     @router.get("/v1/models", response_model=s.ModelList, responses=token_errors)
     def list_models(

@@ -53,6 +53,7 @@ def client(stack: FakeStack) -> TestClient:
                 rate_limit_per_minute=0,
                 suggest=stack.suggest,
                 models=stack.models,
+                collections=stack.collections,
                 maintainer_tokens=(TOKEN,),
                 generate_models=stack.generate,
             )
@@ -113,6 +114,7 @@ def test_suggest_and_model_inputs_carry_the_icon(packages: Path, tmp_path: Path)
                 rate_limit_per_minute=0,
                 suggest=s.suggest,
                 models=s.models,
+                collections=s.collections,
                 sections=s.sections,
                 maintainer_tokens=(TOKEN,),
             )
@@ -145,7 +147,7 @@ def test_maintainer_claude_flow_release(client: TestClient) -> None:  # noqa: PL
     ok = client.post(url, headers=AUTH, json=_draft("good"))
     assert ok.status_code == 201
     body = ok.json()
-    assert (body["visibility"], body["ownerKey"]) == ("unreleased", None)
+    assert (body["visibility"], body["collection"]) == ("unreleased", None)
     model = body["model"]
     mid = model["id"]
     assert model["status"] == "generated_unverified"
@@ -209,10 +211,11 @@ def test_user_flow_unlisted_share_mine_and_versions(client: TestClient) -> None:
     ok = client.post(f"/v1/models/sessions/{sid}/draft", json=_draft("good"))
     assert ok.status_code == 201
     body = ok.json()
-    key = body["ownerKey"]
+    link = body["collection"]
     model = body["model"]
     mid = model["id"]
-    assert key.startswith("pk_")
+    assert link["id"].startswith("c-")
+    assert link["created"] is True
     assert mid.startswith("u-")
     assert (body["visibility"], model["visibility"], model["official"]) == (
         "unlisted",
@@ -232,8 +235,10 @@ def test_user_flow_unlisted_share_mine_and_versions(client: TestClient) -> None:
     assert client.get("/v1/models").json()["items"] == []  # never listed
     again = client.post("/v1/models/generate", json={"apis": APIS, "concept": "Order"}).json()
     assert again["status"] == "awaiting_draft"  # someone's unlisted model is never offered
-    mine = client.post("/v1/models/mine", json={"ownerKeys": [key, "pk_other"]}).json()
-    assert [m["id"] for m in mine["items"]] == [mid]
+    mine = client.get(f"/v1/collections/{link['id']}").json()
+    assert [m["id"] for m in mine["models"]] == [mid]
+    assert (mine["count"], mine["mergedInto"], mine["sets"]) == (1, None, [])
+    assert client.get("/v1/collections/c-nope").status_code == 404
     assert client.post("/v1/models/mine", json={"ownerKeys": []}).status_code == 422
 
     rev = client.post(f"/v1/models/{mid}/revise").json()
@@ -241,9 +246,11 @@ def test_user_flow_unlisted_share_mine_and_versions(client: TestClient) -> None:
     assert rev["startingDraft"]["name"] == "Order"
     draft = dict(_draft("good"), description="Version two.")
     v2 = client.post(
-        f"/v1/models/sessions/{rev['sessionId']}/draft", params={"basedOn": mid}, json=draft
+        f"/v1/models/sessions/{rev['sessionId']}/draft",
+        params={"basedOn": mid, "collection": link["id"]},
+        json=draft,
     ).json()
-    assert v2["ownerKey"] is None
+    assert (v2["collection"]["id"], v2["collection"]["created"]) == (link["id"], False)
     lineage = v2["model"]["lineage"]
     assert (lineage["id"], lineage["version"], lineage["versions"], lineage["basedOn"]) == (
         mid,
@@ -252,8 +259,15 @@ def test_user_flow_unlisted_share_mine_and_versions(client: TestClient) -> None:
         mid,
     )
     assert [h["version"] for h in lineage["history"]] == [1, 2]
-    mine = client.post("/v1/models/mine", json={"ownerKeys": [key]}).json()["items"]
+    mine = client.get(f"/v1/collections/{link['id']}").json()["models"]
     assert [(m["id"], m["version"], m["versions"]) for m in mine] == [(v2["model"]["id"], 2, 2)]
+    # a second link (another browser), then merged into the first
+    g2 = client.post("/v1/models/generate", json={"apis": APIS, "concept": "Order"}).json()
+    other = client.post(f"/v1/models/sessions/{g2['sessionId']}/draft", json=_draft("good"))
+    other_link = other.json()["collection"]["id"]
+    merged = client.post(f"/v1/collections/{link['id']}/merge", json={"from": [other_link]})
+    assert merged.json()["count"] == 2
+    assert client.get(f"/v1/collections/{other_link}").json()["mergedInto"] == link["id"]
     assert client.post(f"/v1/models/{mid}/release", headers=AUTH).status_code == 409
 
 
@@ -409,6 +423,7 @@ async def test_reader_mcp_user_model_flow(stack: FakeStack) -> None:
             diff_builds=lambda: DiffBuilds(stack.builds),
             resolver=stack.resolver,
             models=stack.models,
+            collections=stack.collections,
             web_public_url="http://127.0.0.1:18493",
         )
     )
@@ -431,7 +446,8 @@ async def test_reader_mcp_user_model_flow(stack: FakeStack) -> None:
         )
         assert saved["visibility"] == "unlisted"
         assert saved["share_url"] == f"http://127.0.0.1:18493/models/{saved['snapshot_id']}"
-        assert saved["owner_key"].startswith("pk_")
+        assert "owner_key" not in saved
+        link = saved["collection"]["id"]
         rev = await call(client, "revise_model", snapshot_id=saved["snapshot_id"])
         v2 = await call(
             client,
@@ -439,10 +455,14 @@ async def test_reader_mcp_user_model_flow(stack: FakeStack) -> None:
             session_id=rev["session_id"],
             draft=dict(rev["starting_draft"], description="Changed."),
             based_on=saved["snapshot_id"],
+            collection=link,
         )
         assert v2["version"] == 2
-        mine = await call(client, "list_my_models", owner_keys=[saved["owner_key"]])
+        assert v2["collection"]["id"] == link
+        mine = await call(client, "list_my_models", collection=link)
         assert [m["snapshot_id"] for m in mine["models"]] == [v2["snapshot_id"]]
+        by_url = await call(client, "list_my_models", collection=saved["collection"]["url"])
+        assert by_url["collection"]["id"] == link
         assert (await call(client, "list_models"))["models"] == []
 
 
@@ -472,6 +492,7 @@ def test_suggest_related_route_and_mcp_tool(packages: Path, tmp_path: Path) -> N
                 rate_limit_per_minute=0,
                 suggest=s.suggest,
                 models=s.models,
+                collections=s.collections,
                 suggest_related=s.suggest_related,
                 maintainer_tokens=(TOKEN,),
             )
@@ -505,6 +526,7 @@ def test_suggest_related_route_and_mcp_tool(packages: Path, tmp_path: Path) -> N
             diff_builds=lambda: DiffBuilds(s.builds),
             resolver=s.resolver,
             models=s.models,
+            collections=s.collections,
             suggest_related=s.suggest_related,
         )
     )

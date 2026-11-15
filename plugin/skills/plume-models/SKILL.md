@@ -11,17 +11,19 @@ publicly. Only a maintainer can make a model official.
 
 ## Keep the user's models locally
 
-Plume has no accounts. When a submit starts a new model it returns `owner_key` **once**. Save it
-right away with the model id in `~/.plume/models.json` (create the file and its folder if
-needed; keep the file private, mode 600):
+Plume has no accounts: the user's **My models link** is their identity. The first save returns
+`collection: {id, url}`. Pass that `collection` on every later save (`submit_model_draft`,
+`submit_model_set`) so all their models stay in one list, and give the user the `url` to
+bookmark. Keep it in `~/.plume/models.json` so later sessions reuse it (create the file and its
+folder if needed):
 
 ```json
-{"models": [{"snapshot_id": "u-…", "owner_key": "pk_…", "concept": "Order",
-             "apis": ["shopify", "woocommerce"], "share_url": "…", "saved_at": "2026-11-16"}]}
+{"collection": "c-…", "url": "https://…/mine/c-…"}
 ```
 
-Append to the list; never print the owner keys in the chat. To show the user their models,
-read the file and call `list_my_models(owner_keys)`: it returns the latest version of each.
+To show the user their models, call `list_my_models(collection)`: the latest version of each
+model and set in the link. If the file still holds old `owner_key`s, call
+`list_my_models(owner_keys=[…])` once: it returns the link they became; save that instead.
 
 ## Make a model
 
@@ -39,7 +41,7 @@ read the file and call `list_my_models(owner_keys)`: it returns the latest versi
 5. `submit_model_draft(model_session, draft)`. On refusal, fix exactly the listed issues
    (`MISSING_CITATION`, `QUOTE_NOT_FOUND`, `FIELD_NOT_FOUND`, `ENDPOINT_NOT_FOUND`,
    `DOC_NOT_FOUND`, `API_NOT_IN_SESSION`, `INVALID_FORMAT`) and resubmit.
-6. Save `owner_key` + `snapshot_id` as above. Give the user the `share_url` (or the
+6. Keep the `collection` as above. Give the user the `share_url` (or the
    `share_path` on their Plume web UI), the coverage per API and the open questions. The model
    is "generated, unverified". When writing mapping code, check calls with `check_call`.
 
@@ -52,11 +54,11 @@ Models never change in place; a change is a new version.
 2. Read the evidence you need (`get_model_context`, `get_model_evidence`), apply the user's
    changes to `starting_draft`, keep every citation verbatim.
 3. `submit_model_draft(model_session, draft, based_on=snapshot_id)`. The result is the next
-   version (`version`, and `lineage` in `get_model`). Update the saved entry's `snapshot_id`
-   to the new id (the owner key stays the same).
+   version (`version`, and `lineage` in `get_model`); pass `collection` so it stays in the
+   user's list.
 
-Revising an official model, or someone else's shared model, creates your own unlisted model
-based on it (with a new `owner_key`) when you may not add to theirs; save that key too.
+Revising an official model creates the user's own unlisted model based on it; pass
+`collection` so it joins their list.
 
 ## Maintainers
 
@@ -82,8 +84,7 @@ When the user wants related models together (Product + Variant + Image, Order + 
    cardinality. Never pick one silently. The fields a design needs must exist in the member
    models. Keep anything the user hasn't decided as `"confirmed": false` or an open question.
 5. `submit_model_set(set_session, draft)`: members by model id, relations with per-API
-   sources from the candidate's evidence. Save the returned `owner_key` with the `set_id` in
-   `~/.plume/models.json` (under `"sets"`), and give the user the link.
+   sources from the candidate's evidence, and the user's `collection`. Give the user the link.
 6. To change a set: `revise_model_set(set_id)`, revise any stale members, ask about relation
-   changes, then `submit_model_set(..., based_on=set_id)`. `list_my_model_sets(owner_keys)`
-   lists the user's sets.
+   changes, then `submit_model_set(..., based_on=set_id)`. `list_my_models(collection)`
+   lists the user's sets too.

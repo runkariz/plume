@@ -548,3 +548,33 @@ def set_list_item(s: ModelSetSnapshot, stale: list[dict[str, str | None]], versi
         "versions": versions,
         "stale": bool(stale),
     }
+
+
+def collection_url(collection_id: str, web_public_url: str | None) -> str:
+    """The "My models" page of a collection (a path when no public web URL is configured)."""
+    path = f"/mine/{collection_id}"
+    return f"{web_public_url.rstrip('/')}{path}" if web_public_url else path
+
+
+def collection_payload(ref: Any, web_public_url: str | None) -> Json | None:
+    """{id, url, created, note?} for a CollectionRef (None for maintainer saves)."""
+    if ref is None:
+        return None
+    out: Json = {
+        "id": ref.collection_id,
+        "url": collection_url(ref.collection_id, web_public_url),
+        "created": ref.created,
+    }
+    if ref.note:
+        out["note"] = ref.note
+    return out
+
+
+def collection_text(ref: Json | None) -> str:
+    """The plain words a user reads after a save."""
+    if not ref:
+        return ""
+    text = f"\nYour models: {ref['url']} (bookmark it to find them later)."
+    if ref.get("note"):
+        text += f" {ref['note']}."
+    return text

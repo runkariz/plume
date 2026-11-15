@@ -95,8 +95,8 @@ design is in [design/model-relations.md](design/model-relations.md).
   Relation evidence gets the same field, endpoint, document and quote checks as model fields.
   A `sub_resource` source needs `fetch`.
 - **Access:** as for models.
-  - Without the token, a set is stored unlisted (`us-` random id, owner key once,
-    `POST /v1/model-sets/mine`).
+  - Without the token, a set is stored unlisted (`us-` random id) in the user's My models
+    link (`collection`), like a model.
   - With the token, it's stored unreleased. Releasing makes the set official **and releases
     its unreleased members** (listed in `releasedMembers`). That's refused while any relation is
     undecided (`confirmed: false`).
@@ -159,18 +159,19 @@ design is in [design/model-relations.md](design/model-relations.md).
 |---|---|---|---|
 | `official` | a maintainer, then released | anyone | yes (`GET /v1/models`, `list_models`) |
 | `unreleased` | a maintainer (their Claude or `generate_model`) | maintainers only (404 otherwise) | maintainer lists |
-| `unlisted` | anyone (no token) | anyone with the id: the id **is** the share link | never; the owner lists their own with owner keys |
+| `unlisted` | anyone (no token) | anyone with the id: the id **is** the share link | never; the user lists their own with their My models link |
 | `discarded` | an unreleased model a maintainer threw away | maintainers only | maintainer lists |
 
 - **Users** (no auth, rate limited): any number of models over any 2..6 APIs. Each submit that
-  starts a new model returns an `ownerKey` once (`pk_…`, stored only as a SHA-256). Over MCP
-  it is in the result's structured content (the model view shows it with Copy); the text
-  prints it only for hosts without the view. The Claude Code plugin keeps the keys and ids in
-  `~/.plume/models.json`; elsewhere the user keeps it (the web's "Your models" accepts a pasted
-  key). `list_my_models(owner_keys)` / `POST /v1/models/mine` returns the latest version of
-  each. Resubmitting the same draft in the same session returns the stored model with a NEW key
-  (the first response may have been lost to a timeout); the old key stops listing it. A lost key
-  loses nothing but the listing: links keep working. Unlisted ids are `u-` + 128 random bits (not a content hash: a
+  saves into the user's **My models link** (a collection, `c-` + 128 random bits; see
+  [design/my-models-link.md](design/my-models-link.md)): the first save creates it and returns
+  `collection: {id, url, created}`; later saves pass `collection` to add to it.
+  `list_my_models(collection)` / `GET /v1/collections/{id}` lists the latest version of each
+  model and set in it; `POST /v1/collections/{id}/merge` joins two links. Resubmitting the same
+  draft in the same session returns the stored model and its link. Old owner keys (`pk_…`,
+  before 2026-11-16) became one collection each; `POST /v1/models/mine` and
+  `list_my_models(owner_keys)` still accept them and return the link. A lost link loses nothing
+  but the listing: model links keep working. Unlisted ids are `u-` + 128 random bits (not a content hash: a
   hash can be computed from the content, and two users with the same draft would share it).
 - **Maintainers** (bearer token): drafts are stored `unreleased`; `release` makes one official,
   `discard` throws it away (both 409 `invalid_state` unless the model is unreleased). Nothing
@@ -282,9 +283,10 @@ database trigger refuses any UPDATE except `visibility` / `released_at`.
     `server`** → 202 job.
   - `GET /v1/models/sessions/{id}` (state for pollers: `open` | `submitted` + `snapshotId`),
     `.../context`, `.../evidence`, `POST .../draft?basedOn=` (201 `{created, visibility,
-    ownerKey, model}`; unlisted without the token, unreleased with it).
+    collection, model}`; unlisted without the token, unreleased with it).
   - `GET /v1/models` (official; **`?visibility=unreleased|all`**), `GET /v1/models/{id}`,
-    `POST /v1/models/{id}/revise`, `POST /v1/models/mine {ownerKeys}`.
+    `POST /v1/models/{id}/revise`, `GET /v1/collections/{id}`,
+    `POST /v1/collections/{id}/merge`, `POST /v1/models/mine {ownerKeys}` (transition).
   - **`POST /v1/models/{id}/release`**, **`POST /v1/models/{id}/discard`**,
     **`GET /v1/models/jobs/{id}`**, **`GET /v1/models/jobs/{id}/events`**.
   - Errors `{error, message}`: 401 `unauthorized` (missing/wrong token on a token route, or a

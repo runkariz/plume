@@ -9,6 +9,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from plume.application.errors import NotFoundError
+from plume.application.models.collections import (
+    KIND_SET,
+    CollectionRef,
+    Collections,
+    owner_key_hash,
+)
 from plume.application.models.concepts import ModelInputError, concept_key, resolve_apis
 from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import (
@@ -17,9 +23,7 @@ from plume.application.models.sessions import (
     ModelDraftRefusedError,
     ModelSessions,
     ModelStateError,
-    new_owner_key,
     normalize_concept,
-    owner_key_hash,
 )
 from plume.application.ports.model_repo import ModelRepo
 from plume.application.ports.model_set_repo import ModelSetRepo, SetSession
@@ -116,7 +120,8 @@ def _visible(maintainer: bool) -> tuple[str, ...]:
 class SetSubmitResult:
     snapshot: ModelSetSnapshot
     created: bool
-    owner_key: str | None = None
+    owner_key: str | None = None  # no longer issued (My models link); kept for the shape
+    collection: CollectionRef | None = None  # the user's My models link
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,7 +139,9 @@ class ModelSets:
         sets: ModelSetRepo,
         related: SuggestRelated,
         clock: Clock,
+        collections: Collections | None = None,
     ) -> None:
+        self._collections = collections
         self._resolver = resolver
         self._sessions = sessions
         self._models = models
@@ -360,6 +367,7 @@ class ModelSets:
         based_on: str | None = None,
         maintainer: bool = False,
         generator: str = "claude",
+        collection: str | None = None,
     ) -> SetSubmitResult:
         s = self.get_session(session_id)
         if len(json.dumps(raw, default=str)) > MAX_DRAFT_CHARS:
@@ -393,8 +401,9 @@ class ModelSets:
         if not maintainer:
             for prior in self._sets.by_session(session_id):
                 if prior.key == content_key and prior.visibility != Visibility.DISCARDED:
-                    return SetSubmitResult(prior, False)
-        owner_key = None if maintainer or same_lineage else new_owner_key()
+                    return SetSubmitResult(
+                        prior, False, collection=self._collect(collection, prior.lineage)
+                    )
         for _ in range(_SAVE_ATTEMPTS):
             lineage = self._sets.lineage(base.lineage) if base and same_lineage else []
             snap = ModelSetSnapshot(
@@ -411,12 +420,16 @@ class ModelSets:
                 based_on=base.set_id if base else None,
                 content_key="" if maintainer else content_key,
             )
-            if self._sets.save_set(snap, owner_key_hash(owner_key) if owner_key else None):
-                return SetSubmitResult(snap, True, owner_key)
+            if self._sets.save_set(snap):
+                ref = None if maintainer else self._collect(collection, snap.lineage)
+                return SetSubmitResult(snap, True, collection=ref)
             stored = self._sets.get_set(snap.set_id)
             if stored is not None:
                 return SetSubmitResult(stored, False)
         raise ModelStateError("the set was changed concurrently; submit again")
+
+    def _collect(self, collection: str | None, lineage: str) -> CollectionRef | None:
+        return self._collections.save(collection, KIND_SET, lineage) if self._collections else None
 
     # -- reading, versions, release ----------------------------------------------------------------
 
@@ -633,6 +646,7 @@ class ModelSets:
         set_id: str,
         changes: Sequence[dict[str, Any]],
         maintainer: bool = False,
+        collection: str | None = None,
     ) -> SetSubmitResult:
         """The web edit: change relation DESIGNS (kind, cardinality, embed/ref, confirmed) of the
         latest version of a set; the evidence stays. Saved as a new version through the same
@@ -657,7 +671,9 @@ class ModelSets:
             rel.update({k: v for k, v in change.items() if k != "id"})
             rel["embed"] = rel["embed"] if rel["kind"] == "embedded" else None
             rel["ref"] = rel["ref"] if rel["kind"] == "reference" else None
-        return self.submit(base.session_id, raw, base.set_id, maintainer, base.generator)
+        return self.submit(
+            base.session_id, raw, base.set_id, maintainer, base.generator, collection
+        )
 
     def revise(self, set_id: str, maintainer: bool = False) -> dict[str, Any]:
         base = self.visible(set_id, maintainer)

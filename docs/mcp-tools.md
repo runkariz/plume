@@ -19,16 +19,17 @@ DNS-rebinding protection (allowed hosts from `PLUME_MCP_ALLOWED_HOSTS`). Every r
 | `get_vendor_mcp` | `api, version?` | the vendor's own MCP server(s) and tools when the package lists them; `present: false` otherwise |
 | `start_set_session` / `get_set_context` / `get_set_session` | `apis, concepts, aliases?` / `set_session` | a model set: pinned builds, one model session per member, relation candidates. **Ask the user about every relation** |
 | `submit_model_set` / `get_model_set` / `revise_model_set` | `set_session, draft, based_on?` / `set_id` | the set (members + relations, validated); `get_model_set` renders the view |
-| `list_model_sets` / `list_my_model_sets` | `api?` / `owner_keys` | official sets / the user's own |
+| `list_model_sets` / `list_my_model_sets` | `api?` / `owner_keys` | official sets / sets of old owner keys (transition: use `list_my_models(collection)`) |
 | `suggest_related` | `apis, concept, limit?, offset?` | related concepts with relation candidates (documented evidence only, cited per API) and the designs it supports; `aliases` for differently named concepts at the same position. The user decides |
 | `start_model_session` | `apis, concept` | a session pinned to the current builds (2..6 APIs) |
 | `get_model_context` / `get_model_evidence` | `model_session[, api, doc_ids?, cursor?]` | the evidence index; the fields, paged |
-| `submit_model_draft` | `model_session, draft, based_on?` | validated → stored **unlisted** (`share_url`, `owner_key` once for a new model, `version`) or refused with issue codes |
+| `submit_model_draft` | `model_session, draft, based_on?, collection?` | validated → stored **unlisted** in the user's My models link (`share_url`, `collection {id, url, created}`, `version`) or refused with issue codes |
 | `get_model_session` | `model_session` | `open` / `submitted` + `snapshot_id` |
 | `revise_model` | `snapshot_id` | a new session on the current builds with the model as `starting_draft` |
 | `get_model` | `snapshot_id` | a model (official or unlisted) with `lineage`, `shareUrl`, `revisePrompt` |
 | `list_models` | `api?` | official models (latest version of each), newest first |
-| `list_my_models` | `owner_keys` | the latest version of each model started with those keys |
+| `list_my_models` | `collection` (id or URL), or old `owner_keys` | the latest version of each model and set in the user's My models link; with old keys, their models and the links they became |
+| `merge_my_models` | `collection, sources` | moves the models and sets of other My models links into this one |
 
 ## Maintainer server
 
