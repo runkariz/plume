@@ -1,6 +1,7 @@
-import { http, HttpResponse } from 'msw';
+import { delay, http, HttpResponse } from 'msw';
 import { apiBaseUrl } from '@/api/config';
-import type { CheckCallRequest, ItemKind, SearchRequest } from '@/api/types';
+import type { CheckCallRequest, ItemKind, Job, ReviewRequest, SearchRequest } from '@/api/types';
+import { buildScript, MID_BUILD_PAUSE, sampleJob, withEval, withReview } from './jobData';
 import {
   detailFor,
   sampleApis,
@@ -14,8 +15,149 @@ import {
 
 const notFound = () => HttpResponse.json({ detail: 'API not found' }, { status: 404 });
 
-export function createHandlers(base: string = apiBaseUrl()) {
+export interface MockOptions {
+  /** Pause between scripted build events, in ms (0 in unit tests). */
+  eventDelayMs?: number;
+  /** Make the scripted build fail at the embed step. */
+  failBuild?: boolean;
+  /** Make the quality gate fail. */
+  failGate?: boolean;
+}
+
+/** Test hook (browser only): `localStorage['plume-mock-pause-at'] = 'mid'` freezes the build stream mid-way. */
+function readPauseAt(): number | null {
+  try {
+    return globalThis.localStorage?.getItem('plume-mock-pause-at') === 'mid'
+      ? MID_BUILD_PAUSE
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+const unauthorized = () =>
+  HttpResponse.json({ detail: 'Invalid or missing token' }, { status: 401 });
+const isMaintainer = (req: Request) =>
+  (req.headers.get('authorization') ?? '').startsWith('Bearer pl_');
+
+export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = {}) {
+  const eventDelay = opts.eventDelayMs ?? 0;
+  /** In-memory job store: one sample job per upload, advanced by the endpoints below. */
+  const jobs = new Map<string, Job>();
+  let counter = 0;
+  const guard = (req: Request, id: string) => {
+    if (!isMaintainer(req)) return unauthorized();
+    const job = jobs.get(id);
+    return job ?? HttpResponse.json({ detail: 'Job not found' }, { status: 404 });
+  };
+  const encoder = new TextEncoder();
+  const script = buildScript(opts.failBuild);
+
   return [
+    http.get(`${base}/v1/maintainer/me`, ({ request }) =>
+      isMaintainer(request) ? HttpResponse.json({ name: 'maintainer' }) : unauthorized(),
+    ),
+    http.post(`${base}/v1/packages`, async ({ request }) => {
+      if (!isMaintainer(request)) return unauthorized();
+      // The mock only needs the file name: read it from the raw multipart body (no multipart parser needed).
+      const filename = /filename="([^"]*)"/.exec(await request.text())?.[1];
+      if (!filename) return HttpResponse.json({ detail: 'file is required' }, { status: 400 });
+      if (!filename.endsWith('.zip'))
+        return HttpResponse.json({ detail: 'Only .zip packages are accepted' }, { status: 415 });
+      counter += 1;
+      const job = sampleJob({ id: `job-${counter}` });
+      job.package.filename = filename;
+      jobs.set(job.id, job);
+      return HttpResponse.json(job, { status: 201 });
+    }),
+    http.get(`${base}/v1/jobs/:id`, ({ params, request }) => {
+      const job = guard(request, String(params.id));
+      return job instanceof Response ? job : HttpResponse.json(job);
+    }),
+    http.post(`${base}/v1/jobs/:id/review`, async ({ params, request }) => {
+      const job = guard(request, String(params.id));
+      if (job instanceof Response) return job;
+      const body = (await request.json()) as ReviewRequest;
+      const next = withReview({
+        ...job,
+        apiId: body.apiId,
+        displayName: body.displayName,
+        stagedBuild: body.tag,
+      });
+      jobs.set(next.id, next);
+      return HttpResponse.json(next);
+    }),
+    http.post(`${base}/v1/jobs/:id/build`, ({ params, request }) => {
+      const job = guard(request, String(params.id));
+      if (job instanceof Response) return job;
+      const next: Job = { ...job, status: 'building' };
+      jobs.set(next.id, next);
+      return HttpResponse.json(next, { status: 202 });
+    }),
+    http.get(`${base}/v1/jobs/:id/events`, ({ params, request }) => {
+      const job = guard(request, String(params.id));
+      if (job instanceof Response) return job;
+      const from = Number(request.headers.get('last-event-id') ?? 0);
+      const replay = job.status !== 'building';
+      const stream = new ReadableStream<Uint8Array>({
+        async start(controller) {
+          const pauseAt = readPauseAt();
+          for (let i = from; i < script.length; i += 1) {
+            if (pauseAt !== null && i === pauseAt) {
+              // hold the stream open (never finishes) until the client leaves
+              await new Promise<void>((resolve) =>
+                request.signal.addEventListener('abort', () => resolve()),
+              );
+              break;
+            }
+            if (!replay && eventDelay > 0) await delay(eventDelay);
+            const draft = script[i];
+            if (!draft) break;
+            const e = { ...draft, id: String(i + 1) };
+            controller.enqueue(
+              encoder.encode(`id: ${i + 1}\nevent: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`),
+            );
+          }
+          const last = script[script.length - 1];
+          const ok = last?.type === 'done' && last.status === 'staged';
+          const current = jobs.get(job.id) ?? job;
+          if (current.status === 'building')
+            jobs.set(
+              job.id,
+              ok
+                ? withEval({ ...current, status: 'staged' }, !opts.failGate)
+                : { ...current, status: 'failed' },
+            );
+          controller.close();
+        },
+      });
+      return new HttpResponse(stream, {
+        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+      });
+    }),
+    http.post(`${base}/v1/jobs/:id/publish`, ({ params, request }) => {
+      const job = guard(request, String(params.id));
+      if (job instanceof Response) return job;
+      if (job.status !== 'staged' || !job.eval?.gate.passed)
+        return HttpResponse.json({ detail: 'The quality gate has not passed' }, { status: 409 });
+      const next: Job = { ...job, status: 'published' };
+      jobs.set(next.id, next);
+      return HttpResponse.json(next);
+    }),
+    http.post(`${base}/v1/jobs/:id/discard`, ({ params, request }) => {
+      const job = guard(request, String(params.id));
+      if (job instanceof Response) return job;
+      const next: Job = { ...job, status: 'discarded' };
+      jobs.set(next.id, next);
+      return HttpResponse.json(next);
+    }),
+    http.get(`${base}/v1/jobs/:id/dump`, ({ params, request }) => {
+      const job = guard(request, String(params.id));
+      if (job instanceof Response) return job;
+      return new HttpResponse(new Blob(['mock dump']), {
+        headers: { 'Content-Type': 'application/gzip' },
+      });
+    }),
     http.get(`${base}/v1/apis`, () => HttpResponse.json({ items: sampleApis })),
     http.get(`${base}/v1/apis/:id`, ({ params }) => {
       const found = detailFor(String(params.id));

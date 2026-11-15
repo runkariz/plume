@@ -1,6 +1,11 @@
 import { apiBaseUrl } from './config';
+import { createSseParser } from './sse';
 import {
   ApiError,
+  type Job,
+  type JobEvent,
+  type MaintainerIdentity,
+  type ReviewRequest,
   type ApiDetail,
   type ApiList,
   type AskResponse,
@@ -23,44 +28,120 @@ export interface PlumeApi {
   search(id: string, req: SearchRequest, signal?: AbortSignal): Promise<SearchResponse>;
   ask(id: string, question: string, signal?: AbortSignal): Promise<AskResponse>;
   checkCall(id: string, req: CheckCallRequest, signal?: AbortSignal): Promise<CheckCallResponse>;
+  // maintainer (the key is sent as a bearer token)
+  verifyMaintainer(key: string, signal?: AbortSignal): Promise<MaintainerIdentity>;
+  uploadPackage(file: File, signal?: AbortSignal): Promise<Job>;
+  getJob(id: string, signal?: AbortSignal): Promise<Job>;
+  reviewJob(id: string, req: ReviewRequest, signal?: AbortSignal): Promise<Job>;
+  startBuild(id: string, signal?: AbortSignal): Promise<Job>;
+  publishJob(id: string, signal?: AbortSignal): Promise<Job>;
+  discardJob(id: string, signal?: AbortSignal): Promise<Job>;
+  downloadDump(id: string, signal?: AbortSignal): Promise<Blob>;
+  /** Streams build events; resolves after a `done` event, rejects after repeated connection loss. */
+  watchJob(id: string, onEvent: (e: JobEvent) => void, signal?: AbortSignal): Promise<void>;
 }
 
 /** Typed fetch client. The maintainer key, when present, is passed in by the caller (never stored here). */
 export function createApiClient(
   baseUrl: string = apiBaseUrl(),
-  opts: { maintainerKey?: () => string | null; fetchImpl?: typeof fetch } = {},
+  opts: {
+    maintainerKey?: () => string | null;
+    fetchImpl?: typeof fetch;
+    /** Delay before reconnect attempt n (1-based) of the event stream; tests pass () => 0. */
+    retryDelayMs?: (attempt: number) => number;
+  } = {},
 ): PlumeApi {
+  const enc = encodeURIComponent;
   const doFetch = opts.fetchImpl ?? ((...a: Parameters<typeof fetch>) => fetch(...a));
 
-  async function call<T>(
+  function authHeaders(keyOverride?: string): Record<string, string> {
+    const key = keyOverride ?? opts.maintainerKey?.();
+    return key ? { Authorization: `Bearer ${key}` } : {};
+  }
+
+  async function fail(res: Response): Promise<never> {
+    let detail = res.statusText;
+    try {
+      const body: unknown = await res.json();
+      if (body && typeof body === 'object' && 'detail' in body && typeof body.detail === 'string')
+        detail = body.detail;
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new ApiError(res.status, detail || `Request failed (${res.status})`);
+  }
+
+  async function raw(
     path: string,
-    init: { method?: 'GET' | 'POST'; body?: unknown; signal?: AbortSignal } = {},
-  ): Promise<T> {
-    const headers: Record<string, string> = { Accept: 'application/json' };
+    init: {
+      method?: 'GET' | 'POST';
+      body?: unknown;
+      form?: FormData;
+      signal?: AbortSignal;
+      key?: string;
+      accept?: string;
+      headers?: Record<string, string>;
+    } = {},
+  ): Promise<Response> {
+    const headers: Record<string, string> = {
+      Accept: init.accept ?? 'application/json',
+      ...authHeaders(init.key),
+      ...init.headers,
+    };
     if (init.body !== undefined) headers['Content-Type'] = 'application/json';
-    const key = opts.maintainerKey?.();
-    if (key) headers.Authorization = `Bearer ${key}`;
     const res = await doFetch(`${baseUrl}${path}`, {
       method: init.method ?? 'GET',
       headers,
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      body: init.form ?? (init.body === undefined ? undefined : JSON.stringify(init.body)),
       signal: init.signal,
     });
-    if (!res.ok) {
-      let detail = res.statusText;
-      try {
-        const body: unknown = await res.json();
-        if (body && typeof body === 'object' && 'detail' in body && typeof body.detail === 'string')
-          detail = body.detail;
-      } catch {
-        /* non-JSON error body */
-      }
-      throw new ApiError(res.status, detail || `Request failed (${res.status})`);
-    }
-    return (await res.json()) as T;
+    if (!res.ok) await fail(res);
+    return res;
   }
 
-  const enc = encodeURIComponent;
+  async function call<T>(path: string, init: Parameters<typeof raw>[1] = {}): Promise<T> {
+    return (await (await raw(path, init)).json()) as T;
+  }
+
+  async function watch(id: string, onEvent: (e: JobEvent) => void, signal?: AbortSignal) {
+    let lastId: string | undefined;
+    let finished = false;
+    let failures = 0;
+    while (!finished) {
+      try {
+        const res = await raw(`/v1/jobs/${enc(id)}/events`, {
+          signal,
+          accept: 'text/event-stream',
+          headers: lastId ? { 'Last-Event-ID': lastId } : {},
+        });
+        if (!res.body) throw new Error('The event stream has no body');
+        const parser = createSseParser((m) => {
+          if (m.id) lastId = m.id;
+          const e = JSON.parse(m.data) as JobEvent;
+          if (m.id) e.id = m.id;
+          if (e.type === 'done') finished = true;
+          onEvent(e);
+        });
+        const reader = res.body.getReader();
+        const dec = new TextDecoder();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          failures = 0;
+          parser.push(dec.decode(value, { stream: true }));
+        }
+        if (!finished) throw new Error('The event stream closed before the build finished');
+      } catch (e) {
+        if (signal?.aborted) return;
+        if (e instanceof ApiError && e.status < 500) throw e;
+        failures += 1;
+        if (failures > 5) throw e instanceof Error ? e : new Error(String(e));
+        const wait = opts.retryDelayMs?.(failures) ?? Math.min(500 * failures, 3000);
+        await new Promise((r) => setTimeout(r, wait));
+      }
+    }
+  }
+
   return {
     listApis: (signal) => call<ApiList>('/v1/apis', { signal }),
     getApi: (id, signal) => call<ApiDetail>(`/v1/apis/${enc(id)}`, { signal }),
@@ -78,5 +159,23 @@ export function createApiClient(
       call<AskResponse>(`/v1/apis/${enc(id)}/ask`, { method: 'POST', body: { question }, signal }),
     checkCall: (id, body, signal) =>
       call<CheckCallResponse>(`/v1/apis/${enc(id)}/check-call`, { method: 'POST', body, signal }),
+    verifyMaintainer: (key, signal) =>
+      call<MaintainerIdentity>('/v1/maintainer/me', { key, signal }),
+    uploadPackage: (file, signal) => {
+      const form = new FormData();
+      form.append('file', file, file.name);
+      return call<Job>('/v1/packages', { method: 'POST', form, signal });
+    },
+    getJob: (id, signal) => call<Job>(`/v1/jobs/${enc(id)}`, { signal }),
+    reviewJob: (id, body, signal) =>
+      call<Job>(`/v1/jobs/${enc(id)}/review`, { method: 'POST', body, signal }),
+    startBuild: (id, signal) => call<Job>(`/v1/jobs/${enc(id)}/build`, { method: 'POST', signal }),
+    publishJob: (id, signal) =>
+      call<Job>(`/v1/jobs/${enc(id)}/publish`, { method: 'POST', signal }),
+    discardJob: (id, signal) =>
+      call<Job>(`/v1/jobs/${enc(id)}/discard`, { method: 'POST', signal }),
+    downloadDump: async (id, signal) =>
+      (await raw(`/v1/jobs/${enc(id)}/dump`, { signal, accept: 'application/gzip' })).blob(),
+    watchJob: watch,
   };
 }

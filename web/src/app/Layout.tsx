@@ -1,6 +1,6 @@
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { GitHubIcon, MoonIcon, PlumeMark, SunIcon } from '@/icons';
-import { authStore, useIsMaintainer } from './authStore';
+import { authStore, useIsMaintainer, useMaintainerName } from './authStore';
 import { useTheme } from './theme';
 
 export const GITHUB_URL = 'https://github.com/';
@@ -8,6 +8,8 @@ export const GITHUB_URL = 'https://github.com/';
 export function Layout() {
   const { theme, toggle } = useTheme();
   const maintainer = useIsMaintainer();
+  const name = useMaintainerName() ?? 'maintainer';
+  const onSignIn = useLocation().pathname === '/maintainer';
   const navigate = useNavigate();
   return (
     <>
@@ -36,9 +38,9 @@ export function Layout() {
                 <span className="chip acc">Maintainer</span>
                 <span className="user">
                   <span className="avatar" aria-hidden>
-                    M
+                    {name.charAt(0).toUpperCase()}
                   </span>
-                  maintainer
+                  {name}
                 </span>
                 <button
                   type="button"
@@ -52,8 +54,8 @@ export function Layout() {
                 </button>
               </>
             ) : (
-              <Link className="btn" to="/maintainer">
-                Maintainer
+              <Link className="btn" to={onSignIn ? '/' : '/maintainer'}>
+                {onSignIn ? 'Back to APIs' : 'Maintainer'}
               </Link>
             )}
           </nav>
