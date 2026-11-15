@@ -8,6 +8,8 @@ import { expectNoSeriousA11y, settle, shot, test, THEMES } from '../e2e/helpers'
  * follow the data instead of hard-coded ids.
  */
 const API = process.env.PLUME_E2E_API_URL ?? 'http://127.0.0.1:18480';
+/** What the BROWSER calls: the API's address, or (PLUME_E2E_SAME_ORIGIN=true: web built with an empty base URL, /v1 proxied) a relative path. */
+const FROM_BROWSER = process.env.PLUME_E2E_SAME_ORIGIN === 'true' ? '' : API;
 
 const json = async <T>(request: APIRequestContext, path: string): Promise<T> =>
   (await (await request.get(`${API}${path}`)).json()) as T;
@@ -48,7 +50,10 @@ for (const theme of THEMES) {
     }) => {
       await page.goto('/');
       const shopify = page.locator('article.api-card', { hasText: /shopify/i }).first();
-      await expect(shopify.locator('img')).toHaveAttribute('src', `${API}/v1/apis/shopify/icon`);
+      await expect(shopify.locator('img')).toHaveAttribute(
+        'src',
+        `${FROM_BROWSER}/v1/apis/shopify/icon`,
+      );
       await expect
         .poll(() => shopify.locator('img').evaluate((el: HTMLImageElement) => el.naturalWidth))
         .toBeGreaterThan(0);
@@ -61,7 +66,7 @@ for (const theme of THEMES) {
       await shopify.getByRole('link').click();
       await expect(page.locator('.title-left img')).toHaveAttribute(
         'src',
-        `${API}/v1/apis/shopify/icon`,
+        `${FROM_BROWSER}/v1/apis/shopify/icon`,
       );
       await expect(page.getByRole('region', { name: 'Environments' })).toBeVisible();
       await settle(page);

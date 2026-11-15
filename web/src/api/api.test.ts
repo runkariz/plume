@@ -8,14 +8,42 @@ describe('apiBaseUrl', () => {
   it('reads the env value and trims trailing slashes', () => {
     expect(apiBaseUrl({ VITE_API_BASE_URL: 'http://x:1///' })).toBe('http://x:1');
   });
-  it('throws when unset or blank: no hard-coded default', () => {
+  it('throws when unset: no hard-coded default', () => {
     expect(() => apiBaseUrl({})).toThrow(/VITE_API_BASE_URL/);
-    expect(() => apiBaseUrl({ VITE_API_BASE_URL: '  ' })).toThrow(/VITE_API_BASE_URL/);
+    expect(() => apiBaseUrl({ VITE_API_BASE_URL: 5 })).toThrow(/VITE_API_BASE_URL/);
+  });
+  it('an empty value or "/" means the same origin: relative calls', () => {
+    for (const same of ['', '  ', '/', ' / ', '//'])
+      expect(apiBaseUrl({ VITE_API_BASE_URL: same })).toBe('');
   });
   it('mocksEnabled only for the literal "true"', () => {
     expect(mocksEnabled({ VITE_USE_MOCKS: 'true' })).toBe(true);
     expect(mocksEnabled({ VITE_USE_MOCKS: '1' })).toBe(false);
     expect(mocksEnabled({})).toBe(false);
+  });
+});
+
+describe('the same origin (an empty base URL)', () => {
+  it('calls relative /v1 paths, JSON and event streams alike', async () => {
+    const urls: string[] = [];
+    const fetchImpl = ((url: string) => {
+      urls.push(url);
+      const sse = url.includes('/events');
+      return Promise.resolve(
+        new Response(
+          sse
+            ? 'id: 1\nevent: done\ndata: {"status":"succeeded","snapshotId":null}\n\n'
+            : JSON.stringify({ items: [] }),
+          { headers: { 'Content-Type': sse ? 'text/event-stream' : 'application/json' } },
+        ),
+      );
+    }) as unknown as typeof fetch;
+    const client = createApiClient('', { fetchImpl });
+    expect(client.baseUrl).toBe('');
+    await client.listApis();
+    await client.watchModelJob('mj-1', () => undefined);
+    expect(urls[0]).toBe('/v1/apis');
+    expect(urls[1]).toBe('/v1/models/jobs/mj-1/events');
   });
 });
 

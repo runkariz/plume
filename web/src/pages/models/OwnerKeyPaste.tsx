@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { useApiClient } from '@/api/context';
+import { ApiError } from '@/api/types';
 import { Button, Card } from '@/components';
 import { readOwnerKeys, saveOwnerKey } from '@/lib/ownerKeys';
 
@@ -13,10 +14,13 @@ export function OwnerKeyPaste({ onAdded }: { onAdded: () => void }) {
   const client = useApiClient();
   const [value, setValue] = useState('');
   const [busy, setBusy] = useState(false);
+  // held here (not left to the browser) so a re-render can never close the panel on the person who is using it
+  const [open, setOpen] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   async function add(e: FormEvent) {
     e.preventDefault();
+    setOpen(true);
     const key = value.trim();
     if (!key) return;
     if (/\s/.test(key)) {
@@ -52,9 +56,14 @@ export function OwnerKeyPaste({ onAdded }: { onAdded: () => void }) {
       });
       onAdded();
     } catch (err) {
+      // a request that never got an answer (blocked, offline, wrong address) is a TypeError, often with no useful text
+      const detail = err instanceof Error ? err.message.trim() : '';
       setMessage({
         ok: false,
-        text: err instanceof Error ? err.message : 'Could not check the key.',
+        text:
+          err instanceof ApiError
+            ? `The server refused the check: ${detail || err.status}.`
+            : `Could not reach the Plume API to check the key${detail ? ` (${detail})` : ''}. The key was not added; try again when the API is reachable.`,
       });
     } finally {
       setBusy(false);
@@ -63,7 +72,7 @@ export function OwnerKeyPaste({ onAdded }: { onAdded: () => void }) {
 
   return (
     <Card className="pad owner-key-paste" role="region" aria-label="Add an owner key">
-      <details>
+      <details open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
         <summary>Have an owner key from another browser or from Claude?</summary>
         <p className="muted small">
           Paste it to list your models and model sets here. It only lists them: it cannot change or
@@ -86,15 +95,15 @@ export function OwnerKeyPaste({ onAdded }: { onAdded: () => void }) {
             {busy ? 'Checking…' : 'Add key'}
           </Button>
         </form>
-        {message ? (
-          <p
-            role={message.ok ? 'status' : 'alert'}
-            className={`small ${message.ok ? 'ok' : 'form-error'}`}
-          >
-            {message.text}
-          </p>
-        ) : null}
       </details>
+      {message ? (
+        <p
+          role={message.ok ? 'status' : 'alert'}
+          className={`small ${message.ok ? 'ok' : 'form-error'}`}
+        >
+          {message.text}
+        </p>
+      ) : null}
     </Card>
   );
 }

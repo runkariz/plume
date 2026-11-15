@@ -6,7 +6,8 @@
  * embedded view (which has no API) does not carry the app's environment.
  */
 export function iconSrc(url: string | null | undefined, base?: string | null): string | null {
-  if (!base) return null;
+  // "" is the same origin (relative /v1 calls); null/undefined is no API at all (the embedded view)
+  if (base === null || base === undefined) return null;
   if (!url || !url.startsWith('/v1/') || url.startsWith('//') || url.includes('..')) return null;
   return `${base}${url}`;
 }

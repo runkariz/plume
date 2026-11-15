@@ -24,6 +24,11 @@ describe('iconSrc', () => {
   it('shows nothing without an API base to load from (the embedded view has none)', () => {
     expect(iconSrc('/v1/apis/shopify/icon')).toBeNull();
     expect(iconSrc('/v1/apis/shopify/icon', null)).toBeNull();
-    expect(iconSrc('/v1/apis/shopify/icon', '')).toBeNull();
+  });
+  it('on the same origin (an empty base) the icon is a relative /v1 path, still only on the API', () => {
+    expect(iconSrc('/v1/apis/shopify/icon', '')).toBe('/v1/apis/shopify/icon');
+    expect(iconSrc('https://shopify.dev/favicon.ico', '')).toBeNull();
+    expect(iconSrc('//evil.example/x.png', '')).toBeNull();
+    expect(iconSrc('/v1/../secret', '')).toBeNull();
   });
 });

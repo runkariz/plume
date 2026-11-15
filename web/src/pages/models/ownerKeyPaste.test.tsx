@@ -98,3 +98,25 @@ describe('Add an owner key (Models page)', () => {
     server.events.removeAllListeners();
   });
 });
+
+describe('a failed check keeps the panel open and says why (tester round 3)', () => {
+  it('the network is blocked (Failed to fetch): the APIs did not load, the key check fails, the panel stays open', async () => {
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/models/candidates`, () => HttpResponse.error()),
+      http.get(`${TEST_API_BASE}/v1/apis`, () => HttpResponse.error()),
+      http.post(`${TEST_API_BASE}/v1/models/mine`, () => HttpResponse.error()),
+      http.post(`${TEST_API_BASE}/v1/model-sets/mine`, () => HttpResponse.error()),
+    );
+    const { region } = await open();
+    expect(await screen.findByText('Could not load APIs')).toBeInTheDocument();
+    await paste(region, DEMO_OWNER_KEY);
+    expect(await within(region).findByRole('alert')).toHaveTextContent(
+      /Could not reach the Plume API/,
+    );
+    // still the same, open panel (not collapsed, not re-created)
+    expect(screen.getByRole('region', { name: 'Add an owner key' })).toBe(region);
+    expect(region.querySelector('details')).toHaveAttribute('open');
+    expect(within(region).getByLabelText('Owner key')).toHaveValue(DEMO_OWNER_KEY);
+    expect(readOwnerKeys()).toEqual([]);
+  });
+});

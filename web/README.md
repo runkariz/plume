@@ -56,6 +56,10 @@ The models spec (`e2e-real/models.spec.ts`) creates models and needs a **fresh s
 fixtures): once an Order model exists for the current builds, Generate answers "ready" and skips the generation
 flows. Without a model key on the server, server-side generation answers 503 (the spec checks that state).
 
+Against a build served on one origin (nginx proxying `/v1`, see Deploying), set `PLUME_E2E_BASE_URL` to the web's
+address, `PLUME_E2E_API_URL` to the API (the specs also call it directly) and `PLUME_E2E_SAME_ORIGIN=true`, so the
+specs expect relative `/v1/...` calls and icon paths.
+
 Useful variables: `PLUME_E2E_SHOTS_DIR` (a folder **outside the repo**, mounted into the container, receives
 light/dark screenshots), `PLUME_E2E_BASE_URL` (use an already running web server), `PLUME_E2E_OUTPUT_DIR`.
 The docker scripts mount the whole repo (`/repo`) because some specs read `tests/fixtures`.
@@ -90,7 +94,9 @@ Where to change what:
 
 ## Rules this app follows
 
-- **No hard-coded API URL.** `VITE_API_BASE_URL` is required (`src/api/config.ts` throws without it).
+- **No hard-coded API URL.** `VITE_API_BASE_URL` is required (`src/api/config.ts` throws without it). An absolute
+  URL is for dev; an EMPTY value (or `/`) means the web and the API share an origin and every call is a relative
+  `/v1/...` request: the recommended deploy (see Deploying below).
 - **The maintainer token is not stored for good.** It is typed at sign-in and kept in memory and in
   `sessionStorage` (`src/app/authStore.ts`): a refresh keeps the session, closing the tab, Sign out or a 401 from
   the API ends it. Never put it in the URL, `localStorage` or a log. Blocked storage falls back to memory. See
@@ -193,9 +199,50 @@ Rules it must keep (the host's default CSP is `default-src 'none'`, scripts and 
 runs the BUILT file in a sandboxed iframe under that CSP with the network cut, driven by a stand-in host
 (`e2e/widget-host.ts`), and checks axe in both themes: run `npm run build:widget` before it.
 
+## Deploying: one origin (recommended)
+
+Serve the built `dist/` and the API from the same origin: a reverse proxy sends `/v1/` to the Plume API and
+everything else to the app. The browser then makes only same-origin requests, so there is no CORS to configure and
+nothing for a browser to block (an embedded browser such as Claude Desktop's refuses cross-origin calls to another
+port: `net::ERR_BLOCKED_BY_CLIENT`, "Could not load APIs: Failed to fetch").
+
+```bash
+VITE_API_BASE_URL= VITE_USE_MOCKS=false npm run build    # an EMPTY base URL: relative /v1 calls
+```
+
+An nginx server block (`proxy_buffering off` is required: the live build and the generation jobs are server-sent
+events, which nginx would otherwise hold back until the stream ends):
+
+```nginx
+server {
+  listen 18493;
+  root /srv/plume-web/dist;
+
+  location /v1/ {
+    proxy_pass http://127.0.0.1:18490;   # the Plume API
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header Connection "";
+    proxy_buffering off;                 # server-sent events
+    proxy_read_timeout 1h;               # a stream can stay quiet for a long time
+    client_max_body_size 64m;            # package uploads
+  }
+
+  location / {
+    try_files $uri /index.html;          # single-page app: any path serves index.html
+  }
+}
+```
+
+This is the setup the real e2e suite was run against (nginx in Docker, `PLUME_E2E_SAME_ORIGIN=true`, below). With an
+absolute `VITE_API_BASE_URL` instead (dev), the API must allow the web's origin in its CORS list.
+
 ## Troubleshooting
 
-- _The page is blank / "VITE_API_BASE_URL is not set"_: create `.env.local` from `.env.example`.
+- _The page is blank / "VITE_API_BASE_URL is not set"_: create `.env.local` from `.env.example` (an empty value is
+  valid: same origin).
+- _"Could not load APIs: Failed to fetch" in an embedded browser (`net::ERR_BLOCKED_BY_CLIENT`)_: the web and the API
+  are on different origins. Deploy on one origin (above).
 - _Port 18473 is busy_: the dev server uses a fixed port on purpose (`strictPort`); stop the other process.
 - _CORS errors against the real API_: the API allows `http://127.0.0.1:18473` and `http://localhost:18473`; open
   the app on one of those, not on another host name.
