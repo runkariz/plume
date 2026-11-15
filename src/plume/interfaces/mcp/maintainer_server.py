@@ -21,6 +21,11 @@ from plume.application.models.sessions import ModelSessions
 from plume.application.reader.resolve import BuildResolver
 from plume.domain.shared.ids import BuildId
 from plume.interfaces import payloads
+from plume.interfaces.mcp.apps.model_view import (
+    MODEL_ONLY_META,
+    model_view_apps,
+    model_view_html,
+)
 from plume.interfaces.mcp.model_tools import register_model_tools
 from plume.interfaces.mcp.reader_server import _run
 
@@ -61,6 +66,7 @@ class McpMaintainerDependencies:
     jobs: Callable[[], MaintainerJobs] | None = None
     generate: Callable[[], GenerateModels] | None = None
     web_public_url: str | None = None
+    mcp_app_html: str | None = None
 
 
 def _names(resolver: BuildResolver, apis: list[str]) -> dict[str, str]:
@@ -79,6 +85,7 @@ def create_maintainer_server(deps: McpMaintainerDependencies) -> MCPServer:
         title="Plume maintainer",
         instructions=INSTRUCTIONS,
         version=__version__,
+        extensions=[model_view_apps(deps.mcp_app_html or model_view_html())],
     )
 
     @server.tool(annotations=READ, structured_output=True)
@@ -100,7 +107,7 @@ def create_maintainer_server(deps: McpMaintainerDependencies) -> MCPServer:
         server, deps.models, deps.resolver, _run, True, deps.web_public_url, deps.generate
     )
 
-    @server.tool(annotations=WRITE, structured_output=True)
+    @server.tool(annotations=WRITE, structured_output=True, meta=MODEL_ONLY_META)
     async def publish_build(api: str, build: str, tag: str = "latest") -> dict[str, Any]:
         """Move a tag to a sealed build of the API (publish or roll back)."""
 

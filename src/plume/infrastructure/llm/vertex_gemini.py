@@ -27,7 +27,7 @@ class VertexGeminiWriter:
     def __init__(
         self,
         key_file: Path | None,
-        model: str = "gemini-2.5-pro",
+        model: str = "gemini-4-argon",
         max_retries: int = 4,
         timeout: float = 300.0,
         max_output_tokens: int = 32_768,

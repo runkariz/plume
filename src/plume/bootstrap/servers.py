@@ -13,6 +13,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -57,6 +58,11 @@ def http_app(c: Container) -> FastAPI:
     )
 
 
+def _app_html(c: Container) -> str | None:
+    path = c.settings.mcp_app_html
+    return path.read_text(encoding="utf-8") if path is not None else None
+
+
 def reader_server(c: Container) -> MCPServer:
     return create_reader_server(
         McpReaderDependencies(
@@ -71,6 +77,7 @@ def reader_server(c: Container) -> MCPServer:
             models=c.models,
             sections=c.sections,
             web_public_url=c.settings.web_public_url,
+            mcp_app_html=_app_html(c),
         )
     )
 
@@ -85,6 +92,7 @@ def maintainer_mcp_server(c: Container) -> MCPServer:
             jobs=c.maintainer,
             generate=c.generate,
             web_public_url=c.settings.web_public_url,
+            mcp_app_html=_app_html(c),
         )
     )
 
@@ -150,6 +158,24 @@ def mcp_app(c: Container) -> Starlette:
     # The public reader MCP is rate limited per client address like the HTTP reader API.
     limit = c.settings.reader_rate_limit_per_minute
     middleware = [Middleware(RateLimitMiddleware, per_minute=limit, trusted_tokens=tokens)]
+    if c.settings.mcp_cors_origins:  # outermost, so preflights and 429s carry CORS headers
+        middleware.insert(
+            0,
+            Middleware(
+                CORSMiddleware,
+                allow_origins=list(c.settings.mcp_cors_origins),
+                allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+                allow_headers=[
+                    "Authorization",
+                    "Content-Type",
+                    "Accept",
+                    "Last-Event-ID",
+                    "Mcp-Session-Id",
+                    "Mcp-Protocol-Version",
+                ],
+                expose_headers=["Mcp-Session-Id", "Retry-After"],
+            ),
+        )
     return Starlette(routes=routes, lifespan=lifespan, middleware=middleware)
 
 

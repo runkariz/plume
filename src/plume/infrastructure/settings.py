@@ -48,9 +48,14 @@ class Settings(BaseSettings):
         "(maintainer). Read on every call, never logged. Unset = generation answers 503.",
     )
     model_llm: str = Field(
-        default="gemini-2.5-pro", description="Gemini model for server-side model generation."
+        default="gemini-4-argon", description="Gemini model for server-side model generation."
     )
     model_max_rounds: int = Field(default=3, ge=1, le=10)
+    mcp_app_html: Path | None = Field(
+        default=None,
+        description="The MCP App bundle (model view, one self-contained HTML file). Unset = the "
+        "file packaged with Plume.",
+    )
     web_public_url: str | None = Field(
         default=None,
         description="The web UI's public base URL; model share links are <this>/models/{id}.",
@@ -80,6 +85,12 @@ class Settings(BaseSettings):
         default=(), description="Bearer tokens of maintainers (comma list in JSON). Never logged."
     )
     max_upload_bytes: int = Field(default=200 * 1024 * 1024, ge=1024)
+    mcp_cors_origins: tuple[str, ...] = Field(
+        default=(),
+        description="Browser origins allowed to call the MCP endpoints (for browser-based MCP "
+        "clients such as the ext-apps basic-host). Empty = no CORS (Claude web/Desktop/Code "
+        "connect without it).",
+    )
     cors_origins: tuple[str, ...] = ("http://127.0.0.1:18473", "http://localhost:18473")
 
     @field_validator("maintainer_tokens")
