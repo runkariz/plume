@@ -23,12 +23,20 @@ class CollectionRepo(Protocol):
 
     def get(self, collection_id: str) -> Collection | None: ...
 
-    def add(self, collection_id: str, kind: str, lineage_id: str, at: datetime) -> bool:
-        """False when the lineage is already in the collection."""
+    def add(
+        self,
+        collection_id: str,
+        kind: str,
+        lineage_id: str,
+        at: datetime,
+        version_id: str | None = None,
+    ) -> bool:
+        """Put a lineage in the collection and record ``version_id`` as the newest version
+        saved INTO it. False when the lineage was already there (its version is updated)."""
         ...
 
-    def items(self, collection_id: str) -> list[tuple[str, str]]:
-        """(kind, lineage id) pairs, most recently added first."""
+    def items(self, collection_id: str) -> list[tuple[str, str, str | None]]:
+        """(kind, lineage id, newest version saved into it or None), most recent first."""
         ...
 
     def containing(self, kind: str, lineage_id: str) -> list[str]:

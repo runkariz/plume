@@ -7,9 +7,11 @@ Owner decision (2026-11-16): replace per-model owner keys with one link per pers
 
 - `c-` + `secrets.token_urlsafe(16)` (128 random bits). Its page is `/mine/<id>` on the web
   (`<PLUME_WEB_PUBLIC_URL>/mine/<id>` when set, else the path).
-- It holds **lineages** of user models and user model sets (kind `model` | `set`). Listing a
-  collection shows the latest non-discarded version of each, with its version count, newest
-  first. Unlisted models are included: they are already readable by anyone with their link.
+- It holds **lineages** of user models and user model sets (kind `model` | `set`) and, for
+  each, the newest version saved INTO it. Listing a collection shows that version (not a later
+  one someone else added with the model's link), newest first; when the lineage has a newer
+  version elsewhere, the item carries `newerVersion: {id, version, url}` (else null) so the
+  owner can choose. Items from old owner keys (no recorded version) show the latest. Unlisted models are included: they are already readable by anyone with their link.
 - It is a **list**, not an admin key: it grants nothing beyond seeing which models are in it.
   Anyone with a model's link can still add a version to it (as before).
 - Cap: `MAX_COLLECTION_ITEMS = 500` lineages. Adding beyond that is refused (400).

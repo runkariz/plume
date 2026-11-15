@@ -466,9 +466,14 @@ def register_model_tools(  # noqa: PLR0915
             if sets is not None:
                 service = sets()
                 set_items = [
-                    payloads.set_list_item(
-                        x, service.stale_inputs(x), service.lineage_info(x, False)["versions"]
-                    )
+                    {
+                        **payloads.set_list_item(
+                            x, service.stale_inputs(x), service.lineage_info(x, False)["versions"]
+                        ),
+                        "newerVersion": payloads.newer_version(
+                            c.newer.get(x.set_id), "set", web_public_url
+                        ),
+                    }
                     for x in c.sets
                 ]
             return {
@@ -477,6 +482,14 @@ def register_model_tools(  # noqa: PLR0915
                     "url": payloads.collection_url(c.collection_id, web_public_url),
                 },
                 "mergedInto": c.merged_into,
-                "models": [list_item(m) for m in c.models],
+                "models": [
+                    {
+                        **list_item(m),
+                        "newerVersion": payloads.newer_version(
+                            c.newer.get(m.snapshot_id), "model", web_public_url
+                        ),
+                    }
+                    for m in c.models
+                ],
                 "sets": set_items,
             }

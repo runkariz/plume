@@ -578,3 +578,14 @@ def collection_text(ref: Json | None) -> str:
     if ref.get("note"):
         text += f" {ref['note']}."
     return text
+
+
+def newer_version(newer: Any, kind: str, web_public_url: str | None) -> Json | None:
+    """In a My models list: the lineage's newest version when someone else (with the link)
+    added one after the version saved into this collection."""
+    if newer is None:
+        return None
+    nid = newer.snapshot_id if kind == "model" else newer.set_id
+    path = f"/{'models' if kind == 'model' else 'model-sets'}/{nid}"
+    url = f"{web_public_url.rstrip('/')}{path}" if web_public_url else path
+    return {"id": nid, "version": newer.version, "url": url}
