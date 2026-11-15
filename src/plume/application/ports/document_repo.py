@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from typing import Protocol
 
 from plume.domain.knowledge.chunk import Chunk
-from plume.domain.knowledge.document import Document
+from plume.domain.knowledge.document import Document, DocumentKind
 from plume.domain.shared.ids import BuildId
 
 
@@ -16,6 +16,13 @@ class DocumentRepo(Protocol):
         ...
 
     def get_document(self, build_id: BuildId, doc_id: str) -> Document | None: ...
+
+    def by_source_ids(
+        self, build_id: BuildId, kind: DocumentKind, source_ids: Sequence[str]
+    ) -> dict[str, Document]:
+        """Documents of one kind keyed by the producer's id (``source_id``); missing ids are
+        left out."""
+        ...
 
     def replace_chunks(self, build_id: BuildId, chunks: Sequence[Chunk]) -> None:
         """Set the build's chunks (drops chunks not in ``chunks``)."""

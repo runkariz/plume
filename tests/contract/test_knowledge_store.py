@@ -182,6 +182,22 @@ def test_documents_keep_raw_and_tags(store: Store) -> None:
     assert store.search.browse(build.build_id, (), None, 10, 0, tag="nope")[1] == 0
 
 
+def test_documents_by_source_ids(store: Store) -> None:
+    from dataclasses import replace  # noqa: PLC0415
+
+    build = _draft(store)
+    doc = replace(DOC, source_id="get-orders-2026-10")
+    store.documents.add_documents(build.build_id, [doc])
+    found = store.documents.by_source_ids(
+        build.build_id, DOC.kind, ["get-orders-2026-10", "missing"]
+    )
+    assert list(found) == ["get-orders-2026-10"]
+    assert found["get-orders-2026-10"].doc_id == DOC.doc_id
+    other = next(k for k in DocumentKind if k is not DOC.kind)
+    assert store.documents.by_source_ids(build.build_id, other, ["get-orders-2026-10"]) == {}
+    assert store.documents.by_source_ids(build.build_id, DOC.kind, []) == {}
+
+
 def test_assets(store: Store, request: pytest.FixtureRequest) -> None:
     from plume.domain.knowledge.asset import Asset  # noqa: PLC0415
     from plume.infrastructure.db.repos.asset_repo import PostgresAssetRepo  # noqa: PLC0415

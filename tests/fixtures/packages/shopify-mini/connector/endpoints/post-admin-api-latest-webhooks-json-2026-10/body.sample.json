@@ -1,0 +1,10 @@
+{
+  "webhook": {
+    "address": "<address>",
+    "fields": [
+      "<string>"
+    ],
+    "format": "json",
+    "topic": "<topic>"
+  }
+}

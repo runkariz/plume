@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from sqlalchemy import Connection, Engine, text
 
 from plume.domain.knowledge.chunk import Chunk
-from plume.domain.knowledge.document import Document
+from plume.domain.knowledge.document import Document, DocumentKind
 from plume.domain.shared.ids import BuildId
 from plume.infrastructure.db.repos._codec import document_from_row, fields_to_json
 
@@ -129,6 +129,22 @@ class PostgresDocumentRepo:
                 {"b": build_id.value, "d": doc_id},
             ).one_or_none()
         return document_from_row(row) if row else None
+
+    def by_source_ids(
+        self, build_id: BuildId, kind: DocumentKind, source_ids: Sequence[str]
+    ) -> dict[str, Document]:
+        if not source_ids:
+            return {}
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    f"SELECT {_DOC_COLUMNS} FROM documents WHERE build_id = :b AND kind = :k "  # noqa: S608
+                    "AND source_id = ANY(:ids)"
+                ),
+                {"b": build_id.value, "k": kind.value, "ids": list(source_ids)},
+            ).all()
+        docs = [document_from_row(r) for r in rows]
+        return {d.source_id: d for d in docs if d.source_id}
 
     def replace_chunks(self, build_id: BuildId, chunks: Sequence[Chunk]) -> None:
         with self._engine.begin() as conn:

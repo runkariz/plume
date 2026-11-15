@@ -13,7 +13,7 @@ from plume.domain.knowledge.api import ApiId, ApiInfo
 from plume.domain.knowledge.asset import Asset
 from plume.domain.knowledge.build import Build
 from plume.domain.knowledge.chunk import Chunk
-from plume.domain.knowledge.document import Document
+from plume.domain.knowledge.document import Document, DocumentKind
 from plume.domain.knowledge.fact import Fact
 from plume.domain.knowledge.tag import Tag, TagName
 from plume.domain.shared.ids import BuildId
@@ -98,6 +98,16 @@ class InMemoryDocumentRepo:
 
     def get_document(self, build_id: BuildId, doc_id: str) -> Document | None:
         return self.documents.get(build_id.value, {}).get(doc_id)
+
+    def by_source_ids(
+        self, build_id: BuildId, kind: DocumentKind, source_ids: Sequence[str]
+    ) -> dict[str, Document]:
+        wanted = set(source_ids)
+        return {
+            d.source_id: d
+            for d in self.documents.get(build_id.value, {}).values()
+            if d.kind is kind and d.source_id and d.source_id in wanted
+        }
 
     def replace_chunks(self, build_id: BuildId, chunks: Sequence[Chunk]) -> None:
         old = self.chunks.get(build_id.value, {})

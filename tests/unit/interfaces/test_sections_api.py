@@ -121,7 +121,7 @@ def test_document_raw_responses_errors_and_sections(client: TestClient) -> None:
     assert "v3" in doc["tags"]
     assert doc["responses"] == [r for r in doc["raw"].get("responses", []) if isinstance(r, dict)]
     detail = client.get("/v1/apis/shopify").json()
-    assert detail["sections"] == {"auth": 1, "triggers": 3, "webhookEndpoints": 0}
+    assert detail["sections"] == {"auth": 1, "triggers": 3, "webhookEndpoints": 1}
 
 
 @pytest.fixture
@@ -224,3 +224,16 @@ def test_vendor_mcp_section(packages: Path, tmp_path: Path) -> None:
 def test_mcp_route_absent(client: TestClient) -> None:
     r = client.get("/v1/apis/woocommerce/mcp").json()
     assert (r["present"], r["note"], r["servers"]) == (False, "not in this package", [])
+
+
+def test_webhook_endpoint_ids_resolve(client: TestClient) -> None:
+    shop = client.get("/v1/apis/shopify/triggers").json()
+    hook = shop["webhooks"][0]
+    refs = shop["endpointRefs"]
+    sub = hook["subscribe"]["endpointId"]
+    assert refs[sub]["method"] == "POST"
+    assert refs[sub]["path"].endswith("/webhooks.json")
+    assert client.get(f"/v1/apis/shopify/documents/{refs[sub]['docId']}").status_code == 200
+    unsub = hook["unsubscribe"]["endpointId"]
+    assert refs[unsub] is None  # not in this (mini) build
+    assert client.get("/v1/apis/woocommerce/triggers").json()["endpointRefs"] == {}

@@ -6,7 +6,12 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response
 
-from plume.application.reader.sections import PackageSections, scheme_view, trigger_view
+from plume.application.reader.sections import (
+    PackageSections,
+    endpoint_ids_in,
+    scheme_view,
+    trigger_view,
+)
 from plume.interfaces.http import schemas as s
 
 NOT_IN_PACKAGE = "not in this package"
@@ -112,6 +117,9 @@ def sections_router(sections: Callable[[], PackageSections]) -> APIRouter:
         ref, docs = sections().triggers(api, version)
         views = [trigger_view(d) for d in docs]
         hooks = sections().webhooks(api, version)
+        refs = sections().endpoint_refs(
+            api, endpoint_ids_in(hooks) + endpoint_ids_in([v["event"] for v in views]), version
+        )
         return s.TriggerList(
             api=ref.api,
             build=ref.build,
@@ -120,6 +128,12 @@ def sections_router(sections: Callable[[], PackageSections]) -> APIRouter:
             total=len(views),
             items=[_trigger_summary(v) for v in views[offset : offset + limit]],
             webhooks=hooks,
+            endpoint_refs={
+                k: s.EndpointRef(doc_id=v["doc_id"], method=v["method"], path=v["path"])
+                if v
+                else None
+                for k, v in refs.items()
+            },
         )
 
     @router.get("/v1/apis/{api}/mcp", response_model=s.McpOut, responses=errors)

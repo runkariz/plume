@@ -522,6 +522,12 @@ class TriggerSummary(Schema):
     sync_endpoint_id: str | None = None
 
 
+class EndpointRef(Schema):
+    doc_id: str
+    method: str | None
+    path: str | None
+
+
 class TriggerList(Schema):
     api: str
     build: str
@@ -533,6 +539,11 @@ class TriggerList(Schema):
         default_factory=list,
         description="connector/triggers/webhooks/*.json (subscribe/unsubscribe/list endpoints, "
         "handshake, verification), verbatim; [] when the package has none.",
+    )
+    endpoint_refs: dict[str, EndpointRef | None] = Field(
+        default_factory=dict,
+        description="Every endpointId named by `webhooks` and by the events' syncEndpointId, "
+        "resolved to the endpoint document (null when it is not in this build).",
     )
 
 
