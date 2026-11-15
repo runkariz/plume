@@ -71,7 +71,14 @@ this review and have tests in `tests/unit/interfaces/test_hardening.py`.
   answer 404 without the token (existence is not revealed). A user's "My models" link
   (collection, `c-` + 128 random bits) lists their models and sets; it grants nothing else
   (each model is readable by its own link anyway) and holds at most 500. Old owner keys
-  (`pk_`, stored only as SHA-256) still find their collection during the transition. Only a maintainer can make a model official; a user revising an official model gets
+  (`pk_`, stored only as SHA-256) still find their collection during the transition.
+  *Fixed* (found before release, never deployed): a save without `collection` answered with
+  the lineage's existing collection, so anyone adding a version to a shared model received the
+  author's link and their whole list. Rule now: Plume never answers with a collection the
+  caller did not send; without `collection` every save (a version of someone else's model or
+  set, a relation edit, a retry) gets a new link. The web client also adopts a returned link
+  only if the save created it or the browser sent it. A link lists the version saved into it,
+  not a later one someone else added (`newerVersion` points to that). Only a maintainer can make a model official; a user revising an official model gets
   their own unlisted copy. Drafts are capped at 1,000,000 characters.
 - **LLM key**: server-side generation reads the Vertex key from `PLUME_VERTEX_KEY_FILE` on each
   call and sends it only in the `x-goog-api-key` header; errors carry the HTTP status, never the
