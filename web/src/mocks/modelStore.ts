@@ -8,6 +8,7 @@ import type {
   ModelVisibility,
 } from '@/api/types';
 import { inventorySnapshot, order40Snapshot, productSnapshot } from './modelData';
+import { iconApis } from './sectionData';
 
 /** What the mock server keeps for a model: the snapshot plus the access fields plume-6f's API adds. */
 export interface StoredModel {
@@ -117,6 +118,11 @@ const REVISE = (m: StoredModel) =>
 export function decorate(all: StoredModel[], m: StoredModel): ModelSnapshot {
   return {
     ...m.model,
+    // an API whose package has an icon gets its route (the others send null)
+    inputs: m.model.inputs.map((i) => ({
+      ...i,
+      logo: { ...i.logo, url: iconApis.has(i.id) ? `/v1/apis/${i.id}/icon` : null },
+    })),
     visibility: m.visibility,
     official: m.visibility === 'official',
     origin: m.origin,

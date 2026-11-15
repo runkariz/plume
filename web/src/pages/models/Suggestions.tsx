@@ -4,13 +4,24 @@ import { useApiClient } from '@/api/context';
 import { useIsMaintainer } from '@/app/authStore';
 import { GenerateSession } from './GenerateSession';
 import { ModelJobProgress } from './ModelJobProgress';
+import { Pager, SuggestControls } from './SuggestControls';
+import {
+  changed,
+  isFiltered as isFilteredView,
+  parseView,
+  toQuery,
+  withView,
+  type SuggestView,
+} from './suggestQuery';
 import { useAsync } from '@/api/useAsync';
 import {
   ApiError,
+  type ApiCounts,
   type ApiRef,
   type Concept,
   type GenerateResponse,
   isGenerateJob,
+  type SuggestQuery,
   type SuggestResponse,
 } from '@/api/types';
 import {
@@ -23,10 +34,18 @@ import {
   EmptyState,
   ErrorState,
   LoadingState,
-  Segmented,
 } from '@/components';
 
-type Filter = 'all' | 'every' | 'write';
+/** "Shopify · 2 models · 5 endpoints · 41 fields": only what the server counted, nothing for the API that lacks it. */
+function countsLine(c: ApiCounts) {
+  const parts = [
+    c.models ? `${c.models} ${c.models === 1 ? 'model' : 'models'}` : null,
+    c.endpoints ? `${c.endpoints} ${c.endpoints === 1 ? 'endpoint' : 'endpoints'}` : null,
+    c.fields ? `${c.fields} fields` : null,
+    c.operations.length ? c.operations.join(', ') : null,
+  ].filter(Boolean);
+  return parts.join(' · ');
+}
 
 function ConceptRow({
   concept,
@@ -44,79 +63,141 @@ function ConceptRow({
   /** Signed in only: the same model through your own Claude instead of the server. */
   onGenerateWithClaude?: () => void;
 }) {
+  const counts = apis.flatMap((a) => {
+    const c = concept.apiCounts?.[a.id];
+    const line = c ? countsLine(c) : '';
+    return line ? [{ api: a, line }] : [];
+  });
   return (
-    <article className="card concept">
-      <div className="concept-name">
-        <h3>{concept.name}</h3>
-        <span className="faint small">~{concept.likelyFields} likely fields</span>
-      </div>
-      <p className="muted concept-desc">{concept.description}</p>
-      <span className="concept-cov">
-        {apis.map((a) => (
-          <ApiAvatar
-            key={a.id}
-            text={a.logo.text}
-            color={a.logo.color}
-            name={a.shortName}
-            kind={concept.coverage[a.id] ?? 'absent'}
-          />
-        ))}
-      </span>
-      <span>
-        <Chip>{concept.operations.join(', ')}</Chip>
-      </span>
-      <span>
-        <Chip tone={concept.difficulty.tone}>{concept.difficulty.label}</Chip>
-      </span>
-      <span className="concept-actions">
-        <Button
-          variant="primary"
-          size="lg"
-          onClick={onGenerate}
-          disabled={disabled}
-          aria-busy={busy}
-          aria-label={busy ? `Generating ${concept.name}` : `Generate ${concept.name}`}
-        >
-          {busy ? 'Generating…' : 'Generate'}
-        </Button>
-        {onGenerateWithClaude ? (
-          <button
-            type="button"
-            className="linkbtn small"
+    <article className="card concept" aria-label={concept.name}>
+      <div className="concept-main">
+        <div className="concept-name">
+          <h3>{concept.name}</h3>
+          <span className="faint small">~{concept.likelyFields} likely fields</span>
+        </div>
+        <span className="concept-cov">
+          {apis.map((a) => (
+            <ApiAvatar
+              key={a.id}
+              text={a.logo.text}
+              color={a.logo.color}
+              url={a.logo.url}
+              name={a.shortName}
+              kind={concept.coverage[a.id] ?? 'absent'}
+            />
+          ))}
+        </span>
+        <span>
+          <Chip>{concept.operations.join(', ')}</Chip>
+        </span>
+        <span>
+          <Chip tone={concept.difficulty.tone}>{concept.difficulty.label}</Chip>
+        </span>
+        <span className="concept-actions">
+          <Button
+            variant="primary"
+            size="lg"
+            onClick={onGenerate}
             disabled={disabled}
-            onClick={onGenerateWithClaude}
-            aria-label={`Use Claude instead to generate ${concept.name}`}
+            aria-busy={busy}
+            aria-label={busy ? `Generating ${concept.name}` : `Generate ${concept.name}`}
           >
-            Use Claude instead
-          </button>
-        ) : null}
-      </span>
+            {busy ? 'Generating…' : 'Generate'}
+          </Button>
+          {onGenerateWithClaude ? (
+            <button
+              type="button"
+              className="linkbtn small"
+              disabled={disabled}
+              onClick={onGenerateWithClaude}
+              aria-label={`Use Claude instead to generate ${concept.name}`}
+            >
+              Use Claude instead
+            </button>
+          ) : null}
+        </span>
+      </div>
+      {concept.reason ? <p className="concept-reason muted">{concept.reason}</p> : null}
+      {counts.length ? (
+        <ul className="concept-counts" aria-label={`${concept.name} in each API`}>
+          {counts.map(({ api, line }) => (
+            <li key={api.id}>
+              <ApiAvatar text={api.logo.text} color={api.logo.color} url={api.logo.url} size={18} />
+              <b>{api.shortName}</b> <span className="faint">{line}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </article>
   );
 }
 
-function useSuggestions(key: string) {
+/**
+ * The suggestions of one query (the filters are in the URL). The previous answer stays on screen, dimmed, while the
+ * next one loads, so searching and paging do not flash an empty page.
+ */
+function useSuggestions(apis: string[], query: SuggestQuery) {
   const client = useApiClient();
-  const load = useCallback(
-    (signal: AbortSignal): Promise<SuggestResponse> =>
-      key === ''
-        ? Promise.resolve({ apis: [], concepts: [], notModeled: { count: 0, summary: '' } })
-        : client.suggestModels(key.split(','), signal),
-    [client, key],
-  );
-  return useAsync(load);
+  const key = JSON.stringify([apis, query]);
+  const [state, setState] = useState<{
+    data: SuggestResponse | null;
+    loading: boolean;
+    error: Error | null;
+  }>({ data: null, loading: true, error: null });
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    const [a, q] = JSON.parse(key) as [string[], SuggestQuery];
+    if (a.length < 2) return;
+    const ctrl = new AbortController();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a new query starts loading, the old answer stays
+    setState((s) => ({ ...s, loading: true, error: null }));
+    client.suggestModels(a, q, ctrl.signal).then(
+      (data) => {
+        if (!ctrl.signal.aborted) setState({ data, loading: false, error: null });
+      },
+      (error: unknown) => {
+        if (!ctrl.signal.aborted)
+          setState((s) => ({
+            ...s,
+            loading: false,
+            error: error instanceof Error ? error : new Error(String(error)),
+          }));
+      },
+    );
+    return () => ctrl.abort();
+  }, [client, key, attempt]);
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  return { ...state, retry };
 }
 
 export function Suggestions() {
   const client = useApiClient();
   const navigate = useNavigate();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const key = (params.get('apis') ?? '').split(',').filter(Boolean).join(',');
-  const apiIds = key === '' ? [] : key.split(',');
+  const apiIds = useMemo(() => (key === '' ? [] : key.split(',')), [key]);
   const enough = apiIds.length >= 2;
 
-  const { state, retry } = useSuggestions(key);
-  const [filter, setFilter] = useState<Filter>('all');
+  // the filters, the scope and the page are in the URL: a link keeps them
+  const view = useMemo(() => parseView(params, apiIds), [params, apiIds]);
+  const query = useMemo(() => toQuery(view), [view]);
+  const { data, loading, error: loadError, retry } = useSuggestions(apiIds, query);
+  // Every change starts from the latest URL, not the one of the last render: the router applies a navigation a
+  // moment later, and two quick clicks (two checkboxes) must both count.
+  const latest = useRef(params);
+  useEffect(() => {
+    latest.current = params;
+  }, [params]);
+  const update = useCallback(
+    (f: (v: SuggestView) => SuggestView) => {
+      const next = withView(latest.current, f(parseView(latest.current, apiIds)));
+      latest.current = next;
+      setParams(next, { replace: true });
+    },
+    [setParams, apiIds],
+  );
+  const setView = useCallback((v: SuggestView) => update(() => v), [update]);
+  const [resetKey, setResetKey] = useState(0);
   const [generating, setGenerating] = useState<string | null>(null);
   const [session, setSession] = useState<{ concept: Concept; response: GenerateResponse } | null>(
     null,
@@ -138,15 +219,22 @@ export function Suggestions() {
   // "Regenerate" on a stale model lands here with ?regenerate=<concept>: open that concept's session once
   const regenerateWanted = params.get('regenerate');
   const autoStarted = useRef(false);
-  const suggestions = state.status === 'ready' ? state.data : null;
+  // the concept to regenerate may not be on the current page (paging, filters): look it up on its own
+  const lookup = useCallback(
+    async (signal: AbortSignal) =>
+      regenerateWanted && apiIds.length >= 2
+        ? client.suggestModels(apiIds, { q: regenerateWanted, only: 'all', limit: 100 }, signal)
+        : null,
+    [client, apiIds, regenerateWanted],
+  );
+  const { state: lookupState } = useAsync(lookup);
+  const lookedUp = lookupState.status === 'ready' ? lookupState.data : null;
   const regenerateConcept = useMemo(() => {
     const want = regenerateWanted?.toLowerCase();
     return want
-      ? suggestions?.concepts.find(
-          (c) => c.id.toLowerCase() === want || c.name.toLowerCase() === want,
-        )
+      ? lookedUp?.concepts.find((c) => c.id.toLowerCase() === want || c.name.toLowerCase() === want)
       : undefined;
-  }, [suggestions, regenerateWanted]);
+  }, [lookedUp, regenerateWanted]);
   useEffect(() => {
     if (!regenerateConcept || autoStarted.current) return;
     autoStarted.current = true;
@@ -154,7 +242,7 @@ export function Suggestions() {
     // runs once per page load, when the concept to regenerate is known
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [regenerateConcept]);
-  const regenerateMissing = Boolean(regenerateWanted && suggestions && !regenerateConcept);
+  const regenerateMissing = Boolean(regenerateWanted && lookedUp && !regenerateConcept);
   useEffect(() => () => ctrl.current?.abort(), []);
 
   const crumbs = [
@@ -216,14 +304,7 @@ export function Suggestions() {
     }
   }
 
-  const data = state.status === 'ready' ? state.data : null;
-  const visible = (data?.concepts ?? []).filter((c) =>
-    filter === 'every'
-      ? Object.values(c.coverage).every((v) => v !== 'absent')
-      : filter === 'write'
-        ? c.operations.includes('write')
-        : true,
-  );
+  const filtered = isFilteredView(view);
 
   return (
     <>
@@ -235,7 +316,7 @@ export function Suggestions() {
             <ul className="selbar-chips plain" aria-label="Selected APIs">
               {data.apis.map((a) => (
                 <li key={a.id} className="selbar-chip light">
-                  <ApiAvatar text={a.logo.text} color={a.logo.color} size={26} />
+                  <ApiAvatar text={a.logo.text} color={a.logo.color} url={a.logo.url} size={26} />
                   {a.shortName}
                 </li>
               ))}
@@ -246,46 +327,30 @@ export function Suggestions() {
           Change APIs
         </Link>
       </div>
-      {state.status === 'loading' ? <LoadingState label="Looking across the APIs" /> : null}
-      {state.status === 'error' ? (
-        <ErrorState
-          title="Could not suggest models"
-          message={state.error.message}
-          onRetry={retry}
-        />
+      {!data && loading ? <LoadingState label="Looking across the APIs" /> : null}
+      {loadError && !data ? (
+        <ErrorState title="Could not suggest models" message={loadError.message} onRetry={retry} />
       ) : null}
-      {data && data.concepts.length === 0 ? (
-        <EmptyState title="No shared concepts found">
-          These APIs have no resources in common. Try a different selection.
-        </EmptyState>
-      ) : null}
-      {data && data.concepts.length > 0 ? (
+      {data ? (
         <>
-          <div className="opts">
-            <Segmented
-              variant="pills"
-              label="Show concepts"
-              value={filter}
-              onChange={setFilter}
-              options={[
-                { value: 'all', label: 'All concepts' },
-                { value: 'every', label: `In all ${data.apis.length} APIs` },
-                { value: 'write', label: 'Can write' },
-              ]}
+          <SuggestControls
+            clearSignal={resetKey}
+            apis={data.apis}
+            view={view}
+            counts={data.counts}
+            onChange={update}
+            onClear={() => {
+              setResetKey((n) => n + 1);
+              setView({ q: '', only: 'multi', require: [], chip: 'all', page: 1 });
+            }}
+          />
+          {loadError ? (
+            <ErrorState
+              title="Could not update the suggestions"
+              message={loadError.message}
+              onRetry={retry}
             />
-            <span className="legend" aria-label="Coverage legend">
-              Coverage
-              <span>
-                <ApiAvatar text="W" color="#7f54b3" size={22} /> direct
-              </span>
-              <span>
-                <ApiAvatar text="W" color="#7f54b3" kind="derived" size={22} /> derived
-              </span>
-              <span>
-                <ApiAvatar text="W" color="#7f54b3" kind="absent" size={22} /> absent
-              </span>
-            </span>
-          </div>
+          ) : null}
           {regenerateMissing ? (
             <p role="alert" className="form-error">
               “{regenerateWanted}” is not suggested for these APIs any more. Pick a concept below.
@@ -331,11 +396,42 @@ export function Suggestions() {
               onCancel={() => setSession(null)}
             />
           ) : null}
-          <div className="concepts">
-            {visible.length === 0 ? (
-              <EmptyState title="No concepts match this filter">Try “All concepts”.</EmptyState>
+          <div
+            id="concept-list"
+            className={`concepts${loading ? ' loading' : ''}`}
+            aria-busy={loading}
+          >
+            {data.concepts.length === 0 ? (
+              data.total > 0 ? (
+                <EmptyState title="That page is empty">
+                  <button
+                    type="button"
+                    className="linkbtn"
+                    onClick={() => setView({ ...view, page: 1 })}
+                  >
+                    Back to the first page
+                  </button>
+                </EmptyState>
+              ) : filtered ? (
+                <EmptyState title="No concepts match these filters">
+                  <button
+                    type="button"
+                    className="linkbtn"
+                    onClick={() => {
+                      setResetKey((n) => n + 1);
+                      setView({ q: '', only: 'multi', require: [], chip: 'all', page: 1 });
+                    }}
+                  >
+                    Clear the filters
+                  </button>
+                </EmptyState>
+              ) : (
+                <EmptyState title="No shared concepts found">
+                  These APIs have no resources in common. Try a different selection.
+                </EmptyState>
+              )
             ) : (
-              visible.map((c) => (
+              data.concepts.map((c) => (
                 <ConceptRow
                   key={c.id}
                   concept={c}
@@ -348,6 +444,14 @@ export function Suggestions() {
               ))
             )}
           </div>
+          <Pager
+            data={data}
+            page={view.page}
+            onPage={(page) => {
+              setView({ ...view, page });
+              document.getElementById('concept-list')?.scrollIntoView?.({ block: 'start' });
+            }}
+          />
           <div className="two even">
             <Banner
               tone="accent"
@@ -372,10 +476,28 @@ export function Suggestions() {
             <Card className="pad">
               <h2 className="h2-sm">Not modeled</h2>
               <p className="muted">
-                {data.notModeled.count === 0
-                  ? 'Every resource found in these APIs is part of a suggested concept.'
-                  : `${data.notModeled.count} ${data.notModeled.summary}`}
+                {view.q || view.require.length
+                  ? // the server's summary is for the whole selection: with filters, say what the filters leave
+                    data.counts.single === 0
+                    ? 'No concept that exists in only one API matches these filters.'
+                    : `${data.counts.single} ${data.counts.single === 1 ? 'concept' : 'concepts'} that exist in only one of these APIs match these filters.`
+                  : data.notModeled.count === 0
+                    ? 'Every resource found in these APIs is part of a suggested concept.'
+                    : `${data.notModeled.count} ${data.notModeled.summary}`}
               </p>
+              {data.counts.single > 0 || data.notModeled.count > 0 ? (
+                view.only === 'single' ? (
+                  <Button onClick={() => update((v) => changed(v, { only: 'multi' }))}>
+                    Back to concepts shared by several APIs
+                  </Button>
+                ) : data.counts.single > 0 ? (
+                  <Button
+                    onClick={() => update((v) => changed(v, { only: 'single', chip: 'all' }))}
+                  >
+                    Browse the concepts that exist in only one API
+                  </Button>
+                ) : null
+              ) : null}
             </Card>
           </div>
         </>

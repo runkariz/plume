@@ -24,7 +24,7 @@ function PickCard({
         {checked ? <CheckIcon width={14} height={14} /> : null}
       </span>
       <span className="api-top">
-        <ApiAvatar text={api.logo.text} color={api.logo.color} size={42} />
+        <ApiAvatar text={api.logo.text} color={api.logo.color} url={api.logo.url} size={42} />
         <span>
           <span className="api-name">{api.name}</span>
           <br />
@@ -140,7 +140,7 @@ export function PickApps() {
           <ul className="selbar-chips">
             {chosen.map((a) => (
               <li key={a.id} className="selbar-chip">
-                <ApiAvatar text={a.logo.text} color={a.logo.color} size={22} />
+                <ApiAvatar text={a.logo.text} color={a.logo.color} url={a.logo.url} size={22} />
                 {a.name.split(' ')[0]}
               </li>
             ))}

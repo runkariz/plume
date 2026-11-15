@@ -1,4 +1,11 @@
-import type { ApiSummary, ApiRef, Concept, ModelSnapshot, SuggestResponse } from '@/api/types';
+import type {
+  ApiSummary,
+  ApiRef,
+  Concept,
+  ModelSnapshot,
+  SuggestQuery,
+  SuggestResponse,
+} from '@/api/types';
 import realOrder40 from './fixtures/realOrder40.json';
 
 /** Sample data from the mockups pics/plume-src/09..11. */
@@ -140,96 +147,399 @@ export function apiRef(id: string): ApiRef | undefined {
 }
 
 type Cov = 'direct' | 'derived' | 'absent';
-function concept(
-  id: string,
-  name: string,
-  description: string,
-  likelyFields: number,
-  cov: [Cov, Cov, Cov],
-  operations: Concept['operations'],
-  difficulty: Concept['difficulty'],
-): Concept {
+const MOCK_APIS = ['shopify', 'woocommerce', 'mirakl'] as const;
+const nice = (id: string) => REFS[id]?.shortName ?? id;
+const list = (items: string[]) =>
+  items.length < 2
+    ? items.join('')
+    : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+
+interface Spec {
+  id: string;
+  name: string;
+  fields: number;
+  cov: [Cov, Cov, Cov];
+  ops: Concept['operations'];
+  difficulty: Concept['difficulty'];
+}
+const OK = { tone: 'ok', label: 'Straightforward' } as const;
+const WARN = { tone: 'warn', label: 'Joins needed' } as const;
+const BAD = { tone: 'bad', label: 'Only in some' } as const;
+const RW: Concept['operations'] = ['read', 'write'];
+const R: Concept['operations'] = ['read'];
+
+/** The mock catalogue: enough concepts to page through (36), several in only one API. */
+const SPECS: Spec[] = [
+  {
+    id: 'product',
+    name: 'Product',
+    fields: 14,
+    cov: ['direct', 'direct', 'direct'],
+    ops: RW,
+    difficulty: OK,
+  },
+  {
+    id: 'order',
+    name: 'Order',
+    fields: 18,
+    cov: ['direct', 'direct', 'direct'],
+    ops: RW,
+    difficulty: WARN,
+  },
+  {
+    id: 'inventory',
+    name: 'Inventory',
+    fields: 7,
+    cov: ['derived', 'direct', 'direct'],
+    ops: RW,
+    difficulty: WARN,
+  },
+  {
+    id: 'shipment',
+    name: 'Shipment',
+    fields: 9,
+    cov: ['direct', 'derived', 'direct'],
+    ops: RW,
+    difficulty: WARN,
+  },
+  {
+    id: 'customer',
+    name: 'Customer',
+    fields: 11,
+    cov: ['direct', 'direct', 'absent'],
+    ops: R,
+    difficulty: BAD,
+  },
+  {
+    id: 'location',
+    name: 'Location',
+    fields: 6,
+    cov: ['direct', 'absent', 'absent'],
+    ops: R,
+    difficulty: BAD,
+  },
+  {
+    id: 'refund',
+    name: 'Refund',
+    fields: 8,
+    cov: ['direct', 'direct', 'derived'],
+    ops: RW,
+    difficulty: WARN,
+  },
+  {
+    id: 'discount',
+    name: 'Discount',
+    fields: 10,
+    cov: ['direct', 'direct', 'absent'],
+    ops: RW,
+    difficulty: BAD,
+  },
+  {
+    id: 'return',
+    name: 'Return',
+    fields: 9,
+    cov: ['derived', 'absent', 'direct'],
+    ops: RW,
+    difficulty: BAD,
+  },
+  {
+    id: 'review',
+    name: 'Review',
+    fields: 7,
+    cov: ['absent', 'direct', 'derived'],
+    ops: R,
+    difficulty: BAD,
+  },
+  {
+    id: 'category',
+    name: 'Category',
+    fields: 6,
+    cov: ['direct', 'direct', 'direct'],
+    ops: RW,
+    difficulty: OK,
+  },
+  {
+    id: 'tag',
+    name: 'Tag',
+    fields: 3,
+    cov: ['direct', 'direct', 'absent'],
+    ops: RW,
+    difficulty: BAD,
+  },
+  {
+    id: 'coupon',
+    name: 'Coupon',
+    fields: 9,
+    cov: ['absent', 'direct', 'absent'],
+    ops: RW,
+    difficulty: BAD,
+  },
+  {
+    id: 'invoice',
+    name: 'Invoice',
+    fields: 12,
+    cov: ['absent', 'derived', 'direct'],
+    ops: R,
+    difficulty: BAD,
+  },
+  {
+    id: 'payment',
+    name: 'Payment',
+    fields: 10,
+    cov: ['direct', 'direct', 'direct'],
+    ops: RW,
+    difficulty: WARN,
+  },
+  {
+    id: 'tax',
+    name: 'Tax',
+    fields: 5,
+    cov: ['direct', 'direct', 'absent'],
+    ops: R,
+    difficulty: BAD,
+  },
+  {
+    id: 'shipping-zone',
+    name: 'Shipping zone',
+    fields: 6,
+    cov: ['direct', 'direct', 'absent'],
+    ops: R,
+    difficulty: BAD,
+  },
+  {
+    id: 'warehouse',
+    name: 'Warehouse',
+    fields: 7,
+    cov: ['derived', 'absent', 'direct'],
+    ops: R,
+    difficulty: BAD,
+  },
+  {
+    id: 'attribute',
+    name: 'Attribute',
+    fields: 8,
+    cov: ['direct', 'direct', 'direct'],
+    ops: RW,
+    difficulty: OK,
+  },
+  {
+    id: 'brand',
+    name: 'Brand',
+    fields: 4,
+    cov: ['absent', 'direct', 'direct'],
+    ops: R,
+    difficulty: BAD,
+  },
+  {
+    id: 'collection',
+    name: 'Collection',
+    fields: 7,
+    cov: ['direct', 'derived', 'absent'],
+    ops: RW,
+    difficulty: BAD,
+  },
+  {
+    id: 'cart',
+    name: 'Cart',
+    fields: 9,
+    cov: ['direct', 'absent', 'absent'],
+    ops: RW,
+    difficulty: BAD,
+  },
+  {
+    id: 'subscription',
+    name: 'Subscription',
+    fields: 11,
+    cov: ['direct', 'direct', 'absent'],
+    ops: RW,
+    difficulty: BAD,
+  },
+  {
+    id: 'gift-card',
+    name: 'Gift card',
+    fields: 8,
+    cov: ['direct', 'absent', 'absent'],
+    ops: RW,
+    difficulty: BAD,
+  },
+  {
+    id: 'supplier',
+    name: 'Supplier',
+    fields: 6,
+    cov: ['absent', 'absent', 'direct'],
+    ops: R,
+    difficulty: BAD,
+  },
+  {
+    id: 'campaign',
+    name: 'Campaign',
+    fields: 7,
+    cov: ['direct', 'absent', 'derived'],
+    ops: R,
+    difficulty: BAD,
+  },
+  {
+    id: 'page',
+    name: 'Page',
+    fields: 6,
+    cov: ['direct', 'direct', 'absent'],
+    ops: RW,
+    difficulty: BAD,
+  },
+  {
+    id: 'menu',
+    name: 'Menu',
+    fields: 5,
+    cov: ['direct', 'absent', 'absent'],
+    ops: R,
+    difficulty: BAD,
+  },
+  {
+    id: 'webhook',
+    name: 'Webhook',
+    fields: 6,
+    cov: ['direct', 'direct', 'absent'],
+    ops: RW,
+    difficulty: BAD,
+  },
+  {
+    id: 'theme',
+    name: 'Theme',
+    fields: 5,
+    cov: ['direct', 'absent', 'absent'],
+    ops: R,
+    difficulty: BAD,
+  },
+  {
+    id: 'offer',
+    name: 'Offer',
+    fields: 13,
+    cov: ['absent', 'absent', 'direct'],
+    ops: RW,
+    difficulty: BAD,
+  },
+  {
+    id: 'promotion',
+    name: 'Promotion',
+    fields: 9,
+    cov: ['direct', 'derived', 'direct'],
+    ops: RW,
+    difficulty: WARN,
+  },
+  {
+    id: 'currency',
+    name: 'Currency',
+    fields: 3,
+    cov: ['direct', 'direct', 'direct'],
+    ops: R,
+    difficulty: OK,
+  },
+  {
+    id: 'note',
+    name: 'Note',
+    fields: 3,
+    cov: ['direct', 'absent', 'absent'],
+    ops: RW,
+    difficulty: BAD,
+  },
+  {
+    id: 'message',
+    name: 'Message',
+    fields: 6,
+    cov: ['absent', 'absent', 'direct'],
+    ops: RW,
+    difficulty: BAD,
+  },
+  {
+    id: 'fulfillment',
+    name: 'Fulfillment',
+    fields: 10,
+    cov: ['direct', 'derived', 'direct'],
+    ops: RW,
+    difficulty: WARN,
+  },
+];
+
+/** A concept as the server sends it for the selected APIs (coverage of the others is absent). */
+function build(spec: Spec, apiIds: string[]): Concept {
+  const coverage: Record<string, Cov> = {};
+  const apiCounts: NonNullable<Concept['apiCounts']> = {};
+  apiIds.forEach((id) => {
+    const i = MOCK_APIS.indexOf(id as (typeof MOCK_APIS)[number]);
+    const cov: Cov = i === -1 ? 'absent' : (spec.cov[i] ?? 'absent');
+    coverage[id] = cov;
+    apiCounts[id] =
+      cov === 'direct'
+        ? {
+            models: 1,
+            endpoints: 2 + (spec.fields % 5),
+            operations: spec.ops.includes('write') ? ['read', 'create', 'update'] : ['read'],
+            fields: spec.fields * 2 + 3,
+          }
+        : { models: 0, endpoints: 0, operations: [], fields: 0 };
+  });
+  const direct = apiIds.filter((id) => coverage[id] === 'direct').map(nice);
+  const derived = apiIds.filter((id) => coverage[id] === 'derived').map(nice);
+  const reason =
+    `${spec.name} is documented as a model in ${list(direct)}` +
+    (derived.length
+      ? `, and can be reconstructed from the endpoints of ${list(derived)}`
+      : direct.length > 1
+        ? ', with matching fields'
+        : '') +
+    `. About ${spec.fields} fields are likely to map.`;
   return {
-    id,
-    name,
-    description,
-    likelyFields,
-    coverage: { shopify: cov[0], woocommerce: cov[1], mirakl: cov[2] },
-    operations,
-    difficulty,
+    id: spec.id,
+    name: spec.name,
+    reason,
+    apiCounts,
+    likelyFields: spec.fields,
+    coverage,
+    operations: spec.ops,
+    difficulty: spec.difficulty,
   };
 }
 
-const RW: Concept['operations'] = ['read', 'write'];
+const present = (c: Concept) => Object.values(c.coverage).filter((v) => v !== 'absent').length;
 
-export function sampleSuggestions(apiIds: string[]): SuggestResponse {
+/** The mock of POST /v1/models/suggest: scope, search, require, chips and paging, as the server does them. */
+export function sampleSuggestions(apiIds: string[], q: SuggestQuery = {}): SuggestResponse {
   const apis = apiIds.map((id) => REFS[id]).filter((a): a is ApiRef => Boolean(a));
-  const all: Concept[] = [
-    concept(
-      'product',
-      'Product',
-      'Items for sale: title, SKU, price, status, variants and descriptions.',
-      14,
-      ['direct', 'direct', 'direct'],
-      RW,
-      { tone: 'ok', label: 'Clean' },
-    ),
-    concept(
-      'order',
-      'Order',
-      'Customer purchases with line items, totals, payment and fulfillment state.',
-      18,
-      ['direct', 'direct', 'direct'],
-      RW,
-      { tone: 'warn', label: 'Joins needed' },
-    ),
-    concept(
-      'inventory',
-      'Inventory',
-      'Stock per SKU and location, stock management and backorder behavior.',
-      7,
-      ['derived', 'direct', 'direct'],
-      RW,
-      { tone: 'warn', label: 'Derived in 2' },
-    ),
-    concept(
-      'shipment',
-      'Shipment',
-      'Packages sent for an order, with carrier, tracking and status.',
-      9,
-      ['direct', 'derived', 'direct'],
-      RW,
-      { tone: 'warn', label: 'Derived in 1' },
-    ),
-    concept(
-      'customer',
-      'Customer',
-      'Buyer profiles with contact details and addresses.',
-      11,
-      ['direct', 'direct', 'absent'],
-      ['read'],
-      { tone: 'bad', label: 'Not in all 3' },
-    ),
-    concept(
-      'location',
-      'Location',
-      'Warehouses and stores where stock is held.',
-      6,
-      ['direct', 'absent', 'absent'],
-      ['read'],
-      { tone: 'bad', label: 'Only in 1' },
-    ),
-  ];
-  const concepts = all.map((c) => ({
-    ...c,
-    coverage: Object.fromEntries(apiIds.map((id) => [id, c.coverage[id] ?? ('absent' as const)])),
-  }));
+  const all = SPECS.map((s) => build(s, apiIds));
+  const text = (q.q ?? '').trim().toLowerCase();
+  const matches = (c: Concept) =>
+    (!text || `${c.name} ${c.id} ${c.reason}`.toLowerCase().includes(text)) &&
+    (q.require ?? []).every((id) => (c.coverage[id] ?? 'absent') !== 'absent');
+  const base = all.filter(matches);
+  const multi = base.filter((c) => present(c) >= 2);
+  const single = base.filter((c) => present(c) === 1);
+  const inAll = (c: Concept) => present(c) === apiIds.length;
+  const writes = (c: Concept) => c.operations.includes('write');
+  const scope = q.only ?? 'multi';
+  let rows = scope === 'single' ? single : scope === 'all' ? [...multi, ...single] : multi;
+  if (q.inAll) rows = rows.filter(inAll);
+  if (q.writeOnly) rows = rows.filter(writes);
+  const limit = Math.min(q.limit ?? 24, 100);
+  const offset = q.offset ?? 0;
+  const page = rows.slice(offset, offset + limit);
+  const singles = all.filter((c) => present(c) === 1);
   return {
     apis,
-    concepts,
+    concepts: page,
+    total: rows.length,
+    limit,
+    offset,
+    nextOffset: offset + limit < rows.length ? offset + limit : null,
+    counts: {
+      all: multi.length,
+      inAll: multi.filter(inAll).length,
+      write: multi.filter(writes).length,
+      single: single.length,
+    },
     notModeled: {
-      count: 9,
-      summary: 'resources exist in only one API, such as marketplace messages and theme assets.',
+      count: singles.length,
+      summary:
+        'resources exist in only one of these APIs, such as theme assets and marketplace messages.',
     },
   };
 }

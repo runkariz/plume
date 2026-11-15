@@ -4,6 +4,7 @@ import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
 import { ApiError, type ModelSnapshot } from '@/api/types';
 import {
+  ApiAvatar,
   Banner,
   Button,
   Card,
@@ -15,7 +16,6 @@ import {
 } from '@/components';
 import { shortBuild } from '@/lib/format';
 import { apiLabel } from '@/lib/names';
-import { readableOn } from '@/lib/color';
 import { richText } from '@/lib/richText';
 import { defaultSelection, type Selection } from './graph';
 import { MappingGraph } from './MappingGraph';
@@ -444,13 +444,7 @@ export function ModelView() {
               return (
                 <li key={a.id}>
                   <span className="cov-name">
-                    <span
-                      aria-hidden
-                      className="cov-dot"
-                      style={{ background: a.logo.color, color: readableOn(a.logo.color) }}
-                    >
-                      {a.logo.text}
-                    </span>
+                    <ApiAvatar text={a.logo.text} color={a.logo.color} url={a.logo.url} size={26} />
                     <span className="cov-label">{a.shortName}</span>
                     <span className="mono small cov-count">
                       {c.mapped} of {c.total}

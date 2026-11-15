@@ -297,16 +297,27 @@ export interface ApiRef {
   name: string;
   /** Short label for chips and avatars, e.g. "Shopify". */
   shortName: string;
-  logo: { text: string; color: string };
+  logo: { text: string; color: string; url?: string | null };
 }
 
 export type CoverageKind = 'direct' | 'derived' | 'absent';
 export type Operation = 'read' | 'write';
 
+/** What a package says about a concept in one API (all 0 where the API only has it derived or not at all). */
+export interface ApiCounts {
+  models: number;
+  endpoints: number;
+  operations: string[];
+  fields: number;
+}
+
 export interface Concept {
   id: string;
   name: string;
-  description: string;
+  /** Why it is suggested: one paragraph written by the server from the packages. */
+  reason: string;
+  /** The server's per-API counts, shown next to the reason (nothing is shown that it does not send). */
+  apiCounts?: Record<string, ApiCounts>;
   likelyFields: number;
   coverage: Record<string, CoverageKind>; // by api id
   operations: Operation[];
@@ -315,9 +326,30 @@ export interface Concept {
   documents?: Record<string, string[]>;
 }
 
+/** multi = in 2+ of the selected APIs; single = in exactly one; all = both. */
+export type SuggestScope = 'multi' | 'single' | 'all';
+
+export interface SuggestQuery {
+  q?: string;
+  only?: SuggestScope;
+  /** API ids (a subset of the selected ones): only concepts present, direct or derived, in every one of them. */
+  require?: string[];
+  inAll?: boolean;
+  writeOnly?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
 export interface SuggestResponse {
   apis: ApiRef[];
   concepts: Concept[];
+  /** Concepts matching the filters (all pages). */
+  total: number;
+  limit: number;
+  offset: number;
+  nextOffset: number | null;
+  /** Chip numbers: they follow q and require, not the scope or the chips themselves. */
+  counts: { all: number; inAll: number; write: number; single: number };
   notModeled: { count: number; summary: string };
 }
 

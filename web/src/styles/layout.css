@@ -1000,6 +1000,25 @@ th {
   flex: none;
   line-height: 1;
 }
+.avatar-api.icon {
+  box-sizing: border-box;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.avatar-api.icon.derived {
+  border: 1.5px dashed var(--line);
+}
+.avatar-api.icon.absent {
+  opacity: 0.4;
+  filter: grayscale(1);
+}
+.avatar-api.icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
 .concepts {
   display: flex;
   flex-direction: column;
@@ -1226,9 +1245,6 @@ th {
   height: 100%;
 }
 @media (max-width: 860px) {
-  .concept {
-    grid-template-columns: 1fr 1fr;
-  }
   .model-cols,
   .two.even {
     grid-template-columns: 1fr;
@@ -1402,10 +1418,6 @@ th {
 }
 
 @media (max-width: 640px) {
-  .concept {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
   .concept .btn {
     width: 100%;
     justify-content: center;
@@ -1838,4 +1850,105 @@ th[scope='row'] {
 .model-cols > .share-card,
 .model-cols > .revise-card {
   grid-column: 1 / -1;
+}
+
+/* W13: suggestions with a reason, search, per-API filter and paging */
+.concept {
+  display: block;
+  padding: 20px 24px;
+}
+.concept-main {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) auto auto auto auto;
+  gap: 16px;
+  align-items: center;
+}
+.concept-reason {
+  margin: 12px 0 0;
+  max-width: 78ch;
+}
+.concept-counts {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  font-size: 14px;
+}
+.concept-counts li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.concepts.loading {
+  opacity: 0.55;
+  transition: opacity 0.15s;
+}
+.suggest-controls {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.suggest-search .input {
+  max-width: 520px;
+}
+.suggest-require {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.suggest-require legend {
+  float: left;
+  padding: 0 8px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 36px;
+}
+.suggest-require label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 99px;
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 14px;
+}
+.suggest-require label.on {
+  border-color: var(--accent);
+  background: var(--accent-soft, var(--surface));
+}
+.suggest-require label:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: -8px 0 26px;
+}
+.pager-text {
+  margin: -8px 0 26px;
+}
+
+/* after the base rule above, so they win on small screens */
+@media (max-width: 860px) {
+  .concept-main {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (max-width: 640px) {
+  .concept-main {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
 }

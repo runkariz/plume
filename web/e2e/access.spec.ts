@@ -84,7 +84,7 @@ for (const theme of THEMES) {
       await expectNoSeriousA11y(page);
       await shot(page, 'w12-job-failed', theme);
       await panel.getByRole('button', { name: 'Close' }).click();
-      await page.getByRole('button', { name: 'Generate Location', exact: true }).click();
+      await page.getByRole('button', { name: 'Generate Refund', exact: true }).click();
       await expect(page.getByRole('alert')).toContainText('not configured');
       await settle(page);
       await expectNoSeriousA11y(page);

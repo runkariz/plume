@@ -87,21 +87,30 @@ describe('Suggested models', () => {
     renderApp(url);
     expect(screen.getByRole('status')).toHaveTextContent('Looking across the APIs');
     expect(await screen.findByRole('heading', { name: 'Inventory' })).toBeInTheDocument();
-    expect(screen.getByText('~7 likely fields')).toBeInTheDocument();
     const inv = screen
       .getByRole('heading', { name: 'Inventory' })
       .closest('article') as HTMLElement;
+    expect(within(inv).getByText('~7 likely fields')).toBeInTheDocument();
     expect(within(inv).getByLabelText('Shopify (derived)')).toBeInTheDocument();
     expect(within(inv).getByLabelText('WooCommerce')).toBeInTheDocument();
     expect(within(inv).getByText('read, write')).toBeInTheDocument();
-    expect(within(inv).getByText('Derived in 2')).toBeInTheDocument();
+    expect(within(inv).getByText('Joins needed')).toBeInTheDocument();
+    // why it is suggested, under the box; the old repeated "X as documented by …" line is gone
+    expect(
+      within(inv).getByText(/is documented as a model in WooCommerce and Mirakl/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/as documented by/)).not.toBeInTheDocument();
+    // the counts of each API, only where the API has the concept
+    const counts = within(inv).getByRole('list', { name: 'Inventory in each API' });
+    expect(within(counts).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(counts).getByText('WooCommerce')).toBeInTheDocument();
     const cust = screen
       .getByRole('heading', { name: 'Customer' })
       .closest('article') as HTMLElement;
     expect(within(cust).getByLabelText('Mirakl (absent)')).toBeInTheDocument();
-    expect(within(cust).getByText('Not in all 3')).toBeInTheDocument();
+    expect(within(cust).getByText('Only in some')).toBeInTheDocument();
     expect(screen.getByText('Using Claude instead?')).toBeInTheDocument();
-    expect(screen.getByText(/9 resources exist in only one API/)).toBeInTheDocument();
+    expect(screen.getByText(/resources exist in only one of these APIs/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Change APIs' })).toHaveAttribute(
       'href',
       '/models?apis=shopify,woocommerce,mirakl',
@@ -124,13 +133,16 @@ describe('Suggested models', () => {
   it('filters: in all 3 APIs, can write', async () => {
     renderApp(url);
     await screen.findByRole('heading', { name: 'Customer' });
-    await userEvent.click(screen.getByRole('radio', { name: 'In all 3 APIs' }));
-    expect(screen.queryByRole('heading', { name: 'Customer' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Location' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('radio', { name: /^In all 3 APIs/ }));
+    await waitFor(() =>
+      expect(screen.queryByRole('heading', { name: 'Customer' })).not.toBeInTheDocument(),
+    );
     expect(screen.getByRole('heading', { name: 'Product' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('radio', { name: 'Can write' }));
+    await userEvent.click(screen.getByRole('radio', { name: /^Can write/ }));
+    await waitFor(() =>
+      expect(screen.getByRole('heading', { name: 'Shipment' })).toBeInTheDocument(),
+    );
     expect(screen.queryByRole('heading', { name: 'Customer' })).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Shipment' })).toBeInTheDocument();
   });
 
   it('asks for two APIs when the selection is too small', () => {
@@ -141,7 +153,16 @@ describe('Suggested models', () => {
   it('shows an empty state when no concepts are shared', async () => {
     server.use(
       http.post(`${TEST_API_BASE}/v1/models/suggest`, () =>
-        HttpResponse.json({ apis: [], concepts: [], notModeled: { count: 0, summary: '' } }),
+        HttpResponse.json({
+          apis: [],
+          concepts: [],
+          total: 0,
+          limit: 24,
+          offset: 0,
+          nextOffset: null,
+          counts: { all: 0, inAll: 0, write: 0, single: 0 },
+          notModeled: { count: 0, summary: '' },
+        }),
       ),
     );
     renderApp(url);
