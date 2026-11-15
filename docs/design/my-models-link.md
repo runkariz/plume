@@ -25,7 +25,10 @@ Owner decision (2026-11-16): replace per-model owner keys with one link per pers
     (`collection.created: true`, `collection.note`).
 - A version (`based_on` an unlisted model) made with a collection joins that collection. Its
   lineage may then sit in several collections (whoever saved versions); that is fine.
-- A retry of the same draft in the same session returns the stored model and its collection.
+- Plume never answers with a collection the caller did not send. A version of someone else's
+  model (anyone with its link may add one) saved without `collection` gets a NEW link for the
+  saver, not the author's. Likewise a retry of the same draft without `collection` returns the
+  stored model in a new link (the first answer may never have arrived).
 - Answer shape: `collection: {id, url, created, note?}` in structuredContent / HTTP JSON; the
   text says "Your models: <url> — bookmark it to find them later." The MCP instructions tell
   Claude to pass the collection it already got in this conversation on later saves.
