@@ -5,11 +5,20 @@ import type {
   GenerateRequest,
   ItemKind,
   Job,
+  RelationEdit,
   ReviewRequest,
   SearchRequest,
   SuggestQuery,
 } from '@/api/types';
 import { apiRef, modelCandidates, productSnapshot, sampleSuggestions } from './modelData';
+import {
+  applyEdits,
+  seedSets,
+  lineageOf as lineageOfSet,
+  setJson,
+  setListItem,
+  type StoredSet,
+} from './setStore';
 import {
   decorate,
   jobScript,
@@ -149,6 +158,9 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
   const models = new Map<string, StoredModel>(seedModels().map((m) => [m.model.id, m]));
   const allModels = () => [...models.values()];
   const modelJobs = new Map<string, MockJob>();
+  /** The model sets of the mock server, seeded ones included. */
+  const sets = new Map<string, StoredSet>(seedSets().map((x) => [x.set.id, x]));
+  const allSets = () => [...sets.values()];
   let jobCounter = 0;
   let sessionCounter = 0;
   let counter = 0;
@@ -548,6 +560,177 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
         return HttpResponse.json(decorate(allModels(), stored));
       }),
     ),
+    // ---- model sets: official and unlisted ones are public, unreleased ones need the token (404 otherwise) ----
+    http.get(`${base}/v1/model-sets`, ({ request }) => {
+      const want = new URL(request.url).searchParams.get('visibility');
+      if (want && !isMaintainer(request))
+        return HttpResponse.json(
+          { error: 'unauthorized', message: 'Missing or invalid token' },
+          { status: 401 },
+        );
+      const all = allSets();
+      const vis = want ?? 'official';
+      let rows = all.filter((x) => (vis === 'all' ? true : x.set.visibility === vis));
+      // the public list shows the latest official version of each lineage
+      if (vis === 'official')
+        rows = rows.filter(
+          (x) => !rows.some((o) => o.lineageId === x.lineageId && o.createdAt > x.createdAt),
+        );
+      rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      return HttpResponse.json({ items: rows.map((x) => setListItem(all, x)) });
+    }),
+    http.post(`${base}/v1/model-sets/mine`, async ({ request }) => {
+      const { ownerKeys } = (await request.json()) as { ownerKeys?: string[] };
+      const keys = Array.isArray(ownerKeys) ? ownerKeys : [];
+      const all = allSets();
+      const mine = all
+        .filter((x) => x.ownerKey && keys.includes(x.ownerKey) && x.set.visibility !== 'discarded')
+        .filter(
+          (x, _i, rows) =>
+            !rows.some((o) => o.lineageId === x.lineageId && o.createdAt > x.createdAt),
+        );
+      return HttpResponse.json({ items: mine.map((x) => setListItem(all, x)) });
+    }),
+    http.get(`${base}/v1/model-sets/:id`, ({ params, request }) => {
+      const x = sets.get(String(params.id));
+      if (
+        !x ||
+        ((x.set.visibility === 'unreleased' || x.set.visibility === 'discarded') &&
+          !isMaintainer(request))
+      )
+        return HttpResponse.json(
+          { error: 'not_found', message: 'Model set not found' },
+          { status: 404 },
+        );
+      return HttpResponse.json(setJson(allSets(), x));
+    }),
+    http.post(`${base}/v1/model-sets/:id/release`, ({ params, request }) => {
+      if (!isMaintainer(request))
+        return HttpResponse.json(
+          { error: 'unauthorized', message: 'Missing or invalid token' },
+          { status: 401 },
+        );
+      const x = sets.get(String(params.id));
+      if (!x)
+        return HttpResponse.json(
+          { error: 'not_found', message: 'Model set not found' },
+          { status: 404 },
+        );
+      if (x.set.visibility !== 'unreleased')
+        return HttpResponse.json(
+          { error: 'invalid_state', message: 'Only an unreleased set can be released.' },
+          { status: 409 },
+        );
+      if (x.set.undecided.length)
+        return HttpResponse.json(
+          {
+            error: 'undecided_relations',
+            message: `${x.set.undecided.length} relation(s) are still undecided.`,
+          },
+          { status: 409 },
+        );
+      x.set = {
+        ...x.set,
+        visibility: 'official',
+        official: true,
+        releasedAt: '2026-11-16T14:00:00Z',
+      };
+      return HttpResponse.json({
+        set: setJson(allSets(), x),
+        releasedMembers: x.set.members.filter((m) => !m.missing).map((m) => m.modelId),
+      });
+    }),
+    http.post(`${base}/v1/model-sets/:id/discard`, ({ params, request }) => {
+      if (!isMaintainer(request))
+        return HttpResponse.json(
+          { error: 'unauthorized', message: 'Missing or invalid token' },
+          { status: 401 },
+        );
+      const x = sets.get(String(params.id));
+      if (!x)
+        return HttpResponse.json(
+          { error: 'not_found', message: 'Model set not found' },
+          { status: 404 },
+        );
+      if (x.set.visibility !== 'unreleased')
+        return HttpResponse.json(
+          { error: 'invalid_state', message: 'Only an unreleased set can be discarded.' },
+          { status: 409 },
+        );
+      x.set = { ...x.set, visibility: 'discarded', official: false };
+      return HttpResponse.json(setJson(allSets(), x));
+    }),
+    // the editor: the chosen design of relations becomes a NEW version of the set
+    http.post(`${base}/v1/model-sets/:id/relations`, async ({ params, request }) => {
+      if (request.headers.get('authorization') && !isMaintainer(request))
+        return HttpResponse.json(
+          { error: 'unauthorized', message: 'The token is not valid.' },
+          { status: 401 },
+        );
+      const maintainer = isMaintainer(request);
+      const baseSet = sets.get(String(params.id));
+      if (
+        !baseSet ||
+        (baseSet.set.visibility === 'unreleased' && !maintainer) ||
+        baseSet.set.visibility === 'discarded'
+      )
+        return HttpResponse.json(
+          { error: 'not_found', message: 'Model set not found' },
+          { status: 404 },
+        );
+      const all = allSets();
+      const latest = lineageOfSet(all, baseSet).latestId;
+      if (latest !== baseSet.set.id)
+        return HttpResponse.json(
+          {
+            error: 'not_latest',
+            message: `This is not the latest version of the set (${latest}).`,
+          },
+          { status: 409 },
+        );
+      const body = (await request.json()) as { relations?: RelationEdit[] };
+      const result = applyEdits(baseSet.set, body.relations ?? []);
+      if ('status' in result)
+        return HttpResponse.json(
+          {
+            error: result.error,
+            message: result.message,
+            ...(result.issues ? { issues: result.issues } : {}),
+          },
+          { status: result.status },
+        );
+      const n = sets.size + 1;
+      const fresh = !maintainer && baseSet.set.visibility === 'official'; // the user's own unlisted copy
+      const visibility = maintainer
+        ? baseSet.set.visibility === 'unlisted'
+          ? 'unlisted'
+          : 'unreleased'
+        : 'unlisted';
+      const id = visibility === 'unlisted' ? `u-set${String(n).padStart(23, '0')}` : `set_v${n}`;
+      const ownerKey = fresh ? `pk_set_mock${n}` : null;
+      const stored: StoredSet = {
+        set: {
+          ...baseSet.set,
+          id,
+          visibility,
+          official: false,
+          releasedAt: null,
+          basedOn: baseSet.set.id,
+          relations: result.relations,
+          undecided: result.relations.filter((r) => !r.confirmed).map((r) => r.id),
+          sharePath: `/model-sets/${id}`,
+          generatedAt: '2026-11-16T15:00:00Z',
+        },
+        lineageId: fresh ? `S-${id}` : baseSet.lineageId,
+        ownerKey: ownerKey ?? baseSet.ownerKey,
+        createdAt: new Date(Date.UTC(2026, 10, 16, 15, 0, sets.size)).toISOString(),
+      };
+      sets.set(id, stored);
+      return HttpResponse.json(
+        { created: true, visibility, ownerKey, set: setJson(allSets(), stored) },
+        { status: 201 },
+      );
+    }),
     http.get(`${base}/v1/maintainer/me`, ({ request }) =>
       isMaintainer(request)
         ? HttpResponse.json({ name: 'maintainer', generation: true })

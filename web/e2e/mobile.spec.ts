@@ -52,6 +52,12 @@ const PAGES: { name: string; path: string; ready: (p: Page) => Promise<void> }[]
     ready: (p) => expect(p.getByLabel('Event JSON')).toBeVisible(),
   },
   {
+    name: 'model-set',
+    path: '/model-sets/set_shop00000000000000000?sel=r:order-items',
+    ready: (p) =>
+      expect(p.getByRole('region', { name: 'Selected model or relation' })).toBeVisible(),
+  },
+  {
     name: 'unlisted-model',
     path: '/models/u-3f9a0c71d2e84b5f9a6c1d7e8b2a4c60',
     ready: (p) => expect(p.getByRole('region', { name: 'Share this model' })).toBeVisible(),

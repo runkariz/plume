@@ -24,7 +24,14 @@ export function VisibilityChip({
 }
 
 /** "v3 of 3, based on <id>". A link to the model it was revised from; the other versions are in the history. */
-export function LineageLine({ snap }: { snap: ModelSnapshot }) {
+export function LineageLine({
+  snap,
+  basePath = '/models',
+}: {
+  snap: Pick<ModelSnapshot, 'lineage'>;
+  /** Where the other versions are shown: "/models" or "/model-sets". */
+  basePath?: string;
+}) {
   const l = snap.lineage;
   if (!l || (l.versions <= 1 && !l.basedOn)) return null;
   return (
@@ -34,7 +41,7 @@ export function LineageLine({ snap }: { snap: ModelSnapshot }) {
       </b>
       {l.basedOn ? (
         <>
-          , based on <Link to={`/models/${l.basedOn}`}>{l.basedOn}</Link>
+          , based on <Link to={`${basePath}/${l.basedOn}`}>{l.basedOn}</Link>
         </>
       ) : null}
     </p>
@@ -42,19 +49,29 @@ export function LineageLine({ snap }: { snap: ModelSnapshot }) {
 }
 
 /** The other versions of this model; the page says when a newer one exists. */
-export function LineageHistory({ snap }: { snap: ModelSnapshot }) {
+export function LineageHistory({
+  snap,
+  basePath = '/models',
+  what = 'model',
+}: {
+  snap: Pick<ModelSnapshot, 'id' | 'lineage'>;
+  basePath?: string;
+  what?: string;
+}) {
   const l = snap.lineage;
   if (!l || l.history.length <= 1) return null;
   return (
     <>
       {l.latestId !== snap.id ? (
-        <Banner tone="accent" title="A newer version of this model exists">
+        <Banner tone="accent" title={`A newer version of this ${what} exists`}>
           This is version {l.version} of {l.versions}.{' '}
-          <Link to={`/models/${l.latestId}`}>Open the latest version</Link>.
+          <Link to={`${basePath}/${l.latestId}`}>Open the latest version</Link>.
         </Banner>
       ) : null}
       <details className="lineage-history">
-        <summary>Versions of this model ({l.history.length})</summary>
+        <summary>
+          Versions of this {what} ({l.history.length})
+        </summary>
         <ol>
           {l.history.map((h) => (
             <li key={h.id}>
@@ -62,7 +79,7 @@ export function LineageHistory({ snap }: { snap: ModelSnapshot }) {
               {h.id === snap.id ? (
                 <b>this version</b>
               ) : (
-                <Link to={`/models/${h.id}`} className="mono small">
+                <Link to={`${basePath}/${h.id}`} className="mono small">
                   {h.id}
                 </Link>
               )}{' '}
@@ -91,19 +108,25 @@ function useCopy() {
 }
 
 /** An unlisted model: its link is its id, so the page says so and makes the link easy to copy. */
-export function ShareCard({ snap }: { snap: ModelSnapshot }) {
+export function ShareCard({
+  snap,
+  what = 'model',
+}: {
+  snap: Pick<ModelSnapshot, 'id' | 'visibility' | 'sharePath'>;
+  what?: string;
+}) {
   const { state, copy } = useCopy();
   if (snap.visibility !== 'unlisted') return null;
   const link = shareLink(snap);
   return (
-    <Card className="pad share-card" role="region" aria-label="Share this model">
-      <h2 className="h2-sm">Share this model</h2>
+    <Card className="pad share-card" role="region" aria-label={`Share this ${what}`}>
+      <h2 className="h2-sm">Share this {what}</h2>
       <p className="muted small">
-        Anyone with this link can open the model. It is not in the public Models list.
+        Anyone with this link can open the {what}. It is not in the public Models list.
       </p>
       <div className="share-row">
         <label htmlFor="share-link" className="sr-only">
-          Link to this model
+          Link to this {what}
         </label>
         <input
           id="share-link"
@@ -126,7 +149,13 @@ export function ShareCard({ snap }: { snap: ModelSnapshot }) {
 }
 
 /** "Modify with Claude": the server builds the prompt (it names the tools), the web only copies it. */
-export function ReviseCard({ snap }: { snap: ModelSnapshot }) {
+export function ReviseCard({
+  snap,
+  what = 'model',
+}: {
+  snap: Pick<ModelSnapshot, 'visibility' | 'revisePrompt'>;
+  what?: string;
+}) {
   const { state, copy } = useCopy();
   if (!snap.revisePrompt) return null;
   const prompt = snap.revisePrompt;
@@ -134,8 +163,8 @@ export function ReviseCard({ snap }: { snap: ModelSnapshot }) {
     <Card className="pad revise-card" role="region" aria-label="Modify with Claude">
       <h2 className="h2-sm">Modify with Claude</h2>
       <p className="muted small">
-        Ask Claude to change this model. Plume checks every citation again and stores the result as
-        a new version{snap.visibility === 'official' ? ' of your own' : ''}; this model stays as it
+        Ask Claude to change this {what}. Plume checks every citation again and stores the result as
+        a new version{snap.visibility === 'official' ? ' of your own' : ''}; this {what} stays as it
         is.
       </p>
       <pre className="code prompt" aria-label="Prompt for Claude">
@@ -165,13 +194,21 @@ export function ReviseCard({ snap }: { snap: ModelSnapshot }) {
 }
 
 /** Shown right after someone without a token created a model: the owner key lists "Your models" in this browser. */
-export function OwnerKeyNotice({ ownerKey, onClose }: { ownerKey: string; onClose: () => void }) {
+export function OwnerKeyNotice({
+  ownerKey,
+  onClose,
+  what = 'model',
+}: {
+  ownerKey: string;
+  onClose: () => void;
+  what?: string;
+}) {
   const { state, copy } = useCopy();
   return (
-    <Banner tone="accent" title="Your model is saved, and unlisted">
+    <Banner tone="accent" title={`Your ${what} is saved, and unlisted`}>
       <p>
-        Only people with this page's link can open it. This browser remembers the model under{' '}
-        <b>Your models</b> on the Models page. To see it from another browser, keep this key:
+        Only people with this page's link can open it. This browser remembers the {what} under{' '}
+        <b>Your {what}s</b> on the Models page. To see it from another browser, keep this key:
       </p>
       <div className="share-row">
         <code className="mono owner-key">{ownerKey}</code>

@@ -6,6 +6,7 @@ import type { ApiSummary } from '@/api/types';
 import { ApiAvatar, Button, EmptyState, ErrorState, LoadingState } from '@/components';
 import { CheckIcon } from '@/icons';
 import { categoryLabel, modelCount } from '@/lib/format';
+import { MySets, OfficialSets, UnreleasedSets } from '@/pages/sets/SetLists';
 import { ModelList, MyModels, UnreleasedModels } from './ModelList';
 
 function PickCard({
@@ -133,6 +134,9 @@ export function PickApps() {
         <UnreleasedModels />
         <MyModels />
         <ModelList />
+        <UnreleasedSets />
+        <MySets />
+        <OfficialSets />
       </section>
       {selected.length > 0 ? (
         <div className="selbar" role="region" aria-label="Selected APIs">

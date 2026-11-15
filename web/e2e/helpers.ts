@@ -34,8 +34,8 @@ export async function shot(page: Page, name: string, theme: Theme) {
 }
 
 /** Picks a mapping in the control box of the graph (it is closed by default on a narrow screen). */
-export async function openControls(page: Page) {
-  const toggle = page.getByRole('button', { name: /Filter and mappings/ });
+export async function openControls(page: Page, name: RegExp = /Filter and mappings/) {
+  const toggle = page.getByRole('button', { name });
   if ((await toggle.getAttribute('aria-expanded')) === 'false') await toggle.click();
   await expect(toggle).toHaveAttribute('aria-expanded', 'true');
 }
