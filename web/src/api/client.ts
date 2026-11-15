@@ -7,7 +7,12 @@ import {
   type DraftIssue,
   type EvidencePage,
   type GenerateRequest,
+  type GenerateJobResponse,
   type GenerateResponse,
+  type ModelJob,
+  type ModelJobEvent,
+  type ModelSessionStatus,
+  type ModelVisibility,
   type ModelContext,
   type ModelListItem,
   type Job,
@@ -61,9 +66,37 @@ export interface PlumeApi {
   // canonical models
   listModelCandidates(signal?: AbortSignal): Promise<ApiList>;
   suggestModels(apis: string[], signal?: AbortSignal): Promise<SuggestResponse>;
-  generateModel(req: GenerateRequest, signal?: AbortSignal): Promise<GenerateResponse>;
-  /** Models, newest first; pass an API id to list the models that use it. */
-  listModels(api?: string, signal?: AbortSignal): Promise<{ items: ModelListItem[] }>;
+  /**
+   * Without the maintainer token: a session for Claude (the model is stored unlisted). With it: a server-side job
+   * (202) unless `engine: "claude"`.
+   */
+  generateModel(
+    req: GenerateRequest,
+    signal?: AbortSignal,
+  ): Promise<GenerateResponse | GenerateJobResponse>;
+  /**
+   * Released (official) models, newest first; pass an API id to list the models that use it. With the maintainer
+   * token, `visibility` also lists unreleased models.
+   */
+  listModels(
+    api?: string,
+    signal?: AbortSignal,
+    opts?: { visibility?: ModelVisibility | 'all' },
+  ): Promise<{ items: ModelListItem[] }>;
+  /** The models of the owner keys this browser holds (POST so the keys stay out of URLs and logs). */
+  listMyModels(ownerKeys: string[], signal?: AbortSignal): Promise<{ items: ModelListItem[] }>;
+  /** Public poll of a session: has a draft been accepted for it yet? */
+  getModelSession(sessionId: string, signal?: AbortSignal): Promise<ModelSessionStatus>;
+  /** Maintainer token. 409 invalid_state unless the model is unreleased. */
+  releaseModel(id: string, signal?: AbortSignal): Promise<ModelSnapshot>;
+  discardModel(id: string, signal?: AbortSignal): Promise<ModelSnapshot>;
+  getModelJob(jobId: string, signal?: AbortSignal): Promise<ModelJob>;
+  /** Streams a generation job; resolves after `done`, resumes with Last-Event-ID, rejects after repeated loss. */
+  watchModelJob(
+    jobId: string,
+    onEvent: (e: ModelJobEvent) => void,
+    signal?: AbortSignal,
+  ): Promise<void>;
   /** The compact evidence index Claude reads for a session (snake_case JSON from the server). */
   getModelContext(sessionId: string, signal?: AbortSignal): Promise<ModelContext>;
   /** One page of the fields of an API's documents in a session; follow `next_cursor` for more. */
@@ -72,12 +105,20 @@ export interface PlumeApi {
     q: { api: string; docs?: string[]; cursor?: number },
     signal?: AbortSignal,
   ): Promise<EvidencePage>;
-  /** Maintainer token required. A refused draft rejects with an ApiError carrying `issues`. */
+  /**
+   * Open to everyone: without the token the model is stored unlisted (a new lineage returns an `ownerKey`, shown
+   * once), with it unreleased. A refused draft rejects with an ApiError carrying `issues`.
+   */
   submitModelDraft(
     sessionId: string,
     draft: unknown,
     signal?: AbortSignal,
-  ): Promise<{ created: boolean; model: ModelSnapshot }>;
+  ): Promise<{
+    created: boolean;
+    model: ModelSnapshot;
+    visibility?: ModelVisibility;
+    ownerKey?: string;
+  }>;
   getSnapshot(id: string, signal?: AbortSignal): Promise<ModelSnapshot>;
   // maintainer (the key is sent as a bearer token)
   verifyMaintainer(key: string, signal?: AbortSignal): Promise<MaintainerIdentity>;
@@ -189,13 +230,23 @@ export function createApiClient(
     return (await (await raw(path, init)).json()) as T;
   }
 
-  async function watch(id: string, onEvent: (e: JobEvent) => void, signal?: AbortSignal) {
+  /**
+   * Reads an SSE stream until `isDone` says an event is the last one. It reconnects with Last-Event-ID after a
+   * lost connection (a few times), and throws when the stream ends without a last event.
+   */
+  async function stream<E extends { id?: string }>(
+    path: string,
+    parse: (m: { event: string; data: string }) => E,
+    isDone: (e: E) => boolean,
+    onEvent: (e: E) => void,
+    signal?: AbortSignal,
+  ) {
     let lastId: string | undefined;
     let finished = false;
     let failures = 0;
     while (!finished) {
       try {
-        const res = await raw(`/v1/jobs/${enc(id)}/events`, {
+        const res = await raw(path, {
           signal,
           accept: 'text/event-stream',
           headers: lastId ? { 'Last-Event-ID': lastId } : {},
@@ -203,9 +254,9 @@ export function createApiClient(
         if (!res.body) throw new Error('The event stream has no body');
         const parser = createSseParser((m) => {
           if (m.id) lastId = m.id;
-          const e = JSON.parse(m.data) as JobEvent;
+          const e = parse(m);
           if (m.id) e.id = m.id;
-          if (e.type === 'done') finished = true;
+          if (isDone(e)) finished = true;
           onEvent(e);
         });
         const reader = res.body.getReader();
@@ -216,7 +267,7 @@ export function createApiClient(
           failures = 0;
           parser.push(dec.decode(value, { stream: true }));
         }
-        if (!finished) throw new Error('The event stream closed before the build finished');
+        if (!finished) throw new Error('The event stream closed before it finished');
       } catch (e) {
         if (signal?.aborted) return;
         if (e instanceof ApiError && e.status < 500) throw e;
@@ -227,6 +278,25 @@ export function createApiClient(
       }
     }
   }
+
+  const watch = (id: string, onEvent: (e: JobEvent) => void, signal?: AbortSignal) =>
+    stream<JobEvent>(
+      `/v1/jobs/${enc(id)}/events`,
+      (m) => JSON.parse(m.data) as JobEvent,
+      (e) => e.type === 'done',
+      onEvent,
+      signal,
+    );
+
+  // the model events carry their type in the SSE `event:` name; the data may or may not repeat it
+  const watchModel = (id: string, onEvent: (e: ModelJobEvent) => void, signal?: AbortSignal) =>
+    stream<ModelJobEvent>(
+      `/v1/models/jobs/${enc(id)}/events`,
+      (m) => ({ ...(JSON.parse(m.data) as object), type: m.event }) as ModelJobEvent,
+      (e) => e.type === 'done',
+      onEvent,
+      signal,
+    );
 
   return {
     baseUrl,
@@ -277,8 +347,27 @@ export function createApiClient(
     },
     generateModel: (body, signal) =>
       call<GenerateResponse>('/v1/models/generate', { method: 'POST', body, signal }),
-    listModels: (api, signal) =>
-      call<{ items: ModelListItem[] }>(`/v1/models${api ? `?api=${enc(api)}` : ''}`, { signal }),
+    listModels: (api, signal, opts = {}) => {
+      const p = new URLSearchParams();
+      if (api) p.set('api', api);
+      if (opts.visibility) p.set('visibility', opts.visibility);
+      const qs = p.toString();
+      return call<{ items: ModelListItem[] }>(`/v1/models${qs ? `?${qs}` : ''}`, { signal });
+    },
+    listMyModels: (ownerKeys, signal) =>
+      call<{ items: ModelListItem[] }>('/v1/models/mine', {
+        method: 'POST',
+        body: { ownerKeys },
+        signal,
+      }),
+    getModelSession: (sessionId, signal) =>
+      call<ModelSessionStatus>(`/v1/models/sessions/${enc(sessionId)}`, { signal }),
+    releaseModel: (id, signal) =>
+      call<ModelSnapshot>(`/v1/models/${enc(id)}/release`, { method: 'POST', signal }),
+    discardModel: (id, signal) =>
+      call<ModelSnapshot>(`/v1/models/${enc(id)}/discard`, { method: 'POST', signal }),
+    getModelJob: (jobId, signal) => call<ModelJob>(`/v1/models/jobs/${enc(jobId)}`, { signal }),
+    watchModelJob: watchModel,
     getModelContext: (sessionId, signal) =>
       call<ModelContext>(`/v1/models/sessions/${enc(sessionId)}/context`, { signal }),
     getModelEvidence: (sessionId, q, signal) => {
@@ -288,10 +377,12 @@ export function createApiClient(
       return call<EvidencePage>(`/v1/models/sessions/${enc(sessionId)}/evidence?${p}`, { signal });
     },
     submitModelDraft: (sessionId, body, signal) =>
-      call<{ created: boolean; model: ModelSnapshot }>(
-        `/v1/models/sessions/${enc(sessionId)}/draft`,
-        { method: 'POST', body, signal },
-      ),
+      call<{
+        created: boolean;
+        model: ModelSnapshot;
+        visibility?: ModelVisibility;
+        ownerKey?: string;
+      }>(`/v1/models/sessions/${enc(sessionId)}/draft`, { method: 'POST', body, signal }),
     getSnapshot: async (id, signal) => {
       const m = await call<ModelSnapshot>(`/v1/models/${enc(id)}`, { signal });
       return { ...m, inputs: m.inputs.map(withLabel) };

@@ -324,6 +324,8 @@ export interface SuggestResponse {
 export interface GenerateRequest {
   apis: string[];
   concept: string;
+  /** Maintainer token present: "server" is the default (a job); "claude" opens a session. */
+  engine?: 'claude' | 'server';
 }
 
 export type FieldSupport = 'supported' | 'derived' | 'unsupported';
@@ -354,9 +356,34 @@ export interface StaleInput {
   current: string;
 }
 
+/** Who can see a model: official = released by a maintainer (public lists); unlisted = anyone with the link. */
+export type ModelVisibility = 'official' | 'unreleased' | 'unlisted' | 'discarded';
+
+export interface ModelLineage {
+  id: string;
+  version: number;
+  versions: number;
+  /** The model this one was revised from; it can be in another lineage. */
+  basedOn: string | null;
+  latestId: string;
+  history: { id: string; version: number; createdAt: string; visibility: ModelVisibility }[];
+}
+
 export interface ModelSnapshot {
   id: string;
   name: string;
+  visibility?: ModelVisibility;
+  official?: boolean;
+  origin?: 'user' | 'maintainer';
+  /** "claude" or "gemini:<model>" */
+  generator?: string;
+  lineage?: ModelLineage;
+  /** "/models/{id}": the web route of the model, the link is the id. */
+  sharePath?: string;
+  /** PLUME_WEB_PUBLIC_URL + sharePath, or null when the server does not know its public URL. */
+  shareUrl?: string | null;
+  /** The text of "Modify with Claude", built by the server (it names the tools). */
+  revisePrompt?: string;
   /** True when a pinned API has a newer build: the model is built on older docs. */
   stale?: boolean;
   staleInputs?: StaleInput[];
@@ -389,12 +416,64 @@ export interface GenerateResponse {
   maintainerMcpUrl?: string;
 }
 
+/** POST /v1/models/generate with the token (engine "server"): 202, the model is written on the server. */
+export interface GenerateJobResponse {
+  jobId: string;
+  status: 'queued';
+  eventsUrl: string;
+}
+
+export function isGenerateJob(r: GenerateResponse | GenerateJobResponse): r is GenerateJobResponse {
+  return 'jobId' in r;
+}
+
+/** GET /v1/models/sessions/{sid}: a public poll for "has the model been stored yet?". */
+export interface ModelSessionStatus {
+  sessionId: string;
+  status: 'open' | 'submitted';
+  /** The latest draft accepted for this session. */
+  snapshotId: string | null;
+  visibility: ModelVisibility | null;
+  apis: string[];
+  concept: string;
+  basedOn: string | null;
+}
+
+export interface ModelJob {
+  jobId: string;
+  status: 'queued' | 'running' | 'succeeded' | 'failed';
+  apis: string[];
+  concept: string;
+  round: number;
+  maxRounds: number;
+  snapshotId: string | null;
+  error: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The events of a server-side generation (the SSE `event:` name is the type). */
+export type ModelJobEvent =
+  | { type: 'queued'; id?: string; jobId: string }
+  | { type: 'started'; id?: string; apis: string[]; concept: string }
+  | { type: 'context'; id?: string; documents: number; fields: number }
+  | { type: 'round'; id?: string; n: number; of: number }
+  | { type: 'refused'; id?: string; round: number; issues: DraftIssue[] }
+  | { type: 'accepted'; id?: string; snapshotId: string }
+  | { type: 'failed'; id?: string; code: string; message: string }
+  | { type: 'done'; id?: string; status: ModelJob['status']; snapshotId: string | null };
+
 export interface ModelListItem {
   id: string;
   name: string;
   concept: string;
   apis: string[];
   generatedAt: string;
+  /** Released (official) models only, in the public list. */
+  official?: boolean;
+  visibility?: ModelVisibility;
+  version?: number;
+  versions?: number;
   stale?: boolean;
   staleInputs?: StaleInput[];
 }

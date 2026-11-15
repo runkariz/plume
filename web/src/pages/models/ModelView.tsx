@@ -1,5 +1,5 @@
-import { useCallback, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
 import { ApiError, type ModelSnapshot } from '@/api/types';
@@ -20,6 +20,15 @@ import { richText } from '@/lib/richText';
 import { defaultSelection, type Selection } from './graph';
 import { MappingGraph } from './MappingGraph';
 import { docHref, MappingTable } from './MappingTable';
+import {
+  LineageHistory,
+  LineageLine,
+  OwnerKeyNotice,
+  ReviewBanner,
+  ReviseCard,
+  ShareCard,
+  VisibilityChip,
+} from './ModelAccess';
 import { StaleChip } from './StaleChip';
 
 export function claudePrompt(s: ModelSnapshot): string {
@@ -135,6 +144,18 @@ export function ModelView() {
   const [viewChoice, setViewChoice] = useState<'table' | 'graph' | null>(null);
   const [scopeChoice, setScopeChoice] = useState<'field' | 'all' | null>(null);
   const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
+  // right after someone without a token created this model: the owner key, shown once (then dropped from history)
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [ownerKey] = useState<string | null>(
+    () => (location.state as { ownerKey?: string } | null)?.ownerKey ?? null,
+  );
+  const [ownerKeyOpen, setOwnerKeyOpen] = useState(ownerKey !== null);
+  useEffect(() => {
+    if (ownerKey) navigate(location.pathname, { replace: true, state: null });
+    // once, on arrival
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const snap = state.status === 'ready' ? state.data : null;
   const selection = useMemo(() => picked ?? (snap ? defaultSelection(snap) : null), [picked, snap]);
@@ -211,12 +232,14 @@ export function ModelView() {
         <div>
           <h1 className="h1-sm">{snap.name}</h1>
           <div className="row" style={{ gap: 8, marginTop: 6 }}>
+            <VisibilityChip visibility={snap.visibility} />
             <Chip tone="warn">Generated, unverified</Chip>
             {snap.stale ? <StaleChip inputs={snap.staleInputs} /> : null}
             <Chip>{snap.inputs.length} APIs</Chip>
             <Chip>{snap.fields.length} fields</Chip>
             <Chip>snapshot {snap.id}</Chip>
           </div>
+          <LineageLine snap={snap} />
         </div>
         <div className="row">
           <Button onClick={() => void copy(prompt)}>Copy for Claude</Button>
@@ -238,6 +261,15 @@ export function ModelView() {
                 : ''}
           </span>
         </div>
+      </div>
+      {ownerKey && ownerKeyOpen ? (
+        <div className="access-banner">
+          <OwnerKeyNotice ownerKey={ownerKey} onClose={() => setOwnerKeyOpen(false)} />
+        </div>
+      ) : null}
+      <div className="access-banner">
+        <ReviewBanner snap={snap} onChanged={retry} />
+        <LineageHistory snap={snap} />
       </div>
       {snap.stale ? (
         <div className="stale-banner">
@@ -380,6 +412,8 @@ export function ModelView() {
             {selection ? <MappingDetail snap={snap} sel={selection} /> : null}
           </Card>
         ) : null}
+        <ShareCard snap={snap} />
+        <ReviseCard snap={snap} />
         <Card className="pad">
           <h2 className="h2-sm">Open questions</h2>
           {snap.openQuestions.length === 0 ? (

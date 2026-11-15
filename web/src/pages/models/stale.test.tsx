@@ -1,7 +1,6 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
-import { authStore } from '@/app/authStore';
 import { createHandlers } from '@/mocks/handlers';
 import { order40Snapshot } from '@/mocks/modelData';
 import { renderApp } from '@/test/render';
@@ -50,7 +49,6 @@ describe('a stale model says so', () => {
   });
 
   it('Regenerate opens a new generation session for the same concept and APIs', async () => {
-    authStore.signIn('pl_ok', 'maintainer');
     renderApp(staleModel);
     const regenerate = await screen.findByRole('link', { name: 'Regenerate' });
     expect(regenerate).toHaveAttribute(
@@ -70,7 +68,7 @@ describe('a stale model says so', () => {
     const prompt = within(panel).getByLabelText('Prompt for Claude').textContent ?? '';
     const sessionId = /get_model_context\("(s-mock\d+)"\)/.exec(prompt)?.[1] ?? '';
     const { testClient } = await import('@/test/render');
-    await testClient().submitModelDraft(sessionId, { name: 'Order', fields: [{ name: 'sku' }] });
+    await testClient().submitModelDraft(sessionId, { name: 'Order', fields: [{ name: 'sku' }] }); // unlisted: no token
     const h1 = await screen.findByRole('heading', { level: 1, name: 'Order' }, { timeout: 3000 });
     expect(h1).toBeInTheDocument();
     expect(screen.queryByText(/Stale/)).not.toBeInTheDocument();
@@ -95,7 +93,7 @@ describe('a stale model says so', () => {
 describe('model lists carry the stale mark', () => {
   it('the models page lists existing models, stale ones marked, current ones too', async () => {
     renderApp('/models');
-    const list = await screen.findByRole('region', { name: 'Existing models' });
+    const list = await screen.findByRole('region', { name: 'Official models' });
     const order = within(list).getByRole('link', { name: 'Order' }).closest('li') as HTMLElement;
     expect(within(order).getByText('Stale')).toBeInTheDocument();
     expect(within(order).getByText('Shopify · WooCommerce · Mirakl')).toBeInTheDocument();
@@ -105,7 +103,7 @@ describe('model lists carry the stale mark', () => {
     const inventory = within(list)
       .getByRole('link', { name: 'Inventory' })
       .closest('li') as HTMLElement;
-    expect(within(inventory).getByText('Current')).toBeInTheDocument();
+    expect(within(inventory).getByText('Official')).toBeInTheDocument();
     await userEvent.click(within(list).getByRole('link', { name: 'Order' }));
     expect(await screen.findByRole('heading', { level: 1, name: 'Order' })).toBeInTheDocument();
   });
@@ -113,7 +111,15 @@ describe('model lists carry the stale mark', () => {
   it('the API page lists the models built from it', async () => {
     renderApp('/apis/shopify');
     const list = await screen.findByRole('region', { name: 'Canonical models' });
-    expect(within(list).getAllByRole('listitem')).toHaveLength(2);
+    // released (official) models only: the unlisted and the unreleased ones of the mock never show
+    expect(
+      within(list)
+        .getAllByRole('listitem')
+        .map((li) => li.querySelector('b')?.textContent),
+    ).toEqual(expect.arrayContaining(['Inventory', 'Order', 'Product']));
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+    expect(within(list).queryByText('Return')).not.toBeInTheDocument();
+    expect(within(list).queryByText('Inventory, with a returns count')).not.toBeInTheDocument();
     expect(within(list).getByText('Stale')).toBeInTheDocument();
   });
 
@@ -121,7 +127,7 @@ describe('model lists carry the stale mark', () => {
     server.use(http.get(`${TEST_API_BASE}/v1/models`, () => HttpResponse.json({ items: [] })));
     const { unmount } = renderApp('/models');
     await screen.findByRole('checkbox', { name: /Shopify/ });
-    expect(screen.queryByRole('region', { name: 'Existing models' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Official models' })).not.toBeInTheDocument();
     unmount();
     server.use(
       http.get(`${TEST_API_BASE}/v1/models`, () =>
@@ -131,6 +137,6 @@ describe('model lists carry the stale mark', () => {
     renderApp('/models');
     await screen.findByRole('checkbox', { name: /Shopify/ });
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
-    expect(screen.queryByRole('region', { name: 'Existing models' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Official models' })).not.toBeInTheDocument();
   });
 });
