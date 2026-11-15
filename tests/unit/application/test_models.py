@@ -286,7 +286,9 @@ def test_concept_spelling_is_normalised(stack: FakeStack) -> None:
 # -- access: unlisted user models, lineages, owner keys, release/discard ----------------------
 
 
-def test_user_models_are_unlisted_with_a_random_id_and_owner_key(stack: FakeStack) -> None:
+def test_user_models_are_unlisted_with_a_random_id_and_a_my_models_link(
+    stack: FakeStack,
+) -> None:
     from plume.application.errors import NotFoundError  # noqa: PLC0415
 
     models = stack.models()
@@ -297,24 +299,37 @@ def test_user_models_are_unlisted_with_a_random_id_and_owner_key(stack: FakeStac
     assert snap.snapshot_id.startswith("u-")
     assert len(snap.snapshot_id) >= 22
     assert snap.key.startswith("m-")  # the content hash, kept for dedup only
-    assert result.owner_key
-    assert result.owner_key.startswith("pk_")
+    assert result.owner_key is None  # no more owner keys
+    ref = result.collection
+    assert ref is not None
+    assert ref.created
+    assert ref.collection_id.startswith("c-")
+    assert len(ref.collection_id) >= 22
     retry = models.submit(session.session_id, _draft("good"))  # same draft again: same model
     assert (retry.created, retry.snapshot.snapshot_id) == (False, snap.snapshot_id)
-    # The first response may have been lost (a bridge timeout): the retry gets a new key, the
-    # old one stops working.
-    assert retry.owner_key
-    assert retry.owner_key != result.owner_key
-    assert [m.snapshot_id for m in models.mine([retry.owner_key])] == [snap.snapshot_id]
-    assert models.mine([result.owner_key]) == []
+    # The first response may have been lost (a bridge timeout): the retry names the same link.
+    assert retry.collection is not None
+    assert (retry.collection.collection_id, retry.collection.created) == (ref.collection_id, False)
+    mine = stack.collections().content(ref.collection_id)
+    assert [m.snapshot_id for m in mine.models] == [snap.snapshot_id]
     assert models.visible_snapshot(snap.snapshot_id) == snap  # the link works for anyone
     assert models.list() == []
     assert models.existing(APIS, "Order") is None
-    assert [m.snapshot_id for m in models.mine([retry.owner_key])] == [snap.snapshot_id]
-    assert models.mine(["pk_wrong"]) == []
     assert models.session_status(session.session_id)["snapshot_id"] == snap.snapshot_id
-    other = models.submit(models.start(APIS, "Order", "user").session_id, _draft("good"))
+    # a later save with the link joins it; an unknown link makes a new one and says so
+    second = models.submit(
+        models.start(APIS, "Order", "user").session_id, _draft("good"), collection=ref.collection_id
+    )
+    assert second.collection is not None
+    assert second.collection.collection_id == ref.collection_id
+    assert len(stack.collections().content(ref.collection_id).models) == 2
+    other = models.submit(
+        models.start(APIS, "Order", "user").session_id, _draft("good"), collection="c-typo"
+    )
     assert other.snapshot.snapshot_id != snap.snapshot_id  # another user, another lineage
+    assert other.collection is not None
+    assert other.collection.created
+    assert "not a My models link" in (other.collection.note or "")
     with pytest.raises(NotFoundError):
         models.visible_snapshot("u-guess")
 
@@ -337,7 +352,9 @@ def test_revisions_make_versions_in_a_lineage(stack: FakeStack) -> None:
     info = models.lineage_info(v3)
     assert (info["version"], info["versions"], info["latest_id"]) == (3, 3, v3.snapshot_id)
     assert [h["version"] for h in info["history"]] == [1, 2, 3]
-    assert [m.snapshot_id for m in models.mine([first.owner_key or ""])] == [v3.snapshot_id]
+    assert first.collection is not None
+    mine = stack.collections().content(first.collection.collection_id).models
+    assert [m.snapshot_id for m in mine] == [v3.snapshot_id]  # the latest version
     assert models.snapshot(v1.snapshot_id) == v1  # versions never change
 
 
@@ -348,7 +365,7 @@ def test_maintainer_flow_release_discard_and_official_forks(stack: FakeStack) ->
     models = stack.models()
     snap = models.submit(models.start(APIS, "Order").session_id, _draft("good"), maintainer=True)
     sid = snap.snapshot.snapshot_id
-    assert snap.owner_key is None
+    assert (snap.owner_key, snap.collection) == (None, None)  # maintainers use no links
     with pytest.raises(NotFoundError):
         models.visible_snapshot(sid)  # unreleased: hidden without the token
     assert models.visible_snapshot(sid, maintainer=True).visibility == "unreleased"
@@ -364,7 +381,7 @@ def test_maintainer_flow_release_discard_and_official_forks(stack: FakeStack) ->
     assert (user.snapshot.visibility, user.snapshot.version) == ("unlisted", 1)
     assert user.snapshot.lineage != official.lineage
     assert user.snapshot.based_on == sid
-    assert user.owner_key
+    assert user.collection is not None
     # a maintainer revision is the next (unreleased) version of the official lineage
     v2 = models.submit(
         models.revise(sid, maintainer=True)["session_id"],

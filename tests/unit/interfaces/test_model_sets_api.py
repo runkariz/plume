@@ -49,6 +49,7 @@ def client(stack: FakeStack) -> TestClient:
                 rate_limit_per_minute=0,
                 suggest=stack.suggest,
                 models=stack.models,
+                collections=stack.collections,
                 model_sets=stack.model_sets,
                 maintainer_tokens=(TOKEN,),
                 web_public_url="https://plume.example",
@@ -84,7 +85,10 @@ def test_user_set_over_http(client: TestClient, stack: FakeStack) -> None:
     out = r.json()
     x = out["set"]
     assert (out["visibility"], x["kind"], x["visibility"]) == ("unlisted", "model_set", "unlisted")
-    assert out["ownerKey"].startswith("pk_")
+    assert "ownerKey" not in out
+    link = out["collection"]
+    assert link["created"] is True
+    assert link["url"] == f"https://plume.example/mine/{link['id']}"
     assert [m["concept"] for m in x["members"]] == ["Order", "Product"]
     assert x["members"][0]["fieldCount"] == 6
     rel = x["relations"][0]
@@ -97,8 +101,8 @@ def test_user_set_over_http(client: TestClient, stack: FakeStack) -> None:
     assert x["inputs"][0]["logo"]["text"]
     assert client.get(f"/v1/model-sets/{x['id']}").json()["id"] == x["id"]
     assert client.get("/v1/model-sets").json()["items"] == []
-    mine = client.post("/v1/model-sets/mine", json={"ownerKeys": [out["ownerKey"]]}).json()
-    assert [i["id"] for i in mine["items"]] == [x["id"]]
+    mine = client.get(f"/v1/collections/{link['id']}").json()
+    assert [i["id"] for i in mine["sets"]] == [x["id"]]
     status = client.get(f"/v1/model-sets/sessions/{ss}").json()
     assert (status["status"], status["set_id"]) == ("submitted", x["id"])
     bad = {**body, "relations": [_relation(stack, pins, cardinality="1:1")]}
@@ -192,7 +196,7 @@ def test_web_relation_edit(client: TestClient, stack: FakeStack) -> None:
     assert v2.status_code == 201
     v2set = v2.json()["set"]
     assert (v2set["lineage"]["version"], v2set["undecided"]) == (2, ["order-items"])
-    assert v2.json()["ownerKey"] is None  # same lineage
+    assert v2.json()["collection"]["created"] is False  # the set's existing link
     stale = client.post(url, json={"relations": [{"id": "order-items", "confirmed": True}]})
     assert stale.status_code == 409  # v1 is no longer the latest
     url2 = f"/v1/model-sets/{v2set['id']}/relations"
@@ -250,6 +254,7 @@ def test_server_generated_set_proposes_undecided_relations(packages: Path, tmp_p
                 list_builds=lambda: ListBuilds(s.builds, s.tags),
                 diff_builds=lambda: DiffBuilds(s.builds), resolver=s.resolver,
                 rate_limit_per_minute=0, suggest=s.suggest, models=s.models,
+                collections=s.collections,
                 model_sets=s.model_sets, generate_models=s.generate, maintainer_tokens=(TOKEN,),
             )
         )

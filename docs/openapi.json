@@ -1219,6 +1219,24 @@
         "title": "Citation",
         "type": "object"
       },
+      "CollectionLink": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "url"
+        ],
+        "title": "CollectionLink",
+        "type": "object"
+      },
       "Concept": {
         "properties": {
           "apiCounts": {
@@ -2507,6 +2525,25 @@
         "title": "Me",
         "type": "object"
       },
+      "MergeRequest": {
+        "properties": {
+          "from": {
+            "description": "The other My models links.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "From",
+            "type": "array"
+          }
+        },
+        "required": [
+          "from"
+        ],
+        "title": "MergeRequest",
+        "type": "object"
+      },
       "MineRequest": {
         "properties": {
           "ownerKeys": {
@@ -2665,6 +2702,14 @@
       },
       "ModelList": {
         "properties": {
+          "collections": {
+            "description": "POST /mine only (transition): the My models links the owner keys became.",
+            "items": {
+              "$ref": "#/components/schemas/CollectionLink"
+            },
+            "title": "Collections",
+            "type": "array"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/ModelListItem"
@@ -5425,6 +5470,166 @@
         ]
       }
     },
+    "/v1/collections/{collection_id}": {
+      "get": {
+        "description": "A \"My models\" link: the latest version of each model and set in it, newest\nfirst (unlisted ones included: they are readable by their own links anyway). It\nlists only; it grants nothing else.",
+        "operationId": "get_collection_v1_collections__collection_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "title": "Collection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Collection V1 Collections  Collection Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Collection",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/collections/{collection_id}/merge": {
+      "post": {
+        "description": "Move every model and set of the `from` links into this one (for a user who ended\nup with two links). The old links then list nothing and carry `mergedInto`.",
+        "operationId": "merge_collections_v1_collections__collection_id__merge_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "collection_id",
+            "required": true,
+            "schema": {
+              "title": "Collection Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Merge Collections V1 Collections  Collection Id  Merge Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Merge Collections",
+        "tags": [
+          "models"
+        ]
+      }
+    },
     "/v1/jobs/{job_id}": {
       "get": {
         "operationId": "get_job_v1_jobs__job_id__get",
@@ -6812,7 +7017,7 @@
     },
     "/v1/model-sets/sessions/{session_id}/draft": {
       "post": {
-        "description": "Validate and store a set: unlisted without the token (with `ownerKey` for a new set),\nunreleased with it. Relations the user has not decided carry confirmed:false.",
+        "description": "Validate and store a set: unlisted without the token, saved into the user's \"My\nmodels\" link (`collection`; a new one when omitted or unknown, returned as\n`collection`), unreleased with it. Relations the user has not decided carry\nconfirmed:false.",
         "operationId": "submit_v1_model_sets_sessions__session_id__draft_post",
         "parameters": [
           {
@@ -6838,6 +7043,23 @@
                 }
               ],
               "title": "Basedon"
+            }
+          },
+          {
+            "in": "query",
+            "name": "collection",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Collection"
             }
           },
           {
@@ -7178,6 +7400,23 @@
             "schema": {
               "title": "Set Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "collection",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Collection"
             }
           },
           {
@@ -8017,7 +8256,7 @@
     },
     "/v1/models/mine": {
       "post": {
-        "description": "The latest version of each model started with one of these owner keys (POST so the\nkeys stay out of URLs and logs).",
+        "description": "TRANSITION: the latest version of each model started with one of these old owner\nkeys (POST so the keys stay out of URLs and logs), plus `collections`: the \"My models\"\nlinks those keys became. Use GET /v1/collections/{id} from now on.",
         "operationId": "mine_v1_models_mine_post",
         "requestBody": {
           "content": {
@@ -8237,7 +8476,7 @@
     },
     "/v1/models/sessions/{session_id}/draft": {
       "post": {
-        "description": "Validate and store a draft: unlisted without the token (the response carries the\nmodel's link and, for a new model, its `ownerKey`, shown once), unreleased with it.\n`basedOn` makes it the next version of that model when you may add to it.",
+        "description": "Validate and store a draft: unlisted without the token, saved into the user's \"My\nmodels\" link (`collection`; a new one when omitted or unknown, returned as\n`collection: {id, url, created, note?}`), unreleased with it. `basedOn` makes it the\nnext version of that model when you may add to it.",
         "operationId": "submit_v1_models_sessions__session_id__draft_post",
         "parameters": [
           {
@@ -8263,6 +8502,23 @@
                 }
               ],
               "title": "Basedon"
+            }
+          },
+          {
+            "in": "query",
+            "name": "collection",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Collection"
             }
           },
           {

@@ -18,6 +18,7 @@ from plume.application.knowledge.import_package import ImportPackage
 from plume.application.knowledge.list_builds import ListApis, ListBuilds
 from plume.application.knowledge.seal_build import SealBuild
 from plume.application.knowledge.tag_build import TagBuild
+from plume.application.models.collections import Collections
 from plume.application.models.concepts import SuggestConcepts
 from plume.application.models.generate import GenerateModels
 from plume.application.models.model_sets import ModelSets
@@ -44,6 +45,7 @@ from plume.infrastructure.db.engine import make_engine
 from plume.infrastructure.db.repos.api_repo import PostgresApiRepo
 from plume.infrastructure.db.repos.asset_repo import PostgresAssetRepo
 from plume.infrastructure.db.repos.build_repo import PostgresBuildRepo
+from plume.infrastructure.db.repos.collection_repo import PostgresCollectionRepo
 from plume.infrastructure.db.repos.document_repo import PostgresDocumentRepo
 from plume.infrastructure.db.repos.eval_repo import PostgresEvalRepo
 from plume.infrastructure.db.repos.model_repo import PostgresModelJobRepo, PostgresModelRepo
@@ -166,6 +168,15 @@ class Container:
     def model_sets_repo(self) -> PostgresModelSetRepo:
         return PostgresModelSetRepo(self.engine)
 
+    @cached_property
+    def collections_repo(self) -> PostgresCollectionRepo:
+        return PostgresCollectionRepo(self.engine)
+
+    def collections(self) -> Collections:
+        return Collections(
+            self.collections_repo, self.models_repo, self.model_sets_repo, self.clock
+        )
+
     def model_sets(self) -> ModelSets:
         return ModelSets(
             self.resolver(),
@@ -174,6 +185,7 @@ class Container:
             self.model_sets_repo,
             self.suggest_related(),
             self.clock,
+            self.collections(),
         )
 
     def suggest_related(self) -> SuggestRelated:
@@ -190,6 +202,7 @@ class Container:
             self.documents,
             self.models_repo,
             self.clock,
+            self.collections(),
         )
 
     @cached_property

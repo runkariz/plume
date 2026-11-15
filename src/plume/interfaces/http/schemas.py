@@ -575,8 +575,23 @@ class ModelListItem(Schema):
     )
 
 
+class CollectionLink(Schema):
+    id: str
+    url: str
+
+
+class MergeRequest(Schema):
+    sources: list[str] = Field(
+        alias="from", min_length=1, max_length=20, description="The other My models links."
+    )
+
+
 class ModelList(Schema):
     items: list[ModelListItem]
+    collections: list[CollectionLink] = Field(
+        default_factory=list,
+        description="POST /mine only (transition): the My models links the owner keys became.",
+    )
 
 
 class AuthVariable(Schema):

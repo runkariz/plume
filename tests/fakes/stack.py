@@ -13,6 +13,7 @@ from plume.application.knowledge.extract_facts import ExtractFacts
 from plume.application.knowledge.import_package import ImportPackage
 from plume.application.knowledge.seal_build import SealBuild
 from plume.application.knowledge.tag_build import TagBuild
+from plume.application.models.collections import Collections
 from plume.application.models.concepts import SuggestConcepts
 from plume.application.models.generate import GenerateModels
 from plume.application.models.model_sets import ModelSets
@@ -51,6 +52,7 @@ from tests.fakes.knowledge import (
     RecordingEvents,
 )
 from tests.fakes.models import (
+    InMemoryCollectionRepo,
     InMemoryModelJobRepo,
     InMemoryModelRepo,
     InMemoryModelSetRepo,
@@ -82,6 +84,7 @@ class FakeStack:
     model_jobs: InMemoryModelJobRepo = field(default_factory=InMemoryModelJobRepo)
     model_events: InMemoryJobEventLog = field(default_factory=InMemoryJobEventLog)
     sets_repo: InMemoryModelSetRepo = field(default_factory=InMemoryModelSetRepo)
+    collections_repo: InMemoryCollectionRepo = field(default_factory=InMemoryCollectionRepo)
 
     def __post_init__(self) -> None:
         self.vectors = InMemoryVectorIndex(self.documents)
@@ -225,7 +228,11 @@ class FakeStack:
             self.sets_repo,
             self.suggest_related(),
             self.clock,
+            self.collections(),
         )
+
+    def collections(self) -> Collections:
+        return Collections(self.collections_repo, self.models_repo, self.sets_repo, self.clock)
 
     def suggest_related(self) -> SuggestRelated:
         return SuggestRelated(self.resolver(), self.search_index, self.facts, self.documents)
@@ -238,6 +245,7 @@ class FakeStack:
             self.documents,
             self.models_repo,
             self.clock,
+            self.collections(),
         )
 
     def generate(self) -> GenerateModels:
