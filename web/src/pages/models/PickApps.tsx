@@ -6,6 +6,7 @@ import type { ApiSummary } from '@/api/types';
 import { ApiAvatar, Button, EmptyState, ErrorState, LoadingState } from '@/components';
 import { CheckIcon } from '@/icons';
 import { categoryLabel, modelCount } from '@/lib/format';
+import { ModelList } from './ModelList';
 
 function PickCard({
   api,
@@ -127,6 +128,9 @@ export function PickApps() {
             ))}
           </ul>
         ) : null}
+      </section>
+      <section className="existing-models">
+        <ModelList />
       </section>
       {selected.length > 0 ? (
         <div className="selbar" role="region" aria-label="Selected APIs">

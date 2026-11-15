@@ -344,9 +344,19 @@ export interface ModelField {
   sources: Record<string, FieldSource>;
 }
 
+/** An API whose docs changed since a model was built: the build the model pinned and the current one. */
+export interface StaleInput {
+  api: string;
+  pinned: string;
+  current: string;
+}
+
 export interface ModelSnapshot {
   id: string;
   name: string;
+  /** True when a pinned API has a newer build: the model is built on older docs. */
+  stale?: boolean;
+  staleInputs?: StaleInput[];
   concept?: string;
   sessionId?: string;
   description: string;
@@ -382,6 +392,8 @@ export interface ModelListItem {
   concept: string;
   apis: string[];
   generatedAt: string;
+  stale?: boolean;
+  staleInputs?: StaleInput[];
 }
 
 /** GET /v1/models/sessions/{id}/context: a compact index of the evidence (field lists are paged separately). */

@@ -3,12 +3,24 @@ import { Link, useParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
 import { ApiError, type ModelSnapshot } from '@/api/types';
-import { Button, Card, Chip, Crumbs, ErrorState, LoadingState, Segmented } from '@/components';
+import {
+  Banner,
+  Button,
+  Card,
+  Chip,
+  Crumbs,
+  ErrorState,
+  LoadingState,
+  Segmented,
+} from '@/components';
+import { shortBuild } from '@/lib/format';
+import { apiLabel } from '@/lib/names';
 import { readableOn } from '@/lib/color';
 import { richText } from '@/lib/richText';
 import { defaultSelection, type Selection } from './graph';
 import { MappingGraph } from './MappingGraph';
 import { docHref, MappingTable } from './MappingTable';
+import { StaleChip } from './StaleChip';
 
 export function claudePrompt(s: ModelSnapshot): string {
   const apis = s.inputs.map((a) => a.shortName).join(', ');
@@ -96,6 +108,13 @@ function MappingDetail({ snap, sel }: { snap: ModelSnapshot; sel: Selection }) {
       )}
     </>
   );
+}
+
+function staleSentence(s: ModelSnapshot): string {
+  const names = (s.staleInputs ?? []).map((i) => apiLabel({ id: i.api }));
+  return names.length
+    ? `The docs of ${names.join(', ')} changed after it was built.`
+    : 'The docs changed after it was built.';
 }
 
 /** Above this many fields a model opens as a table, and the graph focuses on one field. */
@@ -193,6 +212,7 @@ export function ModelView() {
           <h1 className="h1-sm">{snap.name}</h1>
           <div className="row" style={{ gap: 8, marginTop: 6 }}>
             <Chip tone="warn">Generated, unverified</Chip>
+            {snap.stale ? <StaleChip inputs={snap.staleInputs} /> : null}
             <Chip>{snap.inputs.length} APIs</Chip>
             <Chip>{snap.fields.length} fields</Chip>
             <Chip>snapshot {snap.id}</Chip>
@@ -219,6 +239,38 @@ export function ModelView() {
           </span>
         </div>
       </div>
+      {snap.stale ? (
+        <div className="stale-banner">
+          <Banner tone="warn" title="This model is built on older docs">
+            {staleSentence(snap)} The mappings and citations below are still checked against the
+            builds this model was made from, but they may not match the docs as they are now.
+            Regenerate to rebuild the model from the current docs.
+            <ul className="stale-builds">
+              {(snap.staleInputs ?? []).map((i) => (
+                <li key={i.api}>
+                  <span className="mono">{apiLabel({ id: i.api })}</span>: built on{' '}
+                  <span className="mono" title={i.pinned}>
+                    {shortBuild(i.pinned)}
+                  </span>
+                  , now{' '}
+                  <span className="mono" title={i.current}>
+                    {shortBuild(i.current)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="row">
+              <Link
+                className="btn primary"
+                to={`/models/suggest?apis=${snap.inputs.map((a) => a.id).join(',')}&regenerate=${encodeURIComponent(snap.concept ?? snap.name)}`}
+              >
+                Regenerate
+              </Link>
+              <span className="faint small">Opens a new generation session for {snap.name}.</span>
+            </div>
+          </Banner>
+        </div>
+      ) : null}
       <div className="legend-line muted small">
         <span>
           <svg width="28" height="6" aria-hidden>

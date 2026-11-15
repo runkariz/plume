@@ -12,6 +12,7 @@ import type {
 import {
   apiRef,
   modelCandidates,
+  order40Snapshot,
   productSnapshot,
   sampleSuggestions,
   snapshots,
@@ -297,15 +298,31 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
     }),
     http.get(`${base}/v1/models`, ({ request }) => {
       const api = new URL(request.url).searchParams.get('api');
-      const items = [...made.values()]
-        .filter((m) => !api || m.apis.includes(api))
-        .map((m) => ({
+      const all = ['shopify', 'woocommerce', 'mirakl'];
+      const seeded: { m: ModelSnapshot; concept: string; apis: string[] }[] = [
+        { m: order40Snapshot, concept: 'Order', apis: all },
+      ];
+      const inventory = snapshots['snap_8f3a21'];
+      if (inventory) seeded.unshift({ m: inventory, concept: 'inventory', apis: all });
+      const items = [
+        ...[...made.values()].map((m) => ({
           id: m.model.id,
           name: m.model.name,
           concept: m.concept,
           apis: m.apis,
           generatedAt: '2026-11-15T01:00:00Z',
-        }));
+          stale: false,
+        })),
+        ...seeded.map((x) => ({
+          id: x.m.id,
+          name: x.m.name,
+          concept: x.concept,
+          apis: x.apis,
+          generatedAt: x.m.generatedAt,
+          stale: x.m.stale ?? false,
+          staleInputs: x.m.staleInputs ?? [],
+        })),
+      ].filter((m) => !api || m.apis.includes(api));
       return HttpResponse.json({ items });
     }),
     http.get(`${base}/v1/models/:id`, ({ params }) => {

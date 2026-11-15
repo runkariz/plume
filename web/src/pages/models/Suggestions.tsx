@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { GenerateSession } from './GenerateSession';
@@ -105,6 +105,26 @@ export function Suggestions() {
   const [error, setError] = useState<string | null>(null);
   const ctrl = useRef<AbortController | null>(null);
   const openModel = useCallback((id: string) => navigate(`/models/${id}`), [navigate]);
+  // "Regenerate" on a stale model lands here with ?regenerate=<concept>: open that concept's session once
+  const regenerateWanted = params.get('regenerate');
+  const autoStarted = useRef(false);
+  const suggestions = state.status === 'ready' ? state.data : null;
+  const regenerateConcept = useMemo(() => {
+    const want = regenerateWanted?.toLowerCase();
+    return want
+      ? suggestions?.concepts.find(
+          (c) => c.id.toLowerCase() === want || c.name.toLowerCase() === want,
+        )
+      : undefined;
+  }, [suggestions, regenerateWanted]);
+  useEffect(() => {
+    if (!regenerateConcept || autoStarted.current) return;
+    autoStarted.current = true;
+    void generate(regenerateConcept);
+    // runs once per page load, when the concept to regenerate is known
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regenerateConcept]);
+  const regenerateMissing = Boolean(regenerateWanted && suggestions && !regenerateConcept);
   useEffect(() => () => ctrl.current?.abort(), []);
 
   const crumbs = [
@@ -223,6 +243,11 @@ export function Suggestions() {
               </span>
             </span>
           </div>
+          {regenerateMissing ? (
+            <p role="alert" className="form-error">
+              “{regenerateWanted}” is not suggested for these APIs any more. Pick a concept below.
+            </p>
+          ) : null}
           {error ? (
             <p role="alert" className="form-error">
               {error}

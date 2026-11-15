@@ -43,6 +43,7 @@ export interface PlumeApi {
   listModelCandidates(signal?: AbortSignal): Promise<ApiList>;
   suggestModels(apis: string[], signal?: AbortSignal): Promise<SuggestResponse>;
   generateModel(req: GenerateRequest, signal?: AbortSignal): Promise<GenerateResponse>;
+  /** Models, newest first; pass an API id to list the models that use it. */
   listModels(api?: string, signal?: AbortSignal): Promise<{ items: ModelListItem[] }>;
   /** The compact evidence index Claude reads for a session (snake_case JSON from the server). */
   getModelContext(sessionId: string, signal?: AbortSignal): Promise<ModelContext>;

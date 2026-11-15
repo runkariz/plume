@@ -739,7 +739,7 @@ th {
   color: var(--accent-ink);
   border-color: var(--accent-soft);
 }
-.banner p {
+.banner-body {
   color: var(--ink);
 }
 .banner-icon {
@@ -1607,4 +1607,46 @@ th {
   .mtable-field {
     width: auto;
   }
+}
+
+/* ---- stale models ---- */
+.model-list ul {
+  list-style: none;
+}
+.model-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 0;
+  border-top: 1px solid var(--line2);
+}
+.model-list li:first-child {
+  border-top: 0;
+}
+.model-list-link {
+  min-width: 90px;
+  text-decoration: underline;
+}
+.model-list .muted {
+  flex: 1;
+  min-width: 140px;
+}
+.stale-banner {
+  margin-bottom: 18px;
+}
+.stale-banner .row {
+  margin-top: 12px;
+}
+.stale-banner .stale-builds {
+  margin-top: 8px;
+  list-style: none;
+  font-size: 13px;
+}
+
+.existing-models {
+  margin: 8px 0 120px;
+}
+.pick-grid {
+  padding-bottom: 24px;
 }
