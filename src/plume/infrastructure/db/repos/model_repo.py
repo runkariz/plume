@@ -52,7 +52,8 @@ class PostgresModelRepo:
             conn.execute(
                 text(
                     "INSERT INTO model_sessions (session_id, concept, inputs, created_at, origin, "
-                    "based_on) VALUES (:s, :c, CAST(:i AS jsonb), :t, :o, :b)"
+                    "based_on, aliases) VALUES (:s, :c, CAST(:i AS jsonb), :t, :o, :b, "
+                    "CAST(:a AS jsonb))"
                 ),
                 {
                     "s": session.session_id,
@@ -61,6 +62,7 @@ class PostgresModelRepo:
                     "t": session.created_at,
                     "o": session.origin,
                     "b": session.based_on,
+                    "a": json.dumps(dict(session.aliases)),
                 },
             )
 
@@ -72,7 +74,13 @@ class PostgresModelRepo:
         if r is None:
             return None
         return ModelSession(
-            r.session_id, r.concept, _inputs(r.inputs), r.created_at, r.origin, r.based_on
+            r.session_id,
+            r.concept,
+            _inputs(r.inputs),
+            r.created_at,
+            r.origin,
+            r.based_on,
+            tuple(sorted(_j(r.aliases).items())),
         )
 
     def save_snapshot(self, snapshot: ModelSnapshot, owner_key_hash: str | None = None) -> bool:

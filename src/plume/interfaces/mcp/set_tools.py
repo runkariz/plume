@@ -89,13 +89,17 @@ def register_set_tools(  # noqa: PLR0915
         )
 
     @server.tool(annotations=WRITE, structured_output=True, meta=MODEL_ONLY_META)
-    async def start_set_session(apis: list[str], concepts: list[str]) -> dict[str, Any]:
+    async def start_set_session(
+        apis: list[str], concepts: list[str], aliases: list[dict[str, Any]] | None = None
+    ) -> dict[str, Any]:
         """Start a model SET (several models with relations, e.g. Product + Variant + Image):
         pins the builds of 2..6 APIs once and opens one model session per concept (1..8). Next:
-        get_set_context(set_session_id)."""
+        get_set_context(set_session_id). aliases: ONLY those the user accepted
+        ([{concept, names: {api: name}}], e.g. WooCommerce "variation" for Variant): that
+        member's evidence in that API is searched under the alias name."""
 
         def go() -> dict[str, Any]:
-            x = sets().start(apis, concepts, origin)
+            x = sets().start(apis, concepts, origin, aliases=aliases or ())
             return {
                 "set_session_id": x.session_id,
                 "inputs": [{"api": i.api, "build": i.build} for i in x.inputs],

@@ -150,14 +150,25 @@ class ModelSets:
         concepts: list[str],
         origin: str = Origin.USER,
         based_on: str | None = None,
+        aliases: Sequence[dict[str, Any]] = (),
     ) -> SetSession:
+        """`aliases`: accepted ones, [{concept, names: {api: that API's name}}] (design D2):
+        that member's evidence in that API is searched under the alias name."""
         resolved = resolve_apis(self._resolver, apis)
         names = list(dict.fromkeys(normalize_concept(c) for c in concepts if concept_key(c)))
         if not 1 <= len(names) <= MAX_MEMBERS:
             raise ModelInputError(f"pick 1..{MAX_MEMBERS} different concepts")
         inputs = tuple(PinnedInput(r.api.api_id.value, r.build.build_id.value) for r in resolved)
+        accepted = self._aliases(aliases, names, {i.api for i in inputs})
+        by_concept = dict(accepted)
         members = tuple(
-            (c, self._sessions.start_pinned(inputs, c, origin).session_id) for c in names
+            (
+                c,
+                self._sessions.start_pinned(
+                    inputs, c, origin, aliases=by_concept.get(c, ())
+                ).session_id,
+            )
+            for c in names
         )
         session = SetSession(
             session_id=f"ss-{uuid.uuid4().hex[:16]}",
@@ -167,9 +178,28 @@ class ModelSets:
             created_at=self._clock.now(),
             origin=origin,
             based_on=based_on,
+            aliases=accepted,
         )
         self._sets.save_session(session)
         return session
+
+    @staticmethod
+    def _aliases(
+        raw: Sequence[Any], concepts: list[str], apis: set[str]
+    ) -> tuple[tuple[str, tuple[tuple[str, str], ...]], ...]:
+        by_key = {concept_key(c): c for c in concepts}
+        out: dict[str, dict[str, str]] = {}
+        for i, a in enumerate(raw or ()):
+            if not isinstance(a, dict) or not isinstance(a.get("names"), dict):
+                raise ModelInputError(f"aliases[{i}] must be {{concept, names: {{api: name}}}}")
+            concept = by_key.get(concept_key(str(a.get("concept", ""))))
+            if concept is None:
+                raise ModelInputError(f"aliases[{i}].concept must be one of the set's concepts")
+            for api, name in a["names"].items():
+                if api not in apis or not isinstance(name, str) or not concept_key(name):
+                    raise ModelInputError(f"aliases[{i}]: {api!r} is not one of the set's APIs")
+                out.setdefault(concept, {})[api] = name.strip()
+        return tuple((c, tuple(sorted(n.items()))) for c, n in sorted(out.items()))
 
     def get_session(self, session_id: str) -> SetSession:
         s = self._sets.get_session(session_id)
@@ -211,6 +241,7 @@ class ModelSets:
         return {
             "set_session_id": s.session_id,
             "inputs": [{"api": i.api, "build": i.build} for i in s.inputs],
+            "accepted_aliases": s.aliases_json(),
             "members": members,
             "relation_candidates": [
                 {
@@ -264,6 +295,7 @@ class ModelSets:
             "concepts": list(s.concepts),
             "member_sessions": dict(s.member_sessions),
             "based_on": s.based_on,
+            "aliases": s.aliases_json(),
         }
 
     # -- submit ----------------------------------------------------------------------------------
@@ -627,6 +659,7 @@ class ModelSets:
             [m.concept for m in base.draft.members],
             Origin.MAINTAINER if maintainer else Origin.USER,
             based_on=base.set_id,
+            aliases=[{"concept": a.concept, "names": dict(a.names)} for a in base.draft.aliases],
         )
         pins = {(i.api, i.build) for i in session.inputs}
         current = {}

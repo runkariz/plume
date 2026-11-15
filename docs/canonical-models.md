@@ -117,6 +117,18 @@ design is in [design/model-relations.md](design/model-relations.md).
     `submit_model_set`, `get_model_set` (the view), `revise_model_set`, `list_model_sets`;
   - reader: `list_my_model_sets`;
   - maintainer: `release_model_set` and `discard_model_set`.
+- **Accepted aliases** (design D2):
+  - `POST /v1/model-sets/sessions` and `/generate` (and MCP `start_set_session`) take optional
+    `aliases: [{concept, names: {apiId: name}}]`, only the ones the user accepted from
+    `suggest-related`.
+  - That member's evidence in that API is searched under the alias name; context documents
+    show `searched_as`. WooCommerce has no "variant" concept (its `/products/{id}/variations`
+    endpoints are tagged Product), so without the alias the Variant member gets no WooCommerce
+    evidence. A real-package test covers this.
+  - Aliases are validated (`concept` ∈ `concepts`, APIs ∈ `apis`; 400 otherwise), stored on
+    the set session (migration 0009) and echoed by the session status and context. The Claude
+    prompt asks Claude to record them under the set's `aliases`; server generation records them
+    itself. Revisions carry them over.
 - **Web relation edit:** `POST /v1/model-sets/{id}/relations {relations: [{id, kind?,
   cardinality?, embed?, ref?, from?, to?, confirmed?}]}`. It changes only the design of
   existing relations of the **latest** version; their evidence stays. Each relation in the set

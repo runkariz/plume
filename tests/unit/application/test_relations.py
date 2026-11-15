@@ -104,3 +104,22 @@ def test_real_refund_parent_id_names_the_order(real_stack: FakeStack) -> None:
     assert any(e.paths[0].endswith("parent_id") and "order" in e.quote.lower() for e in woo)
     assert all(api in refund.sources for api in APIS)
     _assert_cited(real_stack, r)
+
+
+@real
+def test_real_alias_brings_woocommerce_variations_to_the_variant_member(
+    real_stack: FakeStack,
+) -> None:
+    sets = real_stack.model_sets()
+
+    def woo_docs(aliases: list[dict[str, object]]) -> list[str]:
+        s = sets.start(["shopify", "woocommerce"], ["Product", "Variant"], aliases=aliases)
+        ctx = sets.context(s.session_id)
+        variant = next(m for m in ctx["members"] if m["concept"] == "Variant")
+        woo = next(a for a in variant["apis"] if a["api"] == "woocommerce")
+        return [d["endpoint"] or d["doc_id"] for d in woo["documents"]]
+
+    without = woo_docs([])
+    with_alias = woo_docs([{"concept": "Variant", "names": {"woocommerce": "variation"}}])
+    assert not any("variations" in d for d in without)
+    assert any("/variations" in d for d in with_alias)

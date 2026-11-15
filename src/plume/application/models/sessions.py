@@ -216,8 +216,10 @@ class ModelSessions:
         concept: str,
         origin: str = Origin.MAINTAINER,
         based_on: str | None = None,
+        aliases: tuple[tuple[str, str], ...] = (),
     ) -> ModelSession:
-        """A session on given pins (a model set pins its builds once for all members)."""
+        """A session on given pins (a model set pins its builds once for all members). An
+        accepted alias makes the concept's evidence in that API be searched under its name."""
         if not concept_key(concept):
             raise ModelInputError("concept is empty")
         session = ModelSession(
@@ -227,6 +229,7 @@ class ModelSessions:
             created_at=self._clock.now(),
             origin=origin,
             based_on=based_on,
+            aliases=tuple(sorted(aliases)),
         )
         self._models.save_session(session)
         return session
@@ -312,7 +315,7 @@ class ModelSessions:
         for pin in session.inputs:
             build = BuildId(pin.build)
             items = []
-            for d in self._concept_docs(session.concept, build, max_docs):
+            for d in self._concept_docs(session.name_in(pin.api), build, max_docs):
                 full = self._documents.get_document(build, d.doc_id)
                 if full is None:  # pragma: no cover
                     continue
@@ -326,7 +329,10 @@ class ModelSessions:
                         "complete": full.complete,
                     }
                 )
-            per_api.append({"api": pin.api, "build": pin.build, "documents": items})
+            entry: dict[str, Any] = {"api": pin.api, "build": pin.build, "documents": items}
+            if session.name_in(pin.api) != session.concept:
+                entry["searched_as"] = session.name_in(pin.api)  # an accepted alias
+            per_api.append(entry)
         return {
             "session_id": session.session_id,
             "concept": session.concept,
@@ -353,7 +359,7 @@ class ModelSessions:
         if doc_ids:
             wanted = list(dict.fromkeys(doc_ids))[:50]
         else:
-            wanted = [d.doc_id for d in self._concept_docs(session.concept, build)]
+            wanted = [d.doc_id for d in self._concept_docs(session.name_in(api), build)]
         rows: list[tuple[dict[str, Any], dict[str, Any]]] = []  # (doc header, field)
         missing: list[str] = []
         for doc_id in wanted:
