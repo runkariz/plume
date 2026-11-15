@@ -72,7 +72,15 @@ def model_sets_router(  # noqa: PLR0915 - one route per operation
         body: s.SetSessionRequest, maintainer: Annotated[bool, Depends(optional)]
     ) -> dict[str, Any]:
         """Pin the builds of 2..6 APIs once for 1..8 concepts: one model session per member."""
-        x = sets().start(body.apis, body.concepts, "maintainer" if maintainer else "user")
+        aliases = [a.model_dump() for a in body.aliases]
+        x = sets().start(
+            body.apis, body.concepts, "maintainer" if maintainer else "user", aliases=aliases
+        )
+        alias_text = "".join(
+            f" Treat {' and '.join(f'{api} {n!r}' for api, n in names)} as {c}; record it under "
+            "aliases."
+            for c, names in x.aliases
+        )
         return {
             "setSessionId": x.session_id,
             "inputs": [{"api": i.api, "build": i.build} for i in x.inputs],
@@ -81,8 +89,9 @@ def model_sets_router(  # noqa: PLR0915 - one route per operation
             "claudePrompt": (
                 f'Use the Plume MCP: get_set_context("{x.session_id}"), write or reuse a model for '
                 f"each of {', '.join(x.concepts)}, ask me how each relation should be designed, "
-                f'then submit_model_set("{x.session_id}", draft).'
+                f'then submit_model_set("{x.session_id}", draft).' + alias_text
             ),
+            "aliases": x.aliases_json(),
         }
 
     @router.post(
@@ -99,7 +108,8 @@ def model_sets_router(  # noqa: PLR0915 - one route per operation
         GET /v1/models/jobs/{jobId} and its events (kind model_set, setId)."""
         if generate_models is None:
             raise HTTPException(503, "server-side generation is not configured")
-        return job_out(generate_models().start_set(sets(), body.apis, body.concepts))
+        aliases = [a.model_dump() for a in body.aliases]
+        return job_out(generate_models().start_set(sets(), body.apis, body.concepts, aliases))
 
     @router.get("/v1/model-sets/sessions/{session_id}", responses=errors)
     def session_status(session_id: str) -> dict[str, Any]:

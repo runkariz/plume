@@ -3285,8 +3285,40 @@
         "title": "SessionStatus",
         "type": "object"
       },
+      "SetAlias": {
+        "properties": {
+          "concept": {
+            "description": "One of `concepts`.",
+            "title": "Concept",
+            "type": "string"
+          },
+          "names": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "api id -> the concept's name in that API (e.g. woocommerce: variation).",
+            "title": "Names",
+            "type": "object"
+          }
+        },
+        "required": [
+          "concept",
+          "names"
+        ],
+        "title": "SetAlias",
+        "type": "object"
+      },
       "SetSessionRequest": {
         "properties": {
+          "aliases": {
+            "description": "Aliases the user ACCEPTED (from suggest-related): the member's evidence in that API is searched under the alias name; recorded on the set.",
+            "items": {
+              "$ref": "#/components/schemas/SetAlias"
+            },
+            "maxItems": 8,
+            "title": "Aliases",
+            "type": "array"
+          },
           "apis": {
             "items": {
               "type": "string"

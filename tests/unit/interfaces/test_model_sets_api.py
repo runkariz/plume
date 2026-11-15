@@ -280,3 +280,18 @@ def test_server_generated_set_proposes_undecided_relations(packages: Path, tmp_p
     ).json()["set"]
     released = client.post(f"/v1/model-sets/{decided['id']}/release", headers=AUTH).json()
     assert len(released["releasedMembers"]) == 2
+
+
+def test_aliases_on_set_sessions(client: TestClient) -> None:
+    body = {
+        "apis": APIS,
+        "concepts": ["Order", "Product"],
+        "aliases": [{"concept": "Product", "names": {APIS[1]: "items"}}],
+    }
+    r = client.post("/v1/model-sets/sessions", json=body).json()
+    assert r["aliases"] == [{"concept": "Product", "names": {APIS[1]: "items"}}]
+    assert f"Treat {APIS[1]} 'items' as Product" in r["claudePrompt"]
+    ctx = client.get(r["contextUrl"]).json()
+    assert ctx["accepted_aliases"] == r["aliases"]
+    bad = {**body, "aliases": [{"concept": "Nope", "names": {APIS[0]: "x"}}]}
+    assert client.post("/v1/model-sets/sessions", json=bad).status_code == 400
