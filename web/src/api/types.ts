@@ -716,3 +716,115 @@ export interface McpOut {
     tools: { tool: string; inputSchema: unknown; outputSchema: unknown | null }[];
   }[];
 }
+
+// ---- model sets: several canonical models and the relations between them ----
+
+export type RelationKind = 'embedded' | 'reference';
+export type Cardinality = '1:1' | '1:n' | 'n:1' | 'n:m';
+/** How an API documents the relation: nested objects, a sub-resource path, an id field, a model reference. */
+export type RelationSupport = 'nested' | 'sub_resource' | 'id_field' | 'model_ref';
+
+export interface RelationSource {
+  as?: string;
+  paths: string[];
+  /** The endpoint to fetch the related thing from: a string, or an object with the endpoint. */
+  fetch?: string | { endpoint: string } | null;
+  evidence?: { docId?: string; quote: string; anchor?: string }[];
+}
+
+/** One way the relation could be designed, and whether it can be chosen without new field mappings. */
+export interface RelationOption {
+  kind: RelationKind;
+  from: string;
+  to: string;
+  cardinality: Cardinality;
+  embed: { field: string } | null;
+  ref: { field: string; key: string } | null;
+  editable: boolean;
+  /** What is missing when it is not editable ("Product: a field holding the Order id"): revise with Claude. */
+  missing: string[];
+  current: boolean;
+}
+
+export interface SetRelation {
+  id: string;
+  from: string;
+  to: string;
+  kind: RelationKind;
+  cardinality: Cardinality;
+  embed: { field: string } | null;
+  ref: { field: string; key: string } | null;
+  /** false = undecided: a proposal to be confirmed. */
+  confirmed: boolean;
+  candidate?: boolean;
+  support: Record<string, RelationSupport | null>;
+  sources: Record<string, RelationSource>;
+  editableOptions?: RelationOption[];
+}
+
+export interface SetMember {
+  concept: string;
+  modelId: string;
+  name?: string;
+  /** Leaves. */
+  fieldCount?: number;
+  coverage?: Record<string, { mapped: number; total: number }>;
+  visibility?: ModelVisibility;
+  version?: number;
+  /** The member model is not available (not released, or not visible to this reader). */
+  missing?: boolean;
+}
+
+export interface ModelSet {
+  kind: 'model_set';
+  id: string;
+  name: string;
+  description?: string | null;
+  visibility: ModelVisibility;
+  official: boolean;
+  origin?: 'user' | 'maintainer';
+  generator?: string;
+  generatedAt: string;
+  releasedAt?: string | null;
+  basedOn?: string | null;
+  inputs: ApiRef[];
+  stale?: boolean;
+  staleInputs?: StaleInput[];
+  members: SetMember[];
+  relations: SetRelation[];
+  /** Ids of the relations still to decide. */
+  undecided: string[];
+  aliases?: { names: Record<string, string>; concept: string }[];
+  openQuestions: { question: string; detail?: string | null; options?: string[] }[];
+  lineage?: ModelLineage;
+  sharePath?: string;
+  shareUrl?: string | null;
+  revisePrompt?: string;
+}
+
+export interface SetListItem {
+  id: string;
+  name: string;
+  apis: string[];
+  members: string[];
+  relations: number;
+  undecided: number;
+  generatedAt: string;
+  visibility?: ModelVisibility;
+  official?: boolean;
+  version?: number;
+  versions?: number;
+  stale?: boolean;
+}
+
+/** The design fields of a relation the editor may change (anything else is refused with 400). */
+export interface RelationEdit {
+  id: string;
+  kind?: RelationKind;
+  cardinality?: Cardinality;
+  embed?: { field: string } | null;
+  ref?: { field: string; key: string } | null;
+  from?: string;
+  to?: string;
+  confirmed?: boolean;
+}

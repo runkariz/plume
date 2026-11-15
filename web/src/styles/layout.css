@@ -2185,3 +2185,110 @@ th[scope='row'] {
   display: block;
   overflow-wrap: anywhere;
 }
+
+/* model sets: the diagram, the editor and the save bar */
+.set-node {
+  box-sizing: border-box;
+  width: 230px;
+  min-height: 104px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--ink);
+  border-radius: 12px;
+  background: var(--surface);
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.react-flow__node.selected .set-node {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.set-node.missing {
+  border-style: dashed;
+  color: var(--muted);
+}
+.set-node-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: baseline;
+}
+.set-node-cov {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.set-node-cov > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.set-save {
+  margin-bottom: 14px;
+  border-color: var(--accent);
+}
+.set-save p {
+  margin: 0 0 10px;
+}
+.rel-sources {
+  list-style: none;
+  margin: 8px 0 14px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.rel-design {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.rel-design legend {
+  font: 600 16px var(--font-sans);
+  margin-bottom: 6px;
+  padding: 0;
+}
+.rel-option {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.rel-option.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.rel-option.off {
+  cursor: not-allowed;
+  color: var(--muted);
+}
+.rel-option:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.rel-missing {
+  display: block;
+  margin-top: 4px;
+}
+.wb-detail-cov {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+ul.plain {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.h3-sm {
+  font: 600 15px var(--font-sans);
+  margin: 14px 0 4px;
+}

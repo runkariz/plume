@@ -1,24 +1,12 @@
-import { useMemo, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react';
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import type { ModelSnapshot } from '@/api/types';
 import { Card } from '@/components';
 import { CONTROLS_W, GraphControls } from './GraphControls';
 import { findField } from './fields';
 import { mappingRows, type Selection } from './graph';
+import { useMedia } from '@/lib/useMedia';
 import { MappingDetail } from './MappingDetail';
 import { MappingGraph } from './MappingGraph';
-
-/** Whether a media query matches, known on the first render (no measuring, so nothing flickers or re-fits). */
-function useMedia(query: string, fallback: boolean): boolean {
-  return useSyncExternalStore(
-    (cb) => {
-      const m = window.matchMedia?.(query);
-      m?.addEventListener('change', cb);
-      return () => m?.removeEventListener('change', cb);
-    },
-    () => window.matchMedia?.(query).matches ?? fallback,
-    () => fallback,
-  );
-}
 
 const WIDE = '(min-width: 721px)';
 /**

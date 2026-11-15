@@ -121,6 +121,19 @@ Where to change what:
 - **Accessibility.** Inputs have labels, focus is visible, the graph has a keyboard alternative (the Mapping
   list), and both themes pass axe. Small screens: nothing scrolls sideways at 375 px.
 
+## Model sets (several models and the relations between them)
+
+`/model-sets/:id` (`src/pages/sets/`): the top level is a database-like diagram of the models (boxes with their field
+counts and coverage per API) and their relations (arrows labelled with cardinality and kind; dashed = a proposal not
+decided yet). It uses the same control box as the mapping graph (`ControlBox`: filter, API checkboxes that grey out,
+a keyboard list), the state in the URL (`f`, `show`, `sel`), and the detail panel beside it. A model opens its field
+mapping (`/models/:modelId`); a relation shows how each API documents it and the designs it could have.
+
+The editor stages the chosen design per relation (the options come from the server's `editableOptions`; a design that
+is not possible yet is disabled with the server's reason) and saves them with ONE `POST /v1/model-sets/{id}/relations`,
+which makes a NEW version (409: not the latest version; 422: the design was refused). Release is blocked while
+relations are undecided and lists the models released with the set. See `src/api/types.ts` for the shapes.
+
 ## The model view as an MCP App (the widget)
 
 Claude web and Desktop show a canonical model inline through an MCP App: one self-contained HTML file that Plume

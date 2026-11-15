@@ -12,6 +12,9 @@ import {
   type GenerateResponse,
   type ModelJob,
   type ModelJobEvent,
+  type ModelSet,
+  type RelationEdit,
+  type SetListItem,
   type ModelSessionStatus,
   type ModelVisibility,
   type ModelContext,
@@ -126,6 +129,34 @@ export interface PlumeApi {
     ownerKey?: string;
   }>;
   getSnapshot(id: string, signal?: AbortSignal): Promise<ModelSnapshot>;
+  // model sets
+  getModelSet(id: string, signal?: AbortSignal): Promise<ModelSet>;
+  /** Released sets (the latest version of each); with the maintainer token also ?visibility=unreleased|all. */
+  listModelSets(
+    opts?: { visibility?: ModelVisibility | 'all' },
+    signal?: AbortSignal,
+  ): Promise<{ items: SetListItem[] }>;
+  listMyModelSets(ownerKeys: string[], signal?: AbortSignal): Promise<{ items: SetListItem[] }>;
+  /** Maintainer token. 409 while relations are undecided or the set is not unreleased. */
+  releaseModelSet(
+    id: string,
+    signal?: AbortSignal,
+  ): Promise<{ set: ModelSet; releasedMembers: string[] }>;
+  discardModelSet(id: string, signal?: AbortSignal): Promise<ModelSet>;
+  /**
+   * Saves the chosen design of relations as a NEW version of the set (409 when `id` is not the latest version,
+   * 422 {issues} when the design does not validate, 400 for anything but design fields).
+   */
+  saveSetRelations(
+    id: string,
+    relations: RelationEdit[],
+    signal?: AbortSignal,
+  ): Promise<{
+    created: boolean;
+    visibility?: ModelVisibility;
+    ownerKey: string | null;
+    set: ModelSet;
+  }>;
   // maintainer (the key is sent as a bearer token)
   verifyMaintainer(key: string, signal?: AbortSignal): Promise<MaintainerIdentity>;
   uploadPackage(file: File, signal?: AbortSignal): Promise<Job>;
@@ -403,6 +434,40 @@ export function createApiClient(
       const m = await call<ModelSnapshot>(`/v1/models/${enc(id)}`, { signal });
       return withPaths({ ...m, inputs: m.inputs.map(withLabel) });
     },
+    getModelSet: async (id, signal) => {
+      const s = await call<ModelSet>(`/v1/model-sets/${enc(id)}`, { signal });
+      return { ...s, inputs: s.inputs.map(withLabel) };
+    },
+    listModelSets: (opts = {}, signal) =>
+      call<{ items: SetListItem[] }>(
+        `/v1/model-sets${opts.visibility ? `?visibility=${enc(opts.visibility)}` : ''}`,
+        { signal },
+      ),
+    listMyModelSets: (ownerKeys, signal) =>
+      call<{ items: SetListItem[] }>('/v1/model-sets/mine', {
+        method: 'POST',
+        body: { ownerKeys },
+        signal,
+      }),
+    releaseModelSet: (id, signal) =>
+      call<{ set: ModelSet; releasedMembers: string[] }>(`/v1/model-sets/${enc(id)}/release`, {
+        method: 'POST',
+        signal,
+      }),
+    discardModelSet: async (id, signal) => {
+      const r = await call<ModelSet | { set: ModelSet }>(`/v1/model-sets/${enc(id)}/discard`, {
+        method: 'POST',
+        signal,
+      });
+      return 'set' in r ? r.set : r;
+    },
+    saveSetRelations: (id, relations, signal) =>
+      call<{
+        created: boolean;
+        visibility?: ModelVisibility;
+        ownerKey: string | null;
+        set: ModelSet;
+      }>(`/v1/model-sets/${enc(id)}/relations`, { method: 'POST', body: { relations }, signal }),
     verifyMaintainer: (key, signal) =>
       call<MaintainerIdentity>('/v1/maintainer/me', { key, signal }),
     uploadPackage: (file, signal) => {

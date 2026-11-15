@@ -51,6 +51,14 @@ export const routes: RouteObject[] = [
             lazy: async () => ({ Component: (await import('@/pages/models/ModelView')).ModelView }),
             handle: { wide: true },
           },
+          {
+            path: 'model-sets/:setId',
+            // React Flow is large: load it only when a model set is opened
+            lazy: async () => ({
+              Component: (await import('@/pages/sets/ModelSetView')).ModelSetView,
+            }),
+            handle: { wide: true },
+          },
           { path: 'kit', element: <KitPage /> },
           { path: '*', element: <NotFound /> },
         ],
