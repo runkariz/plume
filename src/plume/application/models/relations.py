@@ -20,10 +20,12 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
+from typing import Any
 
 from plume.application.models.concepts import (
     NOISE,
     ModelInputError,
+    _last_literal,
     concept_docs,
     concept_key,
     concept_label,
@@ -136,6 +138,53 @@ class _Api:
     groups: dict[str, list[DocumentSummary]]
     names: dict[str, str]
     owner: dict[str, str]  # doc id -> concept key
+    sub: set[str] = field(default_factory=set)  # endpoints listing a sub-collection (downloads)
+    merge: dict[str, str] = field(default_factory=dict)  # duplicate concept key -> kept key
+    # (owning concept, container key) -> the item model's concept: order.line_items are
+    # Order Line Items, also where an endpoint shows the same container without schema files.
+    items: dict[tuple[str, str], str] = field(default_factory=dict)
+
+
+# Containers that wrap or link rather than hold a concept: _links / previous / next / self, and
+# id lists (product_ids).
+_WRAPPERS = frozenset({"previous", "next", "self", "links", "link", "embedded", "meta"})
+
+
+def _referenced_concept(fields: Any, path: str, concepts: set[str]) -> str | None:
+    """A container whose fields come from another schema file (`line_items` ->
+    orderlineitem.schema.json) stands for that model's concept, when it is one."""
+    prefixes = (f"{path}[].", f"{path}.")
+    stems = {
+        (f.pointer or "").split("#", 1)[0].rsplit("/", 1)[-1].removesuffix(".schema.json")
+        for f in fields
+        if f.pointer and any(f.name.startswith(x) and "." not in f.name[len(x) :] for x in prefixes)
+    }  # direct children only (deeper ones belong to nested item models)
+    keys = {concept_key(st) for st in stems if st}
+    found = sorted(k for k in keys if k in concepts)
+    return found[0] if len(found) == 1 else None
+
+
+def _record_merge(scan: _Api, owner: str | None, container: str, item: str) -> None:
+    """An item model named after its holder and container (productimage for product.images,
+    customcollectioncollect for collects[] where Collect is a resource) is the container's
+    concept: one name across APIs. Otherwise the container stands for its item model, but only
+    under the same owning concept."""
+    key = _segment_key(container.rsplit(".", 1)[-1])
+    if not key or key == item:
+        return
+    if item == f"{owner}{key}" or (
+        item.endswith(key)
+        and key in scan.groups
+        and any(d.kind is DocumentKind.ENDPOINT for d in scan.groups[key])
+    ):  # productimage under product.images = Image; orderlineitem under order = Line Item
+        scan.merge.setdefault(item, key)
+    elif owner:
+        scan.items.setdefault((owner, key), item)
+
+
+def _wrapper(seg: str) -> bool:
+    name = seg.replace("[]", "").lower()
+    return name.startswith("_") or name in _WRAPPERS or name.endswith(("_id", "_ids"))
 
 
 ALIAS_SIMILARITY = 0.75
@@ -194,19 +243,50 @@ class SuggestRelated:
                     break
             names.setdefault(key, concept_label(key))
         owner = {d.doc_id: k for k, docs in groups.items() for d in docs}
-        return _Api(groups, names, owner)
+        # /customers/{id}/downloads lists downloads, not customers: its top-level id fields
+        # are not the customer's (WooCommerce "Customer" / "Report" noise).
+        sub = set()
+        for key, docs in groups.items():
+            for d in docs:
+                if d.kind is DocumentKind.ENDPOINT and d.path:
+                    last = concept_key(_last_literal(d.path))
+                    if last and not key.endswith(last):
+                        sub.add(d.doc_id)
+        return _Api(groups, names, owner, sub)
 
     def candidates(
-        self, resolved: tuple[ResolvedBuild, ...]
+        self,
+        resolved: tuple[ResolvedBuild, ...],
+        renames: dict[tuple[str, str], str] | None = None,
     ) -> tuple[list[RelationCandidate], list[AliasCandidate], dict[str, str]]:
-        """Every candidate between concepts of these APIs, with the concept labels."""
+        """Every candidate between concepts of these APIs, with the concept labels.
+        `renames` {(api, concept key in that API): concept key}: accepted aliases (D2), so
+        WooCommerce "variation" evidence counts for "variant"."""
         found: dict[tuple[str, str], RelationCandidate] = {}
         labels: dict[str, str] = {}
         structural: dict[str, dict[str, dict[str, CandidateEvidence]]] = defaultdict(dict)
+        scans = {r.api.api_id.value: self._scan(r) for r in resolved}
+        # A concept documented in one API can be nested in another (WooCommerce product.images[]
+        # has no Image model of its own, Shopify has one).
+        all_concepts = {k for s in scans.values() for k in s.groups}
+        renames = renames or {}
         for r in resolved:
             api = r.api.api_id.value
-            scan = self._scan(r)
-            evidence = self._evidence(r, scan)  # may add labels (containers, path literals)
+            scan = scans[api]
+            raw = self._evidence(r, scan, all_concepts)  # may add labels and merges
+
+            def canon(k: str, doc_id: str, api: str = api, scan: _Api = scan) -> str:
+                owner = scan.owner.get(doc_id)
+                if owner and k != owner:
+                    k = scan.items.get((owner, k), k)
+                k = scan.merge.get(k, k)
+                return renames.get((api, k), k)
+
+            evidence = [
+                (cp, cc, ev)
+                for p, c, ev in raw
+                if (cp := canon(p, ev.doc_id)) != (cc := canon(c, ev.doc_id))
+            ]
             for k, v in scan.names.items():
                 labels.setdefault(k, v)
             for parent, child, ev in evidence:
@@ -252,8 +332,10 @@ class SuggestRelated:
                             out.append(AliasCandidate(parent, {a1: c1, a2: c2}, {a1: e1, a2: e2}))
         return out
 
-    def _evidence(self, r: ResolvedBuild, scan: _Api) -> list[tuple[str, str, CandidateEvidence]]:
-        concepts = set(scan.groups)
+    def _evidence(
+        self, r: ResolvedBuild, scan: _Api, known: set[str] | None = None
+    ) -> list[tuple[str, str, CandidateEvidence]]:
+        concepts = set(scan.groups) | (known or set())
         out = self._sub_resources(scan, concepts)
         out += self._field_evidence(r, scan, concepts, self._field_hits(r, scan, concepts))
         return out
@@ -319,6 +401,8 @@ class SuggestRelated:
             inner = owner  # the innermost enclosing container (holder of an id field)
             for depth, seg in enumerate(segs[:-1]):
                 key = _segment_key(seg)
+                if _wrapper(seg):
+                    break  # under _links / previous / ...: links, not nesting
                 if not key or key in NOISE:
                     continue
                 if key != inner:
@@ -332,7 +416,9 @@ class SuggestRelated:
                     current = key
             leaf = segs[-1].replace("[]", "")
             m = _ID.match(leaf)
-            if m or leaf == "parent_id":
+            if inner == owner and f.owner_id in scan.sub:
+                pass  # a sub-collection's own ids
+            elif m or leaf == "parent_id":
                 stem = concept_key(m.group("stem")) if m else ""
                 plural = bool(m and m.group("plural") == "ids")
                 wanted[f.owner_id].append(("id_field", inner, stem, f.name, plural, f.name))
@@ -359,6 +445,10 @@ class SuggestRelated:
     ) -> list[tuple[str, str, CandidateEvidence]]:
         """Read the descriptions; keep id fields only when the description names the target."""
         build = r.build.build_id
+
+        def label(key: str) -> str:
+            return scan.names.get(key) or concept_label(key)
+
         out: list[tuple[str, str, CandidateEvidence]] = []
         seen: set[tuple[str, str, str, str]] = set()
         for doc_id, items in wanted.items():
@@ -370,13 +460,21 @@ class SuggestRelated:
                 spec = specs.get(fname)
                 desc = (spec.description or "").strip() if spec else ""
                 if kind == "id_field":
+                    # line_items[].product_id: the item model line_items references holds it.
+                    container = fname.rsplit(".", 1)[0].removesuffix("[]") if "." in fname else ""
+                    item = (
+                        _referenced_concept(doc.fields, container, concepts) if container else None
+                    )
+                    if item and container:
+                        _record_merge(scan, scan.owner.get(doc_id), container, item)
+                    owner_of = item or holder  # the item model holds the id
                     # The description must NAME the target (the field name alone proves nothing).
                     targets = [target] if target in concepts else []
                     if not targets and fname.endswith("parent_id"):  # any concept the text names
                         targets = [c for c in concepts if desc and _names_concept(
-                            desc, c, scan.names[c])]  # fmt: skip
+                            desc, c, label(c))]  # fmt: skip
                     for t in targets:
-                        if t == holder or not desc or not _names_concept(desc, t, scan.names[t]):
+                        if t == owner_of or not desc or not _names_concept(desc, t, label(t)):
                             continue
                         if (kind, t, holder, path) in seen:
                             continue
@@ -385,17 +483,21 @@ class SuggestRelated:
                             (t, holder, CandidateEvidence(kind, doc_id, desc, (path,), many=many))
                         )
                     continue
-                container = specs.get(path)
-                quote = (
-                    ((container.description or "").strip() if container else "")
-                    or desc
-                    or doc.title
-                )
-                if (kind, holder, target, path) in seen:
+                child = target
+                item = _referenced_concept(doc.fields, path, concepts)
+                if item:
+                    _record_merge(scan, scan.owner.get(doc_id), path, item)
+                if child == holder:
                     continue
-                seen.add((kind, holder, target, path))
+                spec_of = specs.get(path)
+                quote = (
+                    ((spec_of.description or "").strip() if spec_of else "") or desc or doc.title
+                )
+                if (kind, holder, child, path) in seen:
+                    continue
+                seen.add((kind, holder, child, path))
                 out.append(
-                    (holder, target, CandidateEvidence(kind, doc_id, quote, (path,), many=many))
+                    (holder, child, CandidateEvidence(kind, doc_id, quote, (path,), many=many))
                 )
         return out
 

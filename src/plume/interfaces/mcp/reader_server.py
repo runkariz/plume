@@ -61,8 +61,9 @@ Rules:
    builds; say so and regenerate it (or ask) before relying on it.
 7. To make a model for the user: start_model_session(apis, concept) -> get_model_context ->
    get_model_evidence per API -> submit_model_draft. It is stored unlisted: give the user its
-   share link, and save owner_key + snapshot_id locally (it is shown once) so list_my_models
-   can find it later. To change a model: revise_model(id), then submit_model_draft(...,
+   share link. A new model comes with an owner key, shown once: tell the user to keep it to list
+   their models later (list_my_models); where you can write files (Claude Code), the plume
+   skill saves it locally. To change a model: revise_model(id), then submit_model_draft(...,
    based_on=id) makes a new version.
 """
 

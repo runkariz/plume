@@ -449,8 +449,9 @@ class StreamPackageSource:
             request = folder / "request.json"
             if request.is_file():
                 add(self._endpoint(folder, _read_json(request), versions), folder.name)
+        returned_by = _response_titles(connector, versions)
         for model in self._models(connector):
-            add(model, model.doc_id)
+            add(_with_operations(model, returned_by), model.doc_id)
         for doc, origin in self._guides_and_auth(connector, warnings):
             add(doc, origin)
         for path in sorted((connector / "triggers" / "events").glob("*.json")):
@@ -757,6 +758,60 @@ class StreamPackageSource:
         )
 
 
+def _title_key(title: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", title.lower())
+
+
+def _titles(node: Any, out: set[str]) -> None:
+    if isinstance(node, dict):
+        if isinstance(node.get("title"), str):
+            out.add(_title_key(node["title"]))
+        for v in node.values():
+            _titles(v, out)
+    elif isinstance(node, list):
+        for v in node:
+            _titles(v, out)
+
+
+def _response_titles(connector: Path, versions: tuple[str, ...]) -> dict[str, list[str]]:
+    """Schema title -> the endpoints whose 2xx response schema names it (a bundled Mirakl
+    "P11_Response_200_Products" is what GET /api/products/offers returns)."""
+    out: dict[str, list[str]] = {}
+    for folder in sorted((connector / "endpoints").glob("*/")):
+        req = _opt_json(folder / "request.json")
+        if not req or not _str(req.get("method")) or not _str(req.get("url")):
+            continue
+        doc_id = endpoint_doc_id(
+            str(req["method"]).upper(),
+            normalize_endpoint_path(_url_path(str(req["url"])), versions),
+        )
+        found: set[str] = set()
+        for response in req.get("responses") or []:
+            if not isinstance(response, dict):
+                continue
+            status, ref = response.get("statusCode"), _str(response.get("contentContractRef"))
+            if ref and isinstance(status, int) and 200 <= status < 300:
+                _titles(_opt_json(folder / ref), found)
+        for t in found:
+            out.setdefault(t, []).append(doc_id)
+    return out
+
+
+MAX_RETURNED_BY = 5  # a title in more responses than this says nothing
+
+
+def _with_operations(model: Document, returned_by: dict[str, list[str]]) -> Document:
+    """Record the operations that return a model, when the package says so by title."""
+    title = model.source_id or model.title
+    if parse_bundled_title(title) is None:  # only bundled names (P11_Response_200_…) say which
+        return model
+    ops = returned_by.get(_title_key(title), [])
+    if not ops or len(ops) > MAX_RETURNED_BY or not isinstance(model.raw, dict):
+        return model
+    ops = sorted(ops, key=lambda d: (not d.startswith("endpoint:GET~"), d))
+    return replace(model, raw={**model.raw, "x-plume-returned-by": ops})
+
+
 def _renamed(model: Document, name: str) -> Document:
     """A bundler-titled model under its display name; the vendor title stays as source_id.
 
@@ -829,7 +884,12 @@ def _apply_export(
             if r.rule_id not in used_rules and (r.source_url or "").rstrip("/") == url
         ]
         used_rules.update(r.rule_id for r in page_rules)
-        guide = _page_guide(page, page_rules)
+        endpoints = [
+            out[i].doc_id
+            for item_id, _ in page.items
+            if (i := by_source.get(endpoint_key(item_id, versions))) is not None
+        ]
+        guide = _page_guide(page, page_rules, endpoints)
         if guide is not None:
             out.append(guide)
     leftover = [r for r in export.rules if r.rule_id not in used_rules]
@@ -839,7 +899,9 @@ def _apply_export(
 
 
 def _page_guide(
-    page: "knowledge_export.ExportPage", rules: "list[knowledge_export.Rule]"
+    page: "knowledge_export.ExportPage",
+    rules: "list[knowledge_export.Rule]",
+    endpoints: list[str] | None = None,
 ) -> Document | None:
     """The page's guide. A page that could not be cut into endpoint sections keeps only its
     rules and an endpoint index: its whole text would duplicate every endpoint on it and
@@ -861,4 +923,6 @@ def _page_guide(
         text="\n\n".join(p for p in parts if p),
         source_url=page.source_url or None,
         source_id=page.file,
+        # the endpoints documented on this page (search keeps one next to the page)
+        raw={"endpoints": list(dict.fromkeys(endpoints or ()))} if endpoints else None,
     )

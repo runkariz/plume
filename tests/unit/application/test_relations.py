@@ -161,3 +161,35 @@ def test_real_models_follow_item_model_refs(real_stack: FakeStack) -> None:
         assert spec.description
         assert (spec.pointer or "").startswith(source)
         assert real_stack.fact_query.find(build, path), (api, path)  # it is a fact too
+
+
+@real
+def test_real_suggestions_merge_item_models_and_skip_link_noise(real_stack: FakeStack) -> None:
+    """Round 2: Image has WooCommerce evidence (product.images[] items are productimage),
+    line items and collects are one concept each, and link/id-list/sub-collection keys are
+    no concepts."""
+    r = real_stack.suggest_related().execute(APIS[:2], "Product", limit=100)
+    kinds = {rel.key: rel.kinds for rel in r.related}
+    assert kinds["image"]["woocommerce"]
+    assert kinds["lineitem"]["woocommerce"]
+    for gone in ("productimage", "orderlineitem", "customcollectioncollect", "previous",
+                 "productid", "customer", "report"):  # fmt: skip
+        assert gone not in kinds, gone
+
+
+@real
+def test_real_set_candidates_merge_an_accepted_alias(real_stack: FakeStack) -> None:
+    sets = real_stack.model_sets()
+    alias = [{"concept": "Variant", "names": {"woocommerce": "variation"}}]
+    session = sets.start(APIS[:2], ["Product", "Variant"], aliases=alias)
+    cands = {c["id"]: c for c in sets.context(session.session_id)["relation_candidates"]}
+    assert cands["product>variant"]["sources"]["woocommerce"]  # not only on the alias entry
+
+
+@real
+def test_real_bundled_response_models_name_their_operation(real_stack: FakeStack) -> None:
+    models = real_stack.models()
+    session = models.start(["mirakl", "shopify"], "Product")  # the tester's session
+    docs = {d["doc_id"]: d for a in models.context(session.session_id)["apis"]
+            for d in a["documents"]}  # fmt: skip
+    assert docs["model:p11-response-200-products"]["endpoint"] == "GET /api/products/offers"

@@ -45,6 +45,7 @@ class VertexGeminiWriter:
         self._key_file = key_file
         self._project = project
         self._location = location
+        self._last_usage: dict[str, int] | None = None
         self._model = model
         self._retries = max_retries
         self._max_tokens = max_output_tokens
@@ -67,6 +68,10 @@ class VertexGeminiWriter:
         return VERTEX_LOCATION_URL.format(
             host=host, project=self._project, location=self._location, model=self._model
         )
+
+    @property
+    def last_usage(self) -> dict[str, int] | None:
+        return self._last_usage
 
     def available(self) -> bool:
         return self._key_file is not None and self._key_file.is_file()
@@ -115,8 +120,24 @@ class VertexGeminiWriter:
                 )
             if response.status_code != 200:
                 raise ModelWriterError(f"LLM HTTP {response.status_code}")
-            return _text(response.json())
+            payload = response.json()
+            self._last_usage = usage_of(payload)
+            return _text(payload)
         raise ModelWriterError("LLM retries exhausted")  # pragma: no cover
+
+
+def usage_of(payload: Any) -> dict[str, int] | None:
+    """Gemini usageMetadata -> {prompt, response, total, thoughts}: what a call cost."""
+    meta = payload.get("usageMetadata") if isinstance(payload, dict) else None
+    if not isinstance(meta, dict):
+        return None
+    out = {
+        "prompt": meta.get("promptTokenCount"),
+        "response": meta.get("candidatesTokenCount"),
+        "thoughts": meta.get("thoughtsTokenCount"),
+        "total": meta.get("totalTokenCount"),
+    }
+    return {k: int(v) for k, v in out.items() if isinstance(v, int)}
 
 
 def _text(payload: Any) -> str:

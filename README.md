@@ -169,9 +169,11 @@ Reader routes are public and rate limited; maintainer routes need `Authorization
 | `PLUME_DATABASE_URL` | `postgresql+psycopg://plume:plume@127.0.0.1:18432/plume` | |
 | `PLUME_EMBEDDER` | `auto` | `auto`, `hash`, `vertex`, `gemini` (`auto`: Vertex key, else Gemini key, else hash) |
 | `PLUME_VERTEX_API_KEY` / `PLUME_GEMINI_API_KEY` | – | never logged |
+| `PLUME_VERTEX_KEY_FILE` | – | the Vertex key as a file (read when used, never logged): for embeddings and generation, so no key sits in a container's env |
 | `PLUME_MAINTAINER_TOKENS` | `[]` | JSON list, each ≥ 16 chars; empty = maintainer API off (503) |
 | `PLUME_GOLD_DIRS` | `[]` | folders of `<api>.json` gold sets |
 | `PLUME_GATE_MIN_RECALL` / `PLUME_GATE_MAX_DROP` | `0.6` / `0.05` | the quality gate |
+| `PLUME_GATE_MIN_RECALL_BY_EMBEDDER` | `{}` | per-embedder recall floor, e.g. `{"vertex": 0.75}`; others use `PLUME_GATE_MIN_RECALL` |
 | `PLUME_READER_RATE_LIMIT_PER_MINUTE` | `120` | per client address; `0` = off |
 | `PLUME_CORS_ORIGINS` | the web dev server | JSON list |
 | `PLUME_MCP_ALLOWED_HOSTS` | loopback | Host headers the MCP server accepts |
@@ -179,7 +181,6 @@ Reader routes are public and rate limited; maintainer routes need `Authorization
 | `PLUME_MCP_CORS_ORIGINS` | `[]` | browser origins allowed to call the MCP endpoints (browser-based MCP clients such as the ext-apps basic-host); off by default |
 | `PLUME_DATA_DIR` | `.plume` (`/data` in Docker) | uploads and dumps |
 | `PLUME_MAX_UPLOAD_BYTES` | 200 MiB | package uploads |
-| `PLUME_VERTEX_KEY_FILE` | – | file with the Vertex key for server-side model generation (maintainers); read per call, never logged; unset = 503 |
 | `PLUME_VERTEX_PROJECT` / `PLUME_VERTEX_LOCATION` | – / `global` | with a project, generation calls the model at that location (gemini-4-argon answers only at `global`); without one, the location-less express URL |
 | `PLUME_MODEL_LLM` / `PLUME_MODEL_MAX_ROUNDS` | `gemini-4-argon` / `3` | the generation model and its repair rounds |
 | `PLUME_MCP_APP_HTML` | the packaged file | the MCP App bundle (model view) served as `ui://plume/model-view`; see [docs/mcp-apps.md](docs/mcp-apps.md) |

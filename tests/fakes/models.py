@@ -44,6 +44,12 @@ class InMemoryModelRepo:
     def get_snapshot(self, snapshot_id: str) -> ModelSnapshot | None:
         return self.snapshots.get(snapshot_id)
 
+    def replace_owner_key(self, lineage_id: str, owner_key_hash: str) -> bool:
+        if not self.owners.get(lineage_id):
+            return False
+        self.owners[lineage_id] = owner_key_hash
+        return True
+
     def list_snapshots(
         self,
         api: str | None = None,
@@ -110,10 +116,15 @@ class ScriptedModelWriter:
         self.replies = list(replies)
         self.calls: list[tuple[str, list[Turn]]] = []
         self._available = available
+        self._last_usage: dict[str, int] | None = None
 
     @property
     def name(self) -> str:
         return "fake:scripted"
+
+    @property
+    def last_usage(self) -> dict[str, int] | None:
+        return self._last_usage
 
     def available(self) -> bool:
         return self._available
@@ -125,7 +136,11 @@ class ScriptedModelWriter:
         if not self.replies:
             raise ModelWriterError("no scripted reply left")
         reply = self.replies.pop(0)
-        return reply if isinstance(reply, str) else json.dumps(reply)
+        text = reply if isinstance(reply, str) else json.dumps(reply)
+        prompt = sum(len(t.text) for t in turns) // 4  # a rough, deterministic count
+        self._last_usage = {"prompt": prompt, "response": len(text) // 4,
+                            "total": prompt + len(text) // 4}  # fmt: skip
+        return text
 
 
 class InMemoryModelSetRepo:

@@ -154,10 +154,12 @@ def resolve_apis(resolver: BuildResolver, apis: list[str]) -> tuple[ResolvedBuil
 
 
 def _last_literal(path: str) -> str:
-    """``/api/{version}/orders/{id}.json`` -> ``orders``."""
+    """``/api/{version}/orders/{id}.json`` -> ``orders``; id-list and count literals are skipped
+    (``/product_listings/product_ids.json`` -> ``product_listings``)."""
     for seg in reversed(path.strip("/").split("/")):
-        if seg and "{" not in seg:
-            return seg.split(".", 1)[0]
+        name = seg.split(".", 1)[0]
+        if name and "{" not in name and not name.endswith(("_id", "_ids")) and name != "count":
+            return name
     return ""
 
 

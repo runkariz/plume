@@ -57,6 +57,7 @@ def job_payload(job: ModelJob) -> dict[str, Any]:
         "snapshot_id": job.snapshot_id,
         "error": job.error,
         "generator": job.generator,
+        "usage": job.usage,
     }
 
 
@@ -110,17 +111,28 @@ def model_text(model: dict[str, Any], full: bool = False) -> str:
     return "\n".join(lines)
 
 
-def submit_text(out: dict[str, Any]) -> str:
+def owner_key_text(key: str, view_shown: bool) -> str:
+    """How the owner key reaches the user: the view shows it (with Copy) when the host renders
+    it; otherwise it is printed once. Plain words: it is what lists the user's models later."""
+    if view_shown:
+        return (
+            "\nAn owner key for this new model is shown in the view: keep it to find or list "
+            "your models later (list_my_models, or paste it in the web's Your models)."
+        )
+    return (
+        f"\nOwner key (shown only this once): {key}\nKeep this key to find or list your model "
+        "later: list_my_models, or paste it in the web's Your models."
+    )
+
+
+def submit_text(out: dict[str, Any], view_shown: bool = False) -> str:
     if not out.get("accepted"):
         issues = json.dumps(out.get("issues", []), ensure_ascii=False)
         return f"Refused: {len(out.get('issues', []))} issue(s). {out.get('next', '')}\n{issues}"
     text = ("Stored" if out.get("created") else "Already stored") + f" ({out['stored_as']}). "
     text += model_text(out["model"])
     if out.get("owner_key"):
-        text += (
-            f"\nowner_key: {out['owner_key']} (shown once; save it with snapshot_id "
-            f"{out['snapshot_id']} in ~/.plume/models.json; do not show it in the chat)"
-        )
+        text += owner_key_text(out["owner_key"], view_shown)
     return text
 
 
@@ -252,13 +264,14 @@ def register_model_tools(  # noqa: PLR0915
             if result.owner_key:
                 out["owner_key"] = result.owner_key
                 out["note"] = (
-                    "Save owner_key with the snapshot_id (e.g. in ~/.plume/models.json): it is "
-                    "shown only once and is what list_my_models needs. Give the user the link."
+                    "owner_key is shown only once; with it the user can list this model later "
+                    "(list_my_models). Give the user the link."
                 )
             return out
 
         out = await run(go)
-        return ui_result(out, submit_text(out), apps_shown(ctx))
+        shown = apps_shown(ctx)
+        return ui_result(out, submit_text(out, shown), shown)
 
     @server.tool(annotations=READ, structured_output=True)
     async def get_model_session(

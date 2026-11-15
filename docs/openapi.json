@@ -2620,6 +2620,21 @@
           "updatedAt": {
             "title": "Updatedat",
             "type": "string"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "LLM tokens so far: {prompt, response, thoughts?, total}.",
+            "title": "Usage"
           }
         },
         "required": [
@@ -2690,6 +2705,14 @@
             "default": true,
             "title": "Official",
             "type": "boolean"
+          },
+          "sameConcept": {
+            "description": "Other official models of the same concept over the same APIs (readable by id); the list shows the newest.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Sameconcept",
+            "type": "array"
           },
           "stale": {
             "description": "A pinned build is no longer the API's latest.",

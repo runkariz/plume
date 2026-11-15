@@ -475,6 +475,9 @@ class ModelJobOut(Schema):
     events_url: str
     kind: Literal["model", "model_set"] = "model"
     set_id: str | None = None
+    usage: dict[str, int] | None = Field(
+        default=None, description="LLM tokens so far: {prompt, response, thoughts?, total}."
+    )
 
 
 class SessionStatus(Schema):
@@ -550,6 +553,11 @@ class ModelListItem(Schema):
     version: int = 1
     versions: int = 1
     lineage_id: str = ""
+    same_concept: list[str] = Field(
+        default_factory=list,
+        description="Other official models of the same concept over the same APIs (readable "
+        "by id); the list shows the newest.",
+    )
 
 
 class ModelList(Schema):

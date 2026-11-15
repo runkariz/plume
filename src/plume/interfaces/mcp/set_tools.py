@@ -22,7 +22,14 @@ from plume.interfaces.mcp.apps.model_view import (
     UI_WRITE_META,
     ui_result,
 )
-from plume.interfaces.mcp.model_tools import READ, WRITE, apps_shown, job_payload, session_arg
+from plume.interfaces.mcp.model_tools import (
+    READ,
+    WRITE,
+    apps_shown,
+    job_payload,
+    owner_key_text,
+    session_arg,
+)
 
 
 def set_text(x: dict[str, Any], full: bool = False) -> str:
@@ -166,12 +173,10 @@ def register_set_tools(  # noqa: PLR0915
             issues = json.dumps(out.get("issues", []), ensure_ascii=False)
             return ui_result(out, f"Refused: {len(out.get('issues', []))} issue(s).\n{issues}")
         text = ("Stored" if out["created"] else "Already stored") + ". " + set_text(out["set"])
+        shown = apps_shown(ctx)
         if out.get("owner_key"):
-            text += (
-                f"\nowner_key: {out['owner_key']} (shown once; save it with set_id "
-                f"{out['set_id']} in ~/.plume/models.json; do not show it in the chat)"
-            )
-        return ui_result(out, text, apps_shown(ctx))
+            text += owner_key_text(out["owner_key"], shown)
+        return ui_result(out, text, shown)
 
     @server.tool(annotations=READ, structured_output=True, meta=UI_META)
     async def get_model_set(ctx: Context, set_id: str) -> Annotated[CallToolResult, dict[str, Any]]:

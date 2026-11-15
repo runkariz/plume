@@ -37,6 +37,11 @@ class ModelRepo(Protocol):
 
     def get_snapshot(self, snapshot_id: str) -> ModelSnapshot | None: ...
 
+    def replace_owner_key(self, lineage_id: str, owner_key_hash: str) -> bool:
+        """Give a lineage that has an owner a new owner key hash (a retry whose first response
+        was lost). False when the lineage has no owner (maintainer models)."""
+        ...
+
     def list_snapshots(
         self,
         api: str | None = None,
@@ -79,6 +84,7 @@ class ModelJob:
     snapshot_id: str | None = None
     error: str | None = None
     generator: str = ""
+    usage: dict[str, int] | None = None  # LLM tokens so far: {prompt, response, total, ...}
     extra: dict[str, object] = field(default_factory=dict, compare=False)
 
 
