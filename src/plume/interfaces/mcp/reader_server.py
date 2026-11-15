@@ -13,6 +13,7 @@ from plume import __version__
 from plume.application.errors import ApplicationError
 from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
+from plume.application.models.model_sets import ModelSets
 from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import ModelSessions
 from plume.application.reader.resolve import BuildResolver
@@ -37,6 +38,7 @@ from plume.interfaces.mcp.apps.model_view import (
     model_view_html,
 )
 from plume.interfaces.mcp.model_tools import register_model_tools
+from plume.interfaces.mcp.set_tools import register_set_tools
 
 INSTRUCTIONS = """\
 Plume serves API documentation as immutable, versioned builds. For ANY question about an API
@@ -81,6 +83,7 @@ class McpReaderDependencies:
     sections: Callable[[], PackageSections] | None = None
     web_public_url: str | None = None
     suggest_related: Callable[[], SuggestRelated] | None = None
+    model_sets: Callable[[], ModelSets] | None = None
     mcp_app_html: str | None = None  # the model view bundle; None = the packaged file
 
 
@@ -336,5 +339,7 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
             deps.web_public_url,
             related=deps.suggest_related,
         )
+    if deps.model_sets is not None:
+        register_set_tools(server, deps.model_sets, deps.resolver, _run, False, deps.web_public_url)
 
     return server

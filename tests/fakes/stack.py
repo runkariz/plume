@@ -15,6 +15,7 @@ from plume.application.knowledge.seal_build import SealBuild
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.models.concepts import SuggestConcepts
 from plume.application.models.generate import GenerateModels
+from plume.application.models.model_sets import ModelSets
 from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import ModelSessions
 from plume.application.ports.job_events import JobEvents
@@ -49,7 +50,12 @@ from tests.fakes.knowledge import (
     InMemoryVectorIndex,
     RecordingEvents,
 )
-from tests.fakes.models import InMemoryModelJobRepo, InMemoryModelRepo, ScriptedModelWriter
+from tests.fakes.models import (
+    InMemoryModelJobRepo,
+    InMemoryModelRepo,
+    InMemoryModelSetRepo,
+    ScriptedModelWriter,
+)
 from tests.fakes.search import InMemoryFactQuery, InMemorySearchIndex
 
 
@@ -75,6 +81,7 @@ class FakeStack:
     writer: ScriptedModelWriter = field(default_factory=ScriptedModelWriter)
     model_jobs: InMemoryModelJobRepo = field(default_factory=InMemoryModelJobRepo)
     model_events: InMemoryJobEventLog = field(default_factory=InMemoryJobEventLog)
+    sets_repo: InMemoryModelSetRepo = field(default_factory=InMemoryModelSetRepo)
 
     def __post_init__(self) -> None:
         self.vectors = InMemoryVectorIndex(self.documents)
@@ -209,6 +216,16 @@ class FakeStack:
 
     def suggest(self) -> SuggestConcepts:
         return SuggestConcepts(self.resolver(), self.search_index, self.facts)
+
+    def model_sets(self) -> ModelSets:
+        return ModelSets(
+            self.resolver(),
+            self.models(),
+            self.models_repo,
+            self.sets_repo,
+            self.suggest_related(),
+            self.clock,
+        )
 
     def suggest_related(self) -> SuggestRelated:
         return SuggestRelated(self.resolver(), self.search_index, self.facts, self.documents)
