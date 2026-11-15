@@ -431,3 +431,30 @@ export interface EvidencePage {
   next_cursor: number | null;
   missing_doc_ids: string[];
 }
+
+/** GET /v1/apis/{api}/documents/{docId}: one stored document (what a citation points at). */
+export interface DocumentOut {
+  api: string;
+  build: string;
+  docsAsOf: string;
+  id: string;
+  kind: string;
+  title: string;
+  resource: string | null;
+  method: string | null;
+  path: string | null;
+  deprecated: boolean;
+  complete: boolean;
+  sourceUrl: string | null;
+  anchor: string | null;
+  /** Plain text taken from the vendor docs: untrusted, render as text. */
+  text: string;
+  fields: {
+    name: string;
+    location: string;
+    type: string | null;
+    required: boolean;
+    description: string | null;
+  }[];
+  scopes: string[];
+}

@@ -46,6 +46,14 @@ export interface EdgeData extends Record<string, unknown> {
 export type ModelNode = Node<FieldNodeData | CanonNodeData | GroupNodeData>;
 export type ModelEdge = Edge<EdgeData>;
 
+/** Edge labels stay short: transforms in real models are whole sentences (the table and the detail card show them in full). */
+export const MAX_EDGE_LABEL = 32;
+export function edgeLabel(transform?: string | null, join?: string[]): string | undefined {
+  const text = transform?.trim() || (join?.length ? 'join' : undefined);
+  if (!text) return undefined;
+  return text.length > MAX_EDGE_LABEL ? `${text.slice(0, MAX_EDGE_LABEL - 1).trimEnd()}…` : text;
+}
+
 const fieldNodeId = (apiId: string, path: string) => `api:${apiId}:${path}`;
 export const canonNodeId = (field: string) => `canon:${field}`;
 const groupNodeId = (apiId: string) => `group:${apiId}`;
@@ -161,7 +169,7 @@ export function buildGraph(snap: ModelSnapshot): { nodes: ModelNode[]; edges: Mo
           source: left ? apiNode : canonNodeId(f.name),
           target: left ? canonNodeId(f.name) : apiNode,
           type: 'default',
-          label: derived ? (src.transform ?? (src.join?.length ? 'join' : undefined)) : undefined,
+          label: derived ? edgeLabel(src.transform, src.join) : undefined,
           data: { field: f.name, apiId: api.id, derived },
           style: {
             stroke: api.logo.color,

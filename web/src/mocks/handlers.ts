@@ -427,6 +427,43 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
       const found = detailFor(String(params.id));
       return found ? HttpResponse.json(found) : notFound();
     }),
+    // A stored document (what a citation points at). The mock builds one from the id.
+    http.get(`${base}/v1/apis/:id/documents/*`, ({ params, request }) => {
+      const api = String(params.id);
+      if (!detailFor(api)) return notFound();
+      const prefix = `/v1/apis/${api}/documents/`;
+      const docId = decodeURIComponent(new URL(request.url).pathname.split(prefix)[1] ?? '');
+      const kind = docId.split(':')[0] ?? 'document';
+      const path = docId.includes('~') ? docId.split('~')[1] : null;
+      const method = docId.includes('~') ? (docId.split(':')[1]?.split('~')[0] ?? null) : null;
+      return HttpResponse.json({
+        api,
+        build: 'b-6ff6063a275d40c14e4bcdd001f1c9ae',
+        docsAsOf: '2026-11-14',
+        id: docId,
+        kind,
+        title: docId.split(/[:~]/).pop() ?? docId,
+        resource: 'orders',
+        method,
+        path: path ?? null,
+        deprecated: false,
+        complete: docId.includes('partial') ? false : true,
+        sourceUrl: `https://docs.example.com/${api}/${kind}`,
+        anchor: '#section',
+        text: `# ${docId}\n\nSample text for this document in the mock backend.\nTotal amount billed for the order.`,
+        fields: [
+          {
+            name: 'order_id',
+            location: 'path',
+            type: 'string',
+            required: true,
+            description: 'Unique identifier of the order.',
+          },
+          { name: 'limit', location: 'query', type: 'integer', required: false, description: null },
+        ],
+        scopes: [],
+      });
+    }),
     http.get(`${base}/v1/apis/:id/items`, ({ params, request }) => {
       if (!detailFor(String(params.id))) return notFound();
       const url = new URL(request.url);

@@ -32,6 +32,11 @@ const PAGES: { name: string; path: string; ready: (p: Page) => Promise<void> }[]
     ready: (p) => expect(p.getByRole('heading', { name: 'Inventory' })).toBeVisible(),
   },
   {
+    name: 'model-view-big-table',
+    path: '/models/m-38f24111baf1076f44c9cfa7',
+    ready: (p) => expect(p.getByRole('table')).toBeVisible(),
+  },
+  {
     name: 'model-view',
     path: '/models/snap_8f3a21',
     ready: (p) => expect(p.getByRole('heading', { level: 1, name: 'Inventory' })).toBeVisible(),

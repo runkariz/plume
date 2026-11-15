@@ -274,6 +274,45 @@ describe('Model view', () => {
     expect(screen.queryByText(/GET \/admin/)).not.toBeInTheDocument();
   });
 
+  it('filters a long mapping list and keeps the selected mapping visible', async () => {
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/models/:id`, async () => {
+        const { inventorySnapshot } = await import('@/mocks/modelData');
+        const base = inventorySnapshot.fields[2];
+        if (!base) throw new Error('fixture');
+        // 12 extra fields: more than 12 mappings in total, so the filter box appears
+        const extra = Array.from({ length: 12 }, (_, i) => ({ ...base, name: `extra_${i}` }));
+        return HttpResponse.json({
+          ...inventorySnapshot,
+          fields: [...inventorySnapshot.fields, ...extra],
+        });
+      }),
+    );
+    renderApp('/models/snap_8f3a21');
+    // 19 fields: a big model opens as a table; the Mapping list belongs to the graph view
+    await userEvent.click(await screen.findByRole('radio', { name: 'Graph' }));
+    const filter = await screen.findByRole('searchbox', { name: 'Filter mappings' });
+    const total = screen
+      .getByRole('combobox', { name: 'Mapping' })
+      .querySelectorAll('option').length;
+    expect(total).toBeGreaterThan(12);
+    await userEvent.type(filter, 'extra_3');
+    const options = screen.getByRole('combobox', { name: 'Mapping' }).querySelectorAll('option');
+    // the matching mappings of extra_3 (3 APIs) plus the currently selected mapping, which stays visible
+    expect(options.length).toBeLessThan(total);
+    expect([...options].some((o) => o.textContent?.startsWith('extra_3'))).toBe(true);
+    expect([...options].some((o) => o.textContent === 'quantity_available ← Shopify')).toBe(true);
+    expect(
+      screen.getByText(new RegExp(`${options.length} of ${total} mappings`)),
+    ).toBeInTheDocument();
+  });
+
+  it('does not show the filter for a small model', async () => {
+    renderApp('/models/snap_8f3a21');
+    await screen.findByRole('combobox', { name: 'Mapping' });
+    expect(screen.queryByRole('searchbox', { name: 'Filter mappings' })).not.toBeInTheDocument();
+  });
+
   it('reports dropped citations', async () => {
     renderApp('/models/snap_prod01');
     expect(

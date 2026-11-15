@@ -1,5 +1,12 @@
 import { inventorySnapshot } from '@/mocks/modelData';
-import { buildGraph, canonNodeId, defaultSelection, NODE } from './graph';
+import {
+  buildGraph,
+  canonNodeId,
+  defaultSelection,
+  edgeLabel,
+  MAX_EDGE_LABEL,
+  NODE,
+} from './graph';
 
 describe('buildGraph', () => {
   const { nodes, edges } = buildGraph(inventorySnapshot);
@@ -64,6 +71,20 @@ describe('buildGraph', () => {
     expect(mirakl?.position.y ?? 0).toBeGreaterThanOrEqual(
       (woo?.position.y ?? 0) + (woo?.height ?? 0),
     );
+  });
+});
+
+describe('edgeLabel', () => {
+  it('keeps short transforms, shortens long ones, falls back to "join"', () => {
+    expect(edgeLabel('not null = true')).toBe('not null = true');
+    const long =
+      'Map platform values to a canonical enum (mapping table not derivable from the evidence).';
+    const out = edgeLabel(long) ?? '';
+    expect(out.length).toBeLessThanOrEqual(MAX_EDGE_LABEL);
+    expect(out.endsWith('…')).toBe(true);
+    expect(edgeLabel(null, ['a = b'])).toBe('join');
+    expect(edgeLabel(undefined, [])).toBeUndefined();
+    expect(edgeLabel('   ')).toBeUndefined();
   });
 });
 

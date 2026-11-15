@@ -1,5 +1,6 @@
 import type { RouteObject } from 'react-router-dom';
 import { ApiDetailPage } from '@/pages/ApiDetailPage';
+import { DocumentPage } from '@/pages/DocumentPage';
 import { Home } from '@/pages/Home';
 import { KitPage } from '@/pages/KitPage';
 import { NotFound } from '@/pages/NotFound';
@@ -21,6 +22,7 @@ export const routes: RouteObject[] = [
       { index: true, element: <Home /> },
       { path: 'apis/:apiId', element: <ApiDetailPage /> },
       { path: 'apis/:apiId/try', element: <TryItPage /> },
+      { path: 'apis/:apiId/documents/:docId', element: <DocumentPage /> },
       { path: 'maintainer', element: <MaintainerEntry /> },
       {
         element: <RequireMaintainer />,
