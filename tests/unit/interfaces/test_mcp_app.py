@@ -88,6 +88,8 @@ async def test_tools_carry_the_ui_metadata(stack: FakeStack) -> None:
         tools = {t.name: t for t in (await client.list_tools()).tools}
     for name in WITH_VIEW:
         assert tools[name].meta["ui"]["resourceUri"] == MODEL_VIEW_URI, name  # type: ignore[index]
+        # the deprecated flat key too, like the official ext-apps helper (older hosts read it)
+        assert tools[name].meta["ui/resourceUri"] == MODEL_VIEW_URI, name  # type: ignore[index]
     for name in WRITES:  # the view can never call a write tool
         assert tools[name].meta["ui"]["visibility"] == ["model"], name  # type: ignore[index]
     for name in ("get_model", "find_fact", "get_document", "search_docs"):
@@ -112,6 +114,7 @@ async def test_results_have_structured_model_and_text_with_the_link(stack: FakeS
         assert sc["owner_key"] in text
         assert "do not show it in the chat" in text
         assert "Model JSON" not in text  # Claude just wrote it
+        assert "refer to it instead of redrawing it" in text
         got = await client.call_tool("get_model", {"snapshot_id": model["id"]})
         assert (got.structured_content or {})["id"] == model["id"]
         logo = (got.structured_content or {})["inputs"][0]["logo"]  # the view draws the tile

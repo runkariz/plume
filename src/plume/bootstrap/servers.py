@@ -19,6 +19,7 @@ from starlette.routing import Route
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from plume.bootstrap.container import Container
+from plume.bootstrap.mcp_debug import McpDebugLog
 from plume.interfaces.http.app import HttpDependencies, create_app
 from plume.interfaces.http.rate_limit import RateLimitMiddleware
 from plume.interfaces.mcp.maintainer_server import (
@@ -182,6 +183,9 @@ def mcp_app(c: Container) -> Starlette:
                 expose_headers=["Mcp-Session-Id", "Retry-After"],
             ),
         )
+    if c.settings.mcp_debug:
+        logging.getLogger("plume.mcp.debug").setLevel(logging.INFO)
+        middleware.append(Middleware(McpDebugLog))
     return Starlette(routes=routes, lifespan=lifespan, middleware=middleware)
 
 
