@@ -18,7 +18,7 @@ import hashlib
 import json
 import re
 from collections.abc import Iterator, Mapping
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -81,14 +81,71 @@ def _type_of(schema: Mapping[str, Any]) -> str | None:
     return None
 
 
+@dataclass(frozen=True)
+class _RefScope:
+    """Where `$ref`s resolve: the current file's root schema and folder (None = no file refs)."""
+
+    root: Mapping[str, Any]
+    file: str
+    folder: Path | None = None
+    seen: frozenset[str] = frozenset()  # refs being expanded on this path (cycle guard)
+
+
+def _pointer_get(doc: Mapping[str, Any], pointer: str) -> Any:
+    node: Any = doc
+    for raw in [p for p in pointer.split("/") if p]:
+        part = raw.replace("~1", "/").replace("~0", "~")
+        if not isinstance(node, dict) or part not in node:
+            return None
+        node = node[part]
+    return node
+
+
+def _resolve_ref(ref: str, scope: _RefScope) -> tuple[Mapping[str, Any], str, _RefScope] | None:
+    """A `$ref` to the same file (`#/$defs/X`) or a sibling schema file
+    (`orderlineitem.schema.json[#/...]`): the target schema, its pointer prefix (file#pointer)
+    and the scope inside it. None when it can't be read or would loop."""
+    file_part, _, fragment = ref.partition("#")
+    key = f"{file_part or scope.file}#{fragment}"
+    if key in scope.seen:
+        return None
+    if file_part:
+        if scope.folder is None or "/" in file_part.replace("./", "") or ".." in file_part:
+            return None  # only sibling files in the same folder
+        path = scope.folder / file_part.removeprefix("./")
+        if not path.is_file():
+            return None
+        root: Mapping[str, Any] = _read_json(path)
+        inner = _RefScope(root, path.name, scope.folder, scope.seen | {key})
+    else:
+        root, inner = scope.root, replace(scope, seen=scope.seen | {key})
+    target = _pointer_get(root, fragment) if fragment else root
+    if not isinstance(target, dict):
+        return None
+    return target, f"{inner.file}#{fragment}", inner
+
+
 def _walk_fields(
     schema: Mapping[str, Any],
     location: FieldLocation,
     pointer: str,
     prefix: str = "",
     depth: int = 0,
+    scope: _RefScope | None = None,
 ) -> Iterator[FieldSpec]:
+    """Every field of a schema as dotted paths (`line_items[].sku`). `$ref`s to the same file or
+    to sibling schema files are followed (bounded depth, cycle-safe); a field found through a
+    reference keeps that file in its pointer (`orderlineitem.schema.json#/properties/sku`)."""
     if depth > MAX_FIELD_DEPTH:
+        return
+    if scope is None:
+        scope = _RefScope(schema, pointer.split("#", 1)[0])
+    ref = schema.get("$ref")
+    if isinstance(ref, str):
+        resolved = _resolve_ref(ref, scope)
+        if resolved is not None:
+            target, target_pointer, inner = resolved
+            yield from _walk_fields(target, location, target_pointer, prefix, depth, inner)
         return
     props = schema.get("properties")
     raw_required = schema.get("required")
@@ -104,13 +161,28 @@ def _walk_fields(
                 location=location,
                 type=_type_of(sub),
                 required=name in required,
-                description=_str(sub.get("description")),
+                description=_str(sub.get("description")) or _ref_description(sub, scope),
                 pointer=sub_pointer,
             )
-            yield from _walk_fields(sub, location, sub_pointer, full, depth + 1)
+            yield from _walk_fields(sub, location, sub_pointer, full, depth + 1, scope)
     items = schema.get("items")
     if isinstance(items, dict):
-        yield from _walk_fields(items, location, f"{pointer}/items", f"{prefix}[]", depth + 1)
+        yield from _walk_fields(
+            items, location, f"{pointer}/items", f"{prefix}[]", depth + 1, scope
+        )
+
+
+def _ref_description(sub: Mapping[str, Any], scope: _RefScope) -> str | None:
+    """A field that is only a `$ref` (or an array of one) takes the referenced schema's
+    description."""
+    ref = sub.get("$ref")
+    items = sub.get("items")
+    if not isinstance(ref, str) and isinstance(items, dict):
+        ref = items.get("$ref")
+    if not isinstance(ref, str):
+        return None
+    resolved = _resolve_ref(ref, scope)
+    return _str(resolved[0].get("description")) if resolved else None
 
 
 _SHAPE_IGNORED = frozenset({"title", "description", "examples", "example", "default"})
@@ -253,8 +325,9 @@ def _endpoint_fields(
     for ref_key, location, title in _REQUEST_SCHEMAS:
         ref = _str(req.get(ref_key))
         data = _opt_json(folder / ref) if ref else None
-        if data is not None:
-            sections[title] = list(_walk_fields(data, location, f"{ref}#"))
+        if data is not None and ref is not None:
+            scope = _RefScope(data, ref, (folder / ref).parent)
+            sections[title] = list(_walk_fields(data, location, f"{ref}#", scope=scope))
     response_fields: list[FieldSpec] = []
     for response in req.get("responses") or []:
         status = response.get("statusCode") if isinstance(response, dict) else None
@@ -262,7 +335,10 @@ def _endpoint_fields(
         if ref and isinstance(status, int) and 200 <= status < 300:
             data = _opt_json(folder / ref)
             if data is not None:
-                response_fields.extend(_walk_fields(data, FieldLocation.RESPONSE, f"{ref}#"))
+                scope = _RefScope(data, ref, (folder / ref).parent)
+                response_fields.extend(
+                    _walk_fields(data, FieldLocation.RESPONSE, f"{ref}#", scope=scope)
+                )
     return sections, response_fields
 
 
@@ -536,7 +612,14 @@ class StreamPackageSource:
         data = _read_json(path)
         stem = path.name.removesuffix(".schema.json")
         title = _str(data.get("title")) or stem
-        fields = list(_walk_fields(data, FieldLocation.MODEL, f"{path.name}#"))
+        fields = list(
+            _walk_fields(
+                data,
+                FieldLocation.MODEL,
+                f"{path.name}#",
+                scope=_RefScope(data, path.name, path.parent),
+            )
+        )
         complete = data.get("x-complete") is not False
         parts = [f"# {title} (model)"]
         if _str(data.get("description")):

@@ -45,6 +45,12 @@ version; Plume's document ids are built from the method and the version-stripped
 not change between a 1.1 and a 1.2 render of the same API (checked on Shopify: 292 of 292 endpoint
 ids identical).
 
+**`$ref` in schemas.** Model and endpoint schemas may reference sibling schema files in the same
+folder (`"items": {"$ref": "orderlineitem.schema.json"}`) and their own `#/$defs/...`. Plume
+follows both, with bounded depth and a cycle guard, so a model exposes its item models' fields
+(`line_items[].sku`) with their descriptions. Each field's pointer names the file it came from
+(`orderlineitem.schema.json#/properties/sku`). Files outside the folder are not read.
+
 **Unresolved include tags.** Markdoc `{% partial … %}`, Liquid `{% include … %}`, Hugo
 `{{< include … >}}` and MDX `<Snippet … />` left in a page mean the included content is missing.
 Plume flags them at load:
