@@ -224,6 +224,7 @@ def _candidate_evidence(e: CandidateEvidence) -> Json:
         "paths": list(e.paths),
         "fetch": e.fetch,
         "many": e.many,
+        "read": e.read,
     }
 
 

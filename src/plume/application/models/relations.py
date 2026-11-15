@@ -25,10 +25,10 @@ from typing import Any
 from plume.application.models.concepts import (
     NOISE,
     ModelInputError,
-    _last_literal,
     concept_docs,
     concept_key,
     concept_label,
+    last_literal,
     resolve_apis,
 )
 from plume.application.ports.document_repo import DocumentRepo
@@ -53,6 +53,7 @@ class CandidateEvidence:
     paths: tuple[str, ...] = ()  # documented field paths (the container, the id field)
     fetch: str | None = None  # "GET /products/{product_id}/variants.json" (sub_resource)
     many: bool = False  # an array / collection / *_ids: the child side is "many"
+    read: bool = True  # from a model or a response (False: a request body only)
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,6 +183,28 @@ def _record_merge(scan: _Api, owner: str | None, container: str, item: str) -> N
         scan.items.setdefault((owner, key), item)
 
 
+def _read(spec: Any, method: str | None) -> bool:
+    """Where the API is read: a model, or a GET response (a batch POST echoes its request)."""
+    if spec is None:
+        return method in (None, "GET")
+    if spec.location is FieldLocation.MODEL:
+        return True
+    return spec.location is FieldLocation.RESPONSE and method == "GET"
+
+
+def _ranked(bucket: list[CandidateEvidence]) -> list[CandidateEvidence]:
+    """Model/response evidence first; request-body-only evidence is dropped when the API also
+    documents the relation where it is read (WooCommerce product.images[] over the
+    create[]/update[] paths of POST /products/batch). Then at most MAX_EVIDENCE_PER_KIND each."""
+    if any(e.read for e in bucket):
+        bucket = [e for e in bucket if e.read]
+    out: list[CandidateEvidence] = []
+    for e in bucket:
+        if sum(x.kind == e.kind for x in out) < MAX_EVIDENCE_PER_KIND:
+            out.append(e)
+    return out
+
+
 def _wrapper(seg: str) -> bool:
     name = seg.replace("[]", "").lower()
     return name.startswith("_") or name in _WRAPPERS or name.endswith(("_id", "_ids"))
@@ -249,7 +272,7 @@ class SuggestRelated:
         for key, docs in groups.items():
             for d in docs:
                 if d.kind is DocumentKind.ENDPOINT and d.path:
-                    last = concept_key(_last_literal(d.path))
+                    last = concept_key(last_literal(d.path))
                     if last and not key.endswith(last):
                         sub.add(d.doc_id)
         return _Api(groups, names, owner, sub)
@@ -291,9 +314,7 @@ class SuggestRelated:
                 labels.setdefault(k, v)
             for parent, child, ev in evidence:
                 cand = found.setdefault((parent, child), RelationCandidate(parent, child))
-                bucket = cand.sources.setdefault(api, [])
-                if sum(e.kind == ev.kind for e in bucket) < MAX_EVIDENCE_PER_KIND:
-                    bucket.append(ev)
+                cand.sources.setdefault(api, []).append(ev)  # ranked and capped below
                 if ev.kind in ("nested", "sub_resource"):
                     known = structural[parent].setdefault(api, {})
                     prior = known.get(child)
@@ -302,6 +323,9 @@ class SuggestRelated:
                         and (ev.fetch or "").startswith("GET ")
                     ):  # prefer the listing endpoint as the cited evidence
                         known[child] = ev
+        for cand in found.values():
+            for api, bucket in cand.sources.items():
+                cand.sources[api] = _ranked(bucket)
         aliases = self._aliases(resolved, structural, found)
         return sorted(found.values(), key=lambda c: c.id), aliases, labels
 
@@ -378,6 +402,7 @@ class SuggestRelated:
                                     paths=(segs[i + 1].strip("{}"),),
                                     fetch=f"{d.method} {d.path}",
                                     many=True,
+                                    read=d.method == "GET",
                                 ),
                             )
                         )
@@ -397,6 +422,7 @@ class SuggestRelated:
             if owner is None:
                 continue
             segs = f.name.split(".")
+            sub = f.owner_id in scan.sub  # its top level is the sub-collection, not the owner
             current = owner  # the innermost enclosing concept (holder of nested concepts)
             inner = owner  # the innermost enclosing container (holder of an id field)
             for depth, seg in enumerate(segs[:-1]):
@@ -408,7 +434,7 @@ class SuggestRelated:
                 if key != inner:
                     inner = key
                     scan.names.setdefault(key, concept_label(seg.replace("[]", "")))
-                if key in concepts and key != current:
+                if key in concepts and key != current and not (sub and current == owner):
                     path = ".".join(segs[: depth + 1])
                     wanted[f.owner_id].append(
                         ("nested", current, key, path, seg.endswith("[]"), f.name)
@@ -416,7 +442,7 @@ class SuggestRelated:
                     current = key
             leaf = segs[-1].replace("[]", "")
             m = _ID.match(leaf)
-            if inner == owner and f.owner_id in scan.sub:
+            if inner == owner and sub:
                 pass  # a sub-collection's own ids
             elif m or leaf == "parent_id":
                 stem = concept_key(m.group("stem")) if m else ""
@@ -450,7 +476,7 @@ class SuggestRelated:
             return scan.names.get(key) or concept_label(key)
 
         out: list[tuple[str, str, CandidateEvidence]] = []
-        seen: set[tuple[str, str, str, str]] = set()
+        seen: set[tuple[str, str, str, str, str]] = set()  # per document: ranked later
         for doc_id, items in wanted.items():
             doc = self._documents.get_document(build, doc_id)
             if doc is None:
@@ -476,11 +502,22 @@ class SuggestRelated:
                     for t in targets:
                         if t == owner_of or not desc or not _names_concept(desc, t, label(t)):
                             continue
-                        if (kind, t, holder, path) in seen:
+                        if (kind, t, holder, path, doc_id) in seen:
                             continue
-                        seen.add((kind, t, holder, path))
+                        seen.add((kind, t, holder, path, doc_id))
                         out.append(
-                            (t, holder, CandidateEvidence(kind, doc_id, desc, (path,), many=many))
+                            (
+                                t,
+                                holder,
+                                CandidateEvidence(
+                                    kind,
+                                    doc_id,
+                                    desc,
+                                    (path,),
+                                    many=many,
+                                    read=_read(spec, doc.method),
+                                ),
+                            )
                         )
                     continue
                 child = target
@@ -493,11 +530,22 @@ class SuggestRelated:
                 quote = (
                     ((spec_of.description or "").strip() if spec_of else "") or desc or doc.title
                 )
-                if (kind, holder, child, path) in seen:
+                if (kind, holder, child, path, doc_id) in seen:
                     continue
-                seen.add((kind, holder, child, path))
+                seen.add((kind, holder, child, path, doc_id))
                 out.append(
-                    (holder, child, CandidateEvidence(kind, doc_id, quote, (path,), many=many))
+                    (
+                        holder,
+                        child,
+                        CandidateEvidence(
+                            kind,
+                            doc_id,
+                            quote,
+                            (path,),
+                            many=many,
+                            read=_read(spec_of or spec, doc.method),
+                        ),
+                    )
                 )
         return out
 

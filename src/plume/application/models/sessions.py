@@ -13,6 +13,7 @@ from plume.application.models.concepts import (
     ModelInputError,
     concept_docs,
     concept_key,
+    last_literal,
     resolve_apis,
 )
 from plume.application.ports.document_repo import DocumentRepo
@@ -310,12 +311,33 @@ class ModelSessions:
         key = concept_key(concept)
         summaries, _ = self._index.browse(build, (), None, 100_000, 0)
         docs = list(concept_docs(summaries).get(key, []))
+        # Endpoints whose collection is the concept under another resource
+        # (GET /products/{product_id}/images.json for Image, grouped under Product).
+        have = {d.doc_id for d in docs}
+        docs += [
+            d
+            for d in summaries
+            if d.kind is DocumentKind.ENDPOINT
+            and d.path
+            and d.doc_id not in have
+            and concept_key(last_literal(d.path)) == key
+        ]
+        parent_scoped = False
+        if not docs:  # the concept under a parent: productimage (Product's images) for Image
+            groups = concept_docs(summaries)
+            parents = sorted(  # the busiest parent first: Product before Order Line Item
+                (k for k in groups if k != key and k.endswith(key) and k[: -len(key)] in groups),
+                key=lambda k: (-len(groups[k[: -len(key)]]), k),
+            )
+            docs = [d for k in parents for d in groups[k]]
+            parent_scoped = bool(docs)
         if not docs:  # derived: documents whose text mentions the concept
             hits = self._index.text(
                 build, concept, MAX_DOCS_PER_API, (DocumentKind.ENDPOINT, DocumentKind.MODEL)
             )
             docs = list(self._index.summaries(build, [h.doc_id for h in hits]).values())
-        docs.sort(key=lambda d: _evidence_rank(d, key))
+        if not parent_scoped:  # those keep the busiest-parent order
+            docs.sort(key=lambda d: _evidence_rank(d, key))
         return docs[:max_docs]
 
     def _pin(self, session: ModelSession, api: str) -> BuildId:

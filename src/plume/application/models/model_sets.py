@@ -267,6 +267,7 @@ class ModelSets:
                                 "quote": e.quote,
                                 "paths": list(e.paths),
                                 "fetch": e.fetch,
+                                "read": e.read,
                             }
                             for e in es
                         ]

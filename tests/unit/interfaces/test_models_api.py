@@ -488,7 +488,7 @@ def test_suggest_related_route_and_mcp_tool(packages: Path, tmp_path: Path) -> N
         {"kind": "reference", "cardinality": "n:1", "needs": cand["options"][0]["needs"]}
     ]
     ev = cand["sources"]["shopify"][0]
-    assert set(ev) == {"kind", "docId", "quote", "paths", "fetch", "many"}
+    assert set(ev) == {"kind", "docId", "quote", "paths", "fetch", "many", "read"}
     assert r["apis"][0]["logo"]["text"]
     assert (r["total"], r["offset"], r["nextOffset"]) == (len(r["related"]), 0, None)
     bad = client.post("/v1/models/suggest-related", json={**body, "apis": ["shopify"]})
