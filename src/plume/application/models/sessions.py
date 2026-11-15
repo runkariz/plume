@@ -720,6 +720,15 @@ class ModelSessions:
             )
         return wanted
 
+    def replaced_by(self, snap: ModelSnapshot) -> tuple[str, ...]:
+        """The models this one superseded (their superseded_by is it), newest first."""
+        api = snap.inputs[0].api if snap.inputs else None
+        return tuple(
+            o.snapshot_id
+            for o in self._models.list_snapshots(api, 200, (Visibility.SUPERSEDED,))
+            if o.superseded_by == snap.snapshot_id
+        )
+
     def supersedable(self, snap: ModelSnapshot) -> list[dict[str, Any]]:
         """Official models of the same concept (case-insensitive) over ANY API set, other than
         this lineage, newest first; ``covered`` = its APIs are a subset of this model's."""
@@ -738,6 +747,7 @@ class ModelSessions:
                 out.append(
                     {
                         "id": o.snapshot_id,
+                        "name": o.draft.name,
                         "concept": normalize_concept(o.concept),
                         "apis": apis,
                         "version": o.version,

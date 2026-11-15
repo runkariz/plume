@@ -2750,7 +2750,8 @@
               "official",
               "unreleased",
               "unlisted",
-              "discarded"
+              "discarded",
+              "superseded"
             ],
             "title": "Visibility",
             "type": "string"
@@ -7505,7 +7506,7 @@
     },
     "/v1/models": {
       "get": {
-        "description": "Official models (the latest released version of each). With the maintainer token,\n`visibility=unreleased|all` lists the others too. Newest first.",
+        "description": "Official models (the latest released version of each). With the maintainer token,\n`visibility=unreleased|superseded|all` lists the others too. Newest first.",
         "operationId": "list_models_v1_models_get",
         "parameters": [
           {
@@ -7542,7 +7543,7 @@
             "required": false,
             "schema": {
               "default": "official",
-              "pattern": "^(official|unreleased|all)$",
+              "pattern": "^(official|unreleased|superseded|all)$",
               "title": "Visibility",
               "type": "string"
             }
