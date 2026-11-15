@@ -112,3 +112,27 @@ for (const theme of THEMES) {
     });
   });
 }
+
+test('a failed server generation is announced next to the concept that was clicked, in view (owner bug)', async ({
+  page,
+}) => {
+  // sign in through the real sign-in flow, then move around inside the app (the token lives in memory only)
+  await page.goto('/maintainer');
+  await page.getByLabel('Email').fill('maintainer@example.com');
+  await page.getByLabel('Access token').fill(TOKEN);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Maintainer', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Models', exact: true }).click();
+  await suggestions(page);
+  // "Refund" is far down the page of 24 concepts: its message used to appear above the list, out of sight
+  const row = page.getByRole('article', { name: 'Refund', exact: true });
+  await row.scrollIntoViewIfNeeded();
+  await row.getByRole('button', { name: 'Generate Refund', exact: true }).click();
+  const alert = page.getByRole('alert').filter({ hasText: 'not configured' });
+  await expect(alert).toBeVisible();
+  await expect(alert).toBeInViewport();
+  // next to the concept, not at the top of the page
+  const [r, a] = await Promise.all([row.boundingBox(), alert.boundingBox()]);
+  expect(Math.abs((a?.y ?? 0) - ((r?.y ?? 0) + (r?.height ?? 0)))).toBeLessThan(400);
+  await expect(alert.getByRole('button', { name: 'Use Claude instead' })).toBeVisible();
+});

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
-import { useIsMaintainer } from '@/app/authStore';
+import { useIsMaintainer, useServerGeneration } from '@/app/authStore';
 import { GenerateSession } from './GenerateSession';
 import { ModelJobProgress } from './ModelJobProgress';
 import { Pager, SuggestControls } from './SuggestControls';
@@ -54,6 +54,7 @@ function ConceptRow({
   disabled,
   onGenerate,
   onGenerateWithClaude,
+  claudeOnly = false,
 }: {
   concept: Concept;
   apis: ApiRef[];
@@ -62,6 +63,8 @@ function ConceptRow({
   onGenerate: () => void;
   /** Signed in only: the same model through your own Claude instead of the server. */
   onGenerateWithClaude?: () => void;
+  /** The server cannot generate: the main button opens the Claude session and says so. */
+  claudeOnly?: boolean;
 }) {
   const counts = apis.flatMap((a) => {
     const c = concept.apiCounts?.[a.id];
@@ -100,10 +103,21 @@ function ConceptRow({
             onClick={onGenerate}
             disabled={disabled}
             aria-busy={busy}
-            aria-label={busy ? `Generating ${concept.name}` : `Generate ${concept.name}`}
+            aria-label={
+              busy
+                ? `Generating ${concept.name}`
+                : claudeOnly
+                  ? `Generate ${concept.name} with Claude`
+                  : `Generate ${concept.name}`
+            }
           >
-            {busy ? 'Generating…' : 'Generate'}
+            {busy ? 'Generating…' : claudeOnly ? 'Generate with Claude' : 'Generate'}
           </Button>
+          {busy ? (
+            <span role="status" className="sr-only">
+              Generating {concept.name}…
+            </span>
+          ) : null}
           {onGenerateWithClaude ? (
             <button
               type="button"
@@ -206,7 +220,10 @@ export function Suggestions() {
   // server generation is not configured (503): offer the Claude flow for this concept
   const [fallback, setFallback] = useState<Concept | null>(null);
   const maintainer = useIsMaintainer();
-  const [error, setError] = useState<string | null>(null);
+  // the message belongs to the concept that was clicked: it is shown under that concept, not at the top of the page
+  const [error, setError] = useState<{ conceptId: string; message: string } | null>(null);
+  const serverGeneration = useServerGeneration();
+  const panelRef = useRef<HTMLDivElement>(null);
   const ctrl = useRef<AbortController | null>(null);
   const openModel = useCallback(
     (id: string, extra?: { ownerKey?: string }) =>
@@ -244,6 +261,13 @@ export function Suggestions() {
   }, [regenerateConcept]);
   const regenerateMissing = Boolean(regenerateWanted && lookedUp && !regenerateConcept);
   useEffect(() => () => ctrl.current?.abort(), []);
+
+  // bring the message / progress / session into view when it appears (it sits under a concept that may be far down)
+  const panelKey = `${error?.message ?? ''}|${job?.jobId ?? ''}|${session?.response.sessionId ?? ''}`;
+  useEffect(() => {
+    if (panelKey === '||') return;
+    panelRef.current?.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+  }, [panelKey]);
 
   const crumbs = [
     { label: 'APIs', to: '/' },
@@ -289,22 +313,71 @@ export function Suggestions() {
     } catch (e) {
       if (c.signal.aborted) return;
       if (e instanceof ApiError && e.code === 'llm_unavailable') setFallback(concept);
-      setError(
-        e instanceof ApiError && e.code === 'llm_unavailable'
-          ? 'Server-side generation is not configured on this Plume. You can generate it with Claude instead.'
-          : e instanceof ApiError && e.status === 401
-            ? 'Your session is not valid any more. Sign in again, or generate it with Claude.'
-            : e instanceof ApiError && e.status === 429
-              ? 'Too many generations right now. Try again in a minute.'
-              : e instanceof Error
-                ? e.message
-                : 'Generation failed.',
-      );
+      setError({
+        conceptId: concept.id,
+        message:
+          e instanceof ApiError && e.code === 'llm_unavailable'
+            ? 'Server-side generation is not configured on this Plume. You can generate it with Claude instead.'
+            : e instanceof ApiError && e.status === 401
+              ? 'Your session is not valid any more. Sign in again, or generate it with Claude.'
+              : e instanceof ApiError && e.status === 429
+                ? 'Too many generations right now. Try again in a minute.'
+                : e instanceof Error
+                  ? e.message
+                  : 'Generation failed.',
+      });
       setGenerating(null);
     }
   }
 
   const filtered = isFilteredView(view);
+  /** What the click on Generate leads to: the message, the server job or the Claude session. */
+  const panelFor = (apis: ApiRef[]) =>
+    error || job || session ? (
+      <div ref={panelRef} className="concept-panels" tabIndex={-1}>
+        {error ? (
+          <p role="alert" className="form-error">
+            {error.message}
+            {fallback ? (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  className="linkbtn"
+                  onClick={() => void generate(fallback, 'claude')}
+                >
+                  Use Claude instead
+                </button>
+              </>
+            ) : null}
+          </p>
+        ) : null}
+        {job ? (
+          <ModelJobProgress
+            key={job.jobId}
+            concept={job.concept}
+            jobId={job.jobId}
+            onOpen={openModel}
+            onCancel={() => setJob(null)}
+            onUseClaude={() => {
+              const c = job.concept;
+              setJob(null);
+              void generate(c, 'claude');
+            }}
+          />
+        ) : null}
+        {session ? (
+          <GenerateSession
+            concept={session.concept}
+            apis={apis}
+            session={session.response}
+            onOpen={openModel}
+            onCancel={() => setSession(null)}
+          />
+        ) : null}
+      </div>
+    ) : null;
+  const activeId = error?.conceptId ?? job?.concept.id ?? session?.concept.id ?? null;
 
   return (
     <>
@@ -356,46 +429,7 @@ export function Suggestions() {
               “{regenerateWanted}” is not suggested for these APIs any more. Pick a concept below.
             </p>
           ) : null}
-          {error ? (
-            <p role="alert" className="form-error">
-              {error}
-              {fallback ? (
-                <>
-                  {' '}
-                  <button
-                    type="button"
-                    className="linkbtn"
-                    onClick={() => void generate(fallback, 'claude')}
-                  >
-                    Use Claude instead
-                  </button>
-                </>
-              ) : null}
-            </p>
-          ) : null}
-          {job ? (
-            <ModelJobProgress
-              key={job.jobId}
-              concept={job.concept}
-              jobId={job.jobId}
-              onOpen={openModel}
-              onCancel={() => setJob(null)}
-              onUseClaude={() => {
-                const c = job.concept;
-                setJob(null);
-                void generate(c, 'claude');
-              }}
-            />
-          ) : null}
-          {session ? (
-            <GenerateSession
-              concept={session.concept}
-              apis={data.apis}
-              session={session.response}
-              onOpen={openModel}
-              onCancel={() => setSession(null)}
-            />
-          ) : null}
+          {activeId && !data.concepts.some((c) => c.id === activeId) ? panelFor(data.apis) : null}
           <div
             id="concept-list"
             className={`concepts${loading ? ' loading' : ''}`}
@@ -432,15 +466,27 @@ export function Suggestions() {
               )
             ) : (
               data.concepts.map((c) => (
-                <ConceptRow
-                  key={c.id}
-                  concept={c}
-                  apis={data.apis}
-                  busy={generating === c.id}
-                  disabled={generating !== null || session !== null || job !== null}
-                  onGenerate={() => void generate(c)}
-                  onGenerateWithClaude={maintainer ? () => void generate(c, 'claude') : undefined}
-                />
+                <Fragment key={c.id}>
+                  <ConceptRow
+                    concept={c}
+                    apis={data.apis}
+                    busy={generating === c.id}
+                    disabled={generating !== null || session !== null || job !== null}
+                    claudeOnly={maintainer && serverGeneration === false}
+                    onGenerate={() =>
+                      void generate(
+                        c,
+                        maintainer && serverGeneration === false ? 'claude' : undefined,
+                      )
+                    }
+                    onGenerateWithClaude={
+                      maintainer && serverGeneration !== false
+                        ? () => void generate(c, 'claude')
+                        : undefined
+                    }
+                  />
+                  {activeId === c.id ? panelFor(data.apis) : null}
+                </Fragment>
               ))
             )}
           </div>
@@ -455,9 +501,18 @@ export function Suggestions() {
           <div className="two even">
             <Banner
               tone="accent"
-              title={maintainer ? 'Generate runs on the server' : 'Using Claude instead?'}
+              title={
+                maintainer && serverGeneration !== false
+                  ? 'Generate runs on the server'
+                  : 'Using Claude instead?'
+              }
             >
-              {maintainer ? (
+              {maintainer && serverGeneration === false ? (
+                <>
+                  This server has no model key, so it cannot write models itself: Generate opens a
+                  Claude session, and the model stays <b>unreleased</b> until you release it.
+                </>
+              ) : maintainer ? (
                 <>
                   You are signed in: Generate writes the model on the server and the result stays{' '}
                   <b>unreleased</b> until you release it. Prefer your own Claude? Ask “which models

@@ -188,6 +188,8 @@ export interface CheckCallResponse {
 
 export interface MaintainerIdentity {
   name: string;
+  /** Whether the server can generate models itself (a model key is configured). Absent on older servers. */
+  generation?: boolean;
 }
 
 export interface ValidationCheck {

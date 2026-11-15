@@ -2153,3 +2153,12 @@ th[scope='row'] {
     width: calc(100% - 24px);
   }
 }
+
+/* the message / progress / Claude session of a click on Generate sits under that concept */
+.concept-panels {
+  margin: -6px 0 6px;
+  scroll-margin: 96px;
+}
+.concept-panels:focus {
+  outline: none;
+}

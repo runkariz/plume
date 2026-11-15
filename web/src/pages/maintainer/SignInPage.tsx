@@ -29,7 +29,7 @@ export function SignInPage() {
     try {
       const who = await client.verifyMaintainer(token.trim());
       const name = email.trim() ? (email.trim().split('@')[0] ?? who.name) : who.name;
-      authStore.signIn(token.trim(), name || who.name);
+      authStore.signIn(token.trim(), name || who.name, who.generation ?? null);
       navigate(next, { replace: true });
     } catch (err) {
       setError(
