@@ -13,8 +13,8 @@ import pytest
 from mcp import Client
 
 pytestmark = pytest.mark.e2e
-API = "http://127.0.0.1:18480"
-MCP = "http://127.0.0.1:18481/mcp"
+API = os.environ.get("PLUME_E2E_API", "http://127.0.0.1:18480")
+MCP = os.environ.get("PLUME_E2E_MCP", "http://127.0.0.1:18481") + "/mcp"
 PLUME = str(Path(sys.executable).parent / "plume")
 PACKAGES = Path(__file__).resolve().parents[1] / "fixtures" / "packages"
 ASSIGNED = "endpoint:GET~/admin/api/{version}/assigned_fulfillment_orders.json"

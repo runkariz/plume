@@ -19,7 +19,7 @@ from plume.infrastructure.settings import Settings
 from tests.unit.infrastructure.test_dumps_and_storage import zip_dir
 
 pytestmark = pytest.mark.e2e
-API = "http://127.0.0.1:18480"
+API = os.environ.get("PLUME_E2E_API", "http://127.0.0.1:18480")
 PLUME = str(Path(sys.executable).parent / "plume")
 PACKAGES = Path(__file__).resolve().parents[1] / "fixtures" / "packages"
 

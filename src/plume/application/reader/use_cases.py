@@ -9,6 +9,7 @@ from plume.application.ports.api_repo import ApiRepo
 from plume.application.ports.build_repo import BuildRepo
 from plume.application.ports.document_repo import DocumentRepo
 from plume.application.ports.embedder import Embedder
+from plume.application.ports.eval_repo import EvalRepo
 from plume.application.ports.search_index import ChunkHit, DocumentSummary, FactQuery, SearchIndex
 from plume.application.ports.tag_repo import TagRepo
 from plume.application.reader.dto import (
@@ -78,7 +79,15 @@ def _snippet(text: str, query: str) -> str:
 
 
 class ListApiOverviews:
-    def __init__(self, apis: ApiRepo, builds: BuildRepo, tags: TagRepo, index: SearchIndex) -> None:
+    def __init__(
+        self,
+        apis: ApiRepo,
+        builds: BuildRepo,
+        tags: TagRepo,
+        index: SearchIndex,
+        evals: EvalRepo | None = None,
+    ) -> None:
+        self._evals = evals
         self._apis = apis
         self._resolver = BuildResolver(apis, builds, tags)
         self._tags = tags
@@ -94,6 +103,7 @@ class ListApiOverviews:
             tags=tuple(t.name.value for t in self._tags.list(r.api.api_id)),
             embed_model=spec.embed_model if spec else None,
             dims=spec.dims if spec else None,
+            eval=self._evals.get(r.build.build_id) if self._evals else None,
         )
 
     def execute(self) -> list[ApiOverview]:

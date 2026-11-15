@@ -1,4 +1,6 @@
 # Local stack. Plume's port block is 18400-18499 (Postgres 18432, API 18480, MCP 18481, web 18473).
+# Host ports can be moved with PLUME_PG_HOST_PORT / PLUME_API_HOST_PORT / PLUME_MCP_HOST_PORT
+# (make e2e runs as project plume-e2e on 18434 / 18484 / 18485 so it never collides).
 name: plume
 
 x-plume-env: &plume-env
@@ -21,7 +23,7 @@ services:
       POSTGRES_PASSWORD: plume
       POSTGRES_DB: plume
     ports:
-      - "127.0.0.1:18432:5432"
+      - "127.0.0.1:${PLUME_PG_HOST_PORT:-18432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -46,7 +48,7 @@ services:
     environment: *plume-env
     command: ["serve", "--host", "0.0.0.0", "--port", "18480"]
     ports:
-      - "127.0.0.1:18480:18480"
+      - "127.0.0.1:${PLUME_API_HOST_PORT:-18480}:18480"
     volumes:
       - plumedata:/data
       - ${PLUME_GOLD_DIR:-./tests/fixtures/gold}:/gold:ro
@@ -59,7 +61,7 @@ services:
     environment: *plume-env
     command: ["mcp", "--host", "0.0.0.0", "--port", "18481"]
     ports:
-      - "127.0.0.1:18481:18481"
+      - "127.0.0.1:${PLUME_MCP_HOST_PORT:-18481}:18481"
     healthcheck:
       test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 18481), 2)"]
       interval: 5s

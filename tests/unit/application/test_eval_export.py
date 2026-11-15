@@ -124,3 +124,14 @@ def test_draft_cannot_be_exported(packages: Path, tmp_path: Path) -> None:
         stack.export().execute(imported.build_id)
     with pytest.raises(Exception, match="not found"):
         stack.export().execute(BuildId.new())
+
+
+def test_eval_shows_in_overviews(packages: Path, tmp_path: Path) -> None:
+    stack = _stack(tmp_path)
+    stack.pipeline().execute("j", str(packages / "test-catalog"))
+    o = stack.overviews().one("test-catalog-api")
+    assert o.eval is not None
+    assert o.eval.metrics.recall_at_k == 1.0
+    plain = FakeStack(embedder=WordEmbedder())
+    plain.load(str(packages / "test-catalog"))
+    assert plain.overviews().one("test-catalog-api").eval is None

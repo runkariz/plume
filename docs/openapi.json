@@ -1940,16 +1940,40 @@
       },
       "Quality": {
         "properties": {
+          "citationHitRate": {
+            "title": "Citationhitrate",
+            "type": "number"
+          },
           "evaluatedAt": {
             "title": "Evaluatedat",
             "type": "string"
+          },
+          "factAccuracy": {
+            "title": "Factaccuracy",
+            "type": "number"
+          },
+          "gatePassed": {
+            "title": "Gatepassed",
+            "type": "boolean"
           },
           "goldQuestions": {
             "title": "Goldquestions",
             "type": "integer"
           },
           "inventedEndpoints": {
-            "title": "Inventedendpoints",
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Not measured yet (Level 2 with Claude); always null.",
+            "title": "Inventedendpoints"
+          },
+          "missingExpected": {
+            "title": "Missingexpected",
             "type": "integer"
           },
           "mrr": {
@@ -1964,8 +1988,11 @@
         "required": [
           "recallAt5",
           "mrr",
-          "inventedEndpoints",
+          "citationHitRate",
+          "factAccuracy",
+          "missingExpected",
           "goldQuestions",
+          "gatePassed",
           "evaluatedAt"
         ],
         "title": "Quality",

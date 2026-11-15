@@ -78,6 +78,7 @@ markers = [
     "e2e: needs the docker compose stack; run by `make e2e`",
     "eval: release gate (gold questions); run by `make eval`",
     "live: calls a real external service (Gemini/Vertex); skipped without PLUME_VERTEX_API_KEY",
+    "claude_live: runs Claude Code headless against a running stack (opt-in, PLUME_L2_RUN=1)",
 ]
 
 [tool.coverage.run]

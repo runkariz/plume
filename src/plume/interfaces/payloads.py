@@ -39,6 +39,7 @@ def api_payload(o: ApiOverview) -> Json:
         "tags": list(o.tags),
         "latest": ref_payload(o.ref) if o.ref else None,
         "counts": o.counts,
+        "quality": ({**o.eval.metrics.as_dict(), "gate_passed": o.eval.passed} if o.eval else None),
     }
 
 
