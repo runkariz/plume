@@ -196,7 +196,7 @@ def test_web_relation_edit(client: TestClient, stack: FakeStack) -> None:
     assert v2.status_code == 201
     v2set = v2.json()["set"]
     assert (v2set["lineage"]["version"], v2set["undecided"]) == (2, ["order-items"])
-    assert v2.json()["collection"]["created"] is False  # the set's existing link
+    assert v2.json()["collection"]["created"] is True  # never the set author's link
     stale = client.post(url, json={"relations": [{"id": "order-items", "confirmed": True}]})
     assert stale.status_code == 409  # v1 is no longer the latest
     url2 = f"/v1/model-sets/{v2set['id']}/relations"
