@@ -86,7 +86,8 @@ for up to `PLUME_MODEL_MAX_ROUNDS` rounds (default 3). The accepted model is sto
 with `generator: "gemini:<model>"`.
 
 - LLM: Gemini on Vertex AI express mode (`generateContent`), behind the `ModelWriter` port (a
-  scripted fake in tests). Model `PLUME_MODEL_LLM` (default `gemini-2.5-pro`).
+  scripted fake in tests). Model `PLUME_MODEL_LLM` (default `gemini-4-argon`, the owner's choice; not yet confirmed against the Vertex express
+  endpoint: the first live run must, and reports a missing model as an error, never falling back).
 - Key: `PLUME_VERTEX_KEY_FILE`, a file read on every call and sent only in the
   `x-goog-api-key` header; never logged, never in an error. Unset or unreadable: generation
   answers 503 `llm_unavailable` and the web offers the Claude flow instead.

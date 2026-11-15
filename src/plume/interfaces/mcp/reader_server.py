@@ -31,6 +31,10 @@ from plume.application.reader.use_cases import (
 from plume.domain.knowledge.api import ApiId
 from plume.domain.shared.errors import DomainError
 from plume.interfaces import payloads
+from plume.interfaces.mcp.apps.model_view import (
+    model_view_apps,
+    model_view_html,
+)
 from plume.interfaces.mcp.model_tools import register_model_tools
 
 INSTRUCTIONS = """\
@@ -75,6 +79,7 @@ class McpReaderDependencies:
     models: Callable[[], ModelSessions] | None = None
     sections: Callable[[], PackageSections] | None = None
     web_public_url: str | None = None
+    mcp_app_html: str | None = None  # the model view bundle; None = the packaged file
 
 
 async def _run(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
@@ -90,6 +95,7 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
         title="Plume API docs",
         instructions=INSTRUCTIONS,
         version=__version__,
+        extensions=[model_view_apps(deps.mcp_app_html or model_view_html())],
     )
 
     @server.tool(annotations=READ_ONLY, structured_output=True)
