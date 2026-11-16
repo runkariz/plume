@@ -47,7 +47,7 @@ def test_notes_are_computed_at_load_and_never_hold_the_publish(
 ) -> None:
     s, first, second = two_builds
     assert _latest(s) == second  # published as before: nothing blocks
-    notes = s.release_notes().get(API, second)
+    notes = s.release_notes().get(API, second, full=True)
     assert (notes["from"], notes["to"], notes["review"], notes["tagged"]) == (
         first, second, "pending", True,
     )  # fmt: skip
@@ -55,6 +55,12 @@ def test_notes_are_computed_at_load_and_never_hold_the_publish(
     assert {("currency", "removed"), ("channel", "added")} <= ops
     assert all(i["class"] in ("unknown", "suspect") for i in notes["items"])  # no source text
     assert notes["counts"]["breaking"] == 0  # nothing visible to users yet
+    light = s.release_notes().get(API, second)
+    assert light["items"] == []  # only user-visible items; the rest are in the report
+    assert sum(g["count"] for g in light["report"]) == len(notes["items"])
+    group = light["report"][0]
+    page = s.release_notes().report_group(API, second, group["rule"], 0, 1)
+    assert (page["count"], len(page["items"])) == (group["count"], 1)
     assert [n["to"] for n in s.release_notes().summaries(API)] == [second]
 
 
@@ -83,7 +89,7 @@ def test_promote_needs_a_verified_quote_and_can_be_undone(
 ) -> None:
     s, _, second = two_builds
     service = s.release_notes()
-    item = next(i for i in service.get(API, second)["items"]
+    item = next(i for i in service.get(API, second, full=True)["items"]
                 if i["subject"]["fieldPath"] == "channel")  # fmt: skip
     with pytest.raises(QuoteNotVerifiedError):
         service.promote(API, second, item["id"], "an invented quote")

@@ -564,7 +564,7 @@ def _classify_one(it: Item, ctx: _Context) -> None:
     it["artifactRules"] = rules
     it["evidence"] = {
         "sourceUrl": doc.source_url if doc else None,
-        "anchor": doc.anchor if doc else None,
+        "anchor": (doc.anchor or "").lstrip("#") or None if doc else None,
         "quote": _quote(quote) if cls == CONFIRMED else None,
         "pageHashBefore": ha,
         "pageHashAfter": hb,
@@ -691,8 +691,9 @@ def attention(items: Sequence[Item], gold: Mapping[str, Any] | None, max_drop: f
     return "; ".join(reasons) or None
 
 
-def report(items: Sequence[Item]) -> list[dict[str, Any]]:
-    """Suspect and unknown items grouped by their first rule (and renames), for maintainers."""
+def report(items: Sequence[Item], limit: int | None = None) -> list[dict[str, Any]]:
+    """Suspect and unknown items grouped by their first rule (and renames), for maintainers.
+    With ``limit``, each group carries its first ``limit`` items (``count`` has them all)."""
     groups: dict[str, list[Item]] = defaultdict(list)
     for i in items:
         if i.get("rename"):
@@ -704,7 +705,13 @@ def report(items: Sequence[Item]) -> list[dict[str, Any]]:
             groups["unknown"].append(i)
     order = list(RULES)
     return [
-        {"rule": r, "title": RULES[r][0], "explanation": RULES[r][1], "items": groups[r]}
+        {
+            "rule": r,
+            "title": RULES[r][0],
+            "explanation": RULES[r][1],
+            "count": len(groups[r]),
+            "items": groups[r] if limit is None else groups[r][:limit],
+        }
         for r in sorted(groups, key=order.index)
     ]
 
