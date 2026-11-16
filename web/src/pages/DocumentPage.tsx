@@ -8,14 +8,16 @@ import {
   Chip,
   Crumbs,
   EndpointRateLimitCard,
+  EndpointLinks,
   ErrorState,
+  GuideLinks,
   LoadingState,
   MethodBadge,
   RawJson,
 } from '@/components';
 import { constraintParts } from '@/lib/constraints';
 import { breakable } from '@/lib/breakable';
-import { operationOf, shownPath } from '@/lib/docHref';
+import { operationOf, schemeIdOf, shownPath } from '@/lib/docHref';
 import { formatDate, shortBuild } from '@/lib/format';
 import { apiTitle } from '@/lib/names';
 
@@ -144,6 +146,7 @@ export function DocumentPage() {
   })).filter((g) => g.fields.length > 0);
   const known = new Set(GROUPS.map((g) => g.location));
   const other = d.fields.filter((f) => !known.has(f.location));
+  const perScheme = (d.requiredScopes ?? []).filter((r) => r.scopes.length > 0);
   const isGuide = d.kind === 'guide' || d.kind === 'app';
   const hasStructure = groups.length > 0 || other.length > 0;
 
@@ -211,7 +214,34 @@ export function DocumentPage() {
 
       <EndpointRateLimitCard limit={d.rateLimit} />
 
-      {d.scopes.length ? (
+      {perScheme.length ? (
+        <Card className="pad doc-scopes" role="region" aria-label="Required scopes">
+          <h2 className="h2-sm">Required scopes</h2>
+          <div className="scheme-scopes">
+            {perScheme.map((r, i) => (
+              <div key={`${r.authId ?? 'any'}-${i}`} className="scheme-row">
+                {r.authId ? (
+                  <Link
+                    className="mono small"
+                    to={`/apis/${apiId}/auth/${encodeURIComponent(schemeIdOf(r.authId))}`}
+                  >
+                    {r.authId}
+                  </Link>
+                ) : (
+                  <span className="faint small" title="The package does not name the scheme">
+                    Any scheme
+                  </span>
+                )}
+                <span className="row">
+                  {r.scopes.map((s) => (
+                    <Chip key={s}>{s}</Chip>
+                  ))}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : d.scopes.length ? (
         <Card className="pad doc-scopes" role="region" aria-label="Scopes">
           <h2 className="h2-sm">{d.kind === 'auth' ? 'Scopes' : 'Required scopes'}</h2>
           <div className="row">
@@ -219,6 +249,28 @@ export function DocumentPage() {
               <Chip key={s}>{s}</Chip>
             ))}
           </div>
+        </Card>
+      ) : null}
+
+      {d.guides?.length ? (
+        <Card className="pad" role="region" aria-label="Related guides">
+          <h2 className="h2-sm">
+            Related guides <span className="faint small">({d.guides.length})</span>
+          </h2>
+          <GuideLinks api={apiId} ids={d.guides} />
+        </Card>
+      ) : null}
+
+      {d.linkedEndpoints?.length ? (
+        <Card className="pad" role="region" aria-label="About these endpoints">
+          <h2 className="h2-sm">
+            About these endpoints <span className="faint small">({d.linkedEndpoints.length})</span>
+          </h2>
+          <EndpointLinks
+            api={apiId}
+            ids={d.linkedEndpoints}
+            label="Endpoints this guide is about"
+          />
         </Card>
       ) : null}
 

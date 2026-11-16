@@ -28,6 +28,22 @@ export const iconApis = new Set(['shopify']);
 export const ICON_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAYAAABytg0kAAAAFklEQVR4nGNkYGD4z8DAwMDEQCUAAC8wARHfTVo8AAAAAElFTkSuQmCC';
 
+/** The endpoints whose requiredScopes name a scope (document ids), as the API sends them. */
+const SCOPE_ENDPOINTS: Record<string, string[]> = {
+  read_orders: [
+    'endpoint:GET~/orders.json',
+    'endpoint:GET~/orders/{order_id}.json',
+    'endpoint:GET~/orders/count.json',
+    'endpoint:GET~/orders/{order_id}/risks.json',
+    'endpoint:GET~/orders/{order_id}/transactions.json',
+  ],
+  write_orders: [
+    'endpoint:POST~/orders.json',
+    'endpoint:PUT~/orders/{order_id}.json',
+    'endpoint:DELETE~/orders/{order_id}.json',
+  ],
+};
+
 const SHOPIFY_SCOPES = [
   ['read_analytics', 'View store metrics'],
   ['read_assigned_fulfillment_orders', 'View or manage fulfillment orders'],
@@ -109,7 +125,11 @@ export function authDetailFor(api: string, id: string): AuthSchemeDetail | undef
   if (api === 'shopify')
     return {
       ...base,
-      scopes: SHOPIFY_SCOPES.map(([scope, description]) => ({ scope, description })),
+      scopes: SHOPIFY_SCOPES.map(([scope, description]) => ({
+        scope,
+        description,
+        ...(SCOPE_ENDPOINTS[scope] ? { endpoints: SCOPE_ENDPOINTS[scope] } : {}),
+      })),
       variables: [],
       setupSteps: [
         {

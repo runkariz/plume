@@ -759,6 +759,18 @@ export interface DocumentOut {
     constraints?: FieldConstraints | null;
   }[];
   scopes: string[];
+  /** Endpoint: the scopes it needs per auth scheme (authId null = the package names no scheme). Absent on older servers. */
+  requiredScopes?: RequiredScopes[];
+  /** Endpoint: the knowledge units (guides) that name it, as document ids. */
+  guides?: string[];
+  /** Guide: the endpoints it is about, as document ids. */
+  linkedEndpoints?: string[];
+}
+
+/** The scopes an endpoint needs under one auth scheme, verbatim from the package. */
+export interface RequiredScopes {
+  authId: string | null;
+  scopes: string[];
 }
 
 /** The allowed values of a field, verbatim from the package (untrusted: show as text). */
@@ -862,7 +874,12 @@ export interface AuthSchemeDetail {
   grantType: string | null;
   headerName: string | null;
   queryParam: string | null;
-  scopes: { scope: string | null; description: string | null }[];
+  scopes: {
+    scope: string | null;
+    description: string | null;
+    /** Endpoint document ids whose requiredScopes name this scope; absent on older servers. */
+    endpoints?: string[];
+  }[];
   variables: { name: string; description: string | null; type: string | null; required: boolean }[];
   /** Verbatim from the package: in Shopify a list of {order, text}; other shapes possible. */
   setupSteps: unknown[] | null;
