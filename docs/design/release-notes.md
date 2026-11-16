@@ -30,6 +30,8 @@ One record per atomic difference between build A (previous) and build B (new) of
 ```json
 {
   "id": "ch-<hash of api, from, to, kind, subject, path, op>",
+  "from": "b-…", "to": "b-…", "toDocsAsOf": "2026-11-15",
+  "wordingOnly": false,
   "kind": "endpoint | param | request_field | response_field | model | property | auth_scheme | scope | webhook_event | guide",
   "op": "added | removed | type | required | description | enum | renamed",
   "subject": {"docId": "endpoint:GET~/orders.json", "method": "GET", "path": "/orders.json",
@@ -46,6 +48,14 @@ One record per atomic difference between build A (previous) and build B (new) of
 }
 ```
 
+- **Quotes** are at most 500 characters, cut at a word boundary with "…".
+- **Links**: `sourceUrl` + `anchor` point to the vendor page. For an item in the latest build,
+  `subject.docId` opens it in Plume. For a REMOVED item, open `GET
+  /v1/apis/{api}/documents/{docId}?version=<from>`: this already reads past builds, since builds
+  are kept.
+- **`wordingOnly`** is true when `op = description`, and on a build summary when every visible
+  item is description-only. Such items are never breaking. The UI collapses them ("wording only:
+  12 descriptions changed"), and they don't count toward a badge.
 - **Identity** is stable across recomputation (the id hashes the subject, not the run), so a
   reclassified item keeps its id. Endpoints are keyed by `METHOD path` (with the `@<endpoint
   id>` suffix for collisions). Models are keyed by source title. Fields are keyed by owner,
@@ -189,14 +199,30 @@ Without these, most items stay `unknown` or rest on artifact rules alone:
 
 All reads; suspect and unknown items need the maintainer token.
 
-- `GET /v1/apis` list items: `docsUpdated: {build, at, confirmed, likely, breaking} | null`.
-  These are visible counts of the latest build's notes, with no per-card call.
+- **Absent means not available**: a server without notes (an old package, no predecessor, or
+  phase 1 for public surfaces) answers `null` or omits the field. It never sends an
+  empty-but-present object meaning "nothing happened". The web detects features this way.
+- `GET /v1/apis` list items: `docsUpdated: {build, at, confirmed, likely, breaking,
+  wordingOnly} | null`. These are visible counts of the latest build's notes, with no per-card
+  call. It is null when the build has no notes or no visible non-wording item.
 - `GET /v1/apis/{api}/builds`: the timeline (`id, docsAsOf, tag, createdAt, counts {confirmed,
   likely, breaking}`). With the token it adds `suspect, unknown, status`.
-- `GET /v1/apis/{api}/changes?build=<id>|since=<date|build>&cursor=`: paged items, visible
-  only. `since` spans builds (section 9).
+- `GET /v1/apis/{api}/changes?build=<id>|since=<date|build>&cursor=&limit=` (default 50,
+  max 200): visible items only.
+  - Stable order: breaking first, then kind, then subject path, then op.
+  - Filters: `breaking=true`, `kind=`, `op=`, `wordingOnly=true|false`, `q=` (subject text).
+  - The response carries `totals {confirmed, likely, breaking, wordingOnly, byKind}` for the
+    WHOLE selection, ignoring paging and the q filter, so chips show true counts, plus
+    `computedAt` of the notes.
+  - `since` spans builds (section 9); items carry `from`, `to` and `toDocsAsOf` for grouping.
 - `GET /v1/apis/{api}/builds/{build}/release-notes` (maintainer): everything, plus the
-  extraction report and gate status. `POST …/decision {accept|reject, note}`.
+  extraction report (suspects grouped by artifact rule, with A/B values and page hashes;
+  unknown items as "no source evidence"). It also carries `status`
+  (clear|review|accepted|rejected), `blocks` (bool), `gateReason` (e.g. "2 suspect removed
+  endpoints"), `computedAt`, and `decisions` (history: who, when, accept|reject, note).
+- `POST …/decision {decision: accept|reject, note}` answers 409 `invalid_state` when the notes
+  are already decided or don't block. A recomputation that changes the counts keeps the
+  decision history and updates `computedAt`.
 - `GET /v1/apis/{api}/changes.atom`: one Atom entry per build with visible items (title:
   counts and BREAKING; content: plain-text list with links to `sourceUrl`).
 - MCP reader `what_changed(api, since)`: the same visible items. The text tells Claude to
@@ -205,16 +231,57 @@ All reads; suspect and unknown items need the maintainer token.
   `decide_release(api, build, accept|reject, note)`.
 - **Model impact** (server-side, since it knows which document fields a mapping cites):
   - `GET /v1/models/{id}/impact` → `{pinned: {api: build}, latest: {api: build}, status:
-    current|updated_unaffected|affected, affected: [{field, api, change: <item>}], counts}`;
-  - the model JSON carries `impact: {status, affectedCount}`, and the MCP structuredContent
-    carries the summary plus at most 5 affected rows (the widget has no network);
-  - a set sums its members, naming the member.
+    current|updated_unaffected|affected|unknown, affected: [{field, api, change: <item>}],
+    counts}`. `unknown` means a pinned build or a build in between has no notes: the UI must
+    not say "unaffected" then;
+  - `impact: {status, affectedCount, breakingCount}` sits on the model JSON AND on the list
+    items of `GET /v1/models`, `GET /v1/model-sets` and the My models collection items (no
+    per-row call);
+  - a set's JSON has `impact: {status, affectedCount, breakingCount, byMember: [{concept,
+    status, affectedCount}]}`, where the set status is the worst of its members (unknown <
+    current < updated_unaffected < affected for display);
+  - the MCP structuredContent carries `impact` plus at most 5 compact rows `{field, api,
+    member?, op, breaking, text}` (`text` is one plain line) and `impactUrl`, not full items.
+    The widget has no network.
 
   A mapping is affected when a **visible** item touches a document field or endpoint it cites
   (paths, evidence doc, `fetch`). Suspect items never make a model "affected". This replaces
   the blanket `stale` badge: `stale` stays as data, and the UI leads with `impact.status`.
 - Quotes are always from the vendor docs of the build they describe (A for `before`, B for
   `after`). They are plain text: render them as text with a link to `sourceUrl`, never as HTML.
+
+## 8b. Web (plume-9a)
+
+- **Maintainer first (phase 1)**: the wizard's Publish step shows the gate (status,
+  `gateReason`), the extraction report (suspects grouped by artifact rule with A/B values and
+  page hashes; unknown items as "no source evidence"), Accept/Reject with a note, and the
+  decision history. Suspect and unknown items appear only on a separate maintainer route
+  (`/maintainer/apis/:api/builds/:build/notes`), never mixed into public pages.
+- **Public (phase 3)**:
+  - API card badge, e.g. "Docs updated 14 Nov: 3 changes, 1 breaking" (text and icon, never
+    colour alone). Shown when confirmed + likely non-wording > 0; links to the Changes tab.
+  - "Changes" tab on the API page: a build timeline (newest first, tag chips, counts, a BREAKING
+    chip when any visible item is breaking). A build opens its list:
+    - filter chips: All, Breaking, Endpoints, Fields, Auth, Wording only;
+    - items grouped by document, each with an op chip, before → after, the quote as plain text
+      and a "Vendor page" link;
+    - "per the vendor's changelog" on likely items, and "Subscribe (Atom)";
+    - an empty build reads "No API changes found".
+  - Model and set pages: an impact banner leads instead of the stale badge.
+    - affected: "N mappings affected (M breaking)", with rows linked to the mapping and
+      Regenerate for maintainers;
+    - updated_unaffected: "Docs updated, your mappings are unaffected";
+    - current: quiet;
+    - unknown: "Not checked against newer docs".
+
+    Lists show the same chip.
+  - Widget: the one-line banner, at most 5 compact rows, and "Open in Plume". No fetch.
+- Quotes render as text nodes, chips carry text, lists are paged (100), filters live in the URL,
+  and the layout works at 375 px.
+- **Reclassification**: deep links to a vanished item show "no longer listed", and
+  `computedAt` shows "recomputed hh:mm".
+- **Feature detection**: the Changes tab appears when `GET …/builds` has a build with notes;
+  the badge when `docsUpdated` is non-null; the impact chip when `impact` exists.
 
 ## 9. Diffing across several builds (a model pinned three builds back)
 
