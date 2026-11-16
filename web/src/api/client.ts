@@ -16,6 +16,7 @@ import {
   type ModelJob,
   type ReleaseNotes,
   type ReleaseSummary,
+  type ReportPage,
   type RollbackResult,
   type RelatedConcepts,
   type SetSessionRequest,
@@ -228,6 +229,15 @@ export interface PlumeApi {
   /** The notes of every build of an API that has some, newest first, with the review state and counts. */
   listReleaseNotes(api: string, signal?: AbortSignal): Promise<ReleaseSummary[]>;
   getReleaseNotes(api: string, build: string, signal?: AbortSignal): Promise<ReleaseNotes>;
+  /** More of one report group (the notes carry only its first 50), `limit` at most 200. */
+  getReportPage(
+    api: string,
+    build: string,
+    rule: string,
+    cursor: number,
+    limit?: number,
+    signal?: AbortSignal,
+  ): Promise<ReportPage>;
   /** Keep the build; on a rolled-back build this rolls forward (409 when `latest` moved on). */
   keepRelease(
     api: string,
@@ -673,6 +683,11 @@ export function createApiClient(
     },
     getReleaseNotes: (api, build, signal) =>
       call<ReleaseNotes>(`/v1/apis/${enc(api)}/builds/${enc(build)}/release-notes`, { signal }),
+    getReportPage: (api, build, rule, cursor, limit = 50, signal) =>
+      call<ReportPage>(
+        `/v1/apis/${enc(api)}/builds/${enc(build)}/release-notes/report/${enc(rule)}?cursor=${cursor}&limit=${limit}`,
+        { signal },
+      ),
     keepRelease: (api, build, note, signal) =>
       call<ReleaseNotes>(`/v1/apis/${enc(api)}/builds/${enc(build)}/release-notes/keep`, {
         method: 'POST',

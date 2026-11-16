@@ -344,6 +344,7 @@ describe('a big report (a real Shopify run has thousands of changes)', () => {
       artifactRules: ['A1-mass-removal'],
       visibleToUsers: false,
     }));
+  /** As the server sends it: each group has its `count` and only the first 50 items. */
   const bigNotes = (n: number) => ({
     api: 'shopify',
     from: REVIEW_SHOPIFY_OLD,
@@ -368,59 +369,105 @@ describe('a big report (a real Shopify run has thousands of changes)', () => {
       },
     },
     gold: null,
-    items: many(n),
+    items: [],
     report: [
       {
         rule: 'A1-mass-removal',
         title: 'Mass removal',
         explanation: 'Most fields vanished.',
-        items: many(n),
+        count: n,
+        items: many(n).slice(0, 50),
       },
     ],
   });
-
-  it('shows 50 at a time, says how many are left, and keeps the page light', async () => {
+  /** The two routes the server has for it: the notes, and a group page by page. */
+  const serve = (n: number, requests: string[] = []) =>
     server.use(
       http.get(`${TEST_API_BASE}/v1/apis/shopify/builds/${REVIEW_SHOPIFY_NEW}/release-notes`, () =>
-        HttpResponse.json(bigNotes(240)),
+        HttpResponse.json(bigNotes(n)),
+      ),
+      http.get(
+        `${TEST_API_BASE}/v1/apis/shopify/builds/${REVIEW_SHOPIFY_NEW}/release-notes/report/:rule`,
+        ({ request }) => {
+          requests.push(request.url);
+          const q = new URL(request.url).searchParams;
+          const cursor = Number(q.get('cursor') ?? 0);
+          const limit = Number(q.get('limit') ?? 50);
+          const all = many(n);
+          const next = cursor + limit;
+          return HttpResponse.json({
+            rule: 'A1-mass-removal',
+            count: n,
+            items: all.slice(cursor, next),
+            nextCursor: next < n ? next : null,
+          });
+        },
       ),
     );
+
+  it('shows the first 50, says how many are left, and fetches the next page from the server', async () => {
+    const requests: string[] = [];
+    serve(240, requests);
     await open();
     const group = screen.getByRole('region', { name: 'Mass removal' });
+    expect(within(group).getByText('240')).toBeInTheDocument(); // the count, not the 50 that came
     expect(within(group).getAllByRole('listitem')).toHaveLength(50);
-    expect(
-      within(group).getByRole('button', { name: 'Show 50 more (190 left)' }),
-    ).toBeInTheDocument();
+    expect(requests).toEqual([]); // nothing more was asked for yet
     await userEvent.click(within(group).getByRole('button', { name: 'Show 50 more (190 left)' }));
-    expect(within(group).getAllByRole('listitem')).toHaveLength(100);
+    await waitFor(() => expect(within(group).getAllByRole('listitem')).toHaveLength(100));
+    expect(requests).toHaveLength(1);
+    const q = new URL(requests[0] ?? '').searchParams;
+    expect([q.get('cursor'), q.get('limit')]).toEqual(['50', '50']);
     // nothing is a "user visible" change: users see nothing new
     expect(
       screen.getByText('No confirmed or likely changes: users see nothing new for this build.'),
     ).toBeInTheDocument();
   });
 
-  it('filters by path, field or model across the report', async () => {
+  it('a filter looks through what is loaded, says so, and can load the rest to search it too', async () => {
+    serve(240);
+    await open();
+    const group = screen.getByRole('region', { name: 'Mass removal' });
+    await userEvent.type(screen.getByLabelText(/Filter the changes below/), 'field_239');
+    // field_239 is the last of 240: not among the 50 that came
+    expect(within(group).getByRole('status')).toHaveTextContent(
+      '0 of 50 loaded match “field_239”. 190 more are not loaded yet.',
+    );
+    expect(within(group).getByText('Nothing matches.')).toBeInTheDocument();
+    await userEvent.click(
+      within(group).getByRole('button', { name: 'Load the other 190 to search them too' }),
+    );
+    await waitFor(() =>
+      expect(within(group).getByRole('status')).toHaveTextContent(
+        '1 of 240 loaded match “field_239”.',
+      ),
+    );
+    expect(within(group).getAllByRole('listitem')).toHaveLength(1);
+  });
+
+  it('a page that cannot be loaded says so and keeps what is there', async () => {
+    serve(240);
     server.use(
-      http.get(`${TEST_API_BASE}/v1/apis/shopify/builds/${REVIEW_SHOPIFY_NEW}/release-notes`, () =>
-        HttpResponse.json(bigNotes(240)),
+      http.get(
+        `${TEST_API_BASE}/v1/apis/shopify/builds/${REVIEW_SHOPIFY_NEW}/release-notes/report/:rule`,
+        () =>
+          HttpResponse.json(
+            { error: 'internal', message: 'the report is not available' },
+            { status: 500 },
+          ),
       ),
     );
     await open();
-    await userEvent.type(screen.getByLabelText(/Filter the changes below/), 'field_239');
     const group = screen.getByRole('region', { name: 'Mass removal' });
-    expect(within(group).getAllByRole('listitem')).toHaveLength(1);
-    expect(within(group).getByRole('status')).toHaveTextContent('1 of 240 match “field_239”.');
-    await userEvent.clear(screen.getByLabelText(/Filter the changes below/));
-    await userEvent.type(screen.getByLabelText(/Filter the changes below/), 'nothing like this');
-    expect(within(group).getByText('Nothing matches.')).toBeInTheDocument();
+    await userEvent.click(within(group).getByRole('button', { name: 'Show 50 more (190 left)' }));
+    expect(await within(group).findByRole('alert')).toHaveTextContent(
+      'the report is not available',
+    );
+    expect(within(group).getAllByRole('listitem').length).toBeGreaterThanOrEqual(50);
   });
 
   it('says the extractor changed, what stream could not read, and that there is no page text to compare with', async () => {
-    server.use(
-      http.get(`${TEST_API_BASE}/v1/apis/shopify/builds/${REVIEW_SHOPIFY_NEW}/release-notes`, () =>
-        HttpResponse.json(bigNotes(3)),
-      ),
-    );
+    serve(3);
     await open();
     const pkg = screen.getByRole('region', { name: 'Package and quality' });
     expect(pkg).toHaveTextContent('The extractor changed');
@@ -429,5 +476,15 @@ describe('a big report (a real Shopify run has thousands of changes)', () => {
     expect(pkg).toHaveTextContent('3'); // a list of three failed pages
     expect(pkg).toHaveTextContent('units blocked');
     expect(pkg).toHaveTextContent('2'); // a plain count
+  });
+
+  it('a decision refreshes the notes without blanking the page', async () => {
+    await open();
+    expect(screen.getByRole('region', { name: 'Alphabetical cut-off' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Keep this build' }));
+    // the page is never replaced by the loading state while the notes load again
+    expect(screen.queryByText('Loading the release notes')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText('Kept').length).toBeGreaterThan(0));
+    expect(screen.getByRole('region', { name: 'Alphabetical cut-off' })).toBeInTheDocument();
   });
 });

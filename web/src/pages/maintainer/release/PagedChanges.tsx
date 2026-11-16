@@ -16,8 +16,10 @@ export function matches(i: ChangeItem, q: string): boolean {
 }
 
 /**
- * A list of changes shown 50 at a time (a real Shopify run has thousands; rendering them all would freeze the page),
- * filtered by the page's filter text.
+ * A list of changes shown 50 at a time (a real Shopify run has thousands: rendering them all would freeze the page),
+ * filtered by the page's filter text. A report group arrives with only its first 50: `total` is how many there are,
+ * and `loadMore(n)` / `loadAll()` fetch the rest from the server on demand. A filter can only look through what is
+ * loaded, and says so, with a way to load the rest.
  */
 export function PagedChanges({
   api,
@@ -26,6 +28,9 @@ export function PagedChanges({
   query,
   onChanged,
   label,
+  total,
+  loadMore,
+  loadAll,
 }: {
   api: string;
   build: string;
@@ -33,15 +38,38 @@ export function PagedChanges({
   query: string;
   onChanged: () => void;
   label: string;
+  /** How many there are in all (more than `items` while the rest is on the server). */
+  total?: number;
+  loadMore?: (limit: number) => Promise<void>;
+  loadAll?: () => Promise<void>;
 }) {
   const [shown, setShown] = useState(STEP);
+  const [busy, setBusy] = useState(false);
   const found = useMemo(() => items.filter((i) => matches(i, query)), [items, query]);
+  const all = total ?? items.length;
+  const remote = all > items.length;
+  const filtering = query.trim() !== '';
   const visible = found.slice(0, shown);
+
+  async function showMore() {
+    setBusy(true);
+    try {
+      const want = shown + STEP;
+      if (!filtering && remote && loadMore && items.length < want)
+        await loadMore(want - items.length);
+      setShown(want);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const left = filtering ? found.length - shown : all - shown;
   return (
     <>
-      {query.trim() && found.length !== items.length ? (
+      {filtering ? (
         <p className="faint small" role="status">
-          {found.length} of {items.length} match “{query.trim()}”.
+          {found.length} of {items.length} loaded match “{query.trim()}”.
+          {remote ? ` ${all - items.length} more are not loaded yet.` : ''}
         </p>
       ) : null}
       <ul className="plain change-list" aria-label={label}>
@@ -49,10 +77,23 @@ export function PagedChanges({
           <ChangeRow key={i.id} api={api} build={build} item={i} onChanged={onChanged} />
         ))}
       </ul>
-      {found.length > shown ? (
+      {left > 0 ? (
         <p>
-          <Button onClick={() => setShown((n) => n + STEP)}>
-            Show {Math.min(STEP, found.length - shown)} more ({found.length - shown} left)
+          <Button disabled={busy} onClick={() => void showMore()}>
+            {busy ? 'Loading…' : `Show ${Math.min(STEP, left)} more (${left} left)`}
+          </Button>
+        </p>
+      ) : null}
+      {filtering && remote && loadAll ? (
+        <p>
+          <Button
+            disabled={busy}
+            onClick={() => {
+              setBusy(true);
+              void loadAll().finally(() => setBusy(false));
+            }}
+          >
+            {busy ? 'Loading…' : `Load the other ${all - items.length} to search them too`}
           </Button>
         </p>
       ) : null}

@@ -6,6 +6,7 @@ import type {
   ReleaseReview,
   ReleaseSummary,
   ReportGroup,
+  ReportPage,
   RollbackResult,
 } from '@/api/types';
 
@@ -390,12 +391,36 @@ export function reportOf(b: MockBuild): ReportGroup[] {
     const rule = i.class === 'unknown' ? 'unknown' : (i.artifactRules?.[0] ?? 'unknown');
     byRule.set(rule, [...(byRule.get(rule) ?? []), i]);
   }
+  // as the server does: each group carries its `count` and only the first 50 items (the rest through reportPage)
   return [...byRule.entries()].map(([rule, items]) => ({
     rule,
     title: RULES[rule]?.title ?? rule,
     explanation: RULES[rule]?.explanation ?? '',
-    items,
+    count: items.length,
+    items: items.slice(0, 50),
   }));
+}
+
+/** GET .../report/{rule}?cursor&limit: one group, paged. */
+export function reportPage(
+  b: MockBuild,
+  rule: string,
+  cursor: number,
+  limit: number,
+): ReportPage | null {
+  const all = b.items
+    .filter((i) => !visible(i))
+    .filter(
+      (i) => (i.class === 'unknown' ? 'unknown' : (i.artifactRules?.[0] ?? 'unknown')) === rule,
+    );
+  if (all.length === 0) return null;
+  const next = cursor + limit;
+  return {
+    rule,
+    count: all.length,
+    items: all.slice(cursor, next),
+    nextCursor: next < all.length ? next : null,
+  };
 }
 
 export function notesJson(api: MockApiBuilds, b: MockBuild, apiId = 'shopify'): ReleaseNotes {

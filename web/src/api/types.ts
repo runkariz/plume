@@ -1094,7 +1094,17 @@ export interface ReportGroup {
   rule: string;
   title: string;
   explanation: string;
+  /** How many changes the rule flagged; `items` holds only the first 50 (the rest: GET .../report/{rule}). */
+  count?: number;
   items: ChangeItem[];
+}
+
+/** One page of a report group (GET .../release-notes/report/{rule}?cursor=&limit=). */
+export interface ReportPage {
+  rule: string;
+  count: number;
+  items: ChangeItem[];
+  nextCursor: number | null;
 }
 
 export interface ReleaseDecision {

@@ -57,7 +57,11 @@ for (const theme of THEMES) {
         review: 'pending' | 'kept' | 'rolled_back';
         attentionReason: string;
         counts: Record<string, number>;
-        report: { title: string; items: { id: string; subject: { fieldPath?: string } }[] }[];
+        report: {
+          title: string;
+          count: number;
+          items: { id: string; subject: { fieldPath?: string; model?: string } }[];
+        }[];
       };
 
       await signIn(page);
@@ -85,21 +89,31 @@ for (const theme of THEMES) {
       // the report: a group per rule with the server's title, 50 at a time
       for (const g of notes.report)
         await expect(page.getByRole('region', { name: g.title, exact: true })).toBeVisible();
-      const biggest = notes.report.reduce((a, b) => (b.items.length > a.items.length ? b : a));
+      const biggest = notes.report.reduce((a, b) => (b.count > a.count ? b : a));
+      expect(biggest.items.length).toBe(50); // the notes carry only the first 50 of a group
       const group = page.getByRole('region', { name: biggest.title, exact: true });
       await expect(group.getByRole('listitem')).toHaveCount(50);
       await expect(
-        group.getByRole('button', { name: /^Show 50 more \(\d+ left\)$/ }),
+        group.getByRole('button', { name: `Show 50 more (${biggest.count - 50} left)` }),
       ).toBeVisible();
+      // the next 50 come from the server's report route
+      await group.getByRole('button', { name: /^Show 50 more/ }).click();
+      await expect(group.getByRole('listitem')).toHaveCount(100);
       // users see nothing for this build
       await expect(
         page.getByText('No confirmed or likely changes: users see nothing new for this build.'),
       ).toBeVisible();
-      // the filter finds a field of the LAST item of the biggest group (not on the first page)
-      const target = biggest.items.at(-1)?.subject.fieldPath ?? '';
+      // the filter searches what is loaded and offers to load the rest of the group to search it too
+      const first = biggest.items[0]?.subject;
+      const target = first?.fieldPath ?? first?.model ?? '';
       expect(target).not.toBe('');
       await page.getByLabel(/Filter the changes below/).fill(target);
-      await expect(page.getByRole('status').filter({ hasText: 'match' }).first()).toBeVisible();
+      const loadRest = group.getByRole('button', {
+        name: /^Load the other \d+ to search them too$/,
+      });
+      await expect(group.getByRole('status')).toContainText('loaded match');
+      await loadRest.click();
+      await expect(group.getByRole('status')).toContainText(`of ${biggest.count} loaded match`);
       await page.getByLabel(/Filter the changes below/).fill('');
       await settle(page);
       await expectNoSeriousA11y(page);
