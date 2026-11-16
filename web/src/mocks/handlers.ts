@@ -17,6 +17,19 @@ import type {
 import { apiRef, modelCandidates, productSnapshot, sampleSuggestions } from './modelData';
 import { relatedFor } from './relatedData';
 import {
+  demote,
+  issuesText,
+  keep,
+  notesJson,
+  promote,
+  rollback,
+  seedReleases,
+  timelineJson,
+  type Failure,
+  type MockApiBuilds,
+  type MockBuild,
+} from './releaseStore';
+import {
   collectionUrl,
   DEMO_COLLECTION,
   LEGACY_KEYS,
@@ -191,6 +204,25 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
     string,
     { apis: string[]; concepts: string[]; aliases: SetAlias[]; setId: string | null }
   >();
+  /** Release notes: the builds of some APIs with the notes and review state of each (maintainer routes). */
+  const releases = seedReleases();
+  const releaseOf = (
+    request: Request,
+    api: string,
+    build: string,
+  ): { api: MockApiBuilds; build: MockBuild } | Response => {
+    if (!isMaintainer(request)) return unauthorized();
+    const a = releases[api];
+    const b = a?.builds.find((x) => x.id === build && x.hasNotes);
+    return a && b
+      ? { api: a, build: b }
+      : HttpResponse.json(
+          { error: 'not_found', message: 'No release notes for this build' },
+          { status: 404 },
+        );
+  };
+  const failure = (f: Failure) =>
+    HttpResponse.json({ error: f.error, message: f.message }, { status: f.status });
   /** My models: the links of the mock server (the demo ones are seeded). */
   const collections = new Map<string, MockCollection>([
     [DEMO_COLLECTION, { id: DEMO_COLLECTION }],
@@ -642,6 +674,72 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
       }
       return HttpResponse.json(collectionJson(id));
     }),
+    // ---- release notes: the review of a build after it was published (maintainer) ----
+    http.get(`${base}/v1/apis/:id/release-notes`, ({ params, request }) => {
+      if (!isMaintainer(request)) return unauthorized();
+      const a = releases[String(params.id)];
+      return HttpResponse.json({ items: a ? timelineJson(a) : [] });
+    }),
+    http.get(`${base}/v1/apis/:id/builds/:build/release-notes`, ({ params, request }) => {
+      const r = releaseOf(request, String(params.id), String(params.build));
+      return r instanceof Response
+        ? r
+        : HttpResponse.json(notesJson(r.api, r.build, String(params.id)));
+    }),
+    http.post(
+      `${base}/v1/apis/:id/builds/:build/release-notes/keep`,
+      async ({ params, request }) => {
+        const r = releaseOf(request, String(params.id), String(params.build));
+        if (r instanceof Response) return r;
+        const body = (await request.json().catch(() => ({}))) as { note?: string };
+        const f = keep(r.api, r.build, body.note);
+        return f ? failure(f) : HttpResponse.json(notesJson(r.api, r.build, String(params.id)));
+      },
+    ),
+    http.post(
+      `${base}/v1/apis/:id/builds/:build/release-notes/rollback`,
+      async ({ params, request }) => {
+        const r = releaseOf(request, String(params.id), String(params.build));
+        if (r instanceof Response) return r;
+        const body = (await request.json().catch(() => ({}))) as { reason?: string };
+        const reason = (body.reason ?? '').trim();
+        if (!reason || reason.length > 500)
+          return HttpResponse.json(
+            { error: 'invalid_request', message: 'A reason of 1 to 500 characters is required.' },
+            { status: 422 },
+          );
+        const res = rollback(r.api, r.build, reason);
+        return 'status' in res ? failure(res) : HttpResponse.json(res);
+      },
+    ),
+    http.get(`${base}/v1/apis/:id/builds/:build/release-notes/issues`, ({ params, request }) => {
+      const r = releaseOf(request, String(params.id), String(params.build));
+      if (r instanceof Response) return r;
+      const format =
+        new URL(request.url).searchParams.get('format') === 'text' ? 'text' : 'markdown';
+      return new HttpResponse(issuesText(String(params.id), r.build, format), {
+        headers: { 'Content-Type': format === 'markdown' ? 'text/markdown' : 'text/plain' },
+      });
+    }),
+    http.post(
+      `${base}/v1/apis/:id/builds/:build/release-notes/items/:item/promote`,
+      async ({ params, request }) => {
+        const r = releaseOf(request, String(params.id), String(params.build));
+        if (r instanceof Response) return r;
+        const body = (await request.json().catch(() => ({}))) as { quote?: string };
+        const res = promote(r.build, String(params.item), body.quote ?? '');
+        return 'status' in res ? failure(res) : HttpResponse.json(res);
+      },
+    ),
+    http.post(
+      `${base}/v1/apis/:id/builds/:build/release-notes/items/:item/demote`,
+      ({ params, request }) => {
+        const r = releaseOf(request, String(params.id), String(params.build));
+        if (r instanceof Response) return r;
+        const res = demote(r.build, String(params.item));
+        return 'status' in res ? failure(res) : HttpResponse.json(res);
+      },
+    ),
     http.get(`${base}/v1/models/jobs/:id`, ({ params, request }) => {
       if (!isMaintainer(request)) return unauthorized();
       const j = modelJobs.get(String(params.id));
