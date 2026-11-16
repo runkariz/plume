@@ -25,10 +25,16 @@ this review and have tests in `tests/unit/interfaces/test_hardening.py`.
 - **Rate limits**: per client address, sliding minute window
   (`PLUME_READER_RATE_LIMIT_PER_MINUTE`, default 120) on every HTTP route except `/health`.
   *Fixed*: the MCP endpoints (reader and maintainer) are rate limited the same way (they had
-  none). Limitation: the limiter keys on the TCP peer. Behind Docker's port publishing or a
-  reverse proxy every client may appear as one address, so the limit becomes global; put a
-  proxy that enforces per-client limits in front for a public deployment (Plume does not trust
-  `X-Forwarded-For`).
+  none). The limiter keys on the TCP peer by default (`PLUME_TRUSTED_PROXY_HOPS=0`): behind a
+  proxy every client then appears as one address and the limit becomes global. Behind N
+  trusted proxies set `PLUME_TRUSTED_PROXY_HOPS=N`: the client is the Nth
+  `X-Forwarded-For` entry from the right (Werkzeug ProxyFix `x_for=N`); fewer than N entries
+  fall back to the peer. Example (GKE): Traefik REPLACES any client `X-Forwarded-For` with the
+  remote address, nginx appends Traefik's pod IP, so Plume receives `X-Forwarded-For: client,
+  traefik` with nginx as the peer: `PLUME_TRUSTED_PROXY_HOPS=2` counts `client`. Only set it
+  behind proxies that overwrite or append the header; otherwise any client can pick the
+  address it is counted under. `GET /health` on the API and on the MCP process is exempt (for
+  probes; no auth, no database call).
 - **Body size**: *fixed*: requests that declare a body over 1 MiB (over
   `PLUME_MAX_UPLOAD_BYTES`, default 200 MiB, for `POST /v1/packages`) are refused with 413
   before the body is read; previously an upload was spooled in full before the size check.
@@ -71,8 +77,33 @@ this review and have tests in `tests/unit/interfaces/test_hardening.py`.
   answer 404 without the token (existence is not revealed). A user's "My models" link
   (collection, `c-` + 128 random bits) lists their models and sets; it grants nothing else
   (each model is readable by its own link anyway) and holds at most 500. Old owner keys
-  (`pk_`, stored only as SHA-256) still find their collection during the transition. Only a maintainer can make a model official; a user revising an official model gets
+  (`pk_`, stored only as SHA-256) still find their collection during the transition.
+  *Fixed* (found before release, never deployed): a save without `collection` answered with
+  the lineage's existing collection, so anyone adding a version to a shared model received the
+  author's link and their whole list. Rule now: Plume never answers with a collection the
+  caller did not send; without `collection` every save (a version of someone else's model or
+  set, a relation edit, a retry) gets a new link. The web client also adopts a returned link
+  only if the save created it or the browser sent it. A link lists the version saved into it,
+  not a later one someone else added (`newerVersion` points to that). Only a maintainer can make a model official; a user revising an official model gets
   their own unlisted copy. Drafts are capped at 1,000,000 characters.
+- **Vertex without a key**: with `PLUME_VERTEX_AUTH=adc` (or `auto` with no key and
+  `PLUME_VERTEX_PROJECT` set) embeddings and generation use Application Default Credentials
+  (Workload Identity on GKE): a Bearer token refreshed 5 minutes before expiry, sent only in
+  the `Authorization` header, never logged; errors name only the exception type. Grant the
+  workload's service account `roles/aiplatform.user`, nothing more.
+- **Outbound hosts** (egress allowlist; HTTPS 443 only, nothing else is called):
+
+  | Mode | Embeddings | Generation |
+  |---|---|---|
+  | key, no `PLUME_VERTEX_PROJECT` | `aiplatform.googleapis.com` (express URL) | `aiplatform.googleapis.com` (express URL) |
+  | key + project | `{EMBED_LOCATION}-aiplatform.googleapis.com` (`aiplatform.googleapis.com` for `global`) | `{VERTEX_LOCATION}-aiplatform.googleapis.com` (`aiplatform.googleapis.com` for `global`) |
+  | ADC (+ project) | as key + project | as key + project; plus `oauth2.googleapis.com` / the GKE metadata server (`169.254.169.254`) for tokens |
+  | `PLUME_EMBEDDER=gemini` | `generativelanguage.googleapis.com` | – |
+  | `PLUME_EMBEDDER=hash` | none | – |
+
+  Example (EU): key + project, `PLUME_VERTEX_EMBED_LOCATION=europe-west3` →
+  `europe-west3-aiplatform.googleapis.com` for embeddings; generation with `gemini-4-argon`
+  needs `PLUME_VERTEX_LOCATION=global` → `aiplatform.googleapis.com`.
 - **LLM key**: server-side generation reads the Vertex key from `PLUME_VERTEX_KEY_FILE` on each
   call and sends it only in the `x-goog-api-key` header; errors carry the HTTP status, never the
   key or the provider's body. Without a readable key file generation answers 503.

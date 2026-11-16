@@ -1,7 +1,9 @@
 """Gemini on Vertex AI express mode (generateContent) as the server-side model writer.
 
 The key is read from a file on every call (so it can be rotated without a restart) and sent only
-in the ``x-goog-api-key`` header: never in a URL, a log line or an error message.
+in the ``x-goog-api-key`` header: never in a URL, a log line or an error message. Without a key
+file, Application Default Credentials (Workload Identity) give a refreshed Bearer token; that
+needs a project (the express URL takes keys only).
 """
 
 import time
@@ -15,6 +17,12 @@ from plume.application.ports.model_writer import (
     ModelWriterError,
     ModelWriterUnavailableError,
     Turn,
+)
+from plume.infrastructure.vertex_auth import (
+    TokenSource,
+    VertexAuthError,
+    auth_headers,
+    vertex_host,
 )
 
 VERTEX_GENERATE_URL = (
@@ -41,8 +49,11 @@ class VertexGeminiWriter:
         sleep: Callable[[float], None] = time.sleep,
         project: str | None = None,
         location: str = "global",
+        token_source: TokenSource | None = None,
     ) -> None:
         self._key_file = key_file
+        # ADC only without a key file, and only with a project (express URLs take keys only)
+        self._tokens = token_source if key_file is None and project else None
         self._project = project
         self._location = location
         self._last_usage: dict[str, int] | None = None
@@ -60,13 +71,11 @@ class VertexGeminiWriter:
     def url(self) -> str:
         if not self._project:
             return VERTEX_GENERATE_URL.format(model=self._model)
-        host = (
-            "aiplatform.googleapis.com"
-            if self._location == "global"
-            else f"{self._location}-aiplatform.googleapis.com"
-        )
         return VERTEX_LOCATION_URL.format(
-            host=host, project=self._project, location=self._location, model=self._model
+            host=vertex_host(self._location),
+            project=self._project,
+            location=self._location,
+            model=self._model,
         )
 
     @property
@@ -74,7 +83,17 @@ class VertexGeminiWriter:
         return self._last_usage
 
     def available(self) -> bool:
-        return self._key_file is not None and self._key_file.is_file()
+        if self._key_file is not None:
+            return self._key_file.is_file()
+        return self._tokens is not None and self._tokens.available()
+
+    def _headers(self) -> dict[str, str]:
+        if self._key_file is None and self._tokens is not None:
+            try:
+                return auth_headers(None, self._tokens)
+            except VertexAuthError as exc:
+                raise ModelWriterUnavailableError(str(exc)) from None
+        return {"x-goog-api-key": self._key()}
 
     def _key(self) -> str:
         if self._key_file is None:
@@ -101,9 +120,7 @@ class VertexGeminiWriter:
         delay = 2.0
         for attempt in range(self._retries + 1):
             try:
-                response = self._client.post(
-                    url, json=body, headers={"x-goog-api-key": self._key()}
-                )
+                response = self._client.post(url, json=body, headers=self._headers())
             except httpx.TransportError as exc:
                 if attempt == self._retries:
                     raise ModelWriterError(f"LLM request failed: {type(exc).__name__}") from exc
@@ -115,8 +132,9 @@ class VertexGeminiWriter:
                 delay = min(delay * 2, 60)
                 continue
             if response.status_code in (401, 403):
+                what = "the key" if self._tokens is None else "the credentials"
                 raise ModelWriterUnavailableError(
-                    f"the LLM refused the key (HTTP {response.status_code})"
+                    f"the LLM refused {what} (HTTP {response.status_code})"
                 )
             if response.status_code != 200:
                 raise ModelWriterError(f"LLM HTTP {response.status_code}")

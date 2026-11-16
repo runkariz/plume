@@ -636,3 +636,47 @@ def test_a_version_by_someone_else_never_reveals_the_authors_link(stack: FakeSta
     content = stack.collections().content(author)
     assert [m.snapshot_id for m in content.models] == [mine.snapshot_id]
     assert content.newer == {}
+
+
+def test_the_evidence_budget_is_shared_fairly_between_apis(stack: FakeStack) -> None:
+    """A huge model in one API (Shopify's Order, 607 fields) filled the whole pack and left the
+    other APIs with nothing; the budget is now split, shallow fields first."""
+    from plume.application.models.generate import GenerateModels  # noqa: PLC0415
+    from plume.infrastructure.jobs.thread_runner import InlineJobRunner  # noqa: PLC0415
+
+    def pack(budget: int) -> dict[str, dict[str, int]]:
+        gen = GenerateModels(stack.models(), stack.writer, stack.model_jobs, stack.model_events,
+                             InlineJobRunner(), stack.clock, evidence_budget=budget)  # fmt: skip
+        session = stack.models().start(APIS, "Order")
+        return gen._evidence_pack(session.session_id)[3]
+
+    full = pack(1_000_000)
+    assert all(v["dropped"] == 0 and v["fields"] > 0 for v in full.values())
+    small = pack(3_000)  # far less than both APIs' evidence
+    assert set(small) == set(APIS)
+    assert all(v["fields"] > 0 for v in small.values())  # every API gets a share
+    assert all(v["dropped"] > 0 for v in small.values())
+    assert sum(v["chars"] for v in small.values()) <= 3_000
+
+
+def test_discarded_or_superseded_models_are_never_offered_as_existing(stack: FakeStack) -> None:
+    """plume-l2: generate without force answered "ready" with a DISCARDED one-API model."""
+    models = stack.models()
+    sid = models.submit(models.start(APIS, "Order").session_id, _draft("good"), maintainer=True)
+    snap = sid.snapshot
+    assert models.existing(APIS, "Order", maintainer=True) == snap  # unreleased: offered
+    assert models.existing(APIS, "Order") is None  # not to the public
+    models.discard(snap.snapshot_id)
+    assert models.existing(APIS, "Order", maintainer=True) is None
+    old = models.release(
+        models.submit(models.start(APIS, "Order").session_id,
+                      dict(_draft("good"), description="old"), maintainer=True).snapshot.snapshot_id
+    )  # fmt: skip
+    new = models.release(
+        models.submit(models.start(APIS, "Order").session_id,
+                      dict(_draft("good"), description="new"), maintainer=True).snapshot.snapshot_id
+    )  # fmt: skip
+    models.supersede(new.snapshot_id, [old.snapshot_id])
+    found = models.existing(APIS, "Order", maintainer=True)
+    assert found is not None
+    assert found.snapshot_id == new.snapshot_id

@@ -4,12 +4,13 @@ All variables use the ``PLUME_`` prefix; a ``.env`` file in the working director
 Defaults match the local docker compose stack (Plume's port block is 18400-18499).
 """
 
+import json
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import Field, PostgresDsn, SecretStr, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 MIN_TOKEN_LENGTH = 16
 
@@ -51,6 +52,13 @@ class Settings(BaseSettings):
         default="gemini-4-argon", description="Gemini model for server-side model generation."
     )
     model_max_rounds: int = Field(default=3, ge=1, le=10)
+    evidence_budget_chars: int = Field(
+        default=200_000,
+        ge=20_000,
+        le=2_000_000,
+        description="Characters of API evidence server generation sends the model, shared "
+        "fairly by the APIs (~4 characters per prompt token).",
+    )
     vertex_project: str | None = Field(
         default=None,
         description="Google Cloud project (id or number) for server-side generation: with it Plume "
@@ -58,6 +66,27 @@ class Settings(BaseSettings):
         "at 'global'); without it the location-less express URL.",
     )
     vertex_location: str = Field(default="global", pattern=r"^[a-z0-9-]{2,40}$")
+    vertex_auth: Literal["auto", "key", "adc"] = Field(
+        default="auto",
+        description="How Plume authenticates to Vertex: key = PLUME_VERTEX_API_KEY / "
+        "PLUME_VERTEX_KEY_FILE; adc = Application Default Credentials (Workload Identity on "
+        "GKE), which needs PLUME_VERTEX_PROJECT; auto = a key when one is configured, else ADC "
+        "when a project is set.",
+    )
+    vertex_embed_location: str = Field(
+        default="global",
+        pattern=r"^[a-z0-9-]{2,40}$",
+        description="Location of the embedding model on the project URL (used whenever "
+        "PLUME_VERTEX_PROJECT is set, with a key or ADC), e.g. europe-west3 to keep query text "
+        "in the EU. Without a project a key uses the location-less express URL.",
+    )
+    trusted_proxy_hops: int = Field(
+        default=0,
+        ge=0,
+        le=5,
+        description="Behind N trusted proxies that append to X-Forwarded-For, the rate limiter "
+        "takes the client address N entries from the right. 0 = the TCP peer (no proxy).",
+    )
     mcp_app_html: Path | None = Field(
         default=None,
         description="The MCP App bundle (model view, one self-contained HTML file). Unset = the "
@@ -75,7 +104,7 @@ class Settings(BaseSettings):
     mcp_public_url: str = Field(
         default="http://127.0.0.1:18481/mcp", description="MCP URL shown to users (connect hint)."
     )
-    mcp_allowed_hosts: tuple[str, ...] = Field(
+    mcp_allowed_hosts: Annotated[tuple[str, ...], NoDecode] = Field(
         default=("127.0.0.1:*", "localhost:*", "[::1]:*"),
         description="Host headers the MCP server accepts (DNS-rebinding protection).",
     )
@@ -83,7 +112,7 @@ class Settings(BaseSettings):
     data_dir: Path = Field(
         default=Path(".plume"), description="Uploaded packages and dumps (maintainer jobs)."
     )
-    gold_dirs: tuple[Path, ...] = Field(
+    gold_dirs: Annotated[tuple[Path, ...], NoDecode] = Field(
         default=(), description="Directories of gold sets (<api>.json) for the eval gate."
     )
     gate_min_recall: float = Field(default=0.6, ge=0, le=1)
@@ -93,7 +122,7 @@ class Settings(BaseSettings):
         description='Per-embedder recall floor, e.g. {"vertex": 0.75}; others use '
         "PLUME_GATE_MIN_RECALL (0.6, set for the offline hash embedder).",
     )
-    maintainer_tokens: tuple[SecretStr, ...] = Field(
+    maintainer_tokens: Annotated[tuple[SecretStr, ...], NoDecode] = Field(
         default=(), description="Bearer tokens of maintainers (comma list in JSON). Never logged."
     )
     max_upload_bytes: int = Field(default=200 * 1024 * 1024, ge=1024)
@@ -102,13 +131,48 @@ class Settings(BaseSettings):
         description="Log each MCP request's JSON-RPC method (initialize: client and whether it "
         "declared MCP Apps; resources/read of ui://; tools/call names). No arguments or results.",
     )
-    mcp_cors_origins: tuple[str, ...] = Field(
+    mcp_cors_origins: Annotated[tuple[str, ...], NoDecode] = Field(
         default=(),
         description="Browser origins allowed to call the MCP endpoints (for browser-based MCP "
         "clients such as the ext-apps basic-host). Empty = no CORS (Claude web/Desktop/Code "
         "connect without it).",
     )
-    cors_origins: tuple[str, ...] = ("http://127.0.0.1:18473", "http://localhost:18473")
+    cors_origins: Annotated[tuple[str, ...], NoDecode] = (
+        "http://127.0.0.1:18473",
+        "http://localhost:18473",
+    )
+
+    @field_validator(
+        "mcp_allowed_hosts",
+        "gold_dirs",
+        "maintainer_tokens",
+        "mcp_cors_origins",
+        "cors_origins",
+        mode="before",
+    )
+    @classmethod
+    def _list_or_commas(cls, value: Any) -> Any:
+        """A JSON list (["a","b"]) or a comma-separated string (a,b): container platforms
+        make plain strings easier than JSON."""
+        if isinstance(value, str):
+            text = value.strip()
+            if text.startswith("["):
+                return json.loads(text)
+            return [part.strip() for part in text.split(",") if part.strip()]
+        return value
+
+    @field_validator("api_port", "mcp_port", mode="before")
+    @classmethod
+    def _not_a_service_link(cls, value: Any) -> Any:
+        """Kubernetes injects PLUME_API_PORT=tcp://10.0.0.1:18480 for a Service named
+        plume-api (service links), which collides with Plume's PLUME_ prefix."""
+        if isinstance(value, str) and "://" in value:
+            raise ValueError(
+                f"{value!r} looks like a Kubernetes service link (a Service named plume-api or "
+                "plume-mcp): set enableServiceLinks: false on the pod, or name the Service "
+                "differently, or set the port explicitly"
+            )
+        return value
 
     @field_validator("maintainer_tokens")
     @classmethod
@@ -138,6 +202,14 @@ class Settings(BaseSettings):
     def gate_floor(self) -> float:
         """The eval gate's recall floor for the embedder in use (per-embedder override)."""
         return self.gate_min_recall_by_embedder.get(self.resolved_embedder, self.gate_min_recall)
+
+    def vertex_uses_adc(self) -> bool:
+        """Vertex through Application Default Credentials (no key; a project is required)."""
+        if self.vertex_auth == "key":
+            return False
+        if self.vertex_auth == "adc":
+            return True
+        return not self.vertex_key() and bool(self.vertex_project)
 
     @property
     def resolved_embedder(self) -> Literal["hash", "vertex", "gemini"]:

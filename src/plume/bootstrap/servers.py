@@ -14,6 +14,7 @@ from mcp.server.transport_security import TransportSecuritySettings
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -48,6 +49,7 @@ def http_app(c: Container) -> FastAPI:
             sections=c.sections,
             mcp_url=s.mcp_public_url,
             rate_limit_per_minute=s.reader_rate_limit_per_minute,
+            trusted_proxy_hops=s.trusted_proxy_hops,
             cors_origins=s.cors_origins,
             maintainer=c.maintainer,
             suggest=c.suggest,
@@ -155,7 +157,12 @@ def mcp_app(c: Container) -> Starlette:
         transport_security=security,
     )
     tokens = tuple(t.get_secret_value() for t in c.settings.maintainer_tokens)
-    routes = list(reader_app.routes)
+
+    async def health(_: Request) -> JSONResponse:
+        """For k8s probes: no auth, not rate limited, no database call."""
+        return JSONResponse({"status": "ok"})
+
+    routes = [Route("/health", health, methods=["GET"]), *reader_app.routes]
     for route in maintainer_app.routes:
         if isinstance(route, Route) and route.path == "/maintainer/mcp":
             routes.append(Route(route.path, endpoint=BearerGate(route.app, tokens)))
@@ -167,7 +174,14 @@ def mcp_app(c: Container) -> Starlette:
 
     # The public reader MCP is rate limited per client address like the HTTP reader API.
     limit = c.settings.reader_rate_limit_per_minute
-    middleware = [Middleware(RateLimitMiddleware, per_minute=limit, trusted_tokens=tokens)]
+    middleware = [
+        Middleware(
+            RateLimitMiddleware,
+            per_minute=limit,
+            trusted_tokens=tokens,
+            trusted_proxy_hops=c.settings.trusted_proxy_hops,
+        )
+    ]
     if c.settings.mcp_cors_origins:  # outermost, so preflights and 429s carry CORS headers
         middleware.insert(
             0,

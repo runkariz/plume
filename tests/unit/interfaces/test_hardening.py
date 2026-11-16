@@ -144,3 +144,51 @@ def test_valid_maintainer_token_is_not_rate_limited(stack: FakeStack) -> None:
     assert [limited.get("/v1/apis", headers=good).status_code for _ in range(5)] == [200] * 5
     codes = [limited.get("/v1/apis", headers=bad).status_code for _ in range(3)]
     assert codes[-1] == 429
+
+
+@pytest.mark.parametrize(
+    ("hops", "xff", "client"),
+    [
+        (0, "1.1.1.1", "peer"),  # no trusted proxy: the TCP peer, XFF ignored
+        (2, "client, traefik", "client"),  # devops-gcp: Traefik replaces XFF, nginx appends
+        (2, "spoofed, client, traefik", "client"),  # entries the client wrote are skipped
+        (1, "client, traefik", "traefik"),
+        (2, "only-one", "peer"),  # fewer entries than hops: the peer
+        (2, "", "peer"),
+    ],
+)
+def test_client_address_counts_trusted_proxy_hops(hops: int, xff: str, client: str) -> None:
+    from starlette.requests import Request  # noqa: PLC0415
+
+    from plume.interfaces.http.rate_limit import client_address  # noqa: PLC0415
+
+    headers = [(b"x-forwarded-for", xff.encode())] if xff else []
+    request = Request({"type": "http", "headers": headers, "client": ("peer", 1234)})
+    assert client_address(request, hops) == client
+
+
+def test_rate_limit_behind_proxies_counts_each_client() -> None:
+    container = Container(
+        settings=Settings(embedder="hash", reader_rate_limit_per_minute=1, trusted_proxy_hops=2)
+    )
+    body = {"jsonrpc": "2.0", "id": 1, "method": "ping"}
+    with TestClient(mcp_app(container), base_url="http://127.0.0.1:18481") as client:
+
+        def call(who: str) -> int:
+            headers = {
+                "Accept": "application/json, text/event-stream",
+                "X-Forwarded-For": f"{who}, 10.0.0.9",
+            }
+            return client.post("/mcp", json=body, headers=headers).status_code
+
+        assert call("203.0.113.1") != 429
+        assert call("203.0.113.2") != 429  # another client behind the same proxies
+        assert call("203.0.113.1") == 429
+
+
+def test_mcp_health_for_probes() -> None:
+    container = Container(settings=Settings(embedder="hash", reader_rate_limit_per_minute=1))
+    with TestClient(mcp_app(container), base_url="http://10.1.2.3:18481") as client:
+        codes = [client.get("/health").status_code for _ in range(3)]  # not rate limited
+        assert client.get("/health").json() == {"status": "ok"}
+    assert codes == [200, 200, 200]  # no auth, any Host (probes use the pod IP)

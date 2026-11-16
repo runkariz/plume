@@ -185,17 +185,21 @@ Reader routes are public and rate limited; maintainer routes need `Authorization
 | `PLUME_EMBEDDER` | `auto` | `auto`, `hash`, `vertex`, `gemini` (`auto`: Vertex key, else Gemini key, else hash) |
 | `PLUME_VERTEX_API_KEY` / `PLUME_GEMINI_API_KEY` | – | never logged |
 | `PLUME_VERTEX_KEY_FILE` | – | the Vertex key as a file (read when used, never logged): for embeddings and generation, so no key sits in a container's env |
-| `PLUME_MAINTAINER_TOKENS` | `[]` | JSON list, each ≥ 16 chars; empty = maintainer API off (503) |
+| `PLUME_MAINTAINER_TOKENS` | `[]` | list (JSON `["a","b"]` or comma-separated `a,b`), each ≥ 16 chars; empty = maintainer API off (503) |
 | `PLUME_GOLD_DIRS` | `[]` | folders of `<api>.json` gold sets |
 | `PLUME_GATE_MIN_RECALL` / `PLUME_GATE_MAX_DROP` | `0.6` / `0.05` | the quality gate |
 | `PLUME_GATE_MIN_RECALL_BY_EMBEDDER` | `{}` | per-embedder recall floor, e.g. `{"vertex": 0.75}`; others use `PLUME_GATE_MIN_RECALL` |
 | `PLUME_READER_RATE_LIMIT_PER_MINUTE` | `120` | per client address; `0` = off |
-| `PLUME_CORS_ORIGINS` | the web dev server | JSON list |
-| `PLUME_MCP_ALLOWED_HOSTS` | loopback | Host headers the MCP server accepts |
+| `PLUME_TRUSTED_PROXY_HOPS` | `0` | behind N proxies that append to `X-Forwarded-For`, the limiter counts the Nth entry from the right (e.g. `client, traefik` with `2` → `client`); `0` = the TCP peer. See docs/security.md |
+| `PLUME_CORS_ORIGINS` | the web dev server | list (JSON or comma-separated) |
+| `PLUME_MCP_ALLOWED_HOSTS` | loopback | Host headers the MCP server accepts; list (JSON or comma-separated), e.g. `plume.example.com,plume.example.com:443` |
 | `PLUME_MCP_DEBUG` | `false` | log each MCP request's method (initialize: client, protocol, MCP Apps declared; `ui://` reads; tool names). No arguments, results or tokens |
 | `PLUME_MCP_CORS_ORIGINS` | `[]` | browser origins allowed to call the MCP endpoints (browser-based MCP clients such as the ext-apps basic-host); off by default |
 | `PLUME_DATA_DIR` | `.plume` (`/data` in Docker) | uploads and dumps |
 | `PLUME_MAX_UPLOAD_BYTES` | 200 MiB | package uploads |
+| `PLUME_VERTEX_AUTH` | `auto` | `key` (`PLUME_VERTEX_API_KEY` / `PLUME_VERTEX_KEY_FILE`), `adc` (Application Default Credentials, e.g. Workload Identity on GKE; needs `PLUME_VERTEX_PROJECT`), `auto` = a key if one is set, else ADC with a project. With ADC also set `PLUME_EMBEDDER=vertex` |
+| `PLUME_EVIDENCE_BUDGET_CHARS` | `200000` | API evidence server generation sends the model, shared fairly by the APIs (~4 characters per prompt token); raise it for big models (e.g. `500000`) |
+| `PLUME_VERTEX_EMBED_LOCATION` | `global` | the embedding model's location on the project path (whenever `PLUME_VERTEX_PROJECT` is set, key or ADC), e.g. `europe-west3` to keep query text in the EU |
 | `PLUME_VERTEX_PROJECT` / `PLUME_VERTEX_LOCATION` | – / `global` | with a project, generation calls the model at that location (gemini-4-argon answers only at `global`); without one, the location-less express URL |
 | `PLUME_MODEL_LLM` / `PLUME_MODEL_MAX_ROUNDS` | `gemini-4-argon` / `3` | the generation model and its repair rounds |
 | `PLUME_MCP_APP_HTML` | the packaged file | the MCP App bundle (model view) served as `ui://plume/model-view`; see [docs/mcp-apps.md](docs/mcp-apps.md) |
@@ -205,6 +209,22 @@ Compose host ports: `PLUME_PG_HOST_PORT` (18432), `PLUME_API_HOST_PORT` (18480),
 `PLUME_MCP_HOST_PORT` (18481). Plume keeps to the 18400–18499 block.
 
 Security notes and known limits: [docs/security.md](docs/security.md).
+
+## Deploying in containers
+
+- **One image, several commands**: `serve` (HTTP API, 18480), `mcp` (MCP, 18481), `migrate`,
+  `load`, `restore`. The image sets `PLUME_API_HOST` and `PLUME_MCP_HOST` to `0.0.0.0` (outside
+  a container both default to `127.0.0.1`). Both processes answer `GET /health` (no auth, not
+  rate limited) for probes; the image's HEALTHCHECK tries both ports.
+- **Kubernetes service links**: a Service named `plume-api` or `plume-mcp` makes Kubernetes
+  inject `PLUME_API_PORT=tcp://…` into pods, which collides with Plume's `PLUME_` settings
+  (Plume refuses to start and says so). Set `enableServiceLinks: false` on the pods, or name
+  the Services differently.
+- **Lists in env vars** (`PLUME_MAINTAINER_TOKENS`, `PLUME_MCP_ALLOWED_HOSTS`,
+  `PLUME_MCP_CORS_ORIGINS`, `PLUME_CORS_ORIGINS`, `PLUME_GOLD_DIRS`): a JSON list or a
+  comma-separated string.
+- **Behind a proxy**: `PLUME_TRUSTED_PROXY_HOPS`, outbound hosts and the Vertex modes are in
+  [docs/security.md](docs/security.md); `PLUME_MCP_ALLOWED_HOSTS` must list the public host.
 
 ## Development
 

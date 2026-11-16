@@ -39,3 +39,33 @@ def test_secret_is_never_rendered(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_dotenv_file_is_read(tmp_path: Path) -> None:
     (tmp_path / ".env").write_text("PLUME_MCP_PORT=18482\n", encoding="utf-8")
     assert Settings().mcp_port == 18482
+
+
+def test_evidence_budget_is_a_setting() -> None:
+    from plume.bootstrap.container import Container  # noqa: PLC0415
+
+    assert Settings().evidence_budget_chars == 200_000
+    c = Container(settings=Settings(embedder="hash", evidence_budget_chars=500_000))
+    assert c.generate()._budget == 500_000
+
+
+def test_lists_accept_json_or_commas(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PLUME_MCP_ALLOWED_HOSTS", "plume.example.com, plume.example.com:443")
+    monkeypatch.setenv("PLUME_CORS_ORIGINS", '["https://a.example","https://b.example"]')
+    monkeypatch.setenv("PLUME_MAINTAINER_TOKENS", "pl_token_aaaaaaaaaaaa,pl_token_bbbbbbbbbbbb")
+    s = Settings()
+    assert s.mcp_allowed_hosts == ("plume.example.com", "plume.example.com:443")
+    assert s.cors_origins == ("https://a.example", "https://b.example")
+    assert [t.get_secret_value() for t in s.maintainer_tokens] == [
+        "pl_token_aaaaaaaaaaaa", "pl_token_bbbbbbbbbbbb",
+    ]  # fmt: skip
+
+
+def test_a_kubernetes_service_link_is_refused_with_a_clear_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from pydantic import ValidationError  # noqa: PLC0415
+
+    monkeypatch.setenv("PLUME_API_PORT", "tcp://10.96.0.12:18480")
+    with pytest.raises(ValidationError, match="enableServiceLinks: false"):
+        Settings()
