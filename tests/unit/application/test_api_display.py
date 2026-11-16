@@ -22,8 +22,8 @@ def _name(s: FakeStack) -> tuple[str, str]:
 def test_override_wins_and_survives_reloads(packages: Path) -> None:
     s = FakeStack()
     s.load(str(packages / "test-catalog"))
-    derived = _name(s)
-    assert derived[1] == "derived"
+    derived = _name(s)  # the package name (no override)
+    assert derived[1] == "package"  # name "Test Catalog API" differs from systemName
     out = s.api_display().set(API, "Test Catalog")
     assert out == {"api": API, "name": "Test Catalog", "nameSource": "override",
                    "packageName": derived[0]}  # fmt: skip

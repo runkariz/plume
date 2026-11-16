@@ -80,5 +80,5 @@
     }
   ],
   "summary": "This connector allows callers to list and search shop orders and products.",
-  "systemName": "secondcatalogapi"
+  "systemName": "second-catalog-api"
 }
