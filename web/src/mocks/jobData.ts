@@ -146,6 +146,22 @@ export function withEval(job: Job, passed = true): Job {
           tone: passed ? 'neutral' : 'bad',
         },
         {
+          key: 'docs.recall_at_k',
+          label: 'Recall@5 (docs questions)',
+          live: '0.95',
+          staged: passed ? '0.96' : '0.84',
+          delta: passed ? '+0.01' : '-0.11',
+          tone: passed ? 'ok' : 'bad',
+        },
+        {
+          key: 'spec.recall_at_k',
+          label: 'Recall@5 (spec questions)',
+          live: '0.90',
+          staged: passed ? '0.91' : '0.72',
+          delta: passed ? '+0.01' : '-0.18',
+          tone: passed ? 'ok' : 'bad',
+        },
+        {
           key: 'invented',
           label: 'Invented endpoints',
           live: '0 / 40',

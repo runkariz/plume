@@ -171,6 +171,10 @@ export const shopifyDetail: ApiDetail = {
     factAccuracy: 1,
     missingExpected: 0,
     gatePassed: true,
+    bySource: [
+      { source: 'docs', recallAt5: 0.96, mrr: 0.84, citationHitRate: 0.98, questions: 26 },
+      { source: 'spec', recallAt5: 0.91, mrr: 0.76, citationHitRate: 0.93, questions: 14 },
+    ],
   },
   index: {
     embedding: 'gemini-embedding-001',

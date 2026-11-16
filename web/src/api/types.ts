@@ -126,6 +126,8 @@ export interface ApiDetail extends ApiSummary {
     /** Gold questions whose expected document was not found. */
     missingExpected?: number;
     gatePassed?: boolean;
+    /** The same scores per question source the gold set has; one "docs" row when it has no sources. Absent on older servers. */
+    bySource?: SourceQuality[];
   } | null;
   index: {
     embedding: string | null;
@@ -714,6 +716,17 @@ export interface EvidencePage {
   total_fields: number;
   next_cursor: number | null;
   missing_doc_ids: string[];
+}
+
+/** Scores over the gold questions of one source ("docs" or "spec"). */
+export interface SourceQuality {
+  source: string;
+  recallAt5: number;
+  mrr: number;
+  /** Top-1: the first result is an expected one. */
+  citationHitRate: number;
+  /** Search questions of this source. */
+  questions: number;
 }
 
 /** GET /v1/apis/{api}/documents/{docId}: one stored document (what a citation points at). */

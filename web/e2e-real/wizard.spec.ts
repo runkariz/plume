@@ -3,7 +3,7 @@ import { zipSync } from 'fflate';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expectNoSeriousA11y, settle, shot, test, THEMES } from '../e2e/helpers';
+import { expectNoSeriousA11y, settle, shot, shotOf, test, THEMES } from '../e2e/helpers';
 
 /**
  * The maintainer wizard against the real API (P4): sign in, upload a zipped fixture package,
@@ -16,6 +16,8 @@ import { expectNoSeriousA11y, settle, shot, test, THEMES } from '../e2e/helpers'
  * The specs run one after the other (they publish and change the live build of the same API).
  */
 const API = process.env.PLUME_E2E_API_URL ?? 'http://127.0.0.1:18480';
+// PLUME_E2E_SPEC_GOLD=true: the gold set of test-catalog-api has questions of source "spec" (and the rest "docs")
+const SPEC_GOLD = process.env.PLUME_E2E_SPEC_GOLD === 'true';
 const TOKEN = process.env.PLUME_E2E_TOKEN ?? 'pl_dev_local_web_e2e';
 const PACKAGES = resolve(
   fileURLToPath(new URL('.', import.meta.url)),
@@ -144,6 +146,13 @@ for (const theme of THEMES) {
       await settle(page);
       await expectNoSeriousA11y(page);
       await shot(page, 'w6-real-publish', theme);
+      if (SPEC_GOLD) {
+        // the job's eval rows per question source arrive as ordinary metric rows
+        const table = page.locator('table');
+        await expect(table.getByRole('cell', { name: 'Recall@5 (docs questions)' })).toBeVisible();
+        await expect(table.getByRole('cell', { name: 'Recall@5 (spec questions)' })).toBeVisible();
+        await shot(page, 'w29-real-publish-sources', theme);
+      }
 
       const download = page.waitForEvent('download', { timeout: 15_000 });
       await page.getByRole('button', { name: 'Download dump' }).click();
@@ -156,6 +165,14 @@ for (const theme of THEMES) {
       await page.getByRole('link', { name: /^View / }).click();
       await expect(page).toHaveURL(/\/apis\/test-catalog-api$/);
       await expect(page.getByText('latest')).toBeVisible();
+      if (SPEC_GOLD) {
+        const by = page.getByRole('table', { name: 'By question source' });
+        await expect(by.getByRole('row', { name: /Docs questions/ })).toBeVisible();
+        await expect(by.getByRole('row', { name: /Spec questions/ })).toContainText('2 questions');
+        await settle(page);
+        await expectNoSeriousA11y(page);
+        await shotOf(by, 'w29-real-quality-sources', theme);
+      }
     });
   });
 }
