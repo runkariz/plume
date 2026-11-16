@@ -2658,6 +2658,10 @@ ul.plain {
   /* two lines: the room is kept while the rows load, so the page below does not jump */
   min-height: 3.4rem;
 }
+/* the widget's rows are one line each: no room kept for a second */
+.impact-rows.compact li {
+  min-height: 0;
+}
 
 .sources-line {
   margin: 4px 0 0;

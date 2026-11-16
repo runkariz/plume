@@ -17,7 +17,7 @@ export function ImpactNotice({ value, what }: { value: WidgetImpact | null; what
         title={`${line.icon} ${line.title}`}
       >
         {value.rows.length > 0 ? (
-          <ul className="plain impact-rows" aria-label="What changed">
+          <ul className="plain impact-rows compact" aria-label="What changed">
             {value.rows.map((r, i) => (
               <li key={`${r.api}/${r.field}/${i}`} className="small">
                 {r.breaking ? <strong>Breaking: </strong> : null}
