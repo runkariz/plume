@@ -96,6 +96,8 @@ def test_since_and_filters(stack: tuple[FakeStack, Path, Path], packages: Path) 
     assert public.changes(API, since="2999-01-01")["items"] == []
     assert public.changes(API, breaking=True)["items"] == []
     assert public.changes(API, kind="property", q="chan")["matched"] == 1
+    assert public.changes(API, kind="param, property")["matched"] == 1  # a comma list
+    assert public.changes(API, kind="param,endpoint")["matched"] == 0
     with pytest.raises(ChangesInputError):
         public.changes(API, build=a, since=today)
     with pytest.raises(ChangesInputError):

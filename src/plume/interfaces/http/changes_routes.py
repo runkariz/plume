@@ -86,7 +86,9 @@ def changes_router(
         build: Annotated[str | None, Query()] = None,
         since: Annotated[str | None, Query(description="A date (YYYY-MM-DD) or a build id")] = None,
         breaking: Annotated[bool | None, Query()] = None,
-        kind: Annotated[str | None, Query(max_length=40)] = None,
+        kind: Annotated[
+            str | None, Query(max_length=200, description="A kind or a comma list of kinds")
+        ] = None,
         op: Annotated[str | None, Query(max_length=20)] = None,
         wording_only: Annotated[bool | None, Query(alias="wordingOnly")] = None,
         q: Annotated[str | None, Query(max_length=200)] = None,

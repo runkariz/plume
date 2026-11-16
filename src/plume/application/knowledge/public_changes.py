@@ -183,8 +183,9 @@ class PublicChanges:
         items = [i for n in notes for i in _visible(n)]
         if breaking is not None:
             items = [i for i in items if i["breaking"] == breaking]
-        if kind:
-            items = [i for i in items if i["kind"] == kind]
+        if kind:  # one kind or a comma list (kind=param,property)
+            kinds = {k.strip() for k in kind.split(",") if k.strip()}
+            items = [i for i in items if i["kind"] in kinds]
         if op:
             items = [i for i in items if i["op"] == op]
         if wording_only is not None:

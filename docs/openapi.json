@@ -5559,19 +5559,21 @@
             }
           },
           {
+            "description": "A kind or a comma list of kinds",
             "in": "query",
             "name": "kind",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "maxLength": 40,
+                  "maxLength": 200,
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
+              "description": "A kind or a comma list of kinds",
               "title": "Kind"
             }
           },
