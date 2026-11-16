@@ -4521,7 +4521,7 @@
     },
     "/v1/apis/{api}/builds/{build}/release-notes": {
       "get": {
-        "description": "All items (with suspect and unknown ones), the extraction report grouped by rule,\nthe review and its decisions.",
+        "description": "The notes: `items` = the user-visible items; `report` = suspect / unknown / renamed\nitems grouped by rule, each group with its `count` and first 50 items (page a group\nwith /report/{rule}); the review and its decisions.",
         "operationId": "get_notes_v1_apis__api__builds__build__release_notes_get",
         "parameters": [
           {
@@ -5057,6 +5057,138 @@
           }
         },
         "summary": "Keep",
+        "tags": [
+          "maintainer"
+        ]
+      }
+    },
+    "/v1/apis/{api}/builds/{build}/release-notes/report/{rule}": {
+      "get": {
+        "description": "One report group, paged: {rule, count, items, nextCursor}.",
+        "operationId": "report_group_v1_apis__api__builds__build__release_notes_report__rule__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "api",
+            "required": true,
+            "schema": {
+              "title": "Api",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "build",
+            "required": true,
+            "schema": {
+              "title": "Build",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "rule",
+            "required": true,
+            "schema": {
+              "title": "Rule",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Cursor",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Report Group V1 Apis  Api  Builds  Build  Release Notes Report  Rule  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Report Group",
         "tags": [
           "maintainer"
         ]

@@ -72,7 +72,10 @@ def test_review_routes(stack: tuple[FakeStack, str, str]) -> None:
     assert (again.status_code, again.json()["error"]) == (409, "invalid_state")
     kept = client.post(f"{url}/keep", headers=AUTH, json={"note": "real docs change"}).json()
     assert kept["review"] == "kept"
-    item = next(i for i in kept["items"] if i["subject"]["fieldPath"] == "channel")
+    assert kept["items"] == []  # only user-visible items
+    unknown = client.get(f"{url}/report/unknown", headers=AUTH, params={"limit": 200}).json()
+    assert unknown["count"] == len(unknown["items"])
+    item = next(i for i in unknown["items"] if i["subject"]["fieldPath"] == "channel")
     bad = client.post(f"{url}/items/{item['id']}/promote", headers=AUTH, json={"quote": "nope"})
     assert (bad.status_code, bad.json()["code"]) == (422, "QUOTE_NOT_VERIFIED")
     ok = client.post(

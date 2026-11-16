@@ -30,9 +30,21 @@ def release_notes_router(notes: Callable[[], ReleaseNotes], tokens: tuple[str, .
 
     @router.get(base, responses=errors)
     def get_notes(api: str, build: str) -> dict[str, Any]:
-        """All items (with suspect and unknown ones), the extraction report grouped by rule,
-        the review and its decisions."""
+        """The notes: `items` = the user-visible items; `report` = suspect / unknown / renamed
+        items grouped by rule, each group with its `count` and first 50 items (page a group
+        with /report/{rule}); the review and its decisions."""
         return notes().get(api, build)
+
+    @router.get(f"{base}/report/{{rule}}", responses=errors)
+    def report_group(
+        api: str,
+        build: str,
+        rule: str,
+        cursor: Annotated[int, Query(ge=0)] = 0,
+        limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    ) -> dict[str, Any]:
+        """One report group, paged: {rule, count, items, nextCursor}."""
+        return notes().report_group(api, build, rule, cursor, limit)
 
     @router.post(f"{base}/keep", responses=errors)
     def keep(api: str, build: str, body: s.KeepRequest | None = None) -> dict[str, Any]:

@@ -93,7 +93,7 @@ def test_release_notes_are_computed_on_postgres_and_travel_with_the_dump(
     second = src.build_pipeline().execute("job", str(copy))
     assert second.notes is not None
     assert second.notes["from"] == first.value
-    notes = src.release_notes().get("test-catalog-api", second.build_id.value)
+    notes = src.release_notes().get("test-catalog-api", second.build_id.value, full=True)
     assert any(i["subject"]["fieldPath"] == "currency" and i["op"] == "removed"
                for i in notes["items"])  # fmt: skip
     rolled = src.release_notes().rollback("test-catalog-api", second.build_id.value, "test")

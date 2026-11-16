@@ -33,6 +33,7 @@ from plume.domain.shared.clock import Clock
 from plume.domain.shared.ids import BuildId
 
 MAX_REASON = 500
+REPORT_PAGE = 50
 PENDING, KEPT, ROLLED_BACK = "pending", "kept", "rolled_back"
 
 
@@ -85,7 +86,11 @@ class ReleaseNotes:
         ra, rb = self._evals.get(a), self._evals.get(b)
         if ra is None or rb is None:
             return None
-        return {"before": ra.metrics.as_dict(), "after": rb.metrics.as_dict()}
+        keep = ("recall_at_k", "mrr", "fact_accuracy", "citation_hit_rate")
+        return {
+            side: {k: v for k, v in r.metrics.as_dict().items() if k in keep}
+            for side, r in (("before", ra), ("after", rb))
+        }
 
     def compute(self, from_build: BuildId, to_build: BuildId) -> dict[str, Any]:
         """The notes of ``to_build`` against ``from_build`` (both of one API). A recomputation
@@ -164,9 +169,31 @@ class ReleaseNotes:
         tag = self._tags.get(ApiId(api), TagName(LATEST))
         return tag.build_id.value if tag else None
 
-    def get(self, api: str, build: str) -> dict[str, Any]:
+    def get(self, api: str, build: str, full: bool = False) -> dict[str, Any]:
+        """The notes. By default ``items`` holds the user-visible items only and each report
+        group its first REPORT_PAGE items (page the rest with ``report_group``): a Shopify-size
+        build has thousands of hidden items. ``full`` returns everything (issues, recompute)."""
         notes = self._require(api, build)
-        return {**notes, "tagged": self._latest(api) == build, "report": report(notes["items"])}
+        out = {**notes, "tagged": self._latest(api) == build}
+        if full:
+            return out | {"report": report(notes["items"])}
+        return out | {
+            "items": [i for i in notes["items"] if i["visibleToUsers"]],
+            "report": report(notes["items"], REPORT_PAGE),
+        }
+
+    def report_group(
+        self, api: str, build: str, rule: str, cursor: int = 0, limit: int = REPORT_PAGE
+    ) -> dict[str, Any]:
+        """One report group, paged."""
+        notes = self._require(api, build)
+        group = next((g for g in report(notes["items"]) if g["rule"] == rule), None)
+        if group is None:
+            raise NotFoundError(f"no report group {rule!r} in these notes")
+        cursor, limit = max(0, cursor), max(1, min(limit, 200))
+        page = group["items"][cursor : cursor + limit]
+        nxt = cursor + limit if cursor + limit < group["count"] else None
+        return {"rule": rule, "count": group["count"], "items": page, "nextCursor": nxt}
 
     def summaries(self, api: str) -> list[dict[str, Any]]:
         latest = self._latest(api)
@@ -189,7 +216,7 @@ class ReleaseNotes:
         ]
 
     def issues(self, api: str, build: str, fmt: str = "markdown") -> str:
-        return issues_text(self.get(api, build), "text" if fmt == "text" else "markdown")
+        return issues_text(self.get(api, build, full=True), "text" if fmt == "text" else "markdown")
 
     # -- review -----------------------------------------------------------------------------------
 
