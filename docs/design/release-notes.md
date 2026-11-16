@@ -32,8 +32,8 @@ One record per atomic difference between build A (previous) and build B (new) of
   "id": "ch-<hash of api, from, to, kind, subject, path, op>",
   "from": "b-…", "to": "b-…", "toDocsAsOf": "2026-11-15",
   "wordingOnly": false,
-  "kind": "endpoint | param | request_field | response_field | model | property | auth_scheme | scope | webhook_event | guide",
-  "op": "added | removed | type | required | description | enum | renamed",
+  "kind": "endpoint | param | request_field | response_field | model | property | auth_scheme | scope | environment | versioning | webhook_event | guide",
+  "op": "added | removed | type | required | description | enum | renamed | changed",
   "subject": {"docId": "endpoint:GET~/orders.json", "method": "GET", "path": "/orders.json",
               "model": null, "fieldPath": "line_items[].tax_lines[].rate", "location": "response"},
   "before": {"type": "string", "required": false, "quote": "…"},
@@ -72,6 +72,19 @@ One record per atomic difference between build A (previous) and build B (new) of
 - **Renames**: a model or nested type whose property set and types are identical under a new
   name (OrderTaxLine → OrderTaxLines) is one `renamed` item, `visibleToUsers: false`, and no
   change for users. Fields citing it are not reported as removed and added.
+- **Environments and versioning** (from `app.json`, subject `docId` = the app document,
+  `fieldPath` e.g. `environments.europe.servers.auth`, `environments.default`,
+  `baseUrls.<url>`, `apiVersioning.current`, `apiVersioning.versions.<v>`):
+  - environments are matched by key; when keys change they are matched by `baseUrl` (or
+    `servers.api`). A key-only rename with identical URLs is one hidden `renamed` item, like a
+    same-shape model rename;
+  - `changed` = a URL (`baseUrl`, `servers.*`) or setting (default environment, versioning
+    current/scheme/format) took a new value;
+  - breaking: a removed environment, server, base URL or API version, a changed URL of an
+    existing environment, a changed versioning scheme/header/query param;
+  - classification is the same: evidence is the app document's page plus the environment's
+    `provenance.evidenceUrl`; an unchanged page makes the item `suspect` (an extraction fix).
+    A `changed` item is confirmed when the new value is on the changed page and the old is not.
 
 ## 3. Computing the diff (at load, against the previous build)
 

@@ -168,3 +168,49 @@ def test_auth_companion_files_are_no_schemes(packages: Path, tmp_path: Path) -> 
     mine = next(d for d in docs if d.raw and d.raw["file"] == f"{scheme}.json")
     assert mine.raw is not None
     assert mine.raw["companions"]["oauth-token-params"]["sample"] == {"grant_type": "refresh_token"}
+
+
+def _with_app(packages: Path, tmp_path: Path, **fields: object) -> Path:
+    copy = tmp_path / "pkg"
+    shutil.copytree(packages / "shopify-mini", copy)
+    app = copy / "connector" / "app.json"
+    data = json.loads(app.read_text())
+    for k, v in fields.items():
+        if v is None:
+            data.pop(k, None)
+        else:
+            data[k] = v
+    app.write_text(json.dumps(data))
+    return copy
+
+
+def test_api_id_is_core_system_name_and_name_is_the_display_name(
+    packages: Path, tmp_path: Path
+) -> None:
+    """Core's app.json: `name` = display name, `systemName` = the stable id (Amazon r7)."""
+    from plume.infrastructure.sources.stream_package import StreamPackageSource  # noqa: PLC0415
+
+    pkg = _with_app(packages, tmp_path, name="Amazon SP-API Vendor", systemName="amazon-sp-vendor")
+    api = StreamPackageSource().load(str(pkg)).api
+    assert (api.api_id.value, api.name, api.name_source) == (
+        "amazon-sp-vendor", "Amazon SP-API Vendor", "package"
+    )  # fmt: skip
+
+
+def test_same_name_and_system_name_keep_the_derived_name(packages: Path, tmp_path: Path) -> None:
+    from plume.infrastructure.sources.stream_package import StreamPackageSource  # noqa: PLC0415
+
+    api = StreamPackageSource().load(str(packages / "shopify-mini")).api
+    assert (api.api_id.value, api.name, api.name_source) == ("shopify", "Shopify", "derived")
+    no_system = _with_app(packages, tmp_path, name="Google Ads", systemName=None)
+    api = StreamPackageSource().load(str(no_system)).api
+    assert api.api_id.value == "google-ads"  # no systemName: the slug of name, as before
+
+
+def test_an_invalid_system_name_is_refused(packages: Path, tmp_path: Path) -> None:
+    from plume.application.errors import SourcePackageError  # noqa: PLC0415
+    from plume.infrastructure.sources.stream_package import StreamPackageSource  # noqa: PLC0415
+
+    pkg = _with_app(packages, tmp_path, systemName="Amazon SP")
+    with pytest.raises(SourcePackageError, match="systemName"):
+        StreamPackageSource().load(str(pkg))

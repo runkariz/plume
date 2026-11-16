@@ -416,6 +416,261 @@ def diff_documents(old: Sequence[Document], new: Sequence[Document]) -> list[Ite
     for it in out[start:]:  # a field typed with a renamed model follows the rename
         if it["op"] == "type" and _follows_rename(it, titles):
             it.update(rename=True, breaking=False, breakingReason=None)
+    app_a = next((d for d in old if d.kind is DocumentKind.APP), None)
+    app_b = next((d for d in new if d.kind is DocumentKind.APP), None)
+    out.extend(_environment_items(app_a, app_b))
+    return out
+
+
+# -- environments, servers and versioning (app.json) -------------------------------------------
+
+
+def _env_item(app: Document, op: str, path: str, before: Any, after: Any, **more: Any) -> Item:
+    return {
+        "kind": "versioning" if path.startswith("apiVersioning") else "environment",
+        "op": op,
+        "subject": {
+            "docId": app.doc_id,
+            "method": None,
+            "path": None,
+            "model": None,
+            "fieldPath": path,
+            "location": None,
+        },
+        "before": None if before is None else {"quote": _quote(str(before))},
+        "after": None if after is None else {"quote": _quote(str(after))},
+        "breaking": more.pop("breaking", False),
+        "breakingReason": more.pop("breakingReason", None),
+        **more,
+    }
+
+
+def _app_json(doc: Document | None) -> dict[str, Any]:
+    app = (doc.raw or {}).get("app") if doc else None
+    return app if isinstance(app, dict) else {}
+
+
+def _envs(app: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for i, e in enumerate(app.get("environments") or []):
+        if isinstance(e, dict):
+            out[str(e.get("key") or e.get("name") or i)] = e
+    return out
+
+
+def _urls(env: Mapping[str, Any]) -> dict[str, str]:
+    """An environment's URLs: baseUrl and servers.* (the values clients call)."""
+    servers = env.get("servers")
+    pairs = sorted(servers.items()) if isinstance(servers, dict) else []
+    out = {f"servers.{k}": v for k, v in pairs if isinstance(v, str)}
+    if isinstance(env.get("baseUrl"), str):
+        out["baseUrl"] = env["baseUrl"]
+    return out
+
+
+def _evidence(env: Mapping[str, Any]) -> list[str]:
+    prov = env.get("provenance")
+    url = prov.get("evidenceUrl") if isinstance(prov, dict) else None
+    return [url] if isinstance(url, str) and url.startswith(("http://", "https://")) else []
+
+
+def _env_pair_items(
+    app: Document, key: str, ea: Mapping[str, Any], eb: Mapping[str, Any]
+) -> list[Item]:
+    out: list[Item] = []
+    ua, ub = _urls(ea), _urls(eb)
+    urls = _evidence(eb) or _evidence(ea)
+    for k in sorted(set(ua) | set(ub)):
+        before, after = ua.get(k), ub.get(k)
+        if before == after:
+            continue
+        path = f"environments.{key}.{k}"
+        if before is None:
+            out.append(_env_item(app, "added", path, None, after, evidenceUrls=urls))
+        elif after is None:
+            out.append(
+                _env_item(
+                    app,
+                    "removed",
+                    path,
+                    before,
+                    None,
+                    evidenceUrls=urls,
+                    breaking=True,
+                    breakingReason=f"removed server {k}",
+                )
+            )
+        else:
+            out.append(
+                _env_item(
+                    app,
+                    "changed",
+                    path,
+                    before,
+                    after,
+                    evidenceUrls=urls,
+                    breaking=True,
+                    breakingReason=f"{k} URL changed",
+                )
+            )
+    if (ea.get("name") or "") != (eb.get("name") or ""):
+        out.append(
+            _env_item(
+                app,
+                "description",
+                f"environments.{key}.name",
+                ea.get("name"),
+                eb.get("name"),
+                evidenceUrls=urls,
+            )
+        )
+    return out
+
+
+def _environment_items(a: Document | None, b: Document | None) -> list[Item]:
+    """Environments (added / removed / renamed / URLs / default), top-level baseUrls and
+    apiVersioning. A key-only rename (identical URLs) is a rename: hidden like a same-shape
+    model rename. Breaking: a removed environment or a changed URL of an existing one."""
+    app = b or a
+    if app is None:
+        return []
+    ja, jb = _app_json(a), _app_json(b)
+    ea, eb = _envs(ja), _envs(jb)
+    out: list[Item] = []
+    gone = [k for k in ea if k not in eb]
+    new = [k for k in eb if k not in ea]
+    pairs = _renamed_envs(ea, eb, gone, new)
+    for old, n in pairs.items():
+        out.append(
+            _env_item(
+                app,
+                "renamed",
+                f"environments.{n}",
+                old,
+                n,
+                rename=True,
+                evidenceUrls=_evidence(eb[n]),
+            )
+        )
+        out += [
+            {**i, "rename": False}
+            for i in _env_pair_items(app, n, ea[old], eb[n])
+            if i["op"] != "description"
+        ]
+    for k in gone:
+        if k not in pairs:
+            out.append(
+                _env_item(
+                    app,
+                    "removed",
+                    f"environments.{k}",
+                    _urls(ea[k]).get("baseUrl") or k,
+                    None,
+                    evidenceUrls=_evidence(ea[k]),
+                    breaking=True,
+                    breakingReason="removed environment",
+                )
+            )
+    for n in new:
+        if n not in pairs.values():
+            out.append(
+                _env_item(
+                    app,
+                    "added",
+                    f"environments.{n}",
+                    None,
+                    _urls(eb[n]).get("baseUrl") or n,
+                    evidenceUrls=_evidence(eb[n]),
+                )
+            )
+    for k in sorted(set(ea) & set(eb)):
+        out += _env_pair_items(app, k, ea[k], eb[k])
+    out += _default_and_base_items(app, ja, jb, pairs)
+    out += _versioning_items(app, ja.get("apiVersioning"), jb.get("apiVersioning"))
+    return out
+
+
+def _renamed_envs(
+    ea: Mapping[str, Any], eb: Mapping[str, Any], gone: list[str], new: list[str]
+) -> dict[str, str]:
+    """old key -> new key of environments whose key changed (same baseUrl / api server)."""
+    pairs: dict[str, str] = {}
+    for k in gone:
+        ident = _urls(ea[k]).get("baseUrl") or _urls(ea[k]).get("servers.api")
+        for n in new:
+            if n in pairs.values():
+                continue
+            if ident and ident in (_urls(eb[n]).get("baseUrl"), _urls(eb[n]).get("servers.api")):
+                pairs[k] = n
+                break
+    return pairs
+
+
+def _default_and_base_items(
+    app: Document, ja: Mapping[str, Any], jb: Mapping[str, Any], pairs: Mapping[str, str]
+) -> list[Item]:
+    out: list[Item] = []
+    ea, eb = _envs(ja), _envs(jb)
+    default_a = ja.get("defaultEnvironment") or next(
+        (pairs.get(k, k) for k, e in ea.items() if e.get("isDefault")), None
+    )
+    default_b = jb.get("defaultEnvironment") or next(
+        (k for k, e in eb.items() if e.get("isDefault")), None
+    )
+    if default_a != default_b and (default_a or default_b):
+        out.append(_env_item(app, "changed", "environments.default", default_a, default_b))
+    base_a, base_b = set(ja.get("baseUrls") or []), set(jb.get("baseUrls") or [])
+    for u in sorted(base_b - base_a):
+        out.append(_env_item(app, "added", f"baseUrls.{u}", None, u))
+    for u in sorted(base_a - base_b):
+        out.append(
+            _env_item(
+                app,
+                "removed",
+                f"baseUrls.{u}",
+                u,
+                None,
+                breaking=True,
+                breakingReason="removed base URL",
+            )
+        )
+    return out
+
+
+def _versioning_items(app: Document, va: Any, vb: Any) -> list[Item]:
+    va = va if isinstance(va, dict) else {}
+    vb = vb if isinstance(vb, dict) else {}
+    out: list[Item] = []
+    for k in ("current", "scheme", "format", "header", "queryParam"):
+        if va.get(k) != vb.get(k) and (va.get(k) or vb.get(k)):
+            breaking = k in ("scheme", "header", "queryParam") and va.get(k) is not None
+            out.append(
+                _env_item(
+                    app,
+                    "changed",
+                    f"apiVersioning.{k}",
+                    va.get(k),
+                    vb.get(k),
+                    breaking=breaking,
+                    breakingReason=f"versioning {k} changed" if breaking else None,
+                )
+            )
+    old_v = {str(v) for v in va.get("versions") or []}
+    new_v = {str(v) for v in vb.get("versions") or []}
+    for v in sorted(new_v - old_v):
+        out.append(_env_item(app, "added", f"apiVersioning.versions.{v}", None, v))
+    for v in sorted(old_v - new_v):
+        out.append(
+            _env_item(
+                app,
+                "removed",
+                f"apiVersioning.versions.{v}",
+                v,
+                None,
+                breaking=True,
+                breakingReason="removed API version",
+            )
+        )
     return out
 
 
@@ -462,7 +717,9 @@ def _near(name: str | None, word: str, text: str | None, span: int = 60) -> bool
     )
 
 
-def _verbatim(item: Item, old_text: str | None, new_text: str | None) -> tuple[bool, str | None]:
+def _verbatim(  # noqa: PLR0911 - one rule per op
+    item: Item, old_text: str | None, new_text: str | None
+) -> tuple[bool, str | None]:
     """Is the change visible in the source text? Returns (holds, quote from B)."""
     op = item["op"]
     name = _leaf(item["subject"].get("fieldPath")) or (item["after"] or {}).get("quote")
@@ -485,6 +742,10 @@ def _verbatim(item: Item, old_text: str | None, new_text: str | None) -> tuple[b
         return holds, quote or name
     if op == "description":
         return in_text(after.get("quote"), new_text), after.get("quote")
+    if op == "changed":  # a URL or setting: the new value is on the page, the old one is not
+        new, old = after.get("quote"), before.get("quote")
+        holds = in_text(new, new_text) and not (old and in_text(old, new_text))
+        return holds, new
     typ = after.get("type")  # op == "type" (other ops never hold)
     return op == "type" and bool(typ) and _near(name, str(typ), new_text, 40), name
 
@@ -591,6 +852,9 @@ def _classify_one(it: Item, ctx: _Context) -> None:
         unit or ""
     )
     urls = sorted({_url(u) for u in attributed}) if attributed else ([url] if url else [])
+    own = it.pop("evidenceUrls", None)  # an environment's own provenance URL, when stated
+    if own:
+        urls = sorted({_url(u) for u in own} | set(urls))
     ta, ha = _side(urls, ctx.pages_a, ctx.hashes_a)
     tb, hb = _side(urls, ctx.pages_b, ctx.hashes_b)
     if ctx.meta_old.baseline_only and any(u in ctx.hashes_a for u in urls):

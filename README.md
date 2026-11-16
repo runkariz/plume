@@ -120,11 +120,12 @@ PLUME_CONTRACT_PACKAGES=/path/to/my-api uv run pytest tests/contract/test_packag
 
 Then either load it with the CLI (`uv run plume load /path/to/my-api`) or upload it as a `.zip`
 in the web UI's maintainer wizard (upload → review the diff and embedding plan → build with
-live progress → publish). The API id comes from `app.json` `name` (slugged).
+live progress → publish). The API id is `app.json` `systemName` (Core's stable id; it must be
+a valid id: lower case, digits, inner dashes), or the slug of `name` when there is none.
 The shown name is, in order: a maintainer's override (`PUT /v1/apis/{api}/display {"name": …}`
 with the token, or the maintainer MCP tool `set_api_display_name`; per API, kept across
-reloads and dumps, `null` clears it), then `app.json` `title`/`displayName`, then one derived
-from `name`. API payloads carry `name` (the resolved one) and `nameSource`
+reloads and dumps, `null` clears it), then the package's own display name (`app.json`
+`title`/`displayName`, or `name` when it differs from `systemName`), then one derived from `name`. API payloads carry `name` (the resolved one) and `nameSource`
 (`override` | `package` | `derived`).
 
 - **Gate it.** If the package has `knowledge-export/gold-questions.json`, convert it with

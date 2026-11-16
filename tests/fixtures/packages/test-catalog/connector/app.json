@@ -82,5 +82,5 @@
     }
   ],
   "summary": "Retrieve and search shop orders and products using this connector.",
-  "systemName": "testcatalogapi"
+  "systemName": "test-catalog-api"
 }
