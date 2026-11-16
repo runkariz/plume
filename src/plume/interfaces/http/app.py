@@ -31,6 +31,7 @@ from plume.application.models.model_sets import ModelSets
 from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import ModelSessions
 from plume.application.ports.model_writer import ModelWriterError, ModelWriterUnavailableError
+from plume.application.reader import links
 from plume.application.reader.dto import ApiOverview
 from plume.application.reader.resolve import BuildResolver
 from plume.application.reader.sections import PackageSections
@@ -390,6 +391,9 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 for f in d.fields
             ],
             scopes=list(d.scopes),
+            required_scopes=links.required_scopes(d),
+            guides=links.linked_guides(d),
+            linked_endpoints=links.linked_endpoints(d),
             tags=list(d.tags),
             responses=_list_of_dicts(d.raw, "responses") if d.kind.value == "endpoint" else [],
             errors=_list_of_dicts(d.raw, "errors") if d.kind.value == "endpoint" else [],

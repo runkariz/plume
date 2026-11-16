@@ -822,6 +822,14 @@
             ],
             "title": "Description"
           },
+          "endpoints": {
+            "description": "Endpoint document ids whose requiredScopes name this scope (this scheme).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Endpoints",
+            "type": "array"
+          },
           "scope": {
             "anyOf": [
               {
@@ -1602,6 +1610,14 @@
             "title": "Fields",
             "type": "array"
           },
+          "guides": {
+            "description": "Endpoint: the knowledge units that name it (endpointId/endpointIds).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Guides",
+            "type": "array"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -1617,6 +1633,14 @@
             ],
             "title": "Kind",
             "type": "string"
+          },
+          "linkedEndpoints": {
+            "description": "Knowledge unit: the endpoints it names (endpointId/endpointIds).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Linkedendpoints",
+            "type": "array"
           },
           "method": {
             "anyOf": [
@@ -1683,6 +1707,15 @@
             ],
             "description": "The package's own path when it fixes the API version (e.g. /vendor/orders/v1/purchaseOrders); null when the version is variable ({version} in `path`) or absent.",
             "title": "Realpath"
+          },
+          "requiredScopes": {
+            "description": "Endpoint: requiredScopes [{authId, scopes}] verbatim (authId null when the package does not name the scheme).",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Requiredscopes",
+            "type": "array"
           },
           "resource": {
             "anyOf": [

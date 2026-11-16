@@ -237,3 +237,22 @@ def test_webhook_endpoint_ids_resolve(client: TestClient) -> None:
     unsub = hook["unsubscribe"]["endpointId"]
     assert refs[unsub] is None  # not in this (mini) build
     assert client.get("/v1/apis/woocommerce/triggers").json()["endpointRefs"] == {}
+
+
+def test_scopes_carry_their_endpoints_and_endpoints_their_scheme(client: TestClient) -> None:
+    """requiredScopes [{authId, scopes}]: the auth scheme lists the endpoints per scope; the
+    endpoint document states the scheme with its scopes."""
+    shop = client.get("/v1/apis/shopify/auth").json()
+    details = [client.get(f"/v1/apis/shopify/auth/{x['id']}").json() for x in shop["schemes"]]
+    scopes = {s["scope"]: s for d in details for s in d["scopes"]}
+    op = "endpoint:GET~/admin/api/{version}/assigned_fulfillment_orders.json"
+    assert scopes["read_assigned_fulfillment_orders"]["endpoints"] == [op]
+    doc = client.get("/v1/apis/shopify/documents/" + op).json()
+    assert doc["requiredScopes"] == [
+        {"authId": "oauth2-authorization-code", "scopes": ["read_assigned_fulfillment_orders"]}
+    ]
+    assert doc["guides"] == []
+    woo = client.get("/v1/apis/woocommerce/auth").json()  # no requiredScopes: no endpoints
+    for x in woo["schemes"]:
+        detail = client.get(f"/v1/apis/woocommerce/auth/{x['id']}").json()
+        assert all(s["endpoints"] == [] for s in detail["scopes"])

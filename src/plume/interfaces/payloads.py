@@ -11,6 +11,7 @@ from plume.application.models.relations import (
     RelationCandidate,
 )
 from plume.application.models.sessions import normalize_concept, revise_prompt
+from plume.application.reader import links
 from plume.application.reader.dto import (
     ApiOverview,
     BuildRef,
@@ -93,6 +94,10 @@ def document_payload(r: DocumentResult) -> Json:
         "complete": d.complete,
         "source_url": d.source_url,
         "anchor": d.anchor,
+        "scopes": list(d.scopes),
+        "required_scopes": links.required_scopes(d),
+        "guides": links.linked_guides(d),
+        "linked_endpoints": links.linked_endpoints(d),
         "text": d.text,
         "citation": citation_payload(r.citation),
     }

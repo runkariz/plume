@@ -5,19 +5,21 @@ for the same gold set.
 """
 
 from dataclasses import dataclass
+from functools import partial
 
 from plume.application.errors import ApplicationError
 from plume.application.knowledge._builds import require_build
 from plume.application.ports.build_repo import BuildRepo
 from plume.application.ports.document_repo import DocumentRepo
-from plume.application.ports.embedder import Embedder
+from plume.application.ports.embedder import Embedder, Vector
 from plume.application.ports.eval_repo import EvalRecord, EvalRepo
 from plume.application.ports.search_index import FactQuery, SearchIndex
 from plume.application.ports.tag_repo import TagRepo
-from plume.application.reader.use_cases import fuse_hits, rank_order
+from plume.application.reader.use_cases import WIDER_POOL, fuse_hits, rank_order
 from plume.domain.eval.gate import GateDecision, GatePolicy, decide
 from plume.domain.eval.gold import GoldKind, GoldSet
 from plume.domain.eval.metrics import K, QuestionOutcome, score
+from plume.domain.knowledge.document import DocumentKind
 from plume.domain.knowledge.tag import LATEST, TagName
 from plume.domain.shared.clock import Clock
 from plume.domain.shared.ids import BuildId
@@ -56,6 +58,10 @@ class RunEvalGate:
         self._clock = clock
         self._policy = policy or GatePolicy()
 
+    def _endpoints_for(self, build_id: BuildId, vector: Vector) -> list[str]:
+        hits = self._index.dense(build_id, vector, WIDER_POOL, (DocumentKind.ENDPOINT,))
+        return list(dict.fromkeys(h.doc_id for h in hits))
+
     def execute(self, build_id: BuildId, gold: GoldSet, gold_hash: str) -> EvalRun:
         build = require_build(self._builds, build_id)
         if build.spec is not None and build.spec.embed_model != self._embedder.model:
@@ -74,7 +80,8 @@ class RunEvalGate:
                 dense = self._index.dense(build_id, vector, POOL)
                 text = self._index.text(build_id, q.question, POOL)
                 fused = [h.doc_id for h in fuse_hits(dense, text, q.question, POOL)]
-                ranked = tuple(rank_order(self._documents, build_id, fused, K))
+                wider = partial(self._endpoints_for, build_id, vector)
+                ranked = tuple(rank_order(self._documents, build_id, fused, K, wider))
                 # Expected docs are alternatives: missing only when none of them is in the build.
                 present = [d for d in q.expect_docs if d in known]
                 missing = () if present else tuple(q.expect_docs)

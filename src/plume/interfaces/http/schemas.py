@@ -379,6 +379,19 @@ class DocumentOut(Schema):
     text: str
     fields: list[FieldOut]
     scopes: list[str]
+    required_scopes: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Endpoint: requiredScopes [{authId, scopes}] verbatim (authId null when "
+        "the package does not name the scheme).",
+    )
+    guides: list[str] = Field(
+        default_factory=list,
+        description="Endpoint: the knowledge units that name it (endpointId/endpointIds).",
+    )
+    linked_endpoints: list[str] = Field(
+        default_factory=list,
+        description="Knowledge unit: the endpoints it names (endpointId/endpointIds).",
+    )
     tags: list[str] = Field(default_factory=list)
     responses: list[dict[str, Any]] = Field(
         default_factory=list, description="Endpoint responses[] from the package, verbatim."
@@ -696,6 +709,10 @@ class AuthVariable(Schema):
 class AuthScope(Schema):
     scope: str | None
     description: str | None
+    endpoints: list[str] = Field(
+        default_factory=list,
+        description="Endpoint document ids whose requiredScopes name this scope (this scheme).",
+    )
 
 
 class AuthSchemeSummary(Schema):
