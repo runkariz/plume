@@ -551,6 +551,8 @@ const apiBuild = {
 } as const;
 
 export const inventorySnapshot: ModelSnapshot = {
+  // newer docs exist, none of the changes touches a field this model cites
+  impact: { status: 'updated_unaffected', affectedCount: 0, breakingCount: 0 },
   id: 'snap_8f3a21',
   name: 'Inventory',
   description: 'Stock per SKU and location, stock management and backorder behavior.',
@@ -679,6 +681,8 @@ export const inventorySnapshot: ModelSnapshot = {
 
 export const productSnapshot: ModelSnapshot = {
   ...inventorySnapshot,
+  // current: the pinned build is still latest (after the spread: Inventory's impact must not leak in)
+  impact: { status: 'current', affectedCount: 0, breakingCount: 0 },
   id: 'snap_prod01',
   name: 'Product',
   description: 'Items for sale: title, SKU, price, status, variants and descriptions.',
@@ -720,6 +724,8 @@ export const order40Snapshot: ModelSnapshot = {
   ...(realOrder40 as unknown as ModelSnapshot),
   // the docs of two of its APIs changed after it was built (the shape plume-6f's server sends)
   stale: true,
+  // and a visible change touches two of its mappings, one of them breaking
+  impact: { status: 'affected', affectedCount: 2, breakingCount: 1 },
   staleInputs: [
     {
       api: 'shopify',
@@ -766,6 +772,8 @@ const leaf = (
 });
 
 export const nestedSnapshot: ModelSnapshot = {
+  // a personal model pinned to a build that has no notes: nobody can say whether it is affected
+  impact: { status: 'unknown', affectedCount: 0, breakingCount: 0 },
   id: 'u-nested0000000000000000000000001',
   name: 'Order with lines',
   description: 'An order with its customer and its lines.',

@@ -17,11 +17,15 @@ import type {
 import { apiRef, modelCandidates, productSnapshot, sampleSuggestions } from './modelData';
 import { relatedFor } from './relatedData';
 import {
+  changesJson,
   demote,
+  docsUpdatedOf,
   issuesText,
   keep,
+  modelImpactOf,
   notesJson,
   promote,
+  timelinePublicJson,
   reportPage,
   rollback,
   seedReleases,
@@ -207,6 +211,14 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
   >();
   /** Release notes: the builds of some APIs with the notes and review state of each (maintainer routes). */
   const releases = seedReleases();
+  // a maintainer's display names (per API, in memory like the rest of the mock)
+  const displayNames = new Map<string, string>();
+  const named = <T extends { id: string; name: string }>(
+    a: T,
+  ): T & { nameSource: 'override' | 'package' } =>
+    displayNames.has(a.id)
+      ? { ...a, name: displayNames.get(a.id) as string, nameSource: 'override' }
+      : { ...a, nameSource: 'package' };
   const releaseOf = (
     request: Request,
     api: string,
@@ -674,6 +686,59 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
         if (c) c.mergedInto = id;
       }
       return HttpResponse.json(collectionJson(id));
+    }),
+    // ---- what users see: the builds with counts, the visible changes, a model's impact ----
+    http.get(`${base}/v1/apis/:id/changes/timeline`, ({ params }) => {
+      const a = releases[String(params.id)];
+      return a
+        ? HttpResponse.json({ api: String(params.id), items: timelinePublicJson(a) })
+        : notFound();
+    }),
+    http.get(`${base}/v1/apis/:id/changes`, ({ params, request }) => {
+      const a = releases[String(params.id)];
+      if (!a) return notFound();
+      const q = new URL(request.url).searchParams;
+      const cursor = Number(q.get('cursor') ?? 0);
+      const res = changesJson(a, {
+        build: q.get('build'),
+        since: q.get('since'),
+        breaking: q.get('breaking') === 'true',
+        kind: q.get('kind'),
+        wordingOnly: q.has('wordingOnly') ? q.get('wordingOnly') === 'true' : null,
+        q: q.get('q'),
+        cursor: Number.isFinite(cursor) ? cursor : 0,
+        limit: Number(q.get('limit') ?? 50) || 50,
+      });
+      return res === 'not_on_chain'
+        ? HttpResponse.json(
+            {
+              error: 'invalid_input',
+              message: 'That build is not on the published chain of notes',
+            },
+            { status: 409 },
+          )
+        : HttpResponse.json(res);
+    }),
+    http.get(`${base}/v1/models/:id/impact`, ({ params }) => {
+      const stored = models.get(String(params.id));
+      if (!stored)
+        return HttpResponse.json(
+          { error: 'not_found', message: 'Snapshot not found' },
+          { status: 404 },
+        );
+      return HttpResponse.json(modelImpactOf(stored.model.impact, releases));
+    }),
+    http.get(`${base}/v1/model-sets/:id/impact`, ({ params }) => {
+      const x = sets.get(String(params.id));
+      if (!x)
+        return HttpResponse.json(
+          { error: 'not_found', message: 'Model set not found' },
+          { status: 404 },
+        );
+      const members = x.set.members.map((m) => m.concept);
+      return HttpResponse.json(
+        modelImpactOf(x.set.impact, releases, (n) => members[n % members.length] ?? null),
+      );
     }),
     // ---- release notes: the review of a build after it was published (maintainer) ----
     http.get(`${base}/v1/apis/:id/release-notes`, ({ params, request }) => {
@@ -1397,10 +1462,50 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
         },
       });
     }),
-    http.get(`${base}/v1/apis`, () => HttpResponse.json({ items: sampleApis })),
+    http.get(`${base}/v1/apis`, () =>
+      HttpResponse.json({
+        items: sampleApis.map((a) => {
+          // the badge: only an API whose latest build has notes with a visible, non-wording change says it
+          const d = docsUpdatedOf(releases[a.id]);
+          return named({ ...a, ...(d ? { docsUpdated: d } : {}) });
+        }),
+      }),
+    ),
+    http.put(`${base}/v1/apis/:id/display`, async ({ params, request }) => {
+      if (!isMaintainer(request)) return unauthorized();
+      const id = String(params.id);
+      const found = detailFor(id);
+      if (!found) return notFound();
+      const body = (await request.json()) as { name?: string | null };
+      const next = typeof body.name === 'string' ? body.name.replace(/\s+/g, ' ').trim() : null;
+      if (
+        body.name !== null &&
+        body.name !== undefined &&
+        (next === '' || (next?.length ?? 0) > 80)
+      )
+        return HttpResponse.json(
+          {
+            error: 'conflict',
+            code: 'invalid_input',
+            message: 'The name must be 1 to 80 characters.',
+          },
+          { status: 409 },
+        );
+      if (next) displayNames.set(id, next);
+      else displayNames.delete(id);
+      const n = named(found);
+      return HttpResponse.json({
+        api: id,
+        name: n.name,
+        nameSource: n.nameSource,
+        packageName: found.name,
+      });
+    }),
     http.get(`${base}/v1/apis/:id`, ({ params }) => {
       const found = detailFor(String(params.id));
-      return found ? HttpResponse.json(found) : notFound();
+      if (!found) return notFound();
+      const d = docsUpdatedOf(releases[String(params.id)]);
+      return HttpResponse.json(named(d ? { ...found, docsUpdated: d } : found));
     }),
     // A stored document (what a citation points at). The mock builds one from the id.
     http.get(`${base}/v1/apis/:id/documents/*`, ({ params, request }) => {

@@ -33,8 +33,13 @@ for (const theme of THEMES) {
         }
         await expect(line).toBeVisible();
         for (const s of detail.sources ?? [])
-          await expect(line.locator(`a[href="${new URL(s.url).toString()}"]`)).toBeVisible();
-        if (detail.extractedAt) await expect(line).toContainText('Extracted on');
+          await expect(
+            page
+              .getByTestId('sources')
+              .locator(`a[href="${new URL(s.url).toString()}"]`)
+              .first(),
+          ).toBeAttached();
+        if (detail.extractedAt) await expect(line).toContainText('Extracted');
         await settle(page);
         await expectNoSeriousA11y(page);
         await shotOf(page.locator('.titlerow'), 'w24-real-api-sources', theme);

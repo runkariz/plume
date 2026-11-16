@@ -1,12 +1,25 @@
 import type { CollectionRef, DraftIssue, ModelSet, ModelSnapshot } from '@/api/types';
 import { apiLabel } from '@/lib/names';
 import { withPaths } from '@/pages/models/fields';
+import { readImpact, type WidgetImpact } from './impact';
 import type { CallToolResult } from './protocol';
 
 /** What a tool result means for the view. */
 export type Shown =
-  | { kind: 'model'; model: ModelSnapshot; link: string | null; collection: CollectionRef | null }
-  | { kind: 'set'; set: ModelSet; link: string | null; collection: CollectionRef | null }
+  | {
+      kind: 'model';
+      model: ModelSnapshot;
+      link: string | null;
+      collection: CollectionRef | null;
+      impact: WidgetImpact | null;
+    }
+  | {
+      kind: 'set';
+      set: ModelSet;
+      link: string | null;
+      collection: CollectionRef | null;
+      impact: WidgetImpact | null;
+    }
   | { kind: 'refused'; issues: DraftIssue[] }
   | { kind: 'pending'; status: string }
   | { kind: 'error'; message: string }
@@ -67,7 +80,13 @@ export function extractModel(result: CallToolResult): Shown {
       (typeof sc.share_url === 'string' && sc.share_url) ||
       (typeof asSet.shareUrl === 'string' && asSet.shareUrl) ||
       null;
-    return { kind: 'set', set: normaliseSet(asSet), link: setLink, collection: collectionOf(sc) };
+    return {
+      kind: 'set',
+      set: normaliseSet(asSet),
+      link: setLink,
+      collection: collectionOf(sc),
+      impact: readImpact(sc, asSet.impact),
+    };
   }
   const candidate = looksLikeModel(sc.model) ? sc.model : sc;
   if (!looksLikeModel(candidate)) {
@@ -79,7 +98,13 @@ export function extractModel(result: CallToolResult): Shown {
     (typeof sc.share_url === 'string' && sc.share_url) ||
     (typeof candidate.shareUrl === 'string' && candidate.shareUrl) ||
     null;
-  return { kind: 'model', model: normalise(candidate), link, collection: collectionOf(sc) };
+  return {
+    kind: 'model',
+    model: normalise(candidate),
+    link,
+    collection: collectionOf(sc),
+    impact: readImpact(sc, candidate.impact),
+  };
 }
 
 const NEUTRAL = '#6a655e';

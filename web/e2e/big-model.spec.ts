@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test';
-import { expectNoSeriousA11y, settle, shot, test, THEMES, pickMapping } from './helpers';
+import { expectNoSeriousA11y, settle, shot, test, THEMES, pickMapping, openModel } from './helpers';
 
 /** A real 40-field Order model (Shopify + WooCommerce + Mirakl), copied from a live snapshot into the mocks. */
 const MODEL = '/models/m-38f24111baf1076f44c9cfa7';
@@ -21,7 +21,7 @@ for (const width of [1440, 375]) {
       test('opens as a readable table with display names, filters, citation links', async ({
         page,
       }) => {
-        await page.goto(MODEL);
+        await openModel(page, MODEL);
         await expect(page.getByRole('heading', { level: 1, name: 'Order' })).toBeVisible();
         await expect(page.getByRole('radio', { name: 'Table' })).toBeChecked();
         const table = page.getByRole('table', { name: /How each API fills each field/ });
@@ -66,7 +66,7 @@ for (const width of [1440, 375]) {
       test('graph view: focused on one field first, the whole model on request at a readable zoom', async ({
         page,
       }) => {
-        await page.goto(MODEL);
+        await openModel(page, MODEL);
         await page.getByRole('radio', { name: 'Graph' }).click({ force: true });
         await expect(page.getByRole('radio', { name: 'Selected field' })).toBeChecked();
         await expect(page.locator('.react-flow__node-canonical')).toHaveCount(1);

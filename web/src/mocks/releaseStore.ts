@@ -1,6 +1,12 @@
 import type {
   BuildPackage,
   ChangeItem,
+  ChangesPage,
+  DocsUpdated,
+  Impact,
+  ModelImpact,
+  PublicBuild,
+  PublicChange,
   SourceConflict,
   ReleaseCounts,
   ReleaseDecision,
@@ -606,4 +612,186 @@ export function issuesText(api: string, b: MockBuild, format: 'markdown' | 'text
     }
   }
   return lines.join('\n');
+}
+
+// ---- what users see (public): the timeline, the visible changes, the docsUpdated badge, a model's impact ----
+
+const userItems = (b: MockBuild): ChangeItem[] => b.items.filter(visible);
+
+/** The public form of an item (what the server sends): flat, no artifact rule, hash or review data. */
+export function publicOf(i: ChangeItem, api = 'shopify'): PublicChange {
+  const anchor = (i.evidence?.anchor ?? '').replace(/^#/, '');
+  const docId = i.subject.docId;
+  return {
+    id: i.id,
+    from: i.from,
+    to: i.to,
+    toDocsAsOf: i.toDocsAsOf,
+    kind: i.kind,
+    op: i.op,
+    subject: i.subject,
+    before: i.before ?? null,
+    after: i.after ?? null,
+    breaking: i.breaking,
+    breakingReason: i.breakingReason ?? null,
+    class: i.class === 'likely' ? 'likely' : 'confirmed',
+    perVendorChangelog: i.class === 'likely',
+    wordingOnly: Boolean(i.wordingOnly),
+    quote: i.after?.quote ?? i.before?.quote ?? i.evidence?.quote ?? null,
+    vendorUrl: i.evidence?.sourceUrl ?? null,
+    anchor: anchor || null,
+    sourceKind: i.evidence?.sourceKind ?? null,
+    documentUrl: docId
+      ? `/v1/apis/${api}/documents/${encodeURIComponent(docId)}?version=${i.to ?? ''}`
+      : null,
+    removedDocument: i.op === 'removed' && (i.kind === 'endpoint' || i.kind === 'model'),
+  };
+}
+
+/** GET /v1/apis/{api}/changes/timeline: only builds that have notes, newest first (latest, then its base, ...). */
+export function timelinePublicJson(api: MockApiBuilds): PublicBuild[] {
+  return [...api.builds]
+    .filter((b) => b.hasNotes && b.from)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .map((b) => {
+      const v = userItems(b);
+      return {
+        build: b.id,
+        from: b.from,
+        docsAsOf: b.docsAsOf,
+        latest: api.latest === b.id,
+        counts: {
+          confirmed: v.filter((i) => i.class === 'confirmed').length,
+          likely: v.filter((i) => i.class === 'likely').length,
+          breaking: v.filter((i) => i.breaking).length,
+          wordingOnly: v.filter((i) => i.wordingOnly).length,
+        },
+      };
+    });
+}
+
+/** The badge on an API card: the latest build's visible, non-wording changes; null when there are none. */
+export function docsUpdatedOf(api: MockApiBuilds | undefined): DocsUpdated | null {
+  const b = api?.builds.find((x) => x.id === api.latest);
+  if (!b || !b.hasNotes || !b.from) return null;
+  const real = userItems(b).filter((i) => !i.wordingOnly);
+  if (real.length === 0) return null;
+  return {
+    build: b.id,
+    at: b.docsAsOf,
+    confirmed: real.filter((i) => i.class === 'confirmed').length,
+    likely: real.filter((i) => i.class === 'likely').length,
+    breaking: real.filter((i) => i.breaking).length,
+  };
+}
+
+export interface ChangesParams {
+  build?: string | null;
+  since?: string | null;
+  breaking?: boolean;
+  kind?: string | null;
+  wordingOnly?: boolean | null;
+  q?: string | null;
+  cursor?: number;
+  limit?: number;
+}
+
+/**
+ * GET /v1/apis/{api}/changes: visible items, breaking first, then kind, docId, fieldPath, op. `totals` cover the
+ * selection after the filters but BEFORE the search and paging; `matched` is after the search.
+ */
+export function changesJson(api: MockApiBuilds, p: ChangesParams): ChangesPage | 'not_on_chain' {
+  const withNotes = api.builds.filter((b) => b.hasNotes && b.from);
+  let builds: MockBuild[];
+  if (p.since) {
+    const base = api.builds.find((b) => b.id === p.since);
+    builds = withNotes.filter((b) =>
+      base ? b.createdAt > base.createdAt : (b.docsAsOf ?? '') > (p.since ?? ''),
+    );
+  } else {
+    const one = withNotes.find((b) => b.id === (p.build ?? api.latest));
+    if (!one) return 'not_on_chain';
+    builds = [one];
+  }
+  const filtered = builds
+    .flatMap(userItems)
+    .map((i) => publicOf(i))
+    .filter((i) => !p.breaking || i.breaking)
+    .filter((i) => !p.kind || i.kind === p.kind)
+    .filter(
+      (i) =>
+        p.wordingOnly === null ||
+        p.wordingOnly === undefined ||
+        Boolean(i.wordingOnly) === p.wordingOnly,
+    )
+    .sort(
+      (a, b) =>
+        Number(b.breaking) - Number(a.breaking) ||
+        a.kind.localeCompare(b.kind) ||
+        (a.subject.docId ?? '').localeCompare(b.subject.docId ?? '') ||
+        (a.subject.fieldPath ?? '').localeCompare(b.subject.fieldPath ?? '') ||
+        a.op.localeCompare(b.op),
+    );
+  const byKind: Record<string, number> = {};
+  for (const i of filtered) byKind[i.kind] = (byKind[i.kind] ?? 0) + 1;
+  const totals = {
+    confirmed: filtered.filter((i) => i.class === 'confirmed').length,
+    likely: filtered.filter((i) => i.class === 'likely').length,
+    breaking: filtered.filter((i) => i.breaking).length,
+    wordingOnly: filtered.filter((i) => i.wordingOnly).length,
+    byKind,
+  };
+  const text = (p.q ?? '').trim().toLowerCase();
+  const rows = filtered.filter(
+    (i) =>
+      !text ||
+      [i.subject.path, i.subject.model, i.subject.fieldPath, i.subject.docId]
+        .filter(Boolean)
+        .some((x) => String(x).toLowerCase().includes(text)),
+  );
+  const cursor = p.cursor ?? 0;
+  const limit = Math.min(200, Math.max(1, p.limit ?? 50));
+  const next = cursor + limit;
+  return {
+    api: 'shopify',
+    builds: builds.map((b) => b.id),
+    computedAt: builds[0]?.computedAt ?? null,
+    totals,
+    matched: rows.length,
+    items: rows.slice(cursor, next),
+    nextCursor: next < rows.length ? next : null,
+  };
+}
+
+/** GET /v1/models/{id}/impact (and a set's, with `member`): the mappings a visible change touches. */
+export function modelImpactOf(
+  impact: Impact | null | undefined,
+  releases: Record<string, MockApiBuilds>,
+  member?: (i: number) => string | null,
+): ModelImpact {
+  const shop = releases.shopify;
+  const latest = shop?.latest ?? REVIEW_SHOPIFY_NEW;
+  const b = shop?.builds.find((x) => x.id === latest);
+  const status = impact?.status ?? 'unknown';
+  const visibleItems = (b ? userItems(b) : [])
+    .filter((i) => !i.wordingOnly)
+    .sort((a, c) => Number(c.breaking) - Number(a.breaking));
+  const affected =
+    status === 'affected'
+      ? visibleItems.slice(0, impact?.affectedCount ?? 0).map((i, n) => ({
+          field: i.subject.fieldPath ?? i.subject.path ?? i.subject.model ?? i.id,
+          api: 'shopify',
+          ...(member ? { member: member(n) } : {}),
+          change: publicOf(i),
+        }))
+      : [];
+  return {
+    status,
+    affectedCount: impact?.affectedCount ?? 0,
+    breakingCount: impact?.breakingCount ?? 0,
+    pinned: { shopify: REVIEW_SHOPIFY_OLD },
+    latest: { shopify: latest },
+    affected,
+    ...(impact?.byMember ? { byMember: impact.byMember } : {}),
+  };
 }

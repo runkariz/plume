@@ -5,6 +5,8 @@ import { useAsync } from '@/api/useAsync';
 import { ApiError, type CollectionRef, type DraftIssue, type ModelSet } from '@/api/types';
 import { useIsMaintainer } from '@/app/authStore';
 import { Banner, Button, Card, Chip, Crumbs, ErrorState, LoadingState } from '@/components';
+import { ImpactChip } from '@/components/ImpactChip';
+import { SetImpactBanner } from './SetImpactBanner';
 import { docHref } from '@/lib/docHref';
 import { richText } from '@/lib/richText';
 import { collectionArrival, readCollectionId, rememberCollection } from '@/lib/collection';
@@ -211,13 +213,18 @@ function SetPage({
             {set.undecided.length ? (
               <Chip tone="warn">{set.undecided.length} to decide</Chip>
             ) : null}
-            {set.stale ? <StaleChip inputs={set.staleInputs} /> : null}
+            {set.impact ? (
+              <ImpactChip impact={set.impact} />
+            ) : set.stale ? (
+              <StaleChip inputs={set.staleInputs} />
+            ) : null}
           </div>
           <LineageLine snap={set} basePath="/model-sets" />
         </div>
       </div>
       {set.description ? <p className="muted">{set.description}</p> : null}
 
+      {set.impact ? <SetImpactBanner set={set} /> : null}
       <div className="access-banner">
         {arrival?.saved ? (
           <Banner tone="ok" title="Saved as a new version">

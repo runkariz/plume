@@ -6,6 +6,8 @@ import { SetWorkbench } from '@/pages/sets/SetWorkbench';
 import { findMember, relationLabel, SUPPORT_TEXT, toggleShow } from '@/pages/sets/setGraph';
 import { CollectionNotice } from './CollectionNotice';
 import type { HostConnection } from './protocol';
+import { ImpactNotice } from './ImpactNotice';
+import type { WidgetImpact } from './impact';
 
 const VISIBILITY: Record<string, { label: string; tone: 'ok' | 'info' | 'warn' | 'bad' }> = {
   official: { label: 'Official', tone: 'ok' },
@@ -23,11 +25,13 @@ export function SetPanel({
   set,
   link,
   collection,
+  impact,
   connection,
 }: {
   set: ModelSet;
   link: string | null;
   collection: CollectionRef | null;
+  impact: WidgetImpact | null;
   connection: HostConnection | null;
 }) {
   const [selection, setSelection] = useState<string | null>(null);
@@ -95,6 +99,7 @@ export function SetPanel({
           onOpen={canOpenLinks ? (u) => void connection?.openLink(u) : undefined}
         />
       ) : null}
+      <ImpactNotice value={impact} what="mappings" />
       {set.description ? <p className="muted">{set.description}</p> : null}
       {set.members.length > 0 ? (
         <SetWorkbench

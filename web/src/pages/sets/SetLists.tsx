@@ -5,6 +5,7 @@ import { useAsync } from '@/api/useAsync';
 import type { ModelVisibility, SetListItem } from '@/api/types';
 import { useIsMaintainer } from '@/app/authStore';
 import { Card, Chip } from '@/components';
+import { ImpactChip } from '@/components/ImpactChip';
 import { formatDate } from '@/lib/format';
 import { apiLabel } from '@/lib/names';
 
@@ -36,7 +37,11 @@ export function SetRows({ items }: { items: SetListItem[] }) {
           {s.visibility === 'unlisted' ? <Chip tone="info">Unlisted</Chip> : null}
           {s.visibility === 'unreleased' ? <Chip tone="warn">Unreleased</Chip> : null}
           {s.undecided ? <Chip tone="warn">{s.undecided} to decide</Chip> : null}
-          {s.stale ? <Chip tone="warn">Stale</Chip> : null}
+          {s.impact ? (
+            <ImpactChip impact={s.impact} />
+          ) : s.stale ? (
+            <Chip tone="warn">Stale</Chip>
+          ) : null}
         </li>
       ))}
     </ul>

@@ -16,12 +16,13 @@ for (const theme of THEMES) {
   test.describe(`sources (${theme})`, () => {
     test.use({ theme, viewport: { width: 1280, height: 900 } });
 
-    test('the API page: linked sources and "Extracted on" next to docs as of', async ({ page }) => {
+    test('the API page: one compact sources line and "Extracted" next to docs as of', async ({
+      page,
+    }) => {
       await page.goto('/apis/shopify');
       const line = page.getByTestId('sources-line');
-      await expect(line).toContainText('Sources: Docs · OpenAPI spec · Changelog');
       await expect(line).toContainText(
-        'Extracted on 14 Nov 2026 from docs, OpenAPI spec, changelog',
+        'Sources: Docs · OpenAPI spec · Changelog · Extracted 14 Nov 2026',
       );
       await expect(line.getByRole('link', { name: 'OpenAPI spec' })).toHaveAttribute(
         'href',
@@ -63,3 +64,53 @@ test('375 px: the sources line wraps and the page does not scroll sideways', asy
   );
   expect(overflow).toBe(false);
 });
+
+/** The owner-reported page: 13 OpenAPI specs and a changelog linked on two hosts (before: one long wrapped paragraph). */
+for (const theme of THEMES) {
+  test.describe(`many sources (${theme})`, () => {
+    test.use({ theme, viewport: { width: 1280, height: 900 } });
+    test('amazon-sp-vendor header, desktop', async ({ page }) => {
+      await page.goto('/apis/amazon-sp-vendor');
+      await expect(
+        page.getByRole('heading', { level: 1, name: 'Amazon SP-API (Vendor)' }),
+      ).toBeVisible();
+      await settle(page);
+      await shotOf(page.locator('.titlerow'), 'w25-amazon-sources', theme);
+      await expectNoSeriousA11y(page);
+      await page.getByText('All sources (15)').click();
+      await expect(page.getByRole('link', { name: 'vendorOrders.json' })).toBeVisible();
+      await expectNoSeriousA11y(page);
+      await shotOf(page.locator('.titlerow'), 'w25-amazon-sources-open', theme);
+    });
+    test('a package with one source: a direct link, no disclosure', async ({ page }) => {
+      await page.goto('/apis/stripe');
+      await expect(page.getByRole('heading', { level: 1, name: 'Stripe API' })).toBeVisible();
+      await expect(page.getByTestId('sources-line')).toContainText(
+        'Sources: Docs · Extracted 14 Nov 2026',
+      );
+      await expect(page.getByTestId('sources-detail')).toHaveCount(0);
+      await settle(page);
+      await expectNoSeriousA11y(page);
+      await shotOf(page.locator('.titlerow'), 'w25-one-source', theme);
+    });
+    test('amazon-sp-vendor header, 375 px', async ({ page }) => {
+      await page.setViewportSize({ width: 375, height: 900 });
+      await page.goto('/apis/amazon-sp-vendor');
+      await expect(
+        page.getByRole('heading', { level: 1, name: 'Amazon SP-API (Vendor)' }),
+      ).toBeVisible();
+      await settle(page);
+      await shotOf(page.locator('.titlerow'), 'w25-amazon-sources-375', theme);
+      const wide = await page.evaluate(
+        () => document.documentElement.scrollWidth > window.innerWidth,
+      );
+      expect(wide).toBe(false);
+      await page.getByText('All sources (15)').click();
+      await expect(page.getByRole('link', { name: 'vendorOrders.json' })).toBeVisible();
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth),
+      ).toBe(false);
+      await shotOf(page.locator('.titlerow'), 'w25-amazon-sources-375-open', theme);
+    });
+  });
+}

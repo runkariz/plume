@@ -674,3 +674,110 @@ describe('the view', () => {
     vi.useRealTimers();
   });
 });
+
+describe('the impact of newer docs in the view (no fetch: it all comes in the tool result)', () => {
+  const rows = Array.from({ length: 7 }, (_, i) => ({
+    field: `f${i}`,
+    api: 'shopify',
+    member: i === 0 ? 'Order' : undefined,
+    op: 'removed',
+    breaking: i < 2,
+    text: `property f${i} removed (removed field)`,
+  }));
+  const sc = (impact: unknown) => ({
+    model: { ...inventorySnapshot, impact },
+    share_url: 'https://plume.example/models/x',
+  });
+  const affected = {
+    status: 'affected',
+    affectedCount: 7,
+    breakingCount: 2,
+    rows,
+    impactUrl: '/v1/models/x/impact',
+  };
+
+  async function shown(structured: unknown) {
+    const h = fakeHost();
+    render(<WidgetApp connection={h.conn} />);
+    await h.reply(h.sent[0]?.id, {
+      hostCapabilities: { openLinks: {} },
+      hostContext: { theme: 'light' },
+    });
+    await h.push({
+      jsonrpc: '2.0',
+      method: 'ui/notifications/tool-result',
+      params: result(structured),
+    });
+    return h;
+  }
+
+  it("reads the summary, at most 5 rows of plain text, from the model's impact", () => {
+    const s = extractModel(result(sc(affected)));
+    if (s.kind !== 'model') throw new Error('not a model');
+    expect(s.impact?.impact).toMatchObject({
+      status: 'affected',
+      affectedCount: 7,
+      breakingCount: 2,
+    });
+    expect(s.impact?.rows).toHaveLength(5);
+    expect(s.impact?.rows[0]).toMatchObject({
+      member: 'Order',
+      breaking: true,
+      text: 'property f0 removed (removed field)',
+    });
+    expect(s.impact?.url).toBe('/v1/models/x/impact');
+  });
+  it('a set carries its own impact with the members', () => {
+    const all = seedSets();
+    const stored = all.find((x) => x.set.id === SET_OFFICIAL);
+    const set = stored ? setJson(all, stored) : (undefined as never);
+    const s = extractModel(
+      result({
+        set: {
+          ...set,
+          impact: {
+            status: 'affected',
+            affectedCount: 1,
+            breakingCount: 0,
+            rows: [rows[0]],
+            byMember: [{ concept: 'Order', modelId: 'm1', status: 'affected', affectedCount: 1 }],
+          },
+        },
+      }),
+    );
+    if (s.kind !== 'set') throw new Error('not a set');
+    expect(s.impact?.impact.byMember).toEqual([
+      { concept: 'Order', status: 'affected', affectedCount: 1 },
+    ]);
+  });
+  it('anything else is no impact: a missing, odd or unknown-status summary shows nothing', () => {
+    for (const odd of [undefined, null, 'x', { status: 'broken' }, { affectedCount: 2 }]) {
+      const s = extractModel(result(sc(odd)));
+      expect(s.kind === 'model' ? s.impact : 'x').toBeNull();
+    }
+  });
+  it('shows ONE headline and the rows as text, replacing the older-docs chip', async () => {
+    await shown(sc(affected));
+    const box = await screen.findByTestId('widget-impact');
+    expect(box).toHaveTextContent('7 mappings affected (2 breaking)');
+    expect(within(box).getAllByRole('listitem')).toHaveLength(5);
+    expect(box).toHaveTextContent('Breaking: ');
+    expect(box).toHaveTextContent('Order: property f0 removed (removed field)');
+    expect(screen.queryByText('Built on older docs')).not.toBeInTheDocument();
+  });
+  it('a row with markup stays text', async () => {
+    await shown(sc({ ...affected, rows: [{ ...rows[0], text: '<img src=x onerror=alert(1)>' }] }));
+    const box = await screen.findByTestId('widget-impact');
+    expect(box).toHaveTextContent('<img src=x onerror=alert(1)>');
+    expect(box.querySelector('img')).toBeNull();
+  });
+  it('is quiet when current, and the stale chip stays when the server sent no impact', async () => {
+    await shown(sc({ status: 'current', affectedCount: 0, breakingCount: 0 }));
+    expect(screen.queryByTestId('widget-impact')).not.toBeInTheDocument();
+  });
+  it('an older server (no impact): the older-docs chip for a stale model, nothing else', async () => {
+    await shown({ model: { ...inventorySnapshot, impact: undefined, stale: true } });
+    expect(await screen.findByText('Built on older docs')).toBeInTheDocument();
+    expect(screen.queryByTestId('widget-impact')).not.toBeInTheDocument();
+  });
+});

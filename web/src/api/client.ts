@@ -15,7 +15,12 @@ import {
   type CollectionRef,
   type ModelJob,
   type ReleaseNotes,
+  type ApiDisplayName,
   type ReleaseSummary,
+  type ChangesPage,
+  type ChangesQuery,
+  type ModelImpact,
+  type PublicBuild,
   type ReportPage,
   type RollbackResult,
   type RelatedConcepts,
@@ -225,6 +230,19 @@ export interface PlumeApi {
   publishJob(id: string, signal?: AbortSignal): Promise<Job>;
   discardJob(id: string, signal?: AbortSignal): Promise<Job>;
   downloadDump(id: string, signal?: AbortSignal): Promise<{ blob: Blob; filename: string | null }>;
+  /** Rename an API for display (maintainer): a name of 1 to 80 characters, or null to go back to the package's. */
+  setApiDisplayName(
+    api: string,
+    name: string | null,
+    signal?: AbortSignal,
+  ): Promise<ApiDisplayName>;
+  // release notes users see (public): feature-detected, absent on a server without them
+  /** The builds that have notes, newest first (empty: the API has none: no Changes tab). */
+  getChangesTimeline(api: string, signal?: AbortSignal): Promise<PublicBuild[]>;
+  getChanges(api: string, query: ChangesQuery, signal?: AbortSignal): Promise<ChangesPage>;
+  /** Which mappings of a model a visible change touches. */
+  getModelImpact(id: string, signal?: AbortSignal): Promise<ModelImpact>;
+  getSetImpact(id: string, signal?: AbortSignal): Promise<ModelImpact>;
   // release notes (maintainer): the review of a build after it was published
   /** The notes of every build of an API that has some, newest first, with the review state and counts. */
   listReleaseNotes(api: string, signal?: AbortSignal): Promise<ReleaseSummary[]>;
@@ -355,7 +373,7 @@ export function createApiClient(
   async function raw(
     path: string,
     init: {
-      method?: 'GET' | 'POST';
+      method?: 'GET' | 'POST' | 'PUT';
       body?: unknown;
       form?: FormData;
       signal?: AbortSignal;
@@ -675,6 +693,26 @@ export function createApiClient(
       const filename = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)?.[1] ?? null;
       return { blob: await res.blob(), filename: filename ? decodeURIComponent(filename) : null };
     },
+    getChangesTimeline: async (api, signal) => {
+      const r = await call<{ items?: PublicBuild[] }>(`/v1/apis/${enc(api)}/changes/timeline`, {
+        signal,
+      });
+      return r.items ?? [];
+    },
+    getChanges: (api, q, signal) => {
+      const p = new URLSearchParams();
+      if (q.build) p.set('build', q.build);
+      if (q.since) p.set('since', q.since);
+      if (q.breaking) p.set('breaking', 'true');
+      if (q.kind) p.set('kind', q.kind);
+      if (q.wordingOnly !== undefined) p.set('wordingOnly', String(q.wordingOnly));
+      if (q.q?.trim()) p.set('q', q.q.trim());
+      if (q.cursor !== undefined && q.cursor !== null) p.set('cursor', String(q.cursor));
+      p.set('limit', String(q.limit ?? 100));
+      return call<ChangesPage>(`/v1/apis/${enc(api)}/changes?${p.toString()}`, { signal });
+    },
+    getModelImpact: (id, signal) => call<ModelImpact>(`/v1/models/${enc(id)}/impact`, { signal }),
+    getSetImpact: (id, signal) => call<ModelImpact>(`/v1/model-sets/${enc(id)}/impact`, { signal }),
     listReleaseNotes: async (api, signal) => {
       const r = await call<{ items?: ReleaseSummary[] }>(`/v1/apis/${enc(api)}/release-notes`, {
         signal,
@@ -688,6 +726,12 @@ export function createApiClient(
         `/v1/apis/${enc(api)}/builds/${enc(build)}/release-notes/report/${enc(rule)}?cursor=${cursor}&limit=${limit}`,
         { signal },
       ),
+    setApiDisplayName: (api, name, signal) =>
+      call<ApiDisplayName>(`/v1/apis/${enc(api)}/display`, {
+        method: 'PUT',
+        body: { name },
+        signal,
+      }),
     keepRelease: (api, build, note, signal) =>
       call<ReleaseNotes>(`/v1/apis/${enc(api)}/builds/${enc(build)}/release-notes/keep`, {
         method: 'POST',

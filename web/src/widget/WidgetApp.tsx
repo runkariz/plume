@@ -11,6 +11,10 @@ import { extractModel, type Shown } from './model';
 import { CollectionNotice } from './CollectionNotice';
 import { SetPanel } from './SetPanel';
 import type { CallToolResult, HostConnection, HostContext } from './protocol';
+import { ImpactChip } from '@/components/ImpactChip';
+import { impactLine } from '@/lib/impact';
+import { ImpactNotice } from './ImpactNotice';
+import type { WidgetImpact } from './impact';
 
 /** Above this many fields the embedded view opens on one field, like the page. */
 const BIG = 12;
@@ -171,6 +175,7 @@ function Body({ phase, connection }: { phase: Phase; connection: HostConnection 
           set={phase.set}
           link={phase.link}
           collection={phase.collection}
+          impact={phase.impact}
           connection={connection}
         />
       );
@@ -181,6 +186,7 @@ function Body({ phase, connection }: { phase: Phase; connection: HostConnection 
           model={phase.model}
           link={phase.link}
           collection={phase.collection}
+          impact={phase.impact}
           connection={connection}
         />
       );
@@ -191,11 +197,13 @@ function ModelPanel({
   model,
   link,
   collection,
+  impact,
   connection,
 }: {
   model: ModelSnapshot;
   link: string | null;
   collection: CollectionRef | null;
+  impact: WidgetImpact | null;
   connection: HostConnection | null;
 }) {
   const big = countLeaves(model) > BIG;
@@ -222,7 +230,11 @@ function ModelPanel({
               </Chip>
             ) : null}
             <Chip>{countLeaves(model)} fields</Chip>
-            {model.stale ? <Chip tone="warn">Built on older docs</Chip> : null}
+            {impact && impactLine(impact.impact) ? (
+              <ImpactChip impact={impact.impact} />
+            ) : !impact && model.stale ? (
+              <Chip tone="warn">Built on older docs</Chip>
+            ) : null}
             <span className="widget-apis" aria-label="APIs">
               {model.inputs.map((a) => (
                 <ApiAvatar
@@ -260,6 +272,7 @@ function ModelPanel({
           onOpen={canOpenLinks ? (u) => void connection?.openLink(u) : undefined}
         />
       ) : null}
+      <ImpactNotice value={impact} what="mappings" />
       {big ? (
         <div className="widget-scope">
           <Segmented

@@ -284,6 +284,7 @@ export function listItem(all: StoredModel[], m: StoredModel): ModelListItem {
     versions: l.versions,
     stale: m.model.stale ?? false,
     staleInputs: m.model.staleInputs ?? [],
+    ...(m.model.impact ? { impact: m.model.impact } : {}),
   };
 }
 

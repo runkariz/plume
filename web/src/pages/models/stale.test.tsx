@@ -2,19 +2,30 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { createHandlers } from '@/mocks/handlers';
-import { order40Snapshot } from '@/mocks/modelData';
+import type { Impact } from '@/api/types';
+import { inventorySnapshot, order40Snapshot, productSnapshot } from '@/mocks/modelData';
 import { renderApp } from '@/test/render';
 import { server, TEST_API_BASE } from '@/test/server';
 import { pollConfig } from './GenerateSession';
 
 const staleModel = `/models/${order40Snapshot.id}`;
 
+// These tests are about a server that does NOT send `impact` (the stale mark is the fallback): the mock's models carry
+// one, so it is taken off for them (impact.test.tsx covers a server that sends it).
+const impacts = new Map<string, Impact | null | undefined>();
+const WITHOUT = [order40Snapshot, inventorySnapshot, productSnapshot];
+
 beforeEach(() => {
   pollConfig.ms = 40;
+  for (const m of WITHOUT) {
+    impacts.set(m.id, m.impact);
+    delete m.impact;
+  }
   server.use(...createHandlers(TEST_API_BASE)); // fresh mock backend per test
 });
 afterEach(() => {
   pollConfig.ms = 3000;
+  for (const m of WITHOUT) m.impact = impacts.get(m.id);
 });
 
 describe('a stale model says so', () => {
