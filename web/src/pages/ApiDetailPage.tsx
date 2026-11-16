@@ -22,12 +22,13 @@ import {
   Metric,
   Segmented,
   Tile,
+  RateLimitsCard,
 } from '@/components';
 import { DocsUpdatedBadge } from '@/components/DocsUpdatedBadge';
 import { SourcesLine } from '@/components/SourcesLine';
 import { SearchIcon } from '@/icons';
 import { breakable } from '@/lib/breakable';
-import { operationOf } from '@/lib/docHref';
+import { operationOf, shownPath } from '@/lib/docHref';
 import { ChangesTab } from './changes/ChangesTab';
 import { docHref } from './models/MappingTable';
 import { ModelList } from './models/ModelList';
@@ -103,10 +104,10 @@ function Browse({ api }: { api: ApiSummary }) {
                   <span className="kind-tag">{it.kind}</span>
                 )}
                 <div className="ep-main">
-                  <div className={it.path ? 'mono ep-path' : 'ep-path'}>
+                  <div className={shownPath(it) ? 'mono ep-path' : 'ep-path'}>
                     {/* the whole row is clickable (stretched link); the link text names the item */}
                     <Link className="ep-link" to={docHref(api.id, it.id)}>
-                      {it.path ? breakable(it.path) : it.title}
+                      {shownPath(it) ? breakable(shownPath(it) ?? '') : it.title}
                     </Link>
                     {operationOf(it.id, it.method, it.path) ? (
                       <span className="faint small ep-op">
@@ -115,7 +116,7 @@ function Browse({ api }: { api: ApiSummary }) {
                       </span>
                     ) : null}
                   </div>
-                  {it.path ? <div className="muted small">{it.title}</div> : null}
+                  {shownPath(it) ? <div className="muted small">{it.title}</div> : null}
                 </div>
                 {it.resource ? <Chip>{it.resource}</Chip> : null}
               </li>
@@ -293,6 +294,7 @@ function Detail({ api }: { api: ApiDetail }) {
             <Kv label="Store" value={api.index.store} />
             <Kv label="Build" value={api.index.build ?? '–'} mono />
           </Card>
+          <RateLimitsCard limits={api.rateLimits} />
           <EnvironmentsCard apiId={api.id} />
           <ModelList api={api.id} title="Canonical models" />
           <Card className="pad" id="connect">

@@ -481,6 +481,16 @@ a.stretched:focus-visible {
 .m-row:first-child {
   border-top: 0;
 }
+.m-row-wrap {
+  flex-wrap: wrap;
+}
+.m-row-extra {
+  flex-basis: 100%;
+}
+.remove-pinned {
+  display: grid;
+  gap: 4px;
+}
 .m-main {
   flex: 1;
   display: flex;
@@ -1723,6 +1733,36 @@ th {
   cursor: pointer;
 }
 .doc-path {
+  overflow-wrap: anywhere;
+}
+.constraints {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 4px;
+  font-size: 12px;
+}
+.constraints li {
+  overflow-wrap: anywhere;
+}
+.endpoint-rate-limit,
+.rate-limits {
+  margin-bottom: 18px;
+}
+.rl-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rl-kv {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+}
+.rl-kv dd {
+  margin: 0;
   overflow-wrap: anywhere;
 }
 
