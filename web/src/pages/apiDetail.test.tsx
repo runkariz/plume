@@ -25,6 +25,40 @@ describe('API detail', () => {
     );
   });
 
+  it('shows the docs and spec questions rows when the gold set has both', async () => {
+    renderApp('/apis/shopify');
+    const table = await screen.findByRole('table', { name: 'By question source' });
+    const docs = within(table).getByRole('row', { name: /Docs questions/ });
+    expect(docs).toHaveTextContent('26 questions');
+    expect(docs).toHaveTextContent('0.96');
+    expect(docs).toHaveTextContent('0.84');
+    expect(docs).toHaveTextContent('0.98');
+    const spec = within(table).getByRole('row', { name: /Spec questions/ });
+    expect(spec).toHaveTextContent('14 questions');
+    expect(spec).toHaveTextContent('0.91');
+    // the combined scores stay where they were
+    expect(screen.getByText('0.94')).toBeInTheDocument();
+  });
+
+  it('shows no per-source rows for one source, or when the server does not send them', async () => {
+    const { shopifyDetail } = await import('@/mocks/data');
+    for (const bySource of [
+      [{ source: 'docs', recallAt5: 0.94, mrr: 0.81, citationHitRate: 0.97, questions: 40 }],
+      undefined,
+    ]) {
+      server.use(
+        http.get(`${TEST_API_BASE}/v1/apis/:id`, () =>
+          HttpResponse.json({ ...shopifyDetail, quality: { ...shopifyDetail.quality, bySource } }),
+        ),
+      );
+      const { unmount } = renderApp('/apis/shopify');
+      await screen.findByText('Recall@5');
+      expect(screen.queryByRole('table', { name: 'By question source' })).not.toBeInTheDocument();
+      expect(screen.queryByText(/Docs questions/)).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
   it('shows only what the server measured: no invented-endpoints row when it is null', async () => {
     server.use(
       http.get(`${TEST_API_BASE}/v1/apis/:id`, async () => {

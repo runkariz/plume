@@ -17,3 +17,4 @@ export { ApiAvatar } from './ApiAvatar';
 export { RawJson } from './RawJson';
 export { RateLimitsCard, EndpointRateLimitCard } from './RateLimits';
 export { EndpointLink, EndpointLinks, GuideLinks } from './LinkedDocs';
+export { QualityBySource } from './QualityBySource';

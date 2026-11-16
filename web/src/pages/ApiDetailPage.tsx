@@ -25,6 +25,7 @@ import {
   RateLimitsCard,
 } from '@/components';
 import { DocsUpdatedBadge } from '@/components/DocsUpdatedBadge';
+import { QualityBySource } from '@/components/QualityBySource';
 import { SourcesLine } from '@/components/SourcesLine';
 import { SearchIcon } from '@/icons';
 import { breakable } from '@/lib/breakable';
@@ -276,6 +277,7 @@ function Detail({ api }: { api: ApiDetail }) {
                 {api.quality.missingExpected ? (
                   <Metric label="Expected docs missing" value={api.quality.missingExpected} />
                 ) : null}
+                <QualityBySource rows={api.quality.bySource} />
                 <p className="faint small" style={{ marginTop: 10 }}>
                   Gold set of {api.quality.goldQuestions} questions · evaluated{' '}
                   {formatDate(api.quality.evaluatedAt)}

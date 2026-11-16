@@ -255,7 +255,10 @@ describe('Publish step', () => {
     expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('Publish');
     const table = screen.getByRole('table');
     expect(within(table).getByText('Recall@5')).toBeInTheDocument();
-    expect(within(table).getByText('+0.01')).toBeInTheDocument();
+    expect(within(table).getAllByText('+0.01').length).toBeGreaterThan(0);
+    // per question source, from the same metrics list
+    expect(within(table).getByText('Recall@5 (docs questions)')).toBeInTheDocument();
+    expect(within(table).getByText('Recall@5 (spec questions)')).toBeInTheDocument();
     expect(screen.getByText('shopify-2026-11-14.dump.gz')).toBeInTheDocument();
     expect(screen.getByText('Switch live search to the staged build')).toBeInTheDocument();
     expect(screen.getByText('Move the tag “latest” to it')).toBeInTheDocument();
