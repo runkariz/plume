@@ -4,6 +4,7 @@ import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
 import { Card, Crumbs, EmptyState, ErrorState, LoadingState, Logo } from '@/components';
 import { formatDate } from '@/lib/format';
+import { ReleaseReviewLink } from './release/BuildsPage';
 
 export function MaintainerHome() {
   const client = useApiClient();
@@ -37,6 +38,7 @@ export function MaintainerHome() {
                     {a.docsAsOf ? `Docs as of ${formatDate(a.docsAsOf)}` : 'No docs published yet'}
                   </span>
                 </div>
+                <ReleaseReviewLink api={a.id} />
                 <Link className="btn" to={`/apis/${a.id}/try`}>
                   Try it
                 </Link>

@@ -212,6 +212,23 @@ Rules it must keep (the host's default CSP is `default-src 'none'`, scripts and 
 runs the BUILT file in a sandboxed iframe under that CSP with the network cut, driven by a stand-in host
 (`e2e/widget-host.ts`), and checks axe in both themes: run `npm run build:widget` before it.
 
+## Release review (maintainer): after a publish nothing is held
+
+A new build publishes as usual; afterwards the maintainer reviews its release notes (design:
+`docs/design/release-notes.md`). Routes (maintainer session): `/maintainer/apis/:api/builds` (the builds, newest first,
+with each review state) and `/maintainer/apis/:api/builds/:build/notes` (`src/pages/maintainer/release/`). The review
+shows: the state (`pending | kept | rolled_back`, whether this build is `latest`), "Needs attention" with the server's
+one-line reason (never blocking), what changed (confirmed, likely, suspect, no source evidence, breaking), the package
+(stream version, rules hash) and gold-score delta, and the **extraction report**: the changes the docs did NOT make but
+the extractor did, grouped by rule with the server's explanation (the web holds no rule text). Actions: **Keep**,
+**Roll back** (confirm + a required reason, at most 500 characters: `latest` moves to the previous build, the build stays
+loaded and untagged), **Roll forward** (Keep on a rolled-back build, while `latest` is still its base), **Copy issues**
+and **Download issues (.md)** (one server-built text for stream), and **Promote to confirmed** with a quote the SERVER
+verifies against the build's source text (422 `QUOTE_NOT_VERIFIED`: the change stays as it was) with **Demote**.
+Suspect and unknown changes appear only on these maintainer routes, never on a public page. Entry points show only when
+the API's latest build has notes (feature detection: a server without them shows nothing): the maintainer home, and the
+publish step after publishing. Quotes, paths and values are text nodes; a source link only for an http(s) address.
+
 ## Releasing models: replacing older ones, and warnings
 
 - **Release asks which older official models of the same concept it replaces** (`ReleaseChoice`): the candidates come

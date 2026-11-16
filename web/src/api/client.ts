@@ -10,9 +10,13 @@ import {
   type GenerateRequest,
   type GenerateJobResponse,
   type GenerateResponse,
+  type BuildEntry,
+  type ChangeItem,
   type Collection,
   type CollectionRef,
   type ModelJob,
+  type ReleaseNotes,
+  type RollbackResult,
   type RelatedConcepts,
   type SetSessionRequest,
   type Supersedable,
@@ -220,6 +224,45 @@ export interface PlumeApi {
   publishJob(id: string, signal?: AbortSignal): Promise<Job>;
   discardJob(id: string, signal?: AbortSignal): Promise<Job>;
   downloadDump(id: string, signal?: AbortSignal): Promise<{ blob: Blob; filename: string | null }>;
+  // release notes (maintainer): the review of a build after it was published
+  /** The builds of an API with their notes counts and review state (an API without notes answers an empty list). */
+  listBuilds(api: string, signal?: AbortSignal): Promise<BuildEntry[]>;
+  getReleaseNotes(api: string, build: string, signal?: AbortSignal): Promise<ReleaseNotes>;
+  /** Keep the build; on a rolled-back build this rolls forward (409 when `latest` moved on). */
+  keepRelease(
+    api: string,
+    build: string,
+    note?: string,
+    signal?: AbortSignal,
+  ): Promise<ReleaseNotes>;
+  /** Moves `latest` back to the build's base (reason required, at most 500 characters; 409 when not applicable). */
+  rollbackRelease(
+    api: string,
+    build: string,
+    reason: string,
+    signal?: AbortSignal,
+  ): Promise<RollbackResult>;
+  /** The extraction report as one text for stream, built by the server (markdown or plain). */
+  getReleaseIssues(
+    api: string,
+    build: string,
+    format: 'markdown' | 'text',
+    signal?: AbortSignal,
+  ): Promise<string>;
+  /** Makes a suspect/unknown item confirmed with a quote the server verifies (422 QUOTE_NOT_VERIFIED otherwise). */
+  promoteChange(
+    api: string,
+    build: string,
+    itemId: string,
+    quote: string,
+    signal?: AbortSignal,
+  ): Promise<ChangeItem>;
+  demoteChange(
+    api: string,
+    build: string,
+    itemId: string,
+    signal?: AbortSignal,
+  ): Promise<ChangeItem>;
   /** Streams build events; resolves after a `done` event, rejects after repeated connection loss. */
   watchJob(id: string, onEvent: (e: JobEvent) => void, signal?: AbortSignal): Promise<void>;
 }
@@ -622,6 +665,43 @@ export function createApiClient(
       const filename = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)?.[1] ?? null;
       return { blob: await res.blob(), filename: filename ? decodeURIComponent(filename) : null };
     },
+    listBuilds: async (api, signal) => {
+      const r = await call<{ items?: BuildEntry[] } | BuildEntry[]>(`/v1/apis/${enc(api)}/builds`, {
+        signal,
+      });
+      return Array.isArray(r) ? r : (r.items ?? []);
+    },
+    getReleaseNotes: (api, build, signal) =>
+      call<ReleaseNotes>(`/v1/apis/${enc(api)}/builds/${enc(build)}/release-notes`, { signal }),
+    keepRelease: (api, build, note, signal) =>
+      call<ReleaseNotes>(`/v1/apis/${enc(api)}/builds/${enc(build)}/release-notes/keep`, {
+        method: 'POST',
+        body: note ? { note } : {},
+        signal,
+      }),
+    rollbackRelease: (api, build, reason, signal) =>
+      call<RollbackResult>(`/v1/apis/${enc(api)}/builds/${enc(build)}/release-notes/rollback`, {
+        method: 'POST',
+        body: { reason },
+        signal,
+      }),
+    getReleaseIssues: async (api, build, format, signal) =>
+      (
+        await raw(
+          `/v1/apis/${enc(api)}/builds/${enc(build)}/release-notes/issues?format=${format}`,
+          { signal, accept: format === 'markdown' ? 'text/markdown' : 'text/plain' },
+        )
+      ).text(),
+    promoteChange: (api, build, itemId, quote, signal) =>
+      call<ChangeItem>(
+        `/v1/apis/${enc(api)}/builds/${enc(build)}/release-notes/items/${enc(itemId)}/promote`,
+        { method: 'POST', body: { quote }, signal },
+      ),
+    demoteChange: (api, build, itemId, signal) =>
+      call<ChangeItem>(
+        `/v1/apis/${enc(api)}/builds/${enc(build)}/release-notes/items/${enc(itemId)}/demote`,
+        { method: 'POST', signal },
+      ),
     watchJob: watch,
   };
 }

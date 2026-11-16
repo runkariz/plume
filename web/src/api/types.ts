@@ -1007,3 +1007,123 @@ export interface SetSessionStatus {
   visibility: ModelVisibility | null;
   concepts: string[];
 }
+
+// ---- release notes: what changed between builds, and the maintainer's review after a publish ----
+
+/** Where a change comes from: the vendor docs (confirmed, likely) or the extractor (suspect, unknown). */
+export type ChangeClass = 'confirmed' | 'likely' | 'suspect' | 'unknown';
+/** After a publish nothing is held; the maintainer keeps the build or rolls it back. */
+export type ReleaseReview = 'pending' | 'kept' | 'rolled_back';
+
+export interface ChangeSubject {
+  docId?: string | null;
+  method?: string | null;
+  path?: string | null;
+  model?: string | null;
+  fieldPath?: string | null;
+  location?: string | null;
+}
+
+/** One side of a change: values, and a short quote from the vendor docs of THAT build (plain text). */
+export interface ChangeValue {
+  type?: string | null;
+  required?: boolean | null;
+  quote?: string | null;
+}
+
+export interface ChangeItem {
+  id: string;
+  kind: string;
+  op: string;
+  subject: ChangeSubject;
+  before?: ChangeValue | null;
+  after?: ChangeValue | null;
+  breaking: boolean;
+  breakingReason?: string | null;
+  class: ChangeClass;
+  evidence?: {
+    sourceUrl?: string | null;
+    anchor?: string | null;
+    quote?: string | null;
+    pageHashBefore?: string | null;
+    pageHashAfter?: string | null;
+    changelog?: string | null;
+  } | null;
+  artifactRules?: string[];
+  wordingOnly?: boolean;
+  from?: string;
+  to?: string;
+  promotedBy?: string | null;
+  promotedAt?: string | null;
+}
+
+export interface ReleaseCounts {
+  confirmed: number;
+  likely: number;
+  breaking: number;
+  /** Maintainer only. */
+  suspect?: number;
+  unknown?: number;
+  wordingOnly?: number;
+}
+
+/** One build on the timeline of an API (the review fields come with the maintainer token). */
+export interface BuildEntry {
+  id: string;
+  docsAsOf?: string | null;
+  tag?: string | null;
+  createdAt: string;
+  counts: ReleaseCounts;
+  review?: ReleaseReview;
+  needsAttention?: boolean;
+}
+
+/** The suspect items of one artifact rule, with the server's own one-sentence explanation (the web holds no rule text). */
+export interface ReportGroup {
+  rule: string;
+  title: string;
+  explanation: string;
+  items: ChangeItem[];
+}
+
+export interface ReleaseDecision {
+  by: string;
+  at: string;
+  decision: 'keep' | 'rollback' | 'rollforward' | 'promote' | 'demote';
+  note?: string | null;
+  reason?: string | null;
+  item?: string | null;
+}
+
+/** What produced a build's package (stream and its rules): the A and B sides of a diff. */
+export interface BuildPackage {
+  streamVersion?: string | null;
+  rulesHash?: string | null;
+  extractedAt?: string | null;
+}
+
+/** GET /v1/apis/{api}/builds/{build}/release-notes (maintainer): every item, the extraction report and the review. */
+export interface ReleaseNotes {
+  review: ReleaseReview;
+  needsAttention: boolean;
+  attentionReason?: string | null;
+  /** This build is `latest` now (only that one can be rolled back). */
+  tagged: boolean;
+  computedAt: string;
+  decisions: ReleaseDecision[];
+  counts: ReleaseCounts;
+  report: ReportGroup[];
+  /** The confirmed and likely items users see. */
+  items?: ChangeItem[];
+  from?: string | null;
+  package?: { from?: BuildPackage | null; to?: BuildPackage | null } | null;
+  gold?: { before?: Record<string, number> | null; after?: Record<string, number> | null } | null;
+}
+
+/** POST .../release-notes/rollback: where `latest` points now. */
+export interface RollbackResult {
+  tag: string;
+  buildId: string;
+  previous: string;
+  review: ReleaseReview;
+}

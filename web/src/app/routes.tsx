@@ -15,6 +15,8 @@ import { BuildStep } from '@/pages/maintainer/BuildStep';
 import { RequireMaintainer } from '@/pages/maintainer/Guard';
 import { MaintainerEntry } from '@/pages/maintainer/MaintainerEntry';
 import { PublishStep } from '@/pages/maintainer/PublishStep';
+import { BuildsPage } from '@/pages/maintainer/release/BuildsPage';
+import { ReleaseReview } from '@/pages/maintainer/release/ReleaseReview';
 import { ReviewStep } from '@/pages/maintainer/ReviewStep';
 import { UploadStep } from '@/pages/maintainer/UploadStep';
 import { Layout } from './Layout';
@@ -43,6 +45,11 @@ export const routes: RouteObject[] = [
               { path: 'maintainer/jobs/:jobId/review', element: <ReviewStep /> },
               { path: 'maintainer/jobs/:jobId/build', element: <BuildStep /> },
               { path: 'maintainer/jobs/:jobId/publish', element: <PublishStep /> },
+              { path: 'maintainer/apis/:apiId/builds', element: <BuildsPage /> },
+              {
+                path: 'maintainer/apis/:apiId/builds/:buildId/notes',
+                element: <ReleaseReview />,
+              },
             ],
           },
           { path: 'models', element: <PickApps /> },

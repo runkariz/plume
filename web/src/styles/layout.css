@@ -2492,3 +2492,114 @@ ul.plain {
   display: grid;
   gap: 16px;
 }
+
+/* ---- release review (maintainer) ---- */
+.release-report,
+.release-visible {
+  display: grid;
+  gap: 12px;
+  margin: 24px 0;
+}
+.change-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+.change-row {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: 10px;
+  background: var(--surface);
+}
+.change-row[data-class='confirmed'] {
+  border-left-color: var(--ok);
+}
+.change-row[data-class='likely'] {
+  border-left-color: var(--info);
+}
+.change-row[data-class='suspect'] {
+  border-left-color: var(--bad);
+}
+.change-row[data-class='unknown'] {
+  border-left-color: var(--faint);
+}
+.change-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.change-subject {
+  overflow-wrap: anywhere;
+}
+.change-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+.change-values > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.change-row .quote {
+  margin: 4px 0 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--line);
+  color: var(--muted);
+}
+.change-evidence {
+  overflow-wrap: anywhere;
+}
+.change-promote,
+.rollback-confirm {
+  display: grid;
+  gap: 8px;
+}
+.change-promote textarea,
+.rollback-confirm textarea,
+.rollback-confirm input {
+  width: 100%;
+  box-sizing: border-box;
+}
+.rollback-confirm {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.notes-counts {
+  display: grid;
+  gap: 4px;
+}
+.decisions {
+  display: grid;
+  gap: 10px;
+}
+.build-list {
+  display: grid;
+  gap: 10px;
+}
+.build-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--line2);
+  border-radius: 10px;
+}
+.release-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+@media (max-width: 720px) {
+  .change-values {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
