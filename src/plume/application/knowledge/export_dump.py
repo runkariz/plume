@@ -12,6 +12,7 @@ from plume.application.ports.document_repo import DocumentRepo
 from plume.application.ports.dump_store import BuildImporter, BuildSnapshot, DumpStore, VectorReader
 from plume.application.ports.eval_repo import EvalRepo
 from plume.application.ports.fact_index import FactIndex
+from plume.application.ports.release_notes_repo import ReleaseNotesRepo
 from plume.domain.knowledge.build import Build
 from plume.domain.knowledge.fact import facts_of
 from plume.domain.shared.ids import BuildId
@@ -41,6 +42,7 @@ def snapshot_of(
     facts: FactIndex,
     evals: EvalRepo | None,
     assets: AssetRepo | None = None,
+    notes: ReleaseNotesRepo | None = None,
 ) -> BuildSnapshot:
     build = require_build(builds, build_id)
     if not build.is_sealed:
@@ -57,6 +59,8 @@ def snapshot_of(
         facts=tuple(facts.list_facts(build_id)),
         eval=evals.get(build_id) if evals else None,
         assets=tuple(assets.list(build_id)) if assets else (),
+        release_notes=notes.get(build_id.value) if notes else None,
+        package_meta=notes.get_meta(build_id.value) if notes else None,
     )
 
 
@@ -102,8 +106,9 @@ class ExportDump:
         evals: EvalRepo | None,
         store: DumpStore,
         assets: AssetRepo | None = None,
+        notes: ReleaseNotesRepo | None = None,
     ) -> None:
-        self._args = (apis, builds, documents, vectors, facts, evals, assets)
+        self._args = (apis, builds, documents, vectors, facts, evals, assets, notes)
         self._store = store
 
     def snapshot(self, build_id: BuildId) -> BuildSnapshot:

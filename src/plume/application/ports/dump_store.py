@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Any, Protocol
 
 from plume.application.ports.embedder import Vector
 from plume.application.ports.eval_repo import EvalRecord
@@ -30,6 +30,10 @@ class BuildSnapshot:
     facts: tuple[Fact, ...]
     eval: EvalRecord | None = None
     assets: tuple[Asset, ...] = ()
+    # Release notes of this build (against its predecessor) and what its package said about
+    # the extraction: carried so prod shows the same notes without recomputing them.
+    release_notes: Mapping[str, Any] | None = None
+    package_meta: Mapping[str, Any] | None = None
 
 
 class DumpStore(Protocol):

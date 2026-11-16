@@ -11,6 +11,7 @@ from plume.application.knowledge.embed_build import EmbedBuild
 from plume.application.knowledge.export_dump import ExportDump, RestoreDump
 from plume.application.knowledge.extract_facts import ExtractFacts
 from plume.application.knowledge.import_package import ImportPackage
+from plume.application.knowledge.release_notes import ReleaseNotes
 from plume.application.knowledge.seal_build import SealBuild
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.models.collections import Collections
@@ -36,6 +37,7 @@ from plume.infrastructure.dumps.local_fs import LocalDumpStore
 from plume.infrastructure.jobs.package_storage import LocalPackageStorage
 from plume.infrastructure.jobs.thread_runner import InlineJobRunner
 from plume.infrastructure.sources.gold_file import JsonGoldSource
+from plume.infrastructure.sources.package_meta import StreamPackageMetaReader
 from plume.infrastructure.sources.stream_package import StreamPackageSource
 from tests.fakes.jobs import InMemoryBuildImporter, InMemoryJobEventLog, InMemoryJobRepo
 from tests.fakes.knowledge import (
@@ -56,6 +58,7 @@ from tests.fakes.models import (
     InMemoryModelJobRepo,
     InMemoryModelRepo,
     InMemoryModelSetRepo,
+    InMemoryReleaseNotesRepo,
     ScriptedModelWriter,
 )
 from tests.fakes.search import InMemoryFactQuery, InMemorySearchIndex
@@ -85,6 +88,7 @@ class FakeStack:
     model_events: InMemoryJobEventLog = field(default_factory=InMemoryJobEventLog)
     sets_repo: InMemoryModelSetRepo = field(default_factory=InMemoryModelSetRepo)
     collections_repo: InMemoryCollectionRepo = field(default_factory=InMemoryCollectionRepo)
+    notes_repo: InMemoryReleaseNotesRepo = field(default_factory=InMemoryReleaseNotesRepo)
 
     def __post_init__(self) -> None:
         self.vectors = InMemoryVectorIndex(self.documents)
@@ -142,6 +146,13 @@ class FakeStack:
             events or self.events,
             evaluate=self.run_eval(),
             gold=self.gold,
+            notes=self.release_notes(),
+            package_meta=StreamPackageMetaReader(),
+        )
+
+    def release_notes(self) -> ReleaseNotes:
+        return ReleaseNotes(
+            self.builds, self.documents, self.tags, self.notes_repo, self.clock, self.evals
         )
 
     def dumps(self) -> LocalDumpStore:
@@ -158,6 +169,7 @@ class FakeStack:
             self.evals,
             self.dumps(),
             self.assets,
+            self.notes_repo,
         )
 
     def restore(self) -> RestoreDump:

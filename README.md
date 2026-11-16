@@ -210,6 +210,25 @@ Compose host ports: `PLUME_PG_HOST_PORT` (18432), `PLUME_API_HOST_PORT` (18480),
 
 Security notes and known limits: [docs/security.md](docs/security.md).
 
+## Release notes (maintainers)
+
+Each load compares the new build with the build `latest` pointed to, field by field, and
+classifies every change: is it a vendor docs change or an extraction artifact? See
+[docs/design/release-notes.md](docs/design/release-notes.md). Nothing blocks a publish;
+review afterwards:
+
+```bash
+plume notes shopify                  # the newest notes: counts, needs-attention, report groups
+plume notes shopify --json           # summary for the archive manifest
+plume notes shopify --build b-… --issues   # the extraction report to paste for stream
+```
+
+Over HTTP (maintainer token): `GET /v1/apis/{api}/release-notes` and
+`/v1/apis/{api}/builds/{build}/release-notes` (with `/keep`, `/rollback`, `/issues`,
+`/items/{id}/promote|demote`); over the maintainer MCP: `review_release_notes`, `keep_release`,
+`rollback_release`, `release_issues`, `promote_change`, `demote_change`. Notes travel inside
+the build's dump, so prod shows the same notes after `plume restore`.
+
 ## Deploying in containers
 
 - **One image, several commands**: `serve` (HTTP API, 18480), `mcp` (MCP, 18481), `migrate`,

@@ -14,7 +14,7 @@ def test_migration_from_empty_to_head_and_back(engine: Engine) -> None:
 
     result = MigrateSchema(migrator).execute()
     assert result.before is None
-    assert result.after == "0013"
+    assert result.after == "0014"
 
     # Idempotent.
     assert not MigrateSchema(migrator).execute().changed
@@ -22,7 +22,7 @@ def test_migration_from_empty_to_head_and_back(engine: Engine) -> None:
     migrator.downgrade_to_base()
     assert migrator.current_revision() is None
     migrator.upgrade_to_head()
-    assert migrator.current_revision() == "0013"
+    assert migrator.current_revision() == "0014"
 
 
 def test_pgvector_is_available(engine: Engine) -> None:

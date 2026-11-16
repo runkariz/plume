@@ -1,6 +1,7 @@
 """Use-case inputs and outputs (plain dataclasses)."""
 
 from dataclasses import dataclass
+from typing import Any
 
 from plume.domain.knowledge.api import ApiId
 from plume.domain.shared.ids import BuildId
@@ -51,3 +52,4 @@ class PipelineResult:
     facts: int
     tag: TagResult | None
     gate: GateSummary | None = None
+    notes: dict[str, Any] | None = None  # release notes summary against the previous build

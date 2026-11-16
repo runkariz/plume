@@ -179,6 +179,18 @@ class AskResponse(Schema):
     total_ms: float
 
 
+class KeepRequest(Schema):
+    note: str | None = Field(default=None, max_length=500)
+
+
+class RollbackRequest(Schema):
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class PromoteRequest(Schema):
+    quote: str = Field(min_length=1, max_length=2000)
+
+
 class ReleaseRequest(Schema):
     supersedes: list[str] = Field(
         default_factory=list,
