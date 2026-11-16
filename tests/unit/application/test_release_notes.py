@@ -119,3 +119,26 @@ def test_issues_text_and_notes_survive_a_dump(
     assert restored is not None
     assert restored["items"] == s.notes_repo.get(second)["items"]  # type: ignore[index]
     assert dst.notes_repo.get_meta(second) == s.notes_repo.get_meta(second)
+
+
+NOTES_PAIR = [p for p in __import__("os").environ.get("PLUME_NOTES_PACKAGES", "").split(":") if p]
+
+
+@pytest.mark.skipif(
+    len(NOTES_PAIR) != 2,
+    reason="set PLUME_NOTES_PACKAGES=<old shopify package>:<new shopify package> "
+    "(e.g. the frozen shopify-20261115-v12-extras:shopify-20261115-v12b-extras)",
+)
+def test_real_shopify_truncations_are_caught_as_suspects() -> None:
+    """The real v12 -> v12b pair: Order truncated a-l and ProductVariant cut to 12 properties
+    must come out as extraction suspects (mass removal, property drop), never as API changes."""
+    s = FakeStack()
+    s.load(NOTES_PAIR[0])
+    second = s.load(NOTES_PAIR[1])
+    notes = s.release_notes().get("shopify", second)
+    groups = {g["rule"]: g["count"] for g in notes["report"]}
+    assert groups.get("A1-mass-removal", 0) >= 40
+    assert groups.get("A3-property-drop", 0) >= 150
+    assert notes["counts"]["suspect"] >= 200
+    assert notes["needsAttention"]
+    assert notes["counts"]["breaking"] == 0  # nothing suspect is ever shown as an API change

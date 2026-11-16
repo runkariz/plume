@@ -341,7 +341,7 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         if n["needsAttention"]:
             typer.echo(f"  NEEDS ATTENTION: {n['attentionReason']}")
         for g in n["report"]:
-            typer.echo(f"  {g['rule']}: {len(g['items'])} ({g['title']})")
+            typer.echo(f"  {g['rule']}: {g['count']} ({g['title']})")
 
     @app.command("restore")
     def restore_cmd(
