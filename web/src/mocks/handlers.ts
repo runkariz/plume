@@ -196,6 +196,23 @@ const isMaintainer = (req: Request) =>
 /** What a mock package says the vendor serves a path as: its version filled in. */
 const realPathOf = (path: string) => `/vendor/orders/v1${path.replace(/^.*\/latest/, '')}`;
 
+/** The links the Shopify sample documents carry: scopes per scheme, guides of an endpoint, endpoints of a guide. */
+function linksOf(docId: string, kind: string, method: string | null) {
+  if (kind === 'endpoint' && docId.includes('orders'))
+    return {
+      requiredScopes: [
+        {
+          authId: 'oauth2-authorization-code',
+          scopes: [method === 'GET' ? 'read_orders' : 'write_orders'],
+        },
+      ],
+      guides: ['guide:pagination', 'guide:rate-limits'],
+    };
+  if (docId === 'guide:pagination')
+    return { linkedEndpoints: ['endpoint:GET~/orders.json', 'endpoint:GET~/products.json'] };
+  return {};
+}
+
 export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = {}) {
   const eventDelay = opts.eventDelayMs ?? 0;
   /** In-memory job store: one sample job per upload, advanced by the endpoints below. */
@@ -1715,6 +1732,8 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
               ]
             : [],
         scopes: [],
+        // cross links of the package (Shopify sample only; the other APIs have none)
+        ...(api === 'shopify' ? linksOf(docId, kind, method) : {}),
       });
     }),
     // package sections (shaped like the real API)

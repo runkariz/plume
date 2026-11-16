@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
 import { ApiError } from '@/api/types';
-import { Card, Chip, Crumbs, ErrorState, LoadingState, RawJson } from '@/components';
+import { Card, Chip, Crumbs, EndpointLinks, ErrorState, LoadingState, RawJson } from '@/components';
 import { apiTitle } from '@/lib/names';
 
 /** Setup steps come verbatim from the package: {order, text} in Shopify; strings or other shapes elsewhere. */
@@ -92,6 +92,7 @@ export function AuthSchemePage() {
     ['Query parameter', d.queryParam],
     ['Test URL', d.testUrl],
   ];
+  const withEndpoints = d.scopes.some((s) => (s.endpoints?.length ?? 0) > 0);
   const steps = (d.setupSteps ?? []).map(stepText);
   const lifetime = d.tokenLifetime ? primitiveEntries(d.tokenLifetime) : [];
 
@@ -198,6 +199,7 @@ export function AuthSchemePage() {
               <tr>
                 <th scope="col">Scope</th>
                 <th scope="col">Description</th>
+                {withEndpoints ? <th scope="col">Endpoints that need it</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -207,6 +209,16 @@ export function AuthSchemePage() {
                     {s.scope}
                   </th>
                   <td className="muted">{s.description ?? ''}</td>
+                  {withEndpoints ? (
+                    <td className="scope-endpoints">
+                      <EndpointLinks
+                        api={apiId}
+                        ids={s.endpoints}
+                        label={`Endpoints that need ${s.scope ?? 'this scope'}`}
+                        collapseAt={3}
+                      />
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>

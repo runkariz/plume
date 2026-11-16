@@ -2757,3 +2757,51 @@ ul.plain {
 .sources-list li {
   overflow-wrap: anywhere;
 }
+.linked-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px 0 8px;
+}
+.linked-list li {
+  overflow-wrap: anywhere;
+}
+.linked-endpoint {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+.scope-endpoints {
+  min-width: 180px;
+}
+.scheme-scopes {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.scheme-scopes .scheme-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  align-items: baseline;
+}
+.linked-list a,
+.scheme-scopes a {
+  color: var(--accent-ink);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 3px;
+}
+.linked-list a:hover,
+.scheme-scopes a:hover {
+  text-decoration-color: currentColor;
+}
+.scope-endpoints .show-all {
+  text-align: left;
+  padding: 6px 0 0;
+}
+.scope-endpoints .linkbtn {
+  font-size: 13px;
+}
