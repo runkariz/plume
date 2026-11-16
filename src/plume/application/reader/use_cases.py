@@ -10,7 +10,7 @@ from plume.application.ports.api_repo import ApiRepo
 from plume.application.ports.asset_repo import AssetRepo
 from plume.application.ports.build_repo import BuildRepo
 from plume.application.ports.document_repo import DocumentRepo
-from plume.application.ports.embedder import Embedder
+from plume.application.ports.embedder import Embedder, Vector
 from plume.application.ports.eval_repo import EvalRepo
 from plume.application.ports.search_index import ChunkHit, DocumentSummary, FactQuery, SearchIndex
 from plume.application.ports.tag_repo import TagRepo
@@ -30,6 +30,7 @@ from plume.application.reader.ranking import (
     is_page,
     lift_operation_endpoints,
     pair_pages_with_endpoints,
+    pair_units_with_endpoints,
 )
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
 from plume.domain.knowledge.asset import ICON
@@ -253,11 +254,20 @@ def operation_owners(documents: DocumentRepo, build_id: BuildId) -> dict[str, st
 
 
 def rank_order(
-    documents: DocumentRepo, build_id: BuildId, fused: Sequence[str], k: int
+    documents: DocumentRepo,
+    build_id: BuildId,
+    fused: Sequence[str],
+    k: int,
+    wider: Callable[[], Sequence[str]] = tuple,
 ) -> list[str]:
     """The final order of fused hits, shared by search and the eval gate: a page brings one of
-    its endpoints into the top-k; a per-operation model brings its endpoint just before it."""
+    its endpoints into the top-k, so does a knowledge unit that names its endpoints (from the
+    pool or `wider`: the endpoints ranked for the query); a per-operation model brings its
+    endpoint just before it."""
     order = pair_pages_with_endpoints(fused, k, lambda d: page_endpoints(documents, build_id, d))
+    order = pair_units_with_endpoints(
+        order, k, lambda d: unit_endpoints(documents, build_id, d), wider
+    )
     owners = operation_owners(documents, build_id)
     if owners:
         order = lift_operation_endpoints(order, k, lambda d: _operation_owner(d, owners))
@@ -267,6 +277,19 @@ def rank_order(
 def page_endpoints(documents: DocumentRepo, build_id: BuildId, doc_id: str) -> list[str]:
     """The endpoints a knowledge-export page documents (recorded on the page guide)."""
     if not is_page(doc_id):
+        return []
+    doc = documents.get_document(build_id, doc_id)
+    raw = doc.raw if doc is not None and isinstance(doc.raw, dict) else {}
+    endpoints = raw.get("endpoints")
+    return [e for e in endpoints if isinstance(e, str)] if isinstance(endpoints, list) else []
+
+
+WIDER_POOL = 50  # endpoints ranked for a query, for a knowledge unit's endpoint (rank_order)
+
+
+def unit_endpoints(documents: DocumentRepo, build_id: BuildId, doc_id: str) -> list[str]:
+    """The endpoints a knowledge unit names (Core's endpointId/endpointIds, as document ids)."""
+    if not doc_id.startswith("guide:") or is_page(doc_id):
         return []
     doc = documents.get_document(build_id, doc_id)
     raw = doc.raw if doc is not None and isinstance(doc.raw, dict) else {}
@@ -319,6 +342,7 @@ class SearchDocs:
         pool = max(top_k * 4, 20)
         dense: list[ChunkHit] = []
         text: list[ChunkHit] = []
+        vector: Vector | None = None
         if mode in ("hybrid", "dense"):
             vector = _timed(
                 trace, "embedder", "embed query", lambda: self._embedder.embed_query(query)
@@ -337,8 +361,19 @@ class SearchDocs:
                 lambda: self._index.text(build_id, query, pool, kinds),
             )
         fused = _timed(trace, "plume", "fuse (RRF)", lambda: fuse_hits(dense, text, query, pool))
-        order = rank_order(self._documents, build_id, [h.doc_id for h in fused], top_k)
-        by_id = {h.doc_id: h for h in fused}
+        wider_hits: list[ChunkHit] = []
+
+        def wider() -> list[str]:
+            if vector is None or (kinds and DocumentKind.ENDPOINT not in kinds):
+                return []
+            wider_hits.extend(
+                self._index.dense(build_id, vector, WIDER_POOL, (DocumentKind.ENDPOINT,))
+            )
+            return list(dict.fromkeys(h.doc_id for h in wider_hits))
+
+        order = rank_order(self._documents, build_id, [h.doc_id for h in fused], top_k, wider)
+        by_id = {h.doc_id: h for h in fuse_hits(wider_hits, [], query, WIDER_POOL)}
+        by_id.update({h.doc_id: h for h in fused})
         hits = [by_id[d] for d in order[:top_k]]
         summaries = self._index.summaries(build_id, [h.doc_id for h in hits])
         enriched = []

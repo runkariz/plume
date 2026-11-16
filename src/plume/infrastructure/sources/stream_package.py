@@ -495,6 +495,7 @@ class StreamPackageSource:
             for path in sorted(export.rglob("*.md")):
                 add(self._export_page(path, export), str(path.relative_to(export)))
 
+        documents = _link_documents(documents, warnings, info.versions)
         documents = _flag_unresolved_includes(documents, warnings)
         manifest = _opt_json(package_root / "manifest.json") or {}
         return SourcePackage(
@@ -709,6 +710,7 @@ class StreamPackageSource:
         body = body_path.read_text(encoding="utf-8-sig")
         key = _str(meta.get("id")) or path.stem
         title = _str(meta.get("title")) or key
+        linked = _unit_endpoint_ids(meta)
         return Document(
             doc_id=slug_doc_id(DocumentKind.GUIDE, _slug(key)),
             kind=DocumentKind.GUIDE,
@@ -716,6 +718,8 @@ class StreamPackageSource:
             text=body.strip() or title,
             source_url=_str(meta.get("sourceUrl")),
             source_id=key,
+            # resolved to endpoint document ids by _link_documents once all endpoints are read
+            raw={"endpointIds": linked} if linked else None,
         )
 
     @staticmethod
@@ -994,6 +998,92 @@ def _apply_export(
     if leftover:
         warnings.append(f"knowledge-export: {len(leftover)} rule(s) matched no endpoint or page")
     return out
+
+
+def _unit_endpoint_ids(meta: JsonObj) -> list[str]:
+    """A knowledge unit's endpoints: Core's ``endpointIds`` list and/or single ``endpointId``."""
+    ids = [meta.get("endpointId")]
+    many = meta.get("endpointIds")
+    if isinstance(many, list):
+        ids.extend(many)
+    return list(dict.fromkeys(i.strip() for i in ids if isinstance(i, str) and i.strip()))
+
+
+def _link_documents(
+    documents: list[Document], warnings: list[str], versions: tuple[str, ...]
+) -> list[Document]:
+    """Cross links the package states, as document ids:
+
+    - a knowledge unit's ``endpointId``/``endpointIds`` -> raw ``endpoints`` on the unit and
+      raw ``x-plume-guides`` on each endpoint;
+    - an endpoint's ``requiredScopes[{authId, scopes}]`` -> raw ``scopeEndpoints`` (scope ->
+      endpoint ids) on the auth scheme it names (every scheme when ``authId`` is absent).
+
+    Packages without them are unchanged."""
+    by_source = {
+        endpoint_key(d.source_id, versions): d.doc_id
+        for d in documents
+        if d.kind is DocumentKind.ENDPOINT and d.source_id
+    }
+    guides_of: dict[str, list[str]] = {}
+    linked = [_link_unit(d, by_source, versions, guides_of, warnings) for d in documents]
+    scope_endpoints = _scope_endpoints(linked)
+    return [_with_links(d, guides_of, scope_endpoints) for d in linked]
+
+
+def _link_unit(
+    doc: Document,
+    by_source: dict[str, str],
+    versions: tuple[str, ...],
+    guides_of: dict[str, list[str]],
+    warnings: list[str],
+) -> Document:
+    ids = doc.raw.get("endpointIds") if doc.kind is DocumentKind.GUIDE and doc.raw else None
+    if not isinstance(ids, list) or not ids:
+        return doc
+    targets: list[str] = []
+    for item in ids:
+        target = by_source.get(endpoint_key(item, versions))
+        if target is None:
+            warnings.append(f"knowledge {doc.source_id}: unknown endpoint {item}")
+            continue
+        targets.append(target)
+        if doc.doc_id not in guides_of.setdefault(target, []):
+            guides_of[target].append(doc.doc_id)
+    return replace(doc, raw={**(doc.raw or {}), "endpoints": list(dict.fromkeys(targets))})
+
+
+def _scope_endpoints(documents: list[Document]) -> dict[str, dict[str, list[str]]]:
+    """Auth scheme id -> scope -> the endpoints whose requiredScopes name it."""
+    schemes = [d.source_id for d in documents if d.kind is DocumentKind.AUTH and d.source_id]
+    out: dict[str, dict[str, list[str]]] = {}
+    for doc in documents:
+        if doc.kind is not DocumentKind.ENDPOINT or not isinstance(doc.raw, dict):
+            continue
+        for entry in doc.raw.get("requiredScopes") or []:
+            if not isinstance(entry, dict):
+                continue
+            auth = _str(entry.get("authId"))
+            scopes = [x for x in entry.get("scopes") or [] if isinstance(x, str)]
+            for scheme in [auth] if auth else schemes:
+                per = out.setdefault(scheme, {})
+                for scope in scopes:
+                    if doc.doc_id not in per.setdefault(scope, []):
+                        per[scope].append(doc.doc_id)
+    return out
+
+
+def _with_links(
+    doc: Document,
+    guides_of: dict[str, list[str]],
+    scope_endpoints: dict[str, dict[str, list[str]]],
+) -> Document:
+    if doc.kind is DocumentKind.ENDPOINT and doc.doc_id in guides_of:
+        return replace(doc, raw={**(doc.raw or {}), "x-plume-guides": guides_of[doc.doc_id]})
+    if doc.kind is DocumentKind.AUTH and doc.source_id in scope_endpoints:
+        links = scope_endpoints[doc.source_id]
+        return replace(doc, raw={**(doc.raw or {}), "scopeEndpoints": links})
+    return doc
 
 
 def _resource_key(name: str | None) -> str:

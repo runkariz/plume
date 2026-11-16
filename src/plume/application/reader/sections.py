@@ -8,6 +8,7 @@ from plume.application.ports.asset_repo import AssetRepo
 from plume.application.ports.document_repo import DocumentRepo
 from plume.application.ports.search_index import SearchIndex
 from plume.application.reader.dto import BuildRef
+from plume.application.reader.links import scope_endpoints
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
 from plume.domain.knowledge import rate_limits
 from plume.domain.knowledge.asset import ICON, Asset
@@ -147,6 +148,29 @@ def _obj(value: Any) -> dict[str, Any] | None:
     return value if isinstance(value, dict) else None
 
 
+def _scopes_with_endpoints(
+    scheme: dict[str, Any], endpoints: dict[str, list[str]]
+) -> list[dict[str, Any]]:
+    """The scheme's scopes (verbatim), each with the endpoints whose requiredScopes name it;
+    a scope only endpoints name (not in the scheme's list) is added with no description."""
+    out = [
+        {
+            "scope": s.get("scope"),
+            "description": s.get("description"),
+            "endpoints": endpoints.get(str(s.get("scope")), []),
+        }
+        for s in scheme.get("scopes", []) or []
+        if isinstance(s, dict)
+    ]
+    listed = {x["scope"] for x in out}
+    out.extend(
+        {"scope": k, "description": None, "endpoints": v}
+        for k, v in endpoints.items()
+        if k not in listed
+    )
+    return out
+
+
 def scheme_view(d: Document) -> dict[str, Any]:
     """Fields read straight from the stored auth JSON (verbatim values, None when absent)."""
     raw = dict(d.raw or {})
@@ -162,11 +186,7 @@ def scheme_view(d: Document) -> dict[str, Any]:
         "grant_type": scheme.get("grantType"),
         "header_name": scheme.get("headerName"),
         "query_param": scheme.get("codeQueryParamName"),
-        "scopes": [
-            {"scope": s.get("scope"), "description": s.get("description")}
-            for s in scheme.get("scopes", []) or []
-            if isinstance(s, dict)
-        ],
+        "scopes": _scopes_with_endpoints(scheme, scope_endpoints(d)),
         "variables": [
             {
                 "name": name,
