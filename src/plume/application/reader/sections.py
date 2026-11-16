@@ -175,6 +175,7 @@ def scheme_view(d: Document) -> dict[str, Any]:
         "test_url": scheme.get("testUrl"),
         "scheme": scheme,
         "variables_schema": variables,
+        "companions": _obj(raw.get("companions")) or {},
         "file": raw.get("file"),
     }
 

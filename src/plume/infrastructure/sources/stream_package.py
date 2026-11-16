@@ -601,7 +601,7 @@ class StreamPackageSource:
             else:
                 warnings.append(f"knowledge {path.stem}: no markdown body, skipped")
         for path in sorted((connector / "auth").glob("*.json")):
-            if not path.name.endswith((".variables.schema.json", ".variables.sample.json")):
+            if not _COMPANION.match(path.name):  # <scheme>.<suffix>.{sample,schema}.json
                 out.append((self._auth(path), path.name))
         return out
 
@@ -699,7 +699,12 @@ class StreamPackageSource:
             text="\n\n".join(parts),
             scopes=tuple(dict.fromkeys(scopes)),
             source_id=key,
-            raw={"scheme": data, "variables_schema": variables, "file": path.name},
+            raw={
+                "scheme": data,
+                "variables_schema": variables,
+                "file": path.name,
+                "companions": _companions(path),
+            },
         )
 
     @staticmethod
@@ -777,6 +782,23 @@ def _distinct_endpoint_ids(
         out.append(
             (replace(d, doc_id=f"{d.doc_id}@{key}") if count[d.doc_id] > 1 else d, folder.name)
         )
+    return out
+
+
+# Files next to an auth scheme that describe it (variables, OAuth token request params, …):
+# <scheme>.<suffix>.sample.json / <scheme>.<suffix>.schema.json. Never schemes of their own.
+_COMPANION = re.compile(
+    r"^(?P<scheme>[^.]+)\.(?P<suffix>[A-Za-z0-9_-]+)\.(?P<part>sample|schema)\.json$"
+)
+
+
+def _companions(scheme_path: Path) -> dict[str, dict[str, Any]]:
+    """{suffix: {"schema": …, "sample": …}} of an auth scheme's companion files (verbatim)."""
+    out: dict[str, dict[str, Any]] = {}
+    for f in sorted(scheme_path.parent.glob(f"{scheme_path.stem}.*.json")):
+        m = _COMPANION.match(f.name)
+        if m and m["scheme"] == scheme_path.stem:
+            out.setdefault(m["suffix"], {})[m["part"]] = _opt_json(f)
     return out
 
 

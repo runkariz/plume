@@ -85,6 +85,7 @@ def sections_router(sections: Callable[[], PackageSections]) -> APIRouter:
             test_url=v["test_url"],
             scheme=v["scheme"],
             variables_schema=v["variables_schema"],
+            companions=v["companions"],
             file=v["file"],
         )
 

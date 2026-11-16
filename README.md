@@ -225,6 +225,14 @@ plume notes shopify --json           # summary for the archive manifest
 plume notes shopify --build b-… --issues   # the extraction report to paste for stream
 ```
 
+Public (no token; only changes Plume confirmed in the vendor's docs, or that the vendor's
+changelog names; never the extraction report): `docsUpdated` on `GET /v1/apis`,
+`GET /v1/apis/{api}/changes/timeline`, `GET /v1/apis/{api}/changes?build=|since=` (filters,
+paging, totals), the Atom feeds `GET /v1/apis/{api}/changes.atom` and `GET /v1/changes.atom`,
+the reader MCP tool `what_changed`, and `impact` on models and sets (`GET
+/v1/models/{id}/impact`, `GET /v1/model-sets/{id}/impact`): which of a saved model's mappings
+cite something that changed since its pinned builds.
+
 Over HTTP (maintainer token): `GET /v1/apis/{api}/release-notes` and
 `/v1/apis/{api}/builds/{build}/release-notes` (with `/keep`, `/rollback`, `/issues`,
 `/items/{id}/promote|demote`); over the maintainer MCP: `review_release_notes`, `keep_release`,

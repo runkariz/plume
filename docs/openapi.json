@@ -76,6 +76,17 @@
             ],
             "title": "Docsasof"
           },
+          "docsUpdated": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocsUpdated"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The latest build's visible docs changes (confirmed + likely, wording-only excluded); null when it has none or no release notes."
+          },
           "endpoints": {
             "title": "Endpoints",
             "type": "integer"
@@ -323,6 +334,17 @@
             ],
             "title": "Docsasof"
           },
+          "docsUpdated": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocsUpdated"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The latest build's visible docs changes (confirmed + likely, wording-only excluded); null when it has none or no release notes."
+          },
           "endpoints": {
             "title": "Endpoints",
             "type": "integer"
@@ -515,6 +537,15 @@
           "build": {
             "title": "Build",
             "type": "string"
+          },
+          "companions": {
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "description": "The scheme's companion files by suffix, verbatim: e.g. \"oauth-token-params\": {\"schema\": \u2026, \"sample\": \u2026} (the OAuth token request params), \"variables\": {\"schema\": \u2026, \"sample\": \u2026}.",
+            "title": "Companions",
+            "type": "object"
           },
           "docId": {
             "title": "Docid",
@@ -1434,6 +1465,40 @@
         "title": "Difficulty",
         "type": "object"
       },
+      "DocsUpdated": {
+        "properties": {
+          "at": {
+            "description": "docsAsOf of that build",
+            "title": "At",
+            "type": "string"
+          },
+          "breaking": {
+            "title": "Breaking",
+            "type": "integer"
+          },
+          "build": {
+            "title": "Build",
+            "type": "string"
+          },
+          "confirmed": {
+            "title": "Confirmed",
+            "type": "integer"
+          },
+          "likely": {
+            "title": "Likely",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "build",
+          "at",
+          "confirmed",
+          "likely",
+          "breaking"
+        ],
+        "title": "DocsUpdated",
+        "type": "object"
+      },
       "DocumentOut": {
         "properties": {
           "anchor": {
@@ -2263,6 +2328,30 @@
         "title": "Health",
         "type": "object"
       },
+      "ImpactSummary": {
+        "properties": {
+          "affectedCount": {
+            "title": "Affectedcount",
+            "type": "integer"
+          },
+          "breakingCount": {
+            "title": "Breakingcount",
+            "type": "integer"
+          },
+          "status": {
+            "description": "current | updated_unaffected | affected | unknown",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "affectedCount",
+          "breakingCount"
+        ],
+        "title": "ImpactSummary",
+        "type": "object"
+      },
       "IndexInfo": {
         "properties": {
           "build": {
@@ -2789,6 +2878,17 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "impact": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImpactSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What newer docs mean for its mappings (null: not computed)."
           },
           "lineageId": {
             "default": "",
@@ -5361,6 +5461,337 @@
         ]
       }
     },
+    "/v1/apis/{api}/changes": {
+      "get": {
+        "description": "Confirmed and likely changes of the latest build (or `build`, or every published\nbuild `since` a date/build), breaking first. `totals` count the whole selection.",
+        "operationId": "list_changes_v1_apis__api__changes_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "api",
+            "required": true,
+            "schema": {
+              "title": "Api",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "build",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Build"
+            }
+          },
+          {
+            "description": "A date (YYYY-MM-DD) or a build id",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A date (YYYY-MM-DD) or a build id",
+              "title": "Since"
+            }
+          },
+          {
+            "in": "query",
+            "name": "breaking",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Breaking"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 40,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "op",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 20,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Op"
+            }
+          },
+          {
+            "in": "query",
+            "name": "wordingOnly",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Wordingonly"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Cursor",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Changes V1 Apis  Api  Changes Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Changes",
+        "tags": [
+          "reader"
+        ]
+      }
+    },
+    "/v1/apis/{api}/changes.atom": {
+      "get": {
+        "description": "Atom feed of the API's published changes (one entry per build).",
+        "operationId": "atom_v1_apis__api__changes_atom_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "api",
+            "required": true,
+            "schema": {
+              "title": "Api",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Atom",
+        "tags": [
+          "reader"
+        ]
+      }
+    },
+    "/v1/apis/{api}/changes/timeline": {
+      "get": {
+        "description": "The published builds with release notes, newest first (latest, then its base, \u2026),\nwith their visible counts. Builds that were rolled back are not on it.",
+        "operationId": "timeline_v1_apis__api__changes_timeline_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "api",
+            "required": true,
+            "schema": {
+              "title": "Api",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Timeline V1 Apis  Api  Changes Timeline Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Timeline",
+        "tags": [
+          "reader"
+        ]
+      }
+    },
     "/v1/apis/{api}/check-call": {
       "post": {
         "operationId": "check_call_v1_apis__api__check_call_post",
@@ -6446,6 +6877,26 @@
           }
         },
         "summary": "Trigger",
+        "tags": [
+          "reader"
+        ]
+      }
+    },
+    "/v1/changes.atom": {
+      "get": {
+        "description": "Atom feed of every API's published changes.",
+        "operationId": "atom_all_v1_changes_atom_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Atom All",
         "tags": [
           "reader"
         ]
@@ -8369,6 +8820,117 @@
         ]
       }
     },
+    "/v1/model-sets/{set_id}/impact": {
+      "get": {
+        "description": "What newer docs mean for the set: per member, its affected mappings.",
+        "operationId": "set_impact_v1_model_sets__set_id__impact_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "set_id",
+            "required": true,
+            "schema": {
+              "title": "Set Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Impact V1 Model Sets  Set Id  Impact Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Set Impact",
+        "tags": [
+          "model sets"
+        ]
+      }
+    },
     "/v1/model-sets/{set_id}/relations": {
       "post": {
         "description": "The web's relation editor: change relation designs (kind, cardinality, embed/ref,\nconfirmed) of the latest version; a new version is stored (unlisted without the token,\nunreleased with it). Only designs whose fields exist in the members pass (see each\nrelation's `editableOptions`); anything else is a revision with Claude (422).",
@@ -10064,6 +10626,107 @@
           }
         },
         "summary": "Discard",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models/{snapshot_id}/impact": {
+      "get": {
+        "description": "What newer docs mean for this model: per mapping, the visible changes (confirmed\nor likely, not wording-only) of the builds published since its pinned ones.",
+        "operationId": "model_impact_v1_models__snapshot_id__impact_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "snapshot_id",
+            "required": true,
+            "schema": {
+              "title": "Snapshot Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Model Impact V1 Models  Snapshot Id  Impact Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Model Impact",
         "tags": [
           "models"
         ]

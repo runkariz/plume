@@ -13,7 +13,9 @@ from plume import __version__
 from plume.application.errors import ApplicationError
 from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
+from plume.application.knowledge.public_changes import PublicChanges
 from plume.application.models.collections import Collections
+from plume.application.models.impact import ModelImpact
 from plume.application.models.model_sets import ModelSets
 from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import ModelSessions
@@ -88,6 +90,8 @@ class McpReaderDependencies:
     suggest_related: Callable[[], SuggestRelated] | None = None
     model_sets: Callable[[], ModelSets] | None = None
     collections: Callable[[], Collections] | None = None
+    public_changes: Callable[[], PublicChanges] | None = None
+    model_impact: Callable[[], ModelImpact] | None = None
     mcp_app_html: str | None = None  # the model view bundle; None = the packaged file
 
 
@@ -344,8 +348,32 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
             related=deps.suggest_related,
             collections=deps.collections,
             sets=deps.model_sets,
+            impact=deps.model_impact,
         )
     if deps.model_sets is not None:
-        register_set_tools(server, deps.model_sets, deps.resolver, _run, False, deps.web_public_url)
+        register_set_tools(
+            server, deps.model_sets, deps.resolver, _run, False, deps.web_public_url,
+            impact=deps.model_impact,
+        )  # fmt: skip
+    if deps.public_changes is not None:
+        changes = deps.public_changes
+
+        @server.tool(annotations=READ_ONLY, structured_output=True)
+        async def what_changed(api: str, since: str | None = None) -> dict[str, Any]:
+            """What changed in an API's docs: the latest published build's changes, or every
+            build since a date (YYYY-MM-DD) or a build id. Only changes Plume could confirm in
+            the vendor's docs (or that the vendor's changelog names, perVendorChangelog). Report
+            ONLY these as API changes; quote the evidence; when only wording changed say "docs
+            updated, no API change"."""
+
+            def go() -> dict[str, Any]:
+                out = changes().changes(api, since=since, limit=100)
+                out["note"] = (
+                    "Changes Plume confirmed in the vendor docs (or that the vendor's changelog "
+                    "names). Extraction problems are never listed here."
+                )
+                return out
+
+            return await _run(go)
 
     return server

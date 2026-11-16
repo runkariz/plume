@@ -19,10 +19,12 @@ from plume.application.errors import (
 from plume.application.jobs.maintainer import JobStateError, MaintainerJobs
 from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
+from plume.application.knowledge.public_changes import PublicChanges
 from plume.application.knowledge.release_notes import ReleaseNotes
 from plume.application.models.collections import Collections
 from plume.application.models.concepts import ModelInputError, SuggestConcepts
 from plume.application.models.generate import GenerateModels
+from plume.application.models.impact import ModelImpact
 from plume.application.models.model_sets import ModelSets
 from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import ModelSessions
@@ -44,6 +46,7 @@ from plume.domain.shared.errors import DomainError, InvalidIdentifierError
 from plume.domain.shared.ids import BuildId
 from plume.interfaces import payloads
 from plume.interfaces.http import schemas as s
+from plume.interfaces.http.changes_routes import changes_router
 from plume.interfaces.http.maintainer import maintainer_router
 from plume.interfaces.http.model_sets_routes import model_sets_router
 from plume.interfaces.http.models_routes import models_router
@@ -87,6 +90,8 @@ class HttpDependencies:
     web_public_url: str | None = None
     collections: Callable[[], Collections] | None = None
     release_notes: Callable[[], ReleaseNotes] | None = None
+    public_changes: Callable[[], PublicChanges] | None = None
+    model_impact: Callable[[], ModelImpact] | None = None
 
 
 MAX_RAW_BYTES = 256 * 1024
@@ -241,12 +246,20 @@ def create_app(deps: HttpDependencies) -> FastAPI:
 
     @app.get("/v1/apis", response_model=s.ApiList, tags=["reader"], responses=responses)
     def list_apis() -> s.ApiList:
-        return s.ApiList(items=[_summary(o) for o in deps.overviews().execute()])
+        return s.ApiList(items=[_with_docs(_summary(o)) for o in deps.overviews().execute()])
+
+    def _with_docs(summary: s.ApiSummary) -> s.ApiSummary:
+        if deps.public_changes is None:
+            return summary
+        updated = deps.public_changes().docs_updated(summary.id)
+        return summary.model_copy(
+            update={"docs_updated": s.DocsUpdated(**updated) if updated else None}
+        )
 
     @app.get("/v1/apis/{api}", response_model=s.ApiDetail, tags=["reader"], responses=responses)
     def get_api(api: ApiPath, version: Version = None) -> s.ApiDetail:
         o = deps.overviews().one(api, version)
-        base = _summary(o)
+        base = _with_docs(_summary(o))
         if o.ref is None:  # pragma: no cover - one() always resolves a build
             raise NotFoundError(f"{api} has no published build")
         return s.ApiDetail(
@@ -576,6 +589,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 deps.suggest_related,
                 deps.model_sets,
                 deps.collections,
+                deps.model_impact,
             )
         )
     if deps.model_sets is not None:
@@ -587,10 +601,18 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 deps.maintainer_tokens,
                 deps.web_public_url,
                 deps.generate_models,
+                deps.model_impact,
             )
         )
     if deps.release_notes is not None:
         app.include_router(release_notes_router(deps.release_notes, deps.maintainer_tokens))
+    if deps.public_changes is not None:
+        app.include_router(
+            changes_router(
+                deps.public_changes,
+                lambda: [o.info.api_id.value for o in deps.overviews().execute() if o.ref],
+            )
+        )
     if deps.maintainer is not None:
         app.include_router(
             maintainer_router(

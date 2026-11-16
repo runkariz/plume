@@ -10,6 +10,8 @@ from mcp_types import CallToolResult
 
 from plume.application.errors import ApplicationError
 from plume.application.models.generate import GenerateModels
+from plume.application.models.impact import ModelImpact, members_of, widget_rows
+from plume.application.models.impact import summary as impact_summary
 from plume.application.models.model_sets import ModelSets
 from plume.application.models.sessions import ModelDraftRefusedError
 from plume.application.reader.resolve import BuildResolver
@@ -66,6 +68,7 @@ def register_set_tools(  # noqa: PLR0915
     maintainer: bool,
     web_public_url: str | None = None,
     generate: Callable[[], GenerateModels] | None = None,
+    impact: Callable[[], ModelImpact] | None = None,
 ) -> None:
     origin = "maintainer" if maintainer else "user"
 
@@ -80,7 +83,7 @@ def register_set_tools(  # noqa: PLR0915
 
     def set_json(x: ModelSetSnapshot) -> dict[str, Any]:
         service = sets()
-        return payloads.set_payload(
+        body = payloads.set_payload(
             x,
             service.member_models(x),
             service.lineage_info(x, maintainer),
@@ -88,12 +91,22 @@ def register_set_tools(  # noqa: PLR0915
             names(x),
             web_public_url,
         )
+        if impact is not None:
+            full = impact().of_set(x, members_of(service, x))
+            body["impact"] = impact_summary(full) | {
+                "rows": widget_rows(full),
+                "impactUrl": f"/v1/model-sets/{x.set_id}/impact",
+            }
+        return body
 
     def item(x: ModelSetSnapshot) -> dict[str, Any]:
         service = sets()
-        return payloads.set_list_item(
+        out = payloads.set_list_item(
             x, service.stale_inputs(x), service.lineage_info(x, maintainer)["versions"]
         )
+        if impact is not None:
+            out["impact"] = impact_summary(impact().of_set(x, members_of(service, x)))
+        return out
 
     @server.tool(annotations=WRITE, structured_output=True, meta=MODEL_ONLY_META)
     async def start_set_session(

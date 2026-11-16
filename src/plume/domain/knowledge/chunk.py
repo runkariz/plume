@@ -20,7 +20,8 @@ from plume.domain.shared.hashing import ContentHash, content_hash
 # 7: knowledge-export page guides record their endpoints (search keeps one next to the page).
 # 8: models record the operations whose response names them (raw x-plume-returned-by).
 # 9: endpoints sharing METHOD + path get "<id>@<package endpoint id>" document ids.
-CHUNKER_VERSION = "9"
+# 10: auth companion files (<scheme>.<suffix>.{sample,schema}.json) are no schemes.
+CHUNKER_VERSION = "10"
 DEFAULT_MAX_CHARS = 6000
 _HEADING = re.compile(r"^#{1,3} ", re.MULTILINE)
 
