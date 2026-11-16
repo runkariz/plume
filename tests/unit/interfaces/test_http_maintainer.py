@@ -151,6 +151,16 @@ def test_cors_allows_maintainer_headers(stack: FakeStack) -> None:
     assert "last-event-id" in allowed
 
 
+def test_cors_allows_put_for_the_display_name(stack: FakeStack) -> None:
+    r = _client(stack).options(
+        "/v1/apis/x/display",
+        headers={"Origin": "http://127.0.0.1:18473", "Access-Control-Request-Method": "PUT",
+                 "Access-Control-Request-Headers": "authorization,content-type"},
+    )  # fmt: skip
+    assert r.status_code == 200
+    assert "PUT" in r.headers["access-control-allow-methods"]
+
+
 def test_quality_after_publish(stack: FakeStack, packages: Path) -> None:
     client = _client(stack)
     data = zip_dir(packages / "test-catalog")
