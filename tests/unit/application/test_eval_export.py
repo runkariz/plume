@@ -166,3 +166,23 @@ def test_expected_alternatives_are_missing_only_when_none_exists(
     r = stack.pipeline().execute("j", str(packages / "test-catalog"), gold_ref=str(gold))
     assert r.gate is not None
     assert r.gate.metrics["missing_expected"] == 2  # only question b (both alternatives absent)
+
+
+def test_eval_refuses_a_build_embedded_with_another_model(packages: Path, tmp_path: Path) -> None:
+    """Switching embedding models (e.g. gemini-embedding-001 -> 2) must never score a build
+    with query vectors of the other model."""
+    from dataclasses import replace  # noqa: PLC0415
+
+    import pytest  # noqa: PLC0415
+
+    from plume.application.errors import ApplicationError  # noqa: PLC0415
+
+    s = _stack(tmp_path)
+    built = s.pipeline().execute("j", str(packages / "shopify-mini")).build_id
+    build = s.builds.get(built)
+    assert build is not None
+    assert build.spec is not None
+    s.builds.builds[built.value] = replace(build, spec=replace(build.spec, embed_model="other-2"))
+    gold, gold_hash = s.gold.load(s.gold.for_api("shopify") or "")
+    with pytest.raises(ApplicationError, match="was embedded with other-2"):
+        s.run_eval().execute(built, gold, gold_hash)

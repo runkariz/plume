@@ -6,6 +6,7 @@ for the same gold set.
 
 from dataclasses import dataclass
 
+from plume.application.errors import ApplicationError
 from plume.application.knowledge._builds import require_build
 from plume.application.ports.build_repo import BuildRepo
 from plume.application.ports.document_repo import DocumentRepo
@@ -58,6 +59,13 @@ class RunEvalGate:
 
     def execute(self, build_id: BuildId, gold: GoldSet, gold_hash: str) -> EvalRun:
         build = require_build(self._builds, build_id)
+        if build.spec is not None and build.spec.embed_model != self._embedder.model:
+            # Scores from vectors of two different models would be meaningless, not low.
+            raise ApplicationError(
+                f"build {build_id} was embedded with {build.spec.embed_model}; this server "
+                f"embeds queries with {self._embedder.model}: evaluate it with that embedder, "
+                "or load the package again with this one"
+            )
         known = {s.doc_id for s in self._index.browse(build_id, (), None, 100_000, 0)[0]}
         outcomes: list[QuestionOutcome] = []
         details: list[dict[str, object]] = []
