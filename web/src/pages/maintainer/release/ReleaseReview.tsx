@@ -6,6 +6,7 @@ import { ApiError, type ReleaseNotes } from '@/api/types';
 import { Banner, Button, Card, Chip, Crumbs, ErrorState, Kv, LoadingState } from '@/components';
 import { formatClock, formatDate, shortBuild } from '@/lib/format';
 import { PagedChanges } from './PagedChanges';
+import { ReportGroupCard } from './ReportGroupCard';
 import { DECISION_LABEL, GOLD_LABEL, REVIEW_LABEL, size } from './notes';
 
 const REVIEW_TONE = { pending: 'warn', kept: 'ok', rolled_back: 'bad' } as const;
@@ -35,6 +36,16 @@ export function ReleaseReview() {
     [client, apiId, buildId],
   );
   const { state, retry } = useAsync(load);
+  // After a decision the notes load again WITHOUT blanking the page (`retry` shows the loading state and would drop
+  // what the maintainer has open): the fresh notes replace the first load's.
+  const [fresh, setFresh] = useState<{ key: string; notes: ReleaseNotes } | null>(null);
+  const refresh = useCallback(async () => {
+    try {
+      setFresh({ key: `${apiId}/${buildId}`, notes: await client.getReleaseNotes(apiId, buildId) });
+    } catch {
+      retry();
+    }
+  }, [client, apiId, buildId, retry]);
   const [busy, setBusy] = useState<'keep' | 'rollback' | 'copy' | 'download' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState('');
@@ -76,7 +87,7 @@ export function ReleaseReview() {
       </>
     );
 
-  const n: ReleaseNotes = state.data;
+  const n: ReleaseNotes = fresh?.key === `${apiId}/${buildId}` ? fresh.notes : state.data;
   const decided = n.review !== 'pending';
   const canRollBack = n.tagged && Boolean(n.from) && n.review !== 'rolled_back';
   const canRollForward = n.review === 'rolled_back';
@@ -93,7 +104,7 @@ export function ReleaseReview() {
       await client.keepRelease(apiId, buildId, note.trim() || undefined);
       setNote('');
       setMoved(canRollForward ? 'Rolled forward: this build is `latest` again.' : null);
-      retry();
+      await refresh();
     } catch (e) {
       setError(refusal(e, canRollForward ? 'Rolling forward' : 'Keeping the build'));
     } finally {
@@ -112,7 +123,7 @@ export function ReleaseReview() {
       );
       setConfirm(false);
       setReason('');
-      retry();
+      await refresh();
     } catch (e) {
       setError(refusal(e, 'Rolling back'));
     } finally {
@@ -403,21 +414,15 @@ export function ReleaseReview() {
           </p>
         )}
         {n.report.map((g) => (
-          <Card key={g.rule} className="pad" role="region" aria-label={g.title}>
-            <h3 className="h3-sm">
-              {g.title} <span className="faint small mono">{g.rule}</span>{' '}
-              <Chip>{g.items.length}</Chip>
-            </h3>
-            <p className="muted small">{g.explanation}</p>
-            <PagedChanges
-              api={apiId}
-              build={buildId}
-              items={g.items}
-              query={query}
-              onChanged={retry}
-              label={`${g.title}: changes`}
-            />
-          </Card>
+          <ReportGroupCard
+            // a refresh (a decision, a promotion) starts the groups again from the server's first page
+            key={`${g.rule}-${n.computedAt}-${n.decisions.length}`}
+            api={apiId}
+            build={buildId}
+            group={g}
+            query={query}
+            onChanged={refresh}
+          />
         ))}
       </section>
 
@@ -433,7 +438,7 @@ export function ReleaseReview() {
             build={buildId}
             items={items}
             query={query}
-            onChanged={retry}
+            onChanged={refresh}
             label="Changes users see"
           />
         )}

@@ -22,6 +22,7 @@ import {
   keep,
   notesJson,
   promote,
+  reportPage,
   rollback,
   seedReleases,
   timelineJson,
@@ -686,6 +687,23 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
         ? r
         : HttpResponse.json(notesJson(r.api, r.build, String(params.id)));
     }),
+    http.get(
+      `${base}/v1/apis/:id/builds/:build/release-notes/report/:rule`,
+      ({ params, request }) => {
+        const r = releaseOf(request, String(params.id), String(params.build));
+        if (r instanceof Response) return r;
+        const q = new URL(request.url).searchParams;
+        const cursor = Math.max(0, Number(q.get('cursor') ?? 0) || 0);
+        const limit = Math.min(200, Math.max(1, Number(q.get('limit') ?? 50) || 50));
+        const page = reportPage(r.build, String(params.rule), cursor, limit);
+        return page
+          ? HttpResponse.json(page)
+          : HttpResponse.json(
+              { error: 'not_found', message: 'No such report group' },
+              { status: 404 },
+            );
+      },
+    ),
     http.post(
       `${base}/v1/apis/:id/builds/:build/release-notes/keep`,
       async ({ params, request }) => {
