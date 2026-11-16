@@ -350,6 +350,11 @@ def diff_documents(old: Sequence[Document], new: Sequence[Document]) -> list[Ite
                 rename=True,
             )
         )
+    titles: dict[str, str] = {}  # old -> new name of each renamed model (title and file stem)
+    for r, n in renamed.items():
+        titles[ka[r].title.lower()] = kb[n].title.lower()
+        titles[ka[r].doc_id.split(":", 1)[1]] = kb[n].doc_id.split(":", 1)[1]
+    start = len(out)
     for key in sorted(set(ka) | set(kb)):
         if key in renamed or key in renamed.values():
             continue
@@ -379,7 +384,16 @@ def diff_documents(old: Sequence[Document], new: Sequence[Document]) -> list[Ite
             )
             continue
         out.extend(_changed_items(kind, a, b))
+    for it in out[start:]:  # a field typed with a renamed model follows the rename
+        if it["op"] == "type" and _follows_rename(it, titles):
+            it.update(rename=True, breaking=False, breakingReason=None)
     return out
+
+
+def _follows_rename(item: Item, titles: Mapping[str, str]) -> bool:
+    before = str((item.get("before") or {}).get("type") or "").lower()
+    after = str((item.get("after") or {}).get("type") or "").lower()
+    return any(old in before and before.replace(old, new) == after for old, new in titles.items())
 
 
 # -- classification ----------------------------------------------------------------------------
@@ -408,6 +422,17 @@ def _leaf(path: str | None) -> str:
     return (path or "").replace("[]", "").rsplit(".", 1)[-1]
 
 
+def _near(name: str | None, word: str, text: str | None, span: int = 60) -> bool:
+    """``word`` within ``span`` characters after ``name`` (e.g. "status (string, required)")."""
+    if not name or not text:
+        return False
+    flat = _norm(text)
+    return any(
+        word in flat[m.end() : m.end() + span]
+        for m in re.finditer(rf"(?<![\w.]){re.escape(name.lower())}(?![\w])", flat)
+    )
+
+
 def _verbatim(item: Item, old_text: str | None, new_text: str | None) -> tuple[bool, str | None]:
     """Is the change visible in the source text? Returns (holds, quote from B)."""
     op = item["op"]
@@ -416,17 +441,23 @@ def _verbatim(item: Item, old_text: str | None, new_text: str | None) -> tuple[b
     before = item.get("before") or {}
     if op == "removed":
         old_quote = before.get("quote") or name
-        return in_text(old_quote, old_text) and not in_text(old_quote, new_text), None
+        if new_text is None:
+            return False, None
+        # The old page text is usually not at hand (snapshots are read at load, only hashes
+        # are kept), so a removal holds when the changed page no longer has the value.
+        was_there = old_text is None or in_text(old_quote, old_text)
+        return was_there and not in_text(old_quote, new_text), None
+    if op == "required":
+        holds = bool(after.get("required")) and _near(name, "required", new_text)
+        return holds, name
     if op == "added":
         quote = after.get("quote")
         holds = in_text(name, new_text) and (not quote or in_text(quote, new_text))
         return holds, quote or name
     if op == "description":
         return in_text(after.get("quote"), new_text), after.get("quote")
-    if op == "type":
-        typ = after.get("type")
-        return bool(typ) and in_text(name, new_text) and in_text(typ, new_text), name
-    return False, None
+    typ = after.get("type")  # op == "type" (other ops never hold)
+    return op == "type" and bool(typ) and _near(name, str(typ), new_text, 40), name
 
 
 def _top(path: str) -> str:
@@ -469,6 +500,12 @@ class _Context:
     mass: set[str]
     cutoff: set[str]
     previous: set[tuple[Any, ...]]
+    # the metas' URL-keyed values with URLs normalised like documents' (no fragment or
+    # trailing slash), so ".../orders/" in pages.json matches a document's ".../orders"
+    hashes_a: Mapping[str, str] = field(default_factory=dict)
+    hashes_b: Mapping[str, str] = field(default_factory=dict)
+    changed: frozenset[str] = frozenset()
+    failed: frozenset[str] = frozenset()
 
 
 _INVERSE = {"added": "removed", "removed": "added"}
@@ -487,7 +524,7 @@ def _rules(it: Item, doc: Document | None, url: str, ctx: _Context) -> list[str]
     unit = doc.source_id if doc else None
     if it["op"] == "completeness" or (unit and unit in ctx.meta_new.blocked_units):
         rules.append("A5-completeness-flag")
-    if url and url in {_url(u) for u in ctx.meta_new.failed_pages}:
+    if url and url in ctx.failed:
         rules.append("A6-unread-page")
     flip = (subj.get("docId"), subj.get("fieldPath"), it["kind"], _INVERSE.get(it["op"]))
     if it["op"] in _INVERSE and flip in ctx.previous:
@@ -500,17 +537,15 @@ def _classify_one(it: Item, ctx: _Context) -> None:
     doc = ctx.docs_b.get(subj["docId"]) or ctx.docs_a.get(subj["docId"])
     url = _url(doc.source_url if doc else None)
     ta, tb = ctx.pages_a.get(url), ctx.pages_b.get(url)
-    ha = ctx.meta_old.page_hashes.get(url) or (text_hash(ta) if ta else None)
-    hb = ctx.meta_new.page_hashes.get(url) or (text_hash(tb) if tb else None)
-    if ctx.meta_old.baseline_only and url in ctx.meta_old.page_hashes:
+    ha = ctx.hashes_a.get(url) or (text_hash(ta) if ta else None)
+    hb = ctx.hashes_b.get(url) or (text_hash(tb) if tb else None)
+    if ctx.meta_old.baseline_only and url in ctx.hashes_a:
         ha = None  # a baseline written after the old extraction says nothing about its content
     rules = _rules(it, doc, url, ctx)
     holds, quote = _verbatim(it, ta, tb) if (ta or tb) else (False, None)
     page_changed = None if (ha is None or hb is None) else ha != hb
     unit = doc.source_id if doc else None
-    named = bool(url and url in ctx.meta_new.changed_pages) or bool(
-        unit and unit in ctx.meta_new.changed_pages
-    )
+    named = bool(url and url in ctx.changed) or bool(unit and unit in ctx.changed)
     if it.get("rename"):
         cls = UNKNOWN  # never shown: no change for users
     elif page_changed and holds:
@@ -562,6 +597,10 @@ def classify(
             (p["subject"].get("docId"), p["subject"].get("fieldPath"), p["kind"], p["op"])
             for p in previous_items
         },
+        {_url(u): h for u, h in meta_old.page_hashes.items()},
+        {_url(u): h for u, h in meta_new.page_hashes.items()},
+        frozenset(_url(u) if "://" in u else u for u in meta_new.changed_pages),
+        frozenset(_url(u) for u in meta_new.failed_pages),
     )
     for it in items:
         _classify_one(it, ctx)

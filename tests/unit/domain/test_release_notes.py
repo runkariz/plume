@@ -78,6 +78,14 @@ def test_same_shape_rename_is_no_change_for_users() -> None:
     items = _run([_model("OrderTaxLine", shape)], [_model("OrderTaxLines", shape)])
     assert [(i["op"], i["visibleToUsers"]) for i in items] == [("renamed", False)]
     assert counts(items)["renamed"] == 1
+    # a field typed with the renamed model follows the rename: no type change for users
+    old = [_model("OrderTaxLine", shape), _model("Order", [_f("tax_lines", "array<OrderTaxLine>")])]
+    new = [_model("OrderTaxLines", shape),
+           _model("Order", [_f("tax_lines", "array<OrderTaxLines>")])]  # fmt: skip
+    follow = _one(_run(old, new), "tax_lines", "type")
+    assert (follow["visibleToUsers"], follow["breaking"], follow.get("rename")) == (
+        False, False, True,
+    )  # fmt: skip
     assert report(items)[0]["rule"] == "A4-same-shape-rename"
 
 
@@ -146,3 +154,28 @@ def test_ids_are_stable_across_recomputation() -> None:
     assert [i["id"] for i in _run(old, new)] == [i["id"] for i in _run(old, new)]
     other = replace(new[0], title="List all orders")
     assert [i["id"] for i in _run(old, [other])] != []
+
+
+def test_page_urls_match_with_or_without_a_trailing_slash() -> None:
+    old, new = [_ep([_f("id")])], [_ep([_f("id"), _f("x", desc="New x.")])]
+    a = PackageMeta(page_hashes={URL + "/": "h1"}, page_texts={URL + "/": "id"})
+    b = PackageMeta(page_hashes={URL + "/": "h2"}, page_texts={URL + "/": "id x New x."},
+                    changed_pages=frozenset({URL + "/"}))  # fmt: skip
+    item = _one(_run(old, new, a, b), "x", "added")
+    assert (item["class"], item["evidence"]["pageHashBefore"]) == ("confirmed", "h1")
+
+
+def test_removals_and_newly_required_inputs_are_confirmed_from_the_new_page() -> None:
+    q = FieldLocation.QUERY
+    old = [_ep([_f("id"), _f("gone", desc="Old field."), _f("status", "string", q)])]
+    new = [_ep([_f("id"), _f("status", "string", q, required=True)])]
+    a = PackageMeta(page_hashes={URL: "h1"})  # the old text is not at hand (a later process)
+    text = "- id\n- status (string, required): Order status."
+    b = PackageMeta(page_hashes={URL: "h2"}, page_texts={URL: text})
+    items = _run(old, new, a, b)
+    gone = _one(items, "gone", "removed")
+    assert (gone["class"], gone["breaking"], gone["visibleToUsers"]) == ("confirmed", True, True)
+    status = _one(items, "status", "required")
+    assert (status["class"], status["breakingReason"]) == ("confirmed", "newly required input")
+    unchanged = PackageMeta(page_hashes={URL: "h1"}, page_texts=b.page_texts)
+    assert _one(_run(old, new, a, unchanged), "gone", "removed")["class"] == "suspect"
