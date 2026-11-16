@@ -161,6 +161,19 @@ def test_cors_allows_put_for_the_display_name(stack: FakeStack) -> None:
     assert "PUT" in r.headers["access-control-allow-methods"]
 
 
+def test_cors_allows_delete_with_a_json_body(stack: FakeStack) -> None:
+    r = _client(stack).options(
+        "/v1/apis/x",
+        headers={"Origin": "http://127.0.0.1:18473", "Access-Control-Request-Method": "DELETE",
+                 "Access-Control-Request-Headers": "authorization,content-type"},
+    )  # fmt: skip
+    assert r.status_code == 200
+    assert "DELETE" in r.headers["access-control-allow-methods"]
+    allowed = r.headers["access-control-allow-headers"].lower()
+    assert "authorization" in allowed
+    assert "content-type" in allowed
+
+
 def test_quality_after_publish(stack: FakeStack, packages: Path) -> None:
     client = _client(stack)
     data = zip_dir(packages / "test-catalog")

@@ -170,7 +170,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=list(deps.cors_origins),
-        allow_methods=["GET", "POST", "PUT"],
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["Authorization", "Content-Type", "Last-Event-ID", "Accept"],
         expose_headers=["Content-Disposition", "Retry-After"],
     )
