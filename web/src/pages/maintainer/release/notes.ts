@@ -79,3 +79,37 @@ export const GOLD_LABEL: Record<string, string> = {
   citation_hit_rate: 'citation hits',
   'recall@5': 'recall@5',
 };
+
+/** What a source is, in words (an unknown kind is "other"). */
+export const SOURCE_KIND_LABEL: Record<string, string> = {
+  docs: 'Docs',
+  spec: 'OpenAPI spec',
+  changelog: 'Changelog',
+  sdk: 'SDK',
+  other: 'Other',
+  mixed: 'Several sources',
+};
+
+export function sourceKindLabel(kind: string | null | undefined): string {
+  return SOURCE_KIND_LABEL[kind ?? ''] ?? SOURCE_KIND_LABEL.other ?? 'Other';
+}
+
+/** Text from a package (a conflicting value, a chosen value) as plain text. */
+export function plain(v: unknown): string {
+  if (v === null || v === undefined) return 'none';
+  if (typeof v === 'string') return v;
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
+}
+
+/** A host for telling two sources of one kind apart ("example.com"); the url if it does not parse. */
+export function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}

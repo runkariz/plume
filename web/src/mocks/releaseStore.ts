@@ -1,5 +1,7 @@
 import type {
+  BuildPackage,
   ChangeItem,
+  SourceConflict,
   ReleaseCounts,
   ReleaseDecision,
   ReleaseNotes,
@@ -30,9 +32,11 @@ export interface MockBuild {
   decisions: ReleaseDecision[];
   items: ChangeItem[];
   package: { from: Pkg; to: Pkg } | null;
+  conflicts?: SourceConflict[];
+  conflictCheck?: { checked: number; notCompared: number };
   gold: { before: Record<string, number>; after: Record<string, number> } | null;
 }
-type Pkg = { streamVersion: string; rulesHash: string; extractedAt: string };
+type Pkg = BuildPackage & { streamVersion: string; rulesHash: string; extractedAt: string };
 
 export interface MockApiBuilds {
   builds: MockBuild[];
@@ -106,6 +110,9 @@ function shopifyNotes(): MockBuild {
         anchor: 'order-property-note-attributes',
         pageHashBefore: 'sha256:11aa22bb33',
         pageHashAfter: 'sha256:44cc55dd66',
+        sources: ['https://shopify.dev/openapi/admin-rest.json'],
+        sourceKind: 'spec',
+        attribution: 'recorded',
       },
     }),
     item('ch-orders-fulfillment-status', {
@@ -243,8 +250,47 @@ function shopifyNotes(): MockBuild {
         rulesHash: 'rules-7f3a',
         extractedAt: '2026-10-20T08:00:00Z',
       },
-      to: { streamVersion: '1.4.3', rulesHash: 'rules-9b21', extractedAt: '2026-11-14T08:30:00Z' },
+      to: {
+        streamVersion: '1.4.3',
+        rulesHash: 'rules-9b21',
+        extractedAt: '2026-11-14T08:30:00Z',
+        runId: 'run-20261114-0830',
+        sources: [
+          {
+            url: 'https://shopify.dev/docs/api/admin-rest',
+            kind: 'docs',
+            fetchedAt: '2026-11-14T08:00:00Z',
+            contentSha256: 'sha256:5f2c9a77d3e1b0aa',
+            role: 'entry',
+          },
+          {
+            url: 'https://shopify.dev/openapi/admin-rest.json',
+            kind: 'spec',
+            fetchedAt: '2026-11-14T08:05:00Z',
+            version: '2026-10',
+            etag: 'W/"abc"',
+            role: 'discovered from https://shopify.dev/docs/api/admin-rest',
+          },
+        ],
+        changelogUrls: ['https://shopify.dev/changelog'],
+      },
     },
+    conflicts: [
+      {
+        unit: 'endpoint:GET~/admin/api/latest/orders.json',
+        field: 'param limit: maximum',
+        values: [
+          { url: 'https://shopify.dev/docs/api/admin-rest', value: 250 },
+          {
+            url: 'https://shopify.dev/openapi/admin-rest.json',
+            value: '<script>alert(1)</script> 100',
+          },
+        ],
+        chosen: 250,
+        reason: 'the docs page is newer than the spec',
+      },
+    ],
+    conflictCheck: { checked: 38, notCompared: 6 },
     gold: { before: { 'recall@5': 0.94, mrr: 0.88 }, after: { 'recall@5': 0.91, mrr: 0.87 } },
   };
 }
@@ -445,6 +491,7 @@ export function notesJson(api: MockApiBuilds, b: MockBuild, apiId = 'shopify'): 
     toDocsAsOf: b.docsAsOf,
     extractorChanged: Boolean(b.package) && b.package?.from.rulesHash !== b.package?.to.rulesHash,
     package: b.package,
+    ...(b.conflictCheck ? { conflictCheck: b.conflictCheck, conflicts: b.conflicts ?? [] } : {}),
     gold: b.gold,
   };
 }

@@ -136,6 +136,20 @@ export const shopifyDetail: ApiDetail = {
   tags: ['latest'],
   versions: ['2026-11-14'],
   docLink: 'https://shopify.dev/docs/api/admin-rest',
+  sources: [
+    {
+      url: 'https://shopify.dev/docs/api/admin-rest',
+      kind: 'docs',
+      fetchedAt: '2026-11-14T08:00:00Z',
+    },
+    {
+      url: 'https://shopify.dev/openapi/admin-rest.json',
+      kind: 'spec',
+      fetchedAt: '2026-11-14T08:05:00Z',
+    },
+    { url: 'https://shopify.dev/changelog', kind: 'changelog', fetchedAt: '2026-11-14T08:10:00Z' },
+  ],
+  extractedAt: '2026-11-14T08:30:00Z',
   quality: {
     recallAt5: 0.94,
     mrr: 0.81,

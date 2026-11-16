@@ -7,6 +7,7 @@ import { Banner, Button, Card, Chip, Crumbs, ErrorState, Kv, LoadingState } from
 import { formatClock, formatDate, shortBuild } from '@/lib/format';
 import { PagedChanges } from './PagedChanges';
 import { ReportGroupCard } from './ReportGroupCard';
+import { SourcesPanel } from './SourcesPanel';
 import { DECISION_LABEL, GOLD_LABEL, REVIEW_LABEL, size } from './notes';
 
 const REVIEW_TONE = { pending: 'warn', kept: 'ok', rolled_back: 'bad' } as const;
@@ -246,6 +247,13 @@ export function ReleaseReview() {
                 value={`${n.package.from?.streamVersion ?? '?'} → ${n.package.to?.streamVersion ?? '?'}`}
                 mono
               />
+              {n.package.from?.runId || n.package.to?.runId ? (
+                <Kv
+                  label="run"
+                  value={`${n.package.from?.runId ?? '?'} → ${n.package.to?.runId ?? '?'}`}
+                  mono
+                />
+              ) : null}
               <Kv
                 label="rules"
                 value={`${n.package.from?.rulesHash ?? '?'} → ${n.package.to?.rulesHash ?? '?'}`}
@@ -287,6 +295,8 @@ export function ReleaseReview() {
           ) : null}
         </Card>
       </div>
+
+      <SourcesPanel n={n} />
 
       <Card className="pad" role="region" aria-label="Review">
         <h2 className="h2-sm">Your review</h2>

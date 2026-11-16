@@ -3,7 +3,15 @@ import { useApiClient } from '@/api/context';
 import { ApiError, type ChangeItem } from '@/api/types';
 import { Button, Chip } from '@/components';
 import { formatDate } from '@/lib/format';
-import { CLASS_LABEL, OP_LABEL, safeHref, subjectText, valueText } from './notes';
+import {
+  CLASS_LABEL,
+  hostOf,
+  OP_LABEL,
+  safeHref,
+  sourceKindLabel,
+  subjectText,
+  valueText,
+} from './notes';
 
 const TONE = { confirmed: 'ok', likely: 'info', suspect: 'bad', unknown: 'neutral' } as const;
 
@@ -13,6 +21,26 @@ const TONE = { confirmed: 'ok', likely: 'info', suspect: 'bad', unknown: 'neutra
  * unknown change can be promoted to confirmed with a quote the SERVER verifies against this build's source text; a
  * promotion can be undone. All text is the package's: only ever a text node, and a link only for an http(s) address.
  */
+/** Which sources a change is attributed to. Never guessed: "not recorded" when the server did not record it. */
+function Attribution({ evidence }: { evidence: ChangeItem['evidence'] }) {
+  const urls = (evidence?.sources ?? []).filter((u) => safeHref(u));
+  if (evidence?.attribution !== 'recorded' || urls.length === 0)
+    return <>Source attribution: not recorded.</>;
+  return (
+    <>
+      Source: {sourceKindLabel(evidence.sourceKind)} ·{' '}
+      {urls.map((u, i) => (
+        <span key={u}>
+          {i > 0 ? ', ' : ''}
+          <a href={safeHref(u) ?? undefined} target="_blank" rel="noreferrer noopener">
+            {hostOf(u)}
+          </a>
+        </span>
+      ))}
+    </>
+  );
+}
+
 export function ChangeRow({
   api,
   build,
@@ -137,6 +165,9 @@ export function ChangeRow({
           </span>
         ) : null}
         {item.evidence?.changelog ? <> · {item.evidence.changelog}</> : null}
+      </p>
+      <p className="small muted change-sources">
+        <Attribution evidence={item.evidence} />
       </p>
       {item.promotedBy ? (
         <p className="small">
