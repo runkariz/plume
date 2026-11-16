@@ -32,7 +32,6 @@ from plume.domain.knowledge.document import (
     DocumentKind,
     FieldLocation,
     FieldSpec,
-    constraint_text,
     constraints_of,
     endpoint_doc_id,
     normalize_endpoint_path,
@@ -254,8 +253,6 @@ def _fields_section(title: str, fields: list[FieldSpec]) -> str:
         line = " ".join(bits)
         if f.description:
             line += f": {f.description}"
-        if f.constraints:
-            line += f" [{constraint_text(f.constraints)}]"
         lines.append(f"- {line}")
     return "\n".join(lines)
 
@@ -615,9 +612,11 @@ class StreamPackageSource:
         scopes = _required_scopes(req)
         deprecated = bool(req.get("isDeprecated")) or bool(req.get("deprecation"))
         provenance = _obj(req.get("provenance"))
+        # realPath, rate limit and field constraints are kept on the document (fields, facts,
+        # payloads), NOT in its text: the text is what is embedded, and adding them cost
+        # recall on the frozen gold sets (Shopify -2.5, Woo -2.7 points at recall@5).
         fixed = real_path(req, path, rolling)
         limit = rate_limits.resolve(req, limits or [])
-        call = f"{method} {fixed} (API version {req.get('apiVersion')} fixed)" if fixed else None
         return Document(
             doc_id=endpoint_doc_id(method, path),
             kind=DocumentKind.ENDPOINT,
@@ -625,13 +624,12 @@ class StreamPackageSource:
             text=_endpoint_text(
                 req,
                 name,
-                call or f"{method} {path}",
+                f"{method} {path}",
                 sections,
                 response_fields,
                 scopes,
                 deprecated,
-            )
-            + (f"\n\nRate limit: {rate_limits.describe(limit)}" if limit else ""),
+            ),
             source_url=_str(provenance.get("sourceUrl")) or _str(req.get("docLink")),
             anchor=_str(provenance.get("docAnchor")),
             resource=_str(req.get("resource")),

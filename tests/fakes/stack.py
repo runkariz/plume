@@ -1,6 +1,6 @@
 """A full set of fakes wired like the bootstrap container (for use-case tests)."""
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -296,8 +296,13 @@ class _FakeRemoval:
     def __init__(self, stack: FakeStack) -> None:
         self.s = stack
 
-    def remove(self, api_id: ApiId, audit: Mapping[str, Any]) -> dict[str, int]:
+    def remove(
+        self, api_id: ApiId, audit: Mapping[str, Any], retire: Sequence[Mapping[str, str]] = ()
+    ) -> dict[str, int]:
         s, api = self.s, api_id.value
+        for r in retire:
+            repo = s.models_repo if r["type"] == "model" else s.sets_repo
+            repo.set_visibility(r["id"], r["now"], None)
         builds = [b for b, x in s.builds.builds.items() if x.api_id.value == api]
         notes = [k for k, v in s.notes_repo.notes.items() if v.get("api") == api]
         counts = {

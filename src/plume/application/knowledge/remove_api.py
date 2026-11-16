@@ -14,7 +14,13 @@ from plume.domain.knowledge.api import ApiId
 from plume.domain.models.snapshot import Visibility
 
 LISTED = (Visibility.OFFICIAL, Visibility.UNRELEASED)
-_RETIRED = {Visibility.OFFICIAL: Visibility.SUPERSEDED, Visibility.UNRELEASED: Visibility.DISCARDED}
+_RETIRED = {
+    "model": {
+        Visibility.OFFICIAL: Visibility.SUPERSEDED,
+        Visibility.UNRELEASED: Visibility.DISCARDED,
+    },
+    "set": {Visibility.OFFICIAL: Visibility.DISCARDED, Visibility.UNRELEASED: Visibility.DISCARDED},
+}
 SCAN_LIMIT = 10_000
 
 
@@ -28,8 +34,8 @@ class ApiInUseError(ApplicationError):
     def __init__(self, api: str, pinned: list[dict[str, Any]]) -> None:
         super().__init__(
             f"{len(pinned)} official/unreleased model(s) or set(s) pin {api}'s builds; "
-            "remove with force=true to retire them (official -> superseded, unreleased -> "
-            "discarded)"
+            "remove with force=true to retire them (models: official -> superseded, "
+            "unreleased -> discarded; sets -> discarded)"
         )
         self.pinned = pinned
 
@@ -71,15 +77,10 @@ class RemoveApi:
         pinned = self.pinned_by(api)
         if pinned and not force:
             raise ApiInUseError(api, pinned)
-        retired = []
-        for p in pinned:  # explicit, before the data goes
-            new = _RETIRED[p["visibility"]]
-            if p["type"] == "model":
-                self._models.set_visibility(p["id"], new, None)
-            else:
-                self._sets.set_visibility(p["id"], new, None)
-            retired.append({**p, "now": new})
+        retired = [{**p, "now": _RETIRED[p["type"]][p["visibility"]]} for p in pinned]
         counts = self._removal.remove(
-            api_id, {"forced": force, "reason": reason, "affected": retired}
+            api_id,
+            {"forced": force, "reason": reason, "affected": retired},
+            [{"type": p["type"], "id": p["id"], "now": p["now"]} for p in retired],
         )
         return {"api": api, "removed": counts, "retired": retired, "forced": force}

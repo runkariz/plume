@@ -1,7 +1,7 @@
 """Removing an API: one transaction over every table that holds its data."""
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from sqlalchemy import Engine, text
@@ -23,13 +23,27 @@ _STEPS = (
 )
 
 
+_RETIRE = {"model": ("model_snapshots", "snapshot_id"), "set": ("model_sets", "set_id")}
+
+
 class PostgresApiRemoval:
     def __init__(self, engine: Engine) -> None:
         self._engine = engine
 
-    def remove(self, api_id: ApiId, audit: Mapping[str, Any]) -> dict[str, int]:
+    def remove(
+        self, api_id: ApiId, audit: Mapping[str, Any], retire: Sequence[Mapping[str, str]] = ()
+    ) -> dict[str, int]:
         counts: dict[str, int] = {}
         with self._engine.begin() as conn:
+            for r in retire:  # first, in the same transaction: all or nothing
+                table, key = _RETIRE[r["type"]]
+                conn.execute(
+                    text(
+                        f"UPDATE {table} SET visibility = :v, released_at = NULL "  # noqa: S608
+                        f"WHERE {key} = :id"
+                    ),
+                    {"v": r["now"], "id": r["id"]},
+                )
             counts["documents"] = int(
                 conn.execute(
                     text(f"SELECT count(*) FROM documents WHERE build_id IN ({_BUILDS})"),  # noqa: S608
