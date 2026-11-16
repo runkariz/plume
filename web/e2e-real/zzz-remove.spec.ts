@@ -51,7 +51,7 @@ test('remove an API that a draft pins: listed, forced, retired, gone', async ({
   const preview = (await (
     await request.get(`${API}/v1/apis/${REMOVE}/removal`, { headers: auth })
   ).json()) as {
-    pinnedBy: { id: string; name: string }[];
+    pinnedBy: { type: string; id: string; name: string }[];
   };
   expect(preview.pinnedBy.map((p) => p.id)).toContain(modelId);
 
@@ -74,6 +74,11 @@ test('remove an API that a draft pins: listed, forced, retired, gone', async ({
   const notice = page.getByRole('status').filter({ hasText: `Removed ${REMOVE}` });
   await expect(notice).toContainText(name);
   await expect(notice).toContainText(/now (superseded|discarded)/);
+  // sets have no "superseded": an official or unreleased set is "discarded" (when z-sets.spec.ts ran before)
+  for (const set of preview.pinnedBy.filter((p) => p.type === 'set'))
+    await expect(notice.getByText(set.name).first()).toBeVisible();
+  for (const li of await notice.locator('li').filter({ hasText: /^set / }).all())
+    await expect(li).toContainText('now discarded');
   await shotOf(notice, 'w27-real-remove-done', 'light');
   await expect(page.locator('.m-row').filter({ hasText: REMOVE })).toHaveCount(0);
 
