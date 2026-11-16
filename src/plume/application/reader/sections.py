@@ -9,6 +9,7 @@ from plume.application.ports.document_repo import DocumentRepo
 from plume.application.ports.search_index import SearchIndex
 from plume.application.reader.dto import BuildRef
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
+from plume.domain.knowledge import rate_limits
 from plume.domain.knowledge.asset import ICON, Asset
 from plume.domain.knowledge.document import Document, DocumentKind
 
@@ -74,6 +75,11 @@ class PackageSections:
     def _app_raw(self, r: ResolvedBuild) -> dict[str, Any]:
         apps = self._docs(r, DocumentKind.APP)
         return dict(apps[0].raw or {}) if apps else {}
+
+    def rate_limits(self, api: str, version: str | None = None) -> list[dict[str, Any]]:
+        """app.json rateLimits[] verbatim (empty when the package states none)."""
+        r = self._resolver.resolve(api, version)
+        return rate_limits.groups(self._app_raw(r).get("app"))
 
     def webhooks(self, api: str, version: str | None = None) -> list[dict[str, Any]]:
         """connector/triggers/webhooks/*.json (the delivery mechanism), verbatim."""

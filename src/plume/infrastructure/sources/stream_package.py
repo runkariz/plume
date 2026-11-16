@@ -24,6 +24,7 @@ from typing import Any
 
 from plume.application.errors import SourcePackageError
 from plume.application.ports.package_source import SourcePackage
+from plume.domain.knowledge import rate_limits
 from plume.domain.knowledge.api import ApiId, ApiInfo, Category
 from plume.domain.knowledge.asset import CONTENT_TYPES, ICON, MAX_ASSET_BYTES, Asset
 from plume.domain.knowledge.document import (
@@ -31,9 +32,13 @@ from plume.domain.knowledge.document import (
     DocumentKind,
     FieldLocation,
     FieldSpec,
+    constraint_text,
+    constraints_of,
     endpoint_doc_id,
     normalize_endpoint_path,
+    real_path,
     slug_doc_id,
+    url_path,
 )
 from plume.domain.knowledge.model_names import display_names, parse_bundled_title
 from plume.domain.shared.errors import InvalidIdentifierError
@@ -164,6 +169,7 @@ def _walk_fields(
                 required=name in required,
                 description=_str(sub.get("description")) or _ref_description(sub, scope),
                 pointer=sub_pointer,
+                constraints=constraints_of(sub),
             )
             yield from _walk_fields(sub, location, sub_pointer, full, depth + 1, scope)
     items = schema.get("items")
@@ -248,6 +254,8 @@ def _fields_section(title: str, fields: list[FieldSpec]) -> str:
         line = " ".join(bits)
         if f.description:
             line += f": {f.description}"
+        if f.constraints:
+            line += f" [{constraint_text(f.constraints)}]"
         lines.append(f"- {line}")
     return "\n".join(lines)
 
@@ -320,9 +328,7 @@ def _tags(req: JsonObj) -> tuple[str, ...]:
 
 
 def _url_path(url: str) -> str:
-    path = _TEMPLATE_VAR.sub(r"{\1}", url)
-    path = _TEMPLATE_ANY.sub("", path)
-    return re.sub(r"^[a-z]+://[^/]+", "", path)
+    return url_path(url)
 
 
 _REQUEST_SCHEMAS = (
@@ -460,8 +466,16 @@ class StreamPackageSource:
             seen.add(doc.doc_id)
             documents.append(doc)
 
+        versioning = app.get("apiVersioning")
+        rolling = isinstance(versioning, dict) and bool(versioning.get("releaseCadence"))
+        limits = rate_limits.groups(app)
         endpoints = [
-            (folder, self._endpoint(folder, _read_json(folder / "request.json"), versions))
+            (
+                folder,
+                self._endpoint(
+                    folder, _read_json(folder / "request.json"), versions, rolling, limits
+                ),
+            )
             for folder in sorted((connector / "endpoints").glob("*/"))
             if (folder / "request.json").is_file()
         ]
@@ -583,7 +597,13 @@ class StreamPackageSource:
         )
 
     @staticmethod
-    def _endpoint(folder: Path, req: JsonObj, versions: tuple[str, ...]) -> Document:
+    def _endpoint(
+        folder: Path,
+        req: JsonObj,
+        versions: tuple[str, ...],
+        rolling: bool = False,
+        limits: list[dict[str, Any]] | None = None,
+    ) -> Document:
         method = _str(req.get("method"))
         url = _str(req.get("url"))
         if method is None or url is None:
@@ -595,13 +615,23 @@ class StreamPackageSource:
         scopes = _required_scopes(req)
         deprecated = bool(req.get("isDeprecated")) or bool(req.get("deprecation"))
         provenance = _obj(req.get("provenance"))
+        fixed = real_path(req, path, rolling)
+        limit = rate_limits.resolve(req, limits or [])
+        call = f"{method} {fixed} (API version {req.get('apiVersion')} fixed)" if fixed else None
         return Document(
             doc_id=endpoint_doc_id(method, path),
             kind=DocumentKind.ENDPOINT,
             title=name,
             text=_endpoint_text(
-                req, name, f"{method} {path}", sections, response_fields, scopes, deprecated
-            ),
+                req,
+                name,
+                call or f"{method} {path}",
+                sections,
+                response_fields,
+                scopes,
+                deprecated,
+            )
+            + (f"\n\nRate limit: {rate_limits.describe(limit)}" if limit else ""),
             source_url=_str(provenance.get("sourceUrl")) or _str(req.get("docLink")),
             anchor=_str(provenance.get("docAnchor")),
             resource=_str(req.get("resource")),
@@ -613,6 +643,8 @@ class StreamPackageSource:
             source_id=_str(req.get("endpointId")),
             tags=_tags(req),
             raw=req,
+            real_path=fixed,
+            rate_limit=limit,
         )
 
     def _guides_and_auth(self, connector: Path, warnings: list[str]) -> list[tuple[Document, str]]:

@@ -67,12 +67,54 @@ def concept_key(name: str) -> str:
 
 
 def concept_label(name: str) -> str:
-    """``line_items`` / ``LineItems`` -> ``Line Item`` (the last word made singular)."""
+    """``line_items`` / ``LineItems`` -> ``Line Item`` (the last word made singular); a word
+    repeated in a row is said once (``customer_customer_address`` -> ``Customer Address``)."""
     words = re.sub(r"([a-z])([A-Z])", r"\1 \2", name).replace("_", " ").replace("-", " ").split()
     if not words:
         return name
     words[-1] = _singular(words[-1].lower())
-    return " ".join(w.capitalize() for w in words)
+    out: list[str] = []
+    for w in words:
+        if not out or out[-1].lower() != w.lower():
+            out.append(w)
+    return " ".join(w.capitalize() for w in out)
+
+
+# A related "concept" that is really an operation, a response wrapper, a result or a change
+# event of another concept (Amazon "Get Purchase Orders Response", Woo "Top Sellers Report",
+# Mirakl "Shipment Success", "Updated Order", "Previous", "Productid").
+_PSEUDO_FIRST = frozenset({"get", "list", "create", "update", "delete", "send", "cancel",
+                           "submit", "retrieve", "fetch", "search", "count", "updated",
+                           "created", "deleted", "previous", "next", "new", "old",
+                           "current"})  # fmt: skip
+_PSEUDO_LAST = frozenset({"response", "request", "result", "list", "status", "success", "error",
+                          "payload", "wrapper", "report", "url", "previous", "next"})  # fmt: skip
+_PSEUDO_ALONE = frozenset({"line", "ship", "previous", "next", "report", "success"})
+
+
+def tidy_concept(
+    label: str, known: set[str], last_words: frozenset[str] | set[str] = frozenset()
+) -> str | None:
+    """The display name of a related concept, or None when it is a pseudo-concept. A run-together
+    word that starts with a known concept and ends with a word other concepts end with is split
+    (``Productlisting`` -> ``Product Listing``, as ``Collection Listing``; ``Collection`` stays);
+    ``<concept>id`` is an id field, not a concept."""
+    words = label.split()
+    low = [w.lower() for w in words]
+    if not words or (len(words) == 1 and low[0] in _PSEUDO_ALONE):
+        return None
+    if len(words) > 1 and (low[0] in _PSEUDO_FIRST or low[-1] in _PSEUDO_LAST):
+        return None
+    if len(words) == 1:
+        word = low[0]
+        for k in sorted(known, key=len, reverse=True):
+            rest = word[len(k) :]
+            if len(k) >= 3 and word.startswith(k) and rest:
+                if rest in ("id", "ids"):
+                    return None
+                if rest in last_words:
+                    return f"{concept_label(k)} {concept_label(rest)}"
+    return label
 
 
 @dataclass(frozen=True, slots=True)

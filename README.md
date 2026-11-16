@@ -137,6 +137,18 @@ reloads and dumps, `null` clears it), then the package's own display name (`app.
   <new>` shows what changed; `plume tag <build> latest` rolls back.
 - **Share it.** `plume export <api> --out x.plume.jsonl.gz` writes a verified dump; `plume restore`
   loads it anywhere in one transaction.
+- **Remove it.** `plume remove <api> --yes` (or `DELETE /v1/apis/{api}` with `{"confirm":
+  "<api id>"}` and the token, or the maintainer MCP tool `remove_api`) deletes the API with all
+  its builds, tags, evals, release notes, package meta, jobs and display name in one
+  transaction, with an audit row (`api_removals`). It is refused while official or unreleased
+  models or sets pin the API (`GET /v1/apis/{api}/removal` lists them); `force` retires them
+  first (official -> superseded, unreleased -> discarded).
+
+What Plume keeps from a package, verbatim: field constraints (`enum`, `minimum`, `maximum`,
+`default`, `format`, `pattern`, lengths) on fields, facts and the endpoint text; an endpoint's
+real path when its request states a fixed `apiVersion` (`realPath`, `versionFixed`; APIs that
+roll versions, like Shopify, keep `{version}`); per-operation rate limits (`rateLimitCost` +
+app.json `rateLimits`) on the endpoint, as a `rate_limit` fact, and on the API detail.
 
 ## Real embeddings
 

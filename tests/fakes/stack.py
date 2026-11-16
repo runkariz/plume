@@ -1,7 +1,9 @@
 """A full set of fakes wired like the bootstrap container (for use-case tests)."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from plume.application.eval.run_eval_gate import RunEvalGate
 from plume.application.jobs.build_pipeline import BuildPipeline
@@ -14,6 +16,7 @@ from plume.application.knowledge.extract_facts import ExtractFacts
 from plume.application.knowledge.import_package import ImportPackage
 from plume.application.knowledge.public_changes import PublicChanges
 from plume.application.knowledge.release_notes import ReleaseNotes
+from plume.application.knowledge.remove_api import RemoveApi
 from plume.application.knowledge.seal_build import SealBuild
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.models.collections import Collections
@@ -36,6 +39,7 @@ from plume.application.reader.use_cases import (
     SearchDocs,
 )
 from plume.domain.eval.gate import GatePolicy
+from plume.domain.knowledge.api import ApiId
 from plume.infrastructure.dumps.local_fs import LocalDumpStore
 from plume.infrastructure.jobs.package_storage import LocalPackageStorage
 from plume.infrastructure.jobs.thread_runner import InlineJobRunner
@@ -155,6 +159,9 @@ class FakeStack:
 
     def api_display(self) -> ApiDisplayName:
         return ApiDisplayName(self.apis)
+
+    def remove_api(self) -> RemoveApi:
+        return RemoveApi(self.apis, _FakeRemoval(self), self.models_repo, self.sets_repo)
 
     def public_changes(self) -> PublicChanges:
         return PublicChanges(self.notes_repo, self.tags)
@@ -281,3 +288,44 @@ class FakeStack:
             InlineJobRunner(),
             self.clock,
         )
+
+
+class _FakeRemoval:
+    """The in-memory twin of PostgresApiRemoval (same counts, an audit list)."""
+
+    def __init__(self, stack: FakeStack) -> None:
+        self.s = stack
+
+    def remove(self, api_id: ApiId, audit: Mapping[str, Any]) -> dict[str, int]:
+        s, api = self.s, api_id.value
+        builds = [b for b, x in s.builds.builds.items() if x.api_id.value == api]
+        notes = [k for k, v in s.notes_repo.notes.items() if v.get("api") == api]
+        counts = {
+            "documents": sum(len(s.documents.documents.get(b, {})) for b in builds),
+            "releaseNotes": len(notes),
+            "packageMeta": sum(1 for b in builds if b in s.notes_repo.meta),
+            "tags": sum(1 for k in s.tags.tags if k[0] == api),
+            "jobs": 0,
+            "evals": sum(1 for b in builds if b in s.evals.records),
+            "builds": len(builds),
+            "displayName": int(api in s.apis.overrides),
+            "api": int(api in s.apis.apis),
+        }
+        for k in notes:
+            del s.notes_repo.notes[k]
+        for b in builds:
+            s.notes_repo.meta.pop(b, None)
+            s.evals.records.pop(b, None)
+            for store in (s.documents.documents, s.documents.chunks, s.documents.vectors,
+                          s.facts.facts):  # fmt: skip
+                store.pop(b, None)
+            del s.builds.builds[b]
+        for tag in [t for t in s.tags.tags if t[0] == api]:
+            del s.tags.tags[tag]
+        s.apis.overrides.pop(api, None)
+        s.apis.apis.pop(api, None)
+        REMOVALS.append({"api": api, **audit, "counts": counts})
+        return counts
+
+
+REMOVALS: list[dict[str, Any]] = []

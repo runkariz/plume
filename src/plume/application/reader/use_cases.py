@@ -26,12 +26,21 @@ from plume.application.reader.dto import (
     SearchResult,
     TraceStep,
 )
-from plume.application.reader.ranking import is_page, pair_pages_with_endpoints
+from plume.application.reader.ranking import (
+    is_page,
+    lift_operation_endpoints,
+    pair_pages_with_endpoints,
+)
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
 from plume.domain.knowledge.asset import ICON
 from plume.domain.knowledge.call_check import normalize_call_path, path_matches, specificity
 from plume.domain.knowledge.citation import Citation
-from plume.domain.knowledge.document import HTTP_METHODS, DocumentKind, FieldLocation
+from plume.domain.knowledge.document import (
+    HTTP_METHODS,
+    DocumentKind,
+    FieldLocation,
+    constraint_dict,
+)
 from plume.domain.knowledge.fact import Fact, FactKind
 from plume.domain.knowledge.ranking import reciprocal_rank_fusion
 from plume.domain.shared.ids import BuildId
@@ -212,6 +221,49 @@ def fuse_hits(
     return out
 
 
+OWNER_CACHE = 64
+_OPERATION_MODEL = re.compile(r"^model:([a-z]+[0-9]+)-(?:response|request)-")
+
+
+def _operation_owner(doc_id: str, owners: dict[str, str]) -> str | None:
+    """The endpoint a per-operation model belongs to (`model:a02-response-200-...` -> A02)."""
+    m = _OPERATION_MODEL.match(doc_id)
+    return owners.get(m.group(1)) if m else None
+
+
+_OWNERS: dict[str, dict[str, str]] = {}
+
+
+def operation_owners(documents: DocumentRepo, build_id: BuildId) -> dict[str, str]:
+    """{operation code: endpoint doc id} from request.json specOperationId (Mirakl "A02");
+    sealed builds never change, so it is computed once per build (bounded cache)."""
+    cached = _OWNERS.get(build_id.value)
+    if cached is None:
+        cached = {}
+        for d in documents.list_documents(build_id):
+            if d.kind is not DocumentKind.ENDPOINT:
+                continue
+            op = (d.raw or {}).get("specOperationId")
+            if isinstance(op, str) and op.strip():
+                cached.setdefault(op.strip().lower(), d.doc_id)
+        if len(_OWNERS) > OWNER_CACHE:
+            _OWNERS.clear()
+        _OWNERS[build_id.value] = cached
+    return cached
+
+
+def rank_order(
+    documents: DocumentRepo, build_id: BuildId, fused: Sequence[str], k: int
+) -> list[str]:
+    """The final order of fused hits, shared by search and the eval gate: a page brings one of
+    its endpoints into the top-k; a per-operation model brings its endpoint just before it."""
+    order = pair_pages_with_endpoints(fused, k, lambda d: page_endpoints(documents, build_id, d))
+    owners = operation_owners(documents, build_id)
+    if owners:
+        order = lift_operation_endpoints(order, k, lambda d: _operation_owner(d, owners))
+    return order
+
+
 def page_endpoints(documents: DocumentRepo, build_id: BuildId, doc_id: str) -> list[str]:
     """The endpoints a knowledge-export page documents (recorded on the page guide)."""
     if not is_page(doc_id):
@@ -285,9 +337,7 @@ class SearchDocs:
                 lambda: self._index.text(build_id, query, pool, kinds),
             )
         fused = _timed(trace, "plume", "fuse (RRF)", lambda: fuse_hits(dense, text, query, pool))
-        order = pair_pages_with_endpoints(
-            [h.doc_id for h in fused], top_k, lambda d: page_endpoints(self._documents, build_id, d)
-        )
+        order = rank_order(self._documents, build_id, [h.doc_id for h in fused], top_k)
         by_id = {h.doc_id: h for h in fused}
         hits = [by_id[d] for d in order[:top_k]]
         summaries = self._index.summaries(build_id, [h.doc_id for h in hits])
@@ -338,6 +388,7 @@ def _match(fact: Fact, titles: dict[str, str]) -> FactMatch:
         required=fact.required,
         complete=fact.complete,
         citation=fact.evidence,
+        constraints=constraint_dict(fact.constraints) or None,
     )
 
 
@@ -594,7 +645,12 @@ class CheckCall:
             checked,
             endpoint.evidence,
             alternatives,
+            self._real_path(r.build.build_id, endpoint.owner_id),
         )
+
+    def _real_path(self, build_id: BuildId, doc_id: str) -> str | None:
+        summary = self._index.summaries(build_id, [doc_id]).get(doc_id)
+        return summary.real_path if summary else None
 
     def _param_checks(
         self, build_id: BuildId, owner_id: str, params: Sequence[str]

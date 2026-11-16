@@ -171,6 +171,8 @@ def _doc(d: Document) -> dict[str, Any]:
         "source_id": d.source_id,
         "shape": d.shape,
         "tags": list(d.tags),
+        **({"real_path": d.real_path} if d.real_path else {}),
+        **({"rate_limit": d.rate_limit} if d.rate_limit else {}),
         "raw": d.raw,
     }
 
@@ -193,6 +195,8 @@ def _doc_back(d: dict[str, Any]) -> Document:
         source_id=d.get("source_id"),
         shape=d.get("shape"),
         tags=tuple(d.get("tags", [])),
+        real_path=d.get("real_path"),
+        rate_limit=d.get("rate_limit"),
         raw=d.get("raw"),
     )
 
@@ -210,6 +214,7 @@ def _fact(f: Fact) -> dict[str, Any]:
         "data_type": f.type,
         "required": f.required,
         "complete": f.complete,
+        **({"constraints": f.constraints} if f.constraints else {}),
         "evidence": {
             "doc_id": e.doc_id,
             "source_url": e.source_url,
@@ -232,6 +237,7 @@ def _fact_back(d: dict[str, Any]) -> Fact:
         type=d.get("data_type"),
         required=bool(d.get("required")),
         complete=bool(d.get("complete", True)),
+        constraints=d.get("constraints"),
     )
 
 

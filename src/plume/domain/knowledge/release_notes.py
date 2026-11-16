@@ -19,6 +19,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from plume.domain.knowledge import rate_limits
 from plume.domain.knowledge.document import Document, DocumentKind, FieldLocation, FieldSpec
 
 Item = dict[str, Any]  # one change (JSON-ready)
@@ -301,6 +302,8 @@ def _same_shape(a: Document, b: Document) -> bool:
 def _changed_items(kind: str, a: Document, b: Document) -> list[Item]:
     """Differences of a document present in both builds."""
     out: list[Item] = []
+    if kind == "endpoint":
+        out.extend(_endpoint_rate_limit_items(a, b))
     if kind in ("endpoint", "model"):
         out.extend(_field_items(a, b))
         for s in sorted(set(b.scopes) - set(a.scopes)):
@@ -423,6 +426,7 @@ def diff_documents(old: Sequence[Document], new: Sequence[Document]) -> list[Ite
     out.extend(_environment_items(app_a, app_b))
     if app_a is not None and app_b is not None:
         out.extend(_webhook_items(app_a, app_b))
+        out.extend(_rate_limit_group_items(app_a, app_b))
     return out
 
 
@@ -954,6 +958,64 @@ def _webhook_items(a: Document, b: Document) -> list[Item]:
                         breakingReason=f"{p} changed" if call else None,
                     )
                 )
+    return out
+
+
+# -- rate limits -----------------------------------------------------------------------------
+
+
+def _rl_groups(app: Document) -> dict[str, dict[str, Any]]:
+    raw = _app_json(app)
+    return {str(g.get("group") or g.get("scope") or i): g
+            for i, g in enumerate(rate_limits.groups(raw))}  # fmt: skip
+
+
+def _rate_limit_group_items(a: Document, b: Document) -> list[Item]:
+    """app.json rateLimits groups: added / removed / changed limit, window, algorithm, notes.
+    Breaking: the group's rate (limit per window) got lower."""
+    ga, gb = _rl_groups(a), _rl_groups(b)
+    out: list[Item] = []
+
+    def item(op: str, path: str, before: Any, after: Any, **more: Any) -> Item:
+        return _env_item(b, op, path, before, after, kind="rate_limit", **more)
+
+    for key in sorted(set(ga) | set(gb)):
+        x, y = ga.get(key), gb.get(key)
+        base = f"rateLimits.{key}"
+        if x is None:
+            out.append(item("added", base, None, json_text(y)))
+            continue
+        if y is None:
+            out.append(item("removed", base, json_text(x), None))
+            continue
+        old_rate, new_rate = rate_limits.rate(x), rate_limits.rate(y)
+        lower = old_rate is not None and new_rate is not None and new_rate < old_rate
+        for k in ("limit", "windowSeconds", "algorithm", "scope"):
+            if x.get(k) != y.get(k):
+                hit = lower and k in ("limit", "windowSeconds")
+                out.append(item("changed", f"{base}.{k}", x.get(k), y.get(k), breaking=hit,
+                                breakingReason="lower rate limit" if hit else None))  # fmt: skip
+        if x.get("notes") != y.get("notes"):
+            out.append(item("description", f"{base}.notes", x.get("notes"), y.get("notes")))
+    return out
+
+
+def _endpoint_rate_limit_items(a: Document, b: Document) -> list[Item]:
+    """An endpoint's bucket or cost changed (a higher cost per call is breaking)."""
+    ra, rb = rate_limits.as_dict(a.rate_limit) or {}, rate_limits.as_dict(b.rate_limit) or {}
+    out: list[Item] = []
+    for k in ("bucket", "cost"):
+        before, after = ra.get(k), rb.get(k)
+        if before == after:
+            continue
+        higher = (k == "cost" and isinstance(before, int | float)
+                  and isinstance(after, int | float) and after > before)  # fmt: skip
+        it = _env_item(b, "changed" if before is not None and after is not None else
+                       ("added" if before is None else "removed"), f"rateLimit.{k}", before,
+                       after, kind="rate_limit", breaking=higher,
+                       breakingReason="higher rate-limit cost" if higher else None)  # fmt: skip
+        it["subject"] = _subject(b) | {"fieldPath": f"rateLimit.{k}"}
+        out.append(it)
     return out
 
 

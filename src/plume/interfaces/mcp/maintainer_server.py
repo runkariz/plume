@@ -17,6 +17,7 @@ from plume import __version__
 from plume.application.jobs.maintainer import MaintainerJobs, job_payload
 from plume.application.knowledge.api_display import ApiDisplayName
 from plume.application.knowledge.release_notes import ReleaseNotes
+from plume.application.knowledge.remove_api import ApiInUseError, RemoveApi
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.models.concepts import SuggestConcepts, SuggestFilter
 from plume.application.models.generate import GenerateModels
@@ -57,6 +58,9 @@ Build control: publish_build(api, build, tag) moves a tag (refused when the qual
 failed); get_job(job_id) reads a maintainer job.
 """
 
+DESTRUCTIVE = ToolAnnotations(
+    read_only_hint=False, destructive_hint=True, idempotent_hint=False, open_world_hint=False
+)
 WRITE = ToolAnnotations(
     read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=False
 )
@@ -77,6 +81,7 @@ class McpMaintainerDependencies:
     mcp_app_html: str | None = None
     release_notes: Callable[[], ReleaseNotes] | None = None
     api_display: Callable[[], ApiDisplayName] | None = None
+    remove_api: Callable[[], RemoveApi] | None = None
 
 
 def _names(resolver: BuildResolver, apis: list[str]) -> dict[str, str]:
@@ -204,6 +209,26 @@ def create_maintainer_server(deps: McpMaintainerDependencies) -> MCPServer:
             amazon-sp-vendor); name null/omitted clears it. Per API, survives reloads. ASK the
             maintainer for the exact name first."""
             return await _run(lambda: display().set(api, name))
+
+    if deps.remove_api is not None:
+        remover = deps.remove_api
+
+        @server.tool(annotations=DESTRUCTIVE, structured_output=True)
+        async def remove_api(
+            api: str, confirm: str, force: bool = False, reason: str | None = None
+        ) -> dict[str, Any]:
+            """PERMANENTLY remove an API and all its builds, tags, evals, release notes and
+            jobs. ASK the maintainer first and have them type the API id (confirm). Refused
+            while official/unreleased models or sets pin it (they are listed); force=true
+            retires them first. Call it without force first to see what it would hit."""
+
+            def go() -> dict[str, Any]:
+                try:
+                    return remover().execute(api, confirm, force, reason)
+                except ApiInUseError as exc:
+                    return {"error": exc.code, "message": str(exc), "pinnedBy": exc.pinned}
+
+            return await _run(go)
 
     @server.tool(annotations=WRITE, structured_output=True, meta=MODEL_ONLY_META)
     async def publish_build(api: str, build: str, tag: str = "latest") -> dict[str, Any]:

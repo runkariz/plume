@@ -21,7 +21,9 @@ from plume.domain.shared.hashing import ContentHash, content_hash
 # 8: models record the operations whose response names them (raw x-plume-returned-by).
 # 9: endpoints sharing METHOD + path get "<id>@<package endpoint id>" document ids.
 # 10: auth companion files (<scheme>.<suffix>.{sample,schema}.json) are no schemes.
-CHUNKER_VERSION = "10"
+# 11: field constraints (enum, min/max, default, format, pattern) in fields and text; an
+# endpoint's fixed-version real path and its rate limit in its text.
+CHUNKER_VERSION = "11"
 DEFAULT_MAX_CHARS = 6000
 _HEADING = re.compile(r"^#{1,3} ", re.MULTILINE)
 

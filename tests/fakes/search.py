@@ -20,8 +20,9 @@ def _words(text: str) -> set[str]:
 
 def _summary(d: Document) -> DocumentSummary:
     return DocumentSummary(
-        d.doc_id, d.kind, d.title, d.resource, d.method, d.path, d.deprecated, d.tags
-    )
+        d.doc_id, d.kind, d.title, d.resource, d.method, d.path, d.deprecated, d.tags,
+        d.real_path,
+    )  # fmt: skip
 
 
 class InMemorySearchIndex:
