@@ -15,3 +15,4 @@ export { Banner } from './Banner';
 export { BrandMark } from './BrandMark';
 export { ApiAvatar } from './ApiAvatar';
 export { RawJson } from './RawJson';
+export { RateLimitsCard, EndpointRateLimitCard } from './RateLimits';

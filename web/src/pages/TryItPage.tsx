@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
-import { operationOf } from '@/lib/docHref';
+import { operationOf, shownPath } from '@/lib/docHref';
 import { formatMs } from '@/lib/format';
 import {
   ApiError,
@@ -387,7 +387,7 @@ function CheckTool({ apiId }: { apiId: string }) {
                 {d.matched ? (
                   <div className="row" style={{ marginBottom: 10 }}>
                     <MethodBadge method={d.matched.method} />
-                    <span className="mono">{d.matched.path}</span>
+                    <span className="mono">{shownPath(d.matched)}</span>
                     {operationOf(d.matched.id, d.matched.method, d.matched.path) ? (
                       <span className="faint small mono">
                         · {operationOf(d.matched.id, d.matched.method, d.matched.path)}

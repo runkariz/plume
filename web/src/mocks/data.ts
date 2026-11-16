@@ -128,6 +128,17 @@ const SHOPIFY_BASE = '/admin/api/latest';
 
 /** Sample data from the mockup pics/plume-src/02-api-detail.html. */
 export const shopifyDetail: ApiDetail = {
+  rateLimits: [
+    {
+      scope: 'app',
+      group: 'rest-admin',
+      limit: 40,
+      windowSeconds: 20,
+      algorithm: 'leaky-bucket',
+      headerNames: ['X-Shopify-Shop-Api-Call-Limit'],
+      notes: 'Sample numbers of the mock backend.',
+    },
+  ],
   ...(sampleApis[0] as (typeof sampleApis)[number]),
   name: 'Shopify Admin REST API',
   chunks: 409,
@@ -230,6 +241,15 @@ export const amazonVendorDetail: ApiDetail = {
     },
   ],
   extractedAt: '2026-11-16T08:30:00Z',
+  // the package describes the algorithm and the headers but no numbers (as Amazon's does today)
+  rateLimits: [
+    {
+      scope: 'endpoint-group',
+      algorithm: 'leaky-bucket',
+      headerNames: ['x-amzn-RateLimit-Limit'],
+      notes: 'Each operation has its own rate and burst.',
+    },
+  ],
 };
 
 export function detailFor(id: string): ApiDetail | undefined {
@@ -252,6 +272,7 @@ export function detailFor(id: string): ApiDetail | undefined {
     // one source (the manifest's docs url), as a package without a sources list has
     sources: [{ url: `https://docs.example.com/${id}`, kind: 'docs', fetchedAt: null }],
     extractedAt: '2026-11-14T08:30:00Z',
+    rateLimits: [],
   };
 }
 

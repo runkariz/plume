@@ -19,3 +19,12 @@ export function operationOf(
 /** The page of a document of an API in the web app. */
 export const docHref = (api: string, docId: string) =>
   `/apis/${encodeURIComponent(api)}/documents/${encodeURIComponent(docId)}`;
+
+/**
+ * The path to show for an endpoint: the one the vendor serves (realPath, e.g. "/vendor/orders/v1/purchaseOrders")
+ * when the package says it, else the package's own path. `operationOf` keeps using the package path: the id is built
+ * from it.
+ */
+export function shownPath(x: { path?: string | null; realPath?: string | null }): string | null {
+  return x.realPath || x.path || null;
+}

@@ -6,6 +6,10 @@ import {
   ApiError,
   type DocumentOut,
   type DraftIssue,
+  type PinnedBy,
+  type RemovalPreview,
+  type RemoveApiRequest,
+  type RemoveApiResult,
   type EvidencePage,
   type GenerateRequest,
   type GenerateJobResponse,
@@ -236,6 +240,10 @@ export interface PlumeApi {
     name: string | null,
     signal?: AbortSignal,
   ): Promise<ApiDisplayName>;
+  /** What removing an API would retire (maintainer): the models and sets that pin it. */
+  getApiRemoval(api: string, signal?: AbortSignal): Promise<RemovalPreview>;
+  /** Remove an API with everything it holds (maintainer); 409 api_in_use without `force` when something pins it. */
+  removeApi(api: string, req: RemoveApiRequest, signal?: AbortSignal): Promise<RemoveApiResult>;
   // release notes users see (public): feature-detected, absent on a server without them
   /** The builds that have notes, newest first (empty: the API has none: no Changes tab). */
   getChangesTimeline(api: string, signal?: AbortSignal): Promise<PublicBuild[]>;
@@ -352,6 +360,7 @@ export function createApiClient(
     let message = res.statusText;
     let code: string | undefined;
     let issues: DraftIssue[] | undefined;
+    let pinnedBy: PinnedBy[] | undefined;
     try {
       const body: unknown = await res.json();
       message = errorMessage(body) ?? message;
@@ -359,6 +368,7 @@ export function createApiClient(
         const b = body as Record<string, unknown>;
         if (typeof b.error === 'string') code = b.error;
         if (Array.isArray(b.issues)) issues = b.issues as DraftIssue[];
+        if (Array.isArray(b.pinnedBy)) pinnedBy = b.pinnedBy as PinnedBy[];
       }
     } catch {
       /* non-JSON error body */
@@ -367,13 +377,17 @@ export function createApiClient(
       const wait = res.headers.get('Retry-After');
       message = `${message || 'Too many requests'}${wait ? ` Try again in ${wait} s.` : ''}`;
     }
-    throw new ApiError(res.status, message || `Request failed (${res.status})`, { code, issues });
+    throw new ApiError(res.status, message || `Request failed (${res.status})`, {
+      code,
+      issues,
+      pinnedBy,
+    });
   }
 
   async function raw(
     path: string,
     init: {
-      method?: 'GET' | 'POST' | 'PUT';
+      method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
       body?: unknown;
       form?: FormData;
       signal?: AbortSignal;
@@ -732,6 +746,10 @@ export function createApiClient(
         body: { name },
         signal,
       }),
+    getApiRemoval: (api, signal) =>
+      call<RemovalPreview>(`/v1/apis/${enc(api)}/removal`, { signal }),
+    removeApi: (api, req, signal) =>
+      call<RemoveApiResult>(`/v1/apis/${enc(api)}`, { method: 'DELETE', body: req, signal }),
     keepRelease: (api, build, note, signal) =>
       call<ReleaseNotes>(`/v1/apis/${enc(api)}/builds/${enc(build)}/release-notes/keep`, {
         method: 'POST',
