@@ -9,15 +9,14 @@ from xml.sax.saxutils import escape
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import Response
 
-from plume.application.knowledge.public_changes import PublicChanges
+from plume.application.knowledge.public_changes import PublicChanges, change_text
 from plume.interfaces.http import schemas as s
 
 ATOM = "application/atom+xml; charset=utf-8"
 
 
 def _line(i: dict[str, Any]) -> str:
-    what = i["subject"].get("fieldPath") or i["subject"].get("docId")
-    out = f"- {i['kind'].replace('_', ' ')} {what} {i['op']}"
+    out = f"- {change_text(i)}"
     if i["breaking"]:
         out += " (BREAKING)"
     if i["perVendorChangelog"]:

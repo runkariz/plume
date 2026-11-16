@@ -131,3 +131,24 @@ def test_model_impact(stack: tuple[FakeStack, Path, Path], packages: Path) -> No
     out = impact.of_model(model)
     assert (out["status"], out["breakingCount"]) == ("affected", 1)
     assert {a["field"] for a in out["affected"]} == {"currency"}
+
+
+def test_a_breaking_input_change_of_the_fetched_endpoint_touches_the_mapping() -> None:
+    from plume.application.knowledge.public_changes import change_text  # noqa: PLC0415
+    from plume.application.models.impact import _touches  # noqa: PLC0415
+
+    def item(kind: str, op: str, field: str | None, breaking: bool) -> dict[str, Any]:
+        return {"kind": kind, "op": op, "breaking": breaking, "subject": {
+            "docId": "endpoint:GET~/orders", "method": "GET", "path": "/wp/{version}/orders",
+            "model": None, "fieldPath": field, "location": "query" if field else None}}  # fmt: skip
+
+    fetch = "GET /wp/{version}/orders"
+    cites = ({"endpoint:GET~/orders"}, {"[].status"})
+    required = item("param", "required", "status", True)
+    assert _touches(required, *cites, fetch)  # the call breaks
+    assert not _touches(item("param", "added", "after", False), *cites, fetch)  # optional input
+    assert not _touches(required, set(), set(), "GET /other")  # a different call
+    assert change_text(required) == "param status (GET /wp/{version}/orders) required"
+    assert (
+        change_text(item("endpoint", "removed", None, True)) == "GET /wp/{version}/orders removed"
+    )
