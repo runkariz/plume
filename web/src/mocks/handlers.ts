@@ -6,6 +6,7 @@ import type {
   CheckCallRequest,
   GenerateRequest,
   ItemKind,
+  PinnedBy,
   Job,
   RelationEdit,
   ReviewRequest,
@@ -192,6 +193,9 @@ const unauthorized = () =>
 const isMaintainer = (req: Request) =>
   (req.headers.get('authorization') ?? '').startsWith('Bearer pl_');
 
+/** What a mock package says the vendor serves a path as: its version filled in. */
+const realPathOf = (path: string) => `/vendor/orders/v1${path.replace(/^.*\/latest/, '')}`;
+
 export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = {}) {
   const eventDelay = opts.eventDelayMs ?? 0;
   /** In-memory job store: one sample job per upload, advanced by the endpoints below. */
@@ -213,6 +217,31 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
   const releases = seedReleases();
   // a maintainer's display names (per API, in memory like the rest of the mock)
   const displayNames = new Map<string, string>();
+  /** APIs a maintainer removed in this mock session. */
+  const removedApis = new Set<string>();
+  /** The models and sets that use an API, as the server's removal preview lists them. */
+  const pinnedBy = (api: string): PinnedBy[] => [
+    ...allModels()
+      .filter((m) => m.apis.includes(api) && ['official', 'unreleased'].includes(m.visibility))
+      .map((m) => ({
+        type: 'model' as const,
+        id: m.model.id,
+        name: m.model.name,
+        visibility: m.visibility as 'official' | 'unreleased',
+      })),
+    ...allSets()
+      .filter(
+        (x) =>
+          x.set.inputs.some((i) => i.id === api) &&
+          ['official', 'unreleased'].includes(x.set.visibility),
+      )
+      .map((x) => ({
+        type: 'set' as const,
+        id: x.set.id,
+        name: x.set.name,
+        visibility: x.set.visibility as 'official' | 'unreleased',
+      })),
+  ];
   const named = <T extends { id: string; name: string }>(
     a: T,
   ): T & { nameSource: 'override' | 'package' } =>
@@ -1462,13 +1491,66 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
         },
       });
     }),
+    http.get(`${base}/v1/apis/:id/removal`, ({ params, request }) => {
+      if (!isMaintainer(request)) return unauthorized();
+      const id = String(params.id);
+      if (removedApis.has(id) || !detailFor(id)) return notFound();
+      return HttpResponse.json({ api: id, pinnedBy: pinnedBy(id) });
+    }),
+    http.delete(`${base}/v1/apis/:id`, async ({ params, request }) => {
+      if (!isMaintainer(request)) return unauthorized();
+      const id = String(params.id);
+      if (removedApis.has(id) || !detailFor(id)) return notFound();
+      const body = (await request.json().catch(() => ({}))) as {
+        confirm?: string;
+        force?: boolean;
+      };
+      if (body.confirm !== id)
+        return HttpResponse.json(
+          { error: 'invalid_input', message: 'confirm must be the API id.' },
+          { status: 409 },
+        );
+      const pins = pinnedBy(id);
+      if (pins.length > 0 && !body.force)
+        return HttpResponse.json(
+          {
+            error: 'api_in_use',
+            message: `${pins.length} models or sets use this API.`,
+            pinnedBy: pins,
+          },
+          { status: 409 },
+        );
+      const retired = pins.map((p) => ({
+        ...p,
+        now: p.visibility === 'official' ? ('superseded' as const) : ('discarded' as const),
+      }));
+      removedApis.add(id);
+      return HttpResponse.json({
+        api: id,
+        removed: {
+          documents: 12,
+          releaseNotes: 0,
+          packageMeta: 1,
+          tags: 1,
+          jobs: 0,
+          evals: 1,
+          builds: 1,
+          displayName: displayNames.delete(id) ? 1 : 0,
+          api: 1,
+        },
+        retired,
+        forced: pins.length > 0,
+      });
+    }),
     http.get(`${base}/v1/apis`, () =>
       HttpResponse.json({
-        items: sampleApis.map((a) => {
-          // the badge: only an API whose latest build has notes with a visible, non-wording change says it
-          const d = docsUpdatedOf(releases[a.id]);
-          return named({ ...a, ...(d ? { docsUpdated: d } : {}) });
-        }),
+        items: sampleApis
+          .filter((a) => !removedApis.has(a.id))
+          .map((a) => {
+            // the badge: only an API whose latest build has notes with a visible, non-wording change says it
+            const d = docsUpdatedOf(releases[a.id]);
+            return named({ ...a, ...(d ? { docsUpdated: d } : {}) });
+          }),
       }),
     ),
     http.put(`${base}/v1/apis/:id/display`, async ({ params, request }) => {
@@ -1502,7 +1584,7 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
       });
     }),
     http.get(`${base}/v1/apis/:id`, ({ params }) => {
-      const found = detailFor(String(params.id));
+      const found = removedApis.has(String(params.id)) ? undefined : detailFor(String(params.id));
       if (!found) return notFound();
       const d = docsUpdatedOf(releases[String(params.id)]);
       return HttpResponse.json(named(d ? { ...found, docsUpdated: d } : found));
@@ -1528,6 +1610,23 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
         resource: item?.resource ?? 'orders',
         method,
         path: path ?? null,
+        realPath: api === 'amazon-sp-vendor' && path ? realPathOf(path) : null,
+        versionFixed: api === 'amazon-sp-vendor' && Boolean(path),
+        rateLimit:
+          kind === 'endpoint' && api === 'amazon-sp-vendor'
+            ? {
+                bucket: 'orders',
+                cost: 1,
+                group: {
+                  scope: 'endpoint-group',
+                  group: 'purchase-orders',
+                  limit: 10,
+                  windowSeconds: 60,
+                  algorithm: 'leaky-bucket',
+                  notes: 'Sample limit of the mock backend.',
+                },
+              }
+            : null,
         deprecated: false,
         complete: docId.includes('partial') ? false : true,
         sourceUrl: `https://docs.example.com/${api}/${kind}`,
@@ -1553,6 +1652,15 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
                   type: 'integer',
                   required: false,
                   description: null,
+                  constraints: { minimum: 1, maximum: 250, default: 50 },
+                },
+                {
+                  name: 'status',
+                  location: 'query',
+                  type: 'string',
+                  required: false,
+                  description: 'Only orders in this state.',
+                  constraints: { enum: ['open', 'closed', 'cancelled'], default: 'open' },
                 },
                 {
                   name: 'X-Access-Token',
@@ -1673,7 +1781,15 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
           (!q ||
             `${i.method ?? ''} ${i.path ?? ''} ${i.title} ${i.resource}`.toLowerCase().includes(q)),
       );
-      return HttpResponse.json({ items: matching.slice(0, limit), total: matching.length });
+      // an API whose package knows the vendor's real paths (Amazon here) sends them; Shopify's are null
+      const withReal = (i: (typeof matching)[number]) =>
+        String(params.id) === 'amazon-sp-vendor' && i.path
+          ? { ...i, realPath: realPathOf(i.path) }
+          : i;
+      return HttpResponse.json({
+        items: matching.slice(0, limit).map(withReal),
+        total: matching.length,
+      });
     }),
     http.post(`${base}/v1/apis/:id/search`, async ({ params, request }) => {
       if (!detailFor(String(params.id))) return notFound();

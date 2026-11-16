@@ -3,9 +3,19 @@ import { Link, useParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
 import { ApiError, type DocumentOut, type HttpMethod } from '@/api/types';
-import { Card, Chip, Crumbs, ErrorState, LoadingState, MethodBadge, RawJson } from '@/components';
+import {
+  Card,
+  Chip,
+  Crumbs,
+  EndpointRateLimitCard,
+  ErrorState,
+  LoadingState,
+  MethodBadge,
+  RawJson,
+} from '@/components';
+import { constraintParts } from '@/lib/constraints';
 import { breakable } from '@/lib/breakable';
-import { operationOf } from '@/lib/docHref';
+import { operationOf, shownPath } from '@/lib/docHref';
 import { formatDate, shortBuild } from '@/lib/format';
 import { apiTitle } from '@/lib/names';
 
@@ -27,6 +37,21 @@ type Field = DocumentOut['fields'][number];
 /** A verbatim value from the package, as text (objects are not guessed at). */
 function text(v: unknown): string {
   return typeof v === 'string' || typeof v === 'number' ? String(v) : '';
+}
+
+/** What the package says about the allowed values of a field, as small plain-text chips. */
+function Constraints({ value }: { value: Field['constraints'] }) {
+  const parts = constraintParts(value);
+  if (parts.length === 0) return null;
+  return (
+    <ul className="constraints" aria-label="Constraints">
+      {parts.map((p) => (
+        <li key={p.label}>
+          <span className="faint">{p.label}</span> <span className="mono">{p.value}</span>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function FieldTable({ title, fields }: { title: string; fields: Field[] }) {
@@ -52,7 +77,10 @@ function FieldTable({ title, fields }: { title: string; fields: Field[] }) {
                 {f.required ? <span className="chip acc ev-req">required</span> : null}
               </th>
               <td className="mono">{f.type ?? '–'}</td>
-              <td className="muted">{f.description ?? ''}</td>
+              <td className="muted">
+                {f.description ?? ''}
+                <Constraints value={f.constraints} />
+              </td>
             </tr>
           ))}
         </tbody>
@@ -130,7 +158,18 @@ export function DocumentPage() {
             {d.method && METHODS.includes(d.method) ? (
               <MethodBadge method={d.method as HttpMethod} />
             ) : null}
-            {d.path ? <span className="mono doc-path">{breakable(d.path)}</span> : null}
+            {shownPath(d) ? (
+              <span
+                className="mono doc-path"
+                title={
+                  d.realPath && d.path && d.realPath !== d.path
+                    ? `Package path: ${d.path}`
+                    : undefined
+                }
+              >
+                {breakable(shownPath(d) ?? '')}
+              </span>
+            ) : null}
             {operationOf(d.id, d.method, d.path) ? (
               <span className="faint small mono">· {operationOf(d.id, d.method, d.path)}</span>
             ) : null}
@@ -169,6 +208,8 @@ export function DocumentPage() {
           )}
         </div>
       </div>
+
+      <EndpointRateLimitCard limit={d.rateLimit} />
 
       {d.scopes.length ? (
         <Card className="pad doc-scopes" role="region" aria-label="Scopes">

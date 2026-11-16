@@ -72,16 +72,19 @@ export class ApiError extends Error {
   readonly code?: string;
   /** Present on a refused model draft (422 draft_refused). */
   readonly issues?: DraftIssue[];
+  /** Present on 409 api_in_use: the models and sets that pin the API. */
+  readonly pinnedBy?: PinnedBy[];
   constructor(
     status: number,
     message: string,
-    extra: { code?: string; issues?: DraftIssue[] } = {},
+    extra: { code?: string; issues?: DraftIssue[]; pinnedBy?: PinnedBy[] } = {},
   ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = extra.code;
     this.issues = extra.issues;
+    this.pinnedBy = extra.pinnedBy;
   }
 }
 
@@ -102,6 +105,8 @@ export interface ApiDetail extends ApiSummary {
   sources?: ApiSource[] | null;
   /** When the package was extracted (ISO); null for older builds. */
   extractedAt?: string | null;
+  /** The package's rate-limit description, verbatim ([] when it has none; absent on an older server). */
+  rateLimits?: ApiRateLimit[];
   chunks: number;
   isLive: boolean;
   tag: string | null; // e.g. "latest"; null while unpublished
@@ -140,6 +145,8 @@ export interface BrowseItem {
   title: string;
   method?: HttpMethod;
   path?: string;
+  /** The path as the vendor serves it (with the version filled in), when the package says so; else null. */
+  realPath?: string | null;
   resource?: string | null;
   deprecated?: boolean;
 }
@@ -214,7 +221,7 @@ export interface CheckCallResponse {
   verdict: 'documented' | 'not_documented';
   /** false when the schema is flagged partial: absence is then not proven */
   complete: boolean;
-  matched: { id: string; method: HttpMethod; path: string } | null;
+  matched: { id: string; method: HttpMethod; path: string; realPath?: string | null } | null;
   evidence?: {
     docId: string;
     sourceUrl: string | null;
@@ -720,6 +727,12 @@ export interface DocumentOut {
   resource: string | null;
   method: string | null;
   path: string | null;
+  /** The path as the vendor serves it (e.g. "/wp-json/wc/v3/orders"); null when the package does not say. */
+  realPath?: string | null;
+  /** True when the version in realPath is fixed by the package, not a variable. */
+  versionFixed?: boolean;
+  /** The limit that applies to this endpoint: its bucket, its cost and the group it counts in. */
+  rateLimit?: EndpointRateLimit | null;
   deprecated: boolean;
   complete: boolean;
   sourceUrl: string | null;
@@ -742,8 +755,78 @@ export interface DocumentOut {
     type: string | null;
     required: boolean;
     description: string | null;
+    /** What the package says about the allowed values; null when nothing. */
+    constraints?: FieldConstraints | null;
   }[];
   scopes: string[];
+}
+
+/** The allowed values of a field, verbatim from the package (untrusted: show as text). */
+export interface FieldConstraints {
+  enum?: unknown[];
+  minimum?: unknown;
+  maximum?: unknown;
+  exclusiveMinimum?: unknown;
+  exclusiveMaximum?: unknown;
+  minLength?: unknown;
+  maxLength?: unknown;
+  minItems?: unknown;
+  maxItems?: unknown;
+  default?: unknown;
+  format?: unknown;
+  pattern?: unknown;
+}
+
+/** One rate-limit group of a package, verbatim; the fields a package leaves out are absent. */
+export interface RateLimitGroup {
+  scope?: string | null;
+  group?: string | null;
+  limit?: number | string | null;
+  windowSeconds?: number | string | null;
+  algorithm?: string | null;
+  notes?: string | null;
+  [key: string]: unknown;
+}
+
+/** An entry of an API's rateLimits: a scope, an algorithm, the headers that report it, maybe one group's numbers. */
+export interface ApiRateLimit extends RateLimitGroup {
+  headerNames?: string[] | string | null;
+}
+
+export interface EndpointRateLimit {
+  bucket?: string | null;
+  cost?: number | string | null;
+  group?: RateLimitGroup | null;
+}
+
+// ---- remove an API (maintainer) ----
+
+/** A model or set that pins an API: removing the API retires it. */
+export interface PinnedBy {
+  type: 'model' | 'set';
+  id: string;
+  name: string;
+  visibility: 'official' | 'unreleased';
+}
+
+export interface RemovalPreview {
+  api: string;
+  pinnedBy: PinnedBy[];
+}
+
+export interface RemoveApiRequest {
+  /** Must equal the API id. */
+  confirm: string;
+  /** Remove although models or sets pin it (they are retired). */
+  force?: boolean;
+  reason?: string;
+}
+
+export interface RemoveApiResult {
+  api: string;
+  removed: Record<string, number | string | boolean>;
+  retired: (PinnedBy & { now: 'superseded' | 'discarded' })[];
+  forced: boolean;
 }
 
 // ---- package sections: auth, triggers, environments (from the package, nothing invented) ----
