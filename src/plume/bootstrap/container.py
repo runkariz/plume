@@ -9,6 +9,7 @@ from sqlalchemy import Engine
 from plume.application.eval.run_eval_gate import RunEvalGate
 from plume.application.jobs.build_pipeline import BuildPipeline
 from plume.application.jobs.maintainer import MaintainerJobs
+from plume.application.knowledge.api_display import ApiDisplayName
 from plume.application.knowledge.chunk_documents import ChunkDocuments
 from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.embed_build import EmbedBuild
@@ -326,6 +327,9 @@ class Container:
     @cached_property
     def release_notes_repo(self) -> PostgresReleaseNotesRepo:
         return PostgresReleaseNotesRepo(self.engine)
+
+    def api_display(self) -> ApiDisplayName:
+        return ApiDisplayName(self.apis)
 
     def public_changes(self) -> PublicChanges:
         return PublicChanges(self.release_notes_repo, self.tags)

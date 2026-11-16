@@ -139,6 +139,12 @@
             "title": "Name",
             "type": "string"
           },
+          "nameSource": {
+            "default": "derived",
+            "description": "Where `name` comes from: override (a maintainer set it) | package (app.json title/displayName) | derived (from the package's id).",
+            "title": "Namesource",
+            "type": "string"
+          },
           "quality": {
             "anyOf": [
               {
@@ -376,6 +382,12 @@
           },
           "name": {
             "title": "Name",
+            "type": "string"
+          },
+          "nameSource": {
+            "default": "derived",
+            "description": "Where `name` comes from: override (a maintainer set it) | package (app.json title/displayName) | derived (from the package's id).",
+            "title": "Namesource",
             "type": "string"
           },
           "status": {
@@ -1463,6 +1475,27 @@
           "label"
         ],
         "title": "Difficulty",
+        "type": "object"
+      },
+      "DisplayNameIn": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The display name (1-80 chars); null clears it.",
+            "title": "Name"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "DisplayNameIn",
         "type": "object"
       },
       "DocsUpdated": {
@@ -5965,6 +5998,107 @@
         "summary": "Diff",
         "tags": [
           "builds"
+        ]
+      }
+    },
+    "/v1/apis/{api}/display": {
+      "put": {
+        "description": "Set the API's display name (null clears it). Stored per API, not per build: it\nsurvives reloads and wins over the package's title and the derived name.",
+        "operationId": "set_display_v1_apis__api__display_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "api",
+            "required": true,
+            "schema": {
+              "title": "Api",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisplayNameIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Set Display V1 Apis  Api  Display Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Display",
+        "tags": [
+          "maintainer"
         ]
       }
     },

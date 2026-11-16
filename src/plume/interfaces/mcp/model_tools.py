@@ -159,7 +159,7 @@ def register_model_tools(  # noqa: PLR0915
         out = {}
         for i in snap.inputs:
             try:
-                out[i.api] = resolver().resolve(i.api).api.name
+                out[i.api] = resolver().resolve(i.api).api.display_name
             except ApplicationError:
                 out[i.api] = i.api
         return out

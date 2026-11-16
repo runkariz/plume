@@ -15,6 +15,7 @@ from mcp.types import ToolAnnotations
 
 from plume import __version__
 from plume.application.jobs.maintainer import MaintainerJobs, job_payload
+from plume.application.knowledge.api_display import ApiDisplayName
 from plume.application.knowledge.release_notes import ReleaseNotes
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.models.concepts import SuggestConcepts, SuggestFilter
@@ -75,13 +76,14 @@ class McpMaintainerDependencies:
     model_sets: Callable[[], ModelSets] | None = None
     mcp_app_html: str | None = None
     release_notes: Callable[[], ReleaseNotes] | None = None
+    api_display: Callable[[], ApiDisplayName] | None = None
 
 
 def _names(resolver: BuildResolver, apis: list[str]) -> dict[str, str]:
     out = {}
     for a in apis:
         try:
-            out[a] = resolver.resolve(a).api.name
+            out[a] = resolver.resolve(a).api.display_name
         except Exception:
             out[a] = a
     return out
@@ -193,6 +195,15 @@ def create_maintainer_server(deps: McpMaintainerDependencies) -> MCPServer:
 
     if deps.release_notes is not None:
         _register_release_notes(server, deps.release_notes)
+    if deps.api_display is not None:
+        display = deps.api_display
+
+        @server.tool(annotations=WRITE, structured_output=True)
+        async def set_api_display_name(api: str, name: str | None = None) -> dict[str, Any]:
+            """Set how an API's name is shown everywhere (e.g. "Amazon SP-API Vendor" for
+            amazon-sp-vendor); name null/omitted clears it. Per API, survives reloads. ASK the
+            maintainer for the exact name first."""
+            return await _run(lambda: display().set(api, name))
 
     @server.tool(annotations=WRITE, structured_output=True, meta=MODEL_ONLY_META)
     async def publish_build(api: str, build: str, tag: str = "latest") -> dict[str, Any]:
