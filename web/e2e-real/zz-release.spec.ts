@@ -161,7 +161,7 @@ test("Copy issues and Download are the server's own text, byte for byte", async 
   expect(readFileSync(path, 'utf8')).toBe(text);
 });
 
-test('a quote that is not in the source is refused by the server and the change stays suspect', async ({
+test('a quote that is not in the source is refused by the server and the change keeps its class', async ({
   page,
   request,
 }) => {
@@ -169,16 +169,23 @@ test('a quote that is not in the source is refused by the server and the change 
   const buildId = tl.find((b) => b.tagged)?.to ?? '';
   await signIn(page);
   await page.goto(`/maintainer/apis/${APIID}/builds/${buildId}/notes`);
-  const group = page.getByRole('region', { name: 'Mass removal', exact: true });
+  // whichever group the server reports first (the groups depend on the data)
+  const notes = (await (
+    await request.get(`${API}/v1/apis/${APIID}/builds/${buildId}/release-notes`, { headers: auth })
+  ).json()) as { report: { title: string }[] };
+  const title = notes.report[0]?.title ?? '';
+  expect(title).not.toBe('');
+  const group = page.getByRole('region', { name: title, exact: true });
   await expect(group).toBeVisible({ timeout: 30_000 });
   const row = group.getByRole('listitem').first();
+  const classChip = (await row.locator('.chip').first().innerText()).trim();
   await row.getByRole('button', { name: 'Promote to confirmed…' }).click();
   await row
     .getByLabel(/A quote from the vendor docs/)
     .fill('This sentence is certainly not in any Shopify page.');
   await row.getByRole('button', { name: 'Promote to confirmed', exact: true }).click();
   await expect(row.getByRole('alert')).toContainText('not in the source text of this build');
-  await expect(row.getByText('Suspect: extraction artifact')).toBeVisible();
+  await expect(row.locator('.chip').first()).toHaveText(classChip);
 });
 
 test('roll back needs a reason and moves latest back on the server; Roll forward undoes it', async ({

@@ -60,7 +60,18 @@ export class ApiError extends Error {
 export type ItemKind = 'endpoint' | 'model' | 'guide' | 'auth' | 'trigger' | 'app';
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
+/** Where a package's docs came from (public: url is always http(s); kind is one of docs|spec|changelog|sdk|other). */
+export interface ApiSource {
+  url: string;
+  kind: string;
+  fetchedAt?: string | null;
+}
+
 export interface ApiDetail extends ApiSummary {
+  /** null: the build has no recorded package metadata (older builds); []: metadata but no http(s) source. */
+  sources?: ApiSource[] | null;
+  /** When the package was extracted (ISO); null for older builds. */
+  extractedAt?: string | null;
   chunks: number;
   isLive: boolean;
   tag: string | null; // e.g. "latest"; null while unpublished
@@ -1048,6 +1059,10 @@ export interface ChangeItem {
     pageHashBefore?: string | null;
     pageHashAfter?: string | null;
     changelog?: string | null;
+    /** Urls the change is attributed to (empty when not attributed). */
+    sources?: string[] | null;
+    sourceKind?: 'spec' | 'docs' | 'changelog' | 'sdk' | 'other' | 'mixed' | null;
+    attribution?: 'recorded' | 'not-recorded' | null;
   } | null;
   artifactRules?: string[];
   wordingOnly?: boolean;
@@ -1117,8 +1132,35 @@ export interface ReleaseDecision {
   fromClass?: ChangeClass | null;
 }
 
+/** A source of a package as stream recorded it (maintainer view). */
+export interface PackageSource extends ApiSource {
+  contentSha256?: string | null;
+  etag?: string | null;
+  version?: string | null;
+  /** "entry" or "discovered from <url>". */
+  role?: string | null;
+  /** True when the source is only the manifest's single source url (no sources[] recorded). */
+  fallback?: boolean | null;
+}
+
+/** Stream found two sources disagreeing about a unit's field; it chose one. */
+export interface SourceConflict {
+  unit: string;
+  field: string;
+  values: { url: string; value: unknown }[];
+  chosen?: unknown;
+  reason?: string | null;
+}
+
 /** What produced a build's package (stream and its rules): the A and B sides of a diff. */
 export interface BuildPackage {
+  sources?: PackageSource[] | null;
+  changelogUrls?: string[] | null;
+  /** unit -> the urls it was built from. */
+  unitSources?: Record<string, string[]> | null;
+  conflicts?: SourceConflict[] | null;
+  conflictsChecked?: string[] | null;
+  conflictsUnchecked?: string[] | null;
   streamVersion?: string | null;
   rulesHash?: string | null;
   runId?: string | null;
@@ -1135,6 +1177,10 @@ export interface BuildPackage {
 
 /** GET /v1/apis/{api}/builds/{build}/release-notes (maintainer): every item, the extraction report and the review. */
 export interface ReleaseNotes {
+  /** Stream's source conflicts for the new build. Absent on notes computed before sources were recorded. */
+  conflicts?: SourceConflict[] | null;
+  /** notCompared: units stream did NOT compare (never the same as "no conflicts"). */
+  conflictCheck?: { checked: number; notCompared: number } | null;
   api?: string;
   to?: string;
   toDocsAsOf?: string | null;

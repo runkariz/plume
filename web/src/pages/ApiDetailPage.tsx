@@ -23,6 +23,7 @@ import {
   Segmented,
   Tile,
 } from '@/components';
+import { SourcesLine } from '@/components/SourcesLine';
 import { SearchIcon } from '@/icons';
 import { breakable } from '@/lib/breakable';
 import { operationOf } from '@/lib/docHref';
@@ -174,6 +175,7 @@ function Detail({ api }: { api: ApiDetail }) {
                   : 'No docs published yet'}
               </span>
             </div>
+            <SourcesLine sources={api.sources} extractedAt={api.extractedAt} />
           </div>
         </div>
         <div className="row">
