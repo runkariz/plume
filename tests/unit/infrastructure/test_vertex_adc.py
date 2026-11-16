@@ -224,3 +224,32 @@ def test_gemini_embedding_2_uses_batch_embed_contents_on_the_rep_host() -> None:
 def test_gemini_embedding_2_needs_adc_and_a_project() -> None:
     with pytest.raises(EmbeddingError, match="does not accept API keys"):
         GeminiEmbedder(api_key="k", model="gemini-embedding-2", project="proj")
+
+
+def test_the_documented_prompt_format_for_gemini_embedding_2() -> None:
+    from plume.infrastructure.embeddings.gemini import gemini_document, gemini_query  # noqa: PLC0415
+
+    assert gemini_document("# Orders\n\nList orders.") == "title: Orders | text: List orders."
+    assert gemini_document("no heading here") == "title: none | text: no heading here"
+    assert gemini_query("list orders") == "task: search result | query: list orders"
+    sent: list[str] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        reqs = json.loads(request.content)["requests"]
+        sent.extend(r["content"]["parts"][0]["text"] for r in reqs)
+        return httpx.Response(200, json={"embeddings": [{"values": [1.0, 0.0]}] * len(reqs)})
+
+    embedder = GeminiEmbedder(
+        api_key="", model="gemini-embedding-2", dims=2, prompt=True, project="proj",
+        location="eu", client=httpx.Client(transport=httpx.MockTransport(handle)),
+        token_source=_source(FakeCreds(), [NOW.timestamp()]),
+    )  # fmt: skip
+    assert embedder.model == "gemini-embedding-2+prompt"  # its own builds and cache rows
+    embedder.embed_documents(["# Orders\n\nList orders."])
+    embedder.embed_query("list orders")
+    assert sent == [
+        "title: Orders | text: List orders.",
+        "task: search result | query: list orders",
+    ]
+    with pytest.raises(EmbeddingError, match="gemini-embedding-2 only"):
+        GeminiEmbedder(api_key="k", prompt=True)

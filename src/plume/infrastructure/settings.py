@@ -98,6 +98,12 @@ class Settings(BaseSettings):
         description="The web UI's public base URL; model share links are <this>/models/{id}.",
     )
     embed_model: str = "gemini-embedding-001"
+    embed_prompt: Literal["none", "gemini"] = Field(
+        default="none",
+        description="gemini = write the task into the text, Google's documented format for "
+        "gemini-embedding-2 (documents 'title: … | text: …', queries 'task: search result | "
+        "query: …'); builds record the model as '<model>+prompt'. gemini-embedding-2 only.",
+    )
     embed_dims: Literal[768] = 768
     embed_batch_size: int | None = Field(default=None, ge=1, le=250)
     chunk_max_chars: int = Field(default=6000, ge=200)

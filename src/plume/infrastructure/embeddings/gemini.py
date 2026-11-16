@@ -44,6 +44,24 @@ VERTEX_BATCH_URL = (
 CONTENT_API_BATCH = 250  # batchEmbedContents accepts 1..250 requests (probed 2026-11-16)
 
 
+PROMPT_SUFFIX = "+prompt"  # recorded model name when the task is written into the text
+
+
+def gemini_document(text: str) -> str:
+    """Google's documented format for gemini-embedding-2 retrieval documents
+    (ai.google.dev/gemini-api/docs/embeddings): "title: {title} | text: {content}", title
+    "none" when there is none. A chunk's embed text is "heading\n\ntext"."""
+    title, sep, body = text.partition("\n\n")
+    if not sep or not title.strip() or "\n" in title:
+        return f"title: none | text: {text}"
+    return f"title: {title.strip().lstrip('# ').strip()} | text: {body}"
+
+
+def gemini_query(text: str) -> str:
+    """The documented query format for search: "task: search result | query: {query}"."""
+    return f"task: search result | query: {text}"
+
+
 def uses_content_api(model: str) -> bool:
     """gemini-embedding-2 answers only :embedContent / :batchEmbedContents (OAuth, no API
     keys) on the project path; :predict gives FAILED_PRECONDITION. taskType is ignored by it."""
@@ -75,7 +93,14 @@ class GeminiEmbedder:
         token_source: TokenSource | None = None,
         project: str | None = None,
         location: str = "global",
+        prompt: bool = False,
     ) -> None:
+        if prompt and not uses_content_api(model):
+            raise EmbeddingError(
+                "PLUME_EMBED_PROMPT=gemini applies to gemini-embedding-2 only "
+                "(gemini-embedding-001 takes task_type)"
+            )
+        self._prompt = prompt
         if not api_key and token_source is None:
             raise EmbeddingError("an API key (or Vertex ADC) is required for the Gemini embedder")
         if token_source is not None and not api_key and (backend != "vertex" or not project):
@@ -105,7 +130,8 @@ class GeminiEmbedder:
 
     @property
     def model(self) -> str:
-        return self._model
+        """Recorded on builds and cache rows: prompted vectors differ from plain ones."""
+        return self._model + (PROMPT_SUFFIX if self._prompt else "")
 
     @property
     def dims(self) -> int:
@@ -207,10 +233,14 @@ class GeminiEmbedder:
         return vectors
 
     def embed_documents(self, texts: Sequence[str]) -> list[Vector]:
+        if self._prompt:
+            texts = [gemini_document(t) for t in texts]
         out: list[Vector] = []
         for start in range(0, len(texts), self._batch):
             out.extend(self._embed_batch(texts[start : start + self._batch], "RETRIEVAL_DOCUMENT"))
         return out
 
     def embed_query(self, text: str) -> Vector:
-        return self._embed_batch([text], "RETRIEVAL_QUERY")[0]
+        return self._embed_batch([gemini_query(text) if self._prompt else text], "RETRIEVAL_QUERY")[
+            0
+        ]

@@ -149,6 +149,7 @@ class Container:
                 token_source=self.vertex_tokens,
                 project=s.vertex_project,
                 location=s.vertex_embed_location,
+                prompt=s.embed_prompt == "gemini",
             )
         if kind == "vertex":
             return GeminiEmbedder(
