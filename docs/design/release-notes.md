@@ -32,7 +32,7 @@ One record per atomic difference between build A (previous) and build B (new) of
   "id": "ch-<hash of api, from, to, kind, subject, path, op>",
   "from": "b-…", "to": "b-…", "toDocsAsOf": "2026-11-15",
   "wordingOnly": false,
-  "kind": "endpoint | param | request_field | response_field | model | property | auth_scheme | scope | environment | versioning | webhook_event | guide",
+  "kind": "endpoint | param | request_field | response_field | model | property | auth_scheme | scope | environment | versioning | webhook | webhook_event | guide",
   "op": "added | removed | type | required | description | enum | renamed | changed",
   "subject": {"docId": "endpoint:GET~/orders.json", "method": "GET", "path": "/orders.json",
               "model": null, "fieldPath": "line_items[].tax_lines[].rate", "location": "response"},
@@ -85,6 +85,19 @@ One record per atomic difference between build A (previous) and build B (new) of
   - classification is the same: evidence is the app document's page plus the environment's
     `provenance.evidenceUrl`; an unchanged page makes the item `suspect` (an extraction fix).
     A `changed` item is confirmed when the new value is on the changed page and the old is not.
+- **Auth schemes** (subject = the auth document; `fieldPath` = the scheme key, `scopes.<s>`,
+  `variables.<name>`, `companions.<suffix>[.<param>]`): URLs and call settings (`*Url`,
+  type, grant, header, query param) added / changed / removed; wording (name, setup steps,
+  token lifetime) as `description`; scopes added / removed; variables and the OAuth
+  auth/token/refresh params schemas: inputs added / removed / newly required; companions
+  added / removed. Breaking: a changed or removed URL or call setting, a removed scope, a
+  newly required input. Builds loaded before companions were recorded skip the companion
+  comparison.
+- **Webhook mechanisms** (kind `webhook`, subject = the app document, `fieldPath`
+  `webhooks.<id>.<path>` or `webhooks.<id>.events.<event>`): every value of subscribe /
+  unsubscribe / list / handshake / verification / mode, and the events offered. Breaking: a
+  removed mechanism or event, a changed or removed call value. Evidence: the mechanism's
+  `provenance.evidenceUrl`. Trigger events themselves stay `webhook_event` documents.
 
 ## 3. Computing the diff (at load, against the previous build)
 

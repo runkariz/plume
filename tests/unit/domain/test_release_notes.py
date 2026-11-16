@@ -264,3 +264,52 @@ def test_key_only_rename_is_a_hidden_rename_and_removals_are_breaking() -> None:
     renamed = next(i for i in items if i["op"] == "renamed")
     assert renamed["rename"]
     assert not renamed["visibleToUsers"]
+
+
+def _auth(scheme: dict[str, object], scopes: tuple[str, ...] = (), **raw: object) -> Document:
+    return Document("auth:oauth", DocumentKind.AUTH, "OAuth", "OAuth", scopes=scopes,
+                    source_id="oauth", raw={"scheme": scheme, "companions": {}, **raw})  # fmt: skip
+
+
+def _ops(items: list[Item]) -> list[tuple[str, str, str, bool]]:
+    return sorted((i["kind"], i["op"], i["subject"]["fieldPath"], i["breaking"]) for i in items)
+
+
+def test_auth_scheme_urls_scopes_inputs_and_companions() -> None:
+    old = _auth({"authorizationType": "OAUTH2", "accessTokenUrl": "https://x/token",
+                 "headerName": "X-Token", "name": "OAuth"}, ("read", "write"),
+                variables_schema={"properties": {"clientId": {}, "shop": {}}})  # fmt: skip
+    new = _auth(
+        {"authorizationType": "OAUTH2", "accessTokenUrl": "https://x/oauth/token",
+         "authUrl": "https://x/authorize", "name": "OAuth 2"}, ("read", "orders"),
+        variables_schema={"properties": {"shop": {}}, "required": ["shop"]},
+        companions={"oauth-token-params": {"schema": {"properties": {"grant_type": {}}}}},
+    )  # fmt: skip
+    assert _ops(diff_documents([old], [new])) == [
+        ("auth_scheme", "added", "authUrl", False),
+        ("auth_scheme", "added", "companions.oauth-token-params", False),
+        ("auth_scheme", "changed", "accessTokenUrl", True),
+        ("auth_scheme", "description", "name", False),
+        ("auth_scheme", "removed", "headerName", True),
+        ("auth_scheme", "removed", "variables.clientId", False),
+        ("auth_scheme", "required", "variables.shop", True),
+        ("scope", "added", "scopes.orders", False),
+        ("scope", "removed", "scopes.write", True),
+    ]
+
+
+def test_webhook_mechanism_call_values_and_events() -> None:
+    def app(id_var: str, events: list[str]) -> Document:
+        hook = {"id": "hooks", "eventsAvailable": events, "unsubscribe": {"idVar": id_var},
+                "provenance": {"evidenceUrl": "https://x/webhooks"}}  # fmt: skip
+        return Document("app:shop", DocumentKind.APP, "Shop", "Shop", raw={"app": {},
+                        "webhooks": [hook]})  # fmt: skip
+
+    items = diff_documents(
+        [app("/webhook_id", ["a/x", "b/y"])], [app("webhook_id", ["a/x", "c/z"])]
+    )
+    assert _ops(items) == [
+        ("webhook", "added", "webhooks.hooks.events.c/z", False),
+        ("webhook", "changed", "webhooks.hooks.unsubscribe.idVar", True),
+        ("webhook", "removed", "webhooks.hooks.events.b/y", True),
+    ]

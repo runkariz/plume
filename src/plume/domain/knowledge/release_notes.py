@@ -327,6 +327,8 @@ def _changed_items(kind: str, a: Document, b: Document) -> list[Item]:
                     breakingReason=None,
                 )
             )
+    if kind == "auth_scheme":  # its text is generated from the scheme: diff the scheme itself
+        return out + _auth_items(a, b)
     if kind not in {"endpoint", "model"} and _norm(a.text) != _norm(b.text):
         out.append(
             _item(
@@ -419,6 +421,8 @@ def diff_documents(old: Sequence[Document], new: Sequence[Document]) -> list[Ite
     app_a = next((d for d in old if d.kind is DocumentKind.APP), None)
     app_b = next((d for d in new if d.kind is DocumentKind.APP), None)
     out.extend(_environment_items(app_a, app_b))
+    if app_a is not None and app_b is not None:
+        out.extend(_webhook_items(app_a, app_b))
     return out
 
 
@@ -426,8 +430,11 @@ def diff_documents(old: Sequence[Document], new: Sequence[Document]) -> list[Ite
 
 
 def _env_item(app: Document, op: str, path: str, before: Any, after: Any, **more: Any) -> Item:
+    kind = more.pop("kind", None) or (
+        "versioning" if path.startswith("apiVersioning") else "environment"
+    )
     return {
-        "kind": "versioning" if path.startswith("apiVersioning") else "environment",
+        "kind": kind,
         "op": op,
         "subject": {
             "docId": app.doc_id,
@@ -671,6 +678,282 @@ def _versioning_items(app: Document, va: Any, vb: Any) -> list[Item]:
                 breakingReason="removed API version",
             )
         )
+    return out
+
+
+# -- auth schemes and webhook mechanisms ---------------------------------------------------------
+
+# Values a client's auth call uses: a change or removal breaks it.
+_AUTH_CALL = (
+    "authorizationType",
+    "grantType",
+    "headerName",
+    "codeQueryParamName",
+    "queryParamName",
+    "testUrlMethod",
+)
+_AUTH_WORDING = ("name", "description", "setupSteps", "tokenLifetime", "notes")
+_AUTH_SKIP = ("id", "scopes", "provenance")
+# Webhook mechanism parts whose values a subscription call uses.
+_HOOK_CALL = ("subscribe", "unsubscribe", "list", "handshake", "verification", "mode")
+
+
+def _leaves(value: Any, prefix: str = "") -> dict[str, str]:
+    """Flatten JSON to dotted leaf paths (lists of scalars become one sorted value)."""
+    if isinstance(value, dict):
+        out: dict[str, str] = {}
+        for k, v in value.items():
+            out.update(_leaves(v, f"{prefix}.{k}" if prefix else str(k)))
+        return out
+    if isinstance(value, list):
+        if all(not isinstance(v, dict | list) for v in value):
+            return {prefix: ", ".join(sorted(str(v) for v in value))}
+        out = {}
+        for i, v in enumerate(value):
+            out.update(_leaves(v, f"{prefix}[{i}]"))
+        return out
+    return {prefix: "" if value is None else str(value)}
+
+
+def _scheme(d: Document) -> dict[str, Any]:
+    s = (d.raw or {}).get("scheme")
+    return s if isinstance(s, dict) else {}
+
+
+def _props(schema: Any) -> tuple[dict[str, Any], set[str]]:
+    if not isinstance(schema, dict):
+        return {}, set()
+    props = schema.get("properties")
+    return (props if isinstance(props, dict) else {}), set(schema.get("required") or [])
+
+
+def _auth_item(doc: Document, op: str, path: str, before: Any, after: Any, **more: Any) -> Item:
+    kind = more.pop("kind", "auth_scheme")
+    item = _env_item(doc, op, path, before, after, kind=kind, **more)
+    item["subject"] = _subject(doc) | {"fieldPath": path}
+    return item
+
+
+def _schema_items(doc: Document, prefix: str, sa: Any, sb: Any) -> list[Item]:
+    """Inputs of a variables / OAuth params schema: added, removed, newly required."""
+    (pa, ra), (pb, rb) = _props(sa), _props(sb)
+    out: list[Item] = []
+    for name in sorted(set(pa) | set(pb)):
+        path = f"{prefix}.{name}"
+        if name not in pa:
+            req = name in rb
+            out.append(
+                _auth_item(
+                    doc,
+                    "added",
+                    path,
+                    None,
+                    name,
+                    breaking=req,
+                    breakingReason="new required input" if req else None,
+                )
+            )
+        elif name not in pb:
+            out.append(_auth_item(doc, "removed", path, name, None))
+        elif (name in ra) != (name in rb):
+            req = name in rb
+            out.append(
+                _auth_item(
+                    doc,
+                    "required",
+                    path,
+                    name in ra,
+                    req,
+                    breaking=req,
+                    breakingReason="newly required input" if req else None,
+                )
+            )
+    return out
+
+
+def _auth_items(a: Document, b: Document) -> list[Item]:
+    """An auth scheme present in both builds: its URLs and call settings, scopes, variables and
+    companion schemas (OAuth auth/token/refresh params). Breaking: a changed or removed auth /
+    token URL, type, grant, header or query param, a removed scope, a newly required input."""
+    out = _scheme_value_items(a, b)
+    old_s, new_s = set(a.scopes), set(b.scopes)
+    for s in sorted(new_s - old_s):
+        out.append(_auth_item(b, "added", f"scopes.{s}", None, s, kind="scope"))
+    for s in sorted(old_s - new_s):
+        out.append(
+            _auth_item(
+                b,
+                "removed",
+                f"scopes.{s}",
+                s,
+                None,
+                kind="scope",
+                breaking=True,
+                breakingReason=f"removed scope {s}",
+            )
+        )
+    ra, rb = a.raw or {}, b.raw or {}
+    out += _schema_items(b, "variables", ra.get("variables_schema"), rb.get("variables_schema"))
+    ca, cb = _companions_of(ra), _companions_of(rb)
+    if "companions" not in ra:  # built before companions were recorded: nothing to compare
+        return out
+    for suffix in sorted(set(ca) | set(cb)):
+        if suffix == "variables":  # the variables schema above
+            continue
+        path = f"companions.{suffix}"
+        if suffix not in ca:
+            out.append(_auth_item(b, "added", path, None, suffix))
+        elif suffix not in cb:
+            out.append(_auth_item(b, "removed", path, suffix, None))
+        else:
+            out += _schema_items(b, path, ca[suffix].get("schema"), cb[suffix].get("schema"))
+    return out
+
+
+def _companions_of(raw: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    c = raw.get("companions")
+    return {k: v for k, v in c.items() if isinstance(v, dict)} if isinstance(c, dict) else {}
+
+
+def _scheme_value_items(a: Document, b: Document) -> list[Item]:
+    sa, sb = _scheme(a), _scheme(b)
+    out: list[Item] = []
+    keys = sorted(
+        k for k in set(sa) | set(sb) if k not in _AUTH_SKIP and not k.endswith("ContractRef")
+    )
+    for k in keys:
+        before, after = sa.get(k), sb.get(k)
+        if before == after:
+            continue
+        if k in _AUTH_WORDING:
+            out.append(_auth_item(b, "description", k, json_text(before), json_text(after)))
+            continue
+        call = k in _AUTH_CALL or k.endswith(("Url", "URL"))
+        if before is None:
+            out.append(_auth_item(b, "added", k, None, after))
+        elif after is None:
+            out.append(
+                _auth_item(
+                    b,
+                    "removed",
+                    k,
+                    before,
+                    None,
+                    breaking=call,
+                    breakingReason=f"removed {k}" if call else None,
+                )
+            )
+        else:
+            out.append(
+                _auth_item(
+                    b,
+                    "changed",
+                    k,
+                    json_text(before),
+                    json_text(after),
+                    breaking=call,
+                    breakingReason=f"{k} changed" if call else None,
+                )
+            )
+    return out
+
+
+def json_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, dict | list):
+        return " ".join(f"{k}: {v}" for k, v in _leaves(value).items() if v)
+    return str(value)
+
+
+def _hooks(app: Document) -> dict[str, dict[str, Any]]:
+    hooks = (app.raw or {}).get("webhooks")
+    out: dict[str, dict[str, Any]] = {}
+    for i, h in enumerate(hooks if isinstance(hooks, list) else []):
+        if isinstance(h, dict):
+            out[str(h.get("id") or i)] = h
+    return out
+
+
+def _webhook_items(a: Document, b: Document) -> list[Item]:
+    """Webhook mechanisms (connector/triggers/webhooks): subscribe / unsubscribe / list
+    endpoints and variables, handshake, verification, and the events they offer. Breaking: a
+    removed mechanism, a changed or removed call value, a removed event."""
+    ha, hb = _hooks(a), _hooks(b)
+    out: list[Item] = []
+
+    def item(op: str, path: str, before: Any, after: Any, urls: list[str], **more: Any) -> Item:
+        return _env_item(b, op, path, before, after, kind="webhook", evidenceUrls=urls, **more)
+
+    for key in sorted(set(ha) | set(hb)):
+        x, y = ha.get(key), hb.get(key)
+        urls = _evidence(y or x or {})
+        base = f"webhooks.{key}"
+        if x is None:
+            out.append(item("added", base, None, key, urls))
+            continue
+        if y is None:
+            out.append(
+                item(
+                    "removed",
+                    base,
+                    key,
+                    None,
+                    urls,
+                    breaking=True,
+                    breakingReason="removed webhook mechanism",
+                )
+            )
+            continue
+        ev_a, ev_b = set(x.get("eventsAvailable") or []), set(y.get("eventsAvailable") or [])
+        for e in sorted(ev_b - ev_a):
+            out.append(item("added", f"{base}.events.{e}", None, e, urls))
+        for e in sorted(ev_a - ev_b):
+            out.append(
+                item(
+                    "removed",
+                    f"{base}.events.{e}",
+                    e,
+                    None,
+                    urls,
+                    breaking=True,
+                    breakingReason=f"removed event {e}",
+                )
+            )
+        la = _leaves({k: v for k, v in x.items() if k not in ("eventsAvailable", "provenance")})
+        lb = _leaves({k: v for k, v in y.items() if k not in ("eventsAvailable", "provenance")})
+        for p in sorted(set(la) | set(lb)):
+            before, after = la.get(p), lb.get(p)
+            if before == after:
+                continue
+            call = p.split(".", 1)[0].split("[", 1)[0] in _HOOK_CALL
+            path = f"{base}.{p}"
+            if before is None:
+                out.append(item("added", path, None, after, urls))
+            elif after is None:
+                out.append(
+                    item(
+                        "removed",
+                        path,
+                        before,
+                        None,
+                        urls,
+                        breaking=call,
+                        breakingReason=f"removed {p}" if call else None,
+                    )
+                )
+            else:
+                out.append(
+                    item(
+                        "changed",
+                        path,
+                        before,
+                        after,
+                        urls,
+                        breaking=call,
+                        breakingReason=f"{p} changed" if call else None,
+                    )
+                )
     return out
 
 
