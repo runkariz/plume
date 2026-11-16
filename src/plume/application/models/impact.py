@@ -14,7 +14,7 @@ status:
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-from plume.application.knowledge.public_changes import PublicChanges, public_item
+from plume.application.knowledge.public_changes import PublicChanges, change_text, public_item
 from plume.domain.knowledge.call_check import path_matches
 from plume.domain.models.model_set import ModelSetSnapshot
 from plume.domain.models.snapshot import ModelSnapshot
@@ -23,13 +23,24 @@ RANK = {"current": 0, "updated_unaffected": 1, "unknown": 2, "affected": 3}
 WIDGET_ROWS = 5
 
 
+_CALL_INPUTS = ("param", "request_field")
+
+
+def _fetches(s: dict[str, Any], fetch: str | None) -> bool:
+    if not (fetch and s.get("method") and s.get("path")):
+        return False
+    method, _, path = fetch.partition(" ")
+    return s["method"] == method.upper() and (
+        s["path"] == path.strip() or path_matches(s["path"], path.strip())
+    )
+
+
 def _touches(item: dict[str, Any], docs: set[str], paths: set[str], fetch: str | None) -> bool:
     s = item["subject"]
-    if fetch and s.get("method") and s.get("path") and not s.get("fieldPath"):
-        method, _, path = fetch.partition(" ")
-        if s["method"] == method.upper() and (
-            s["path"] == path.strip() or path_matches(s["path"], path.strip())
-        ):
+    if _fetches(s, fetch):
+        if not s.get("fieldPath"):  # the fetched endpoint itself changed (removed ...)
+            return True
+        if item["kind"] in _CALL_INPUTS and item["breaking"]:  # the call itself breaks
             return True
     if s.get("docId") not in docs:
         return False
@@ -156,8 +167,8 @@ def widget_rows(impact: dict[str, Any]) -> list[dict[str, Any]]:
     rows = []
     for a in impact["affected"][:WIDGET_ROWS]:
         c = a["change"]
-        what = c["subject"].get("fieldPath") or c["subject"].get("docId")
-        reason = f" ({c['breakingReason']})" if c["breaking"] and c.get("breakingReason") else ""
+        why = c.get("breakingReason") if c["breaking"] else None
+        reason = f": {why}" if why and not why.startswith("removed") else ""  # only if it adds
         rows.append(
             {
                 "field": a["field"],
@@ -165,7 +176,7 @@ def widget_rows(impact: dict[str, Any]) -> list[dict[str, Any]]:
                 **({"member": a["member"]} if "member" in a else {}),
                 "op": c["op"],
                 "breaking": c["breaking"],
-                "text": f"{c['kind'].replace('_', ' ')} {what} {c['op']}{reason}",
+                "text": change_text(c) + reason,
             }
         )
     return rows

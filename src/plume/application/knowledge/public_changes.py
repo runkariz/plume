@@ -65,6 +65,21 @@ def public_item(api: str, item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def change_text(i: dict[str, Any]) -> str:
+    """One plain line: "DELETE /orders/{id} removed", "param status (GET /orders) required",
+    "property currency removed"."""
+    s = i["subject"]
+    kind = i["kind"].replace("_", " ")
+    where = f"{s['method']} {s['path']}" if s.get("method") and s.get("path") else None
+    if s.get("fieldPath"):
+        what = s["fieldPath"] + (f" ({where})" if where else "")
+    elif where:  # a whole endpoint: METHOD path
+        return f"{where} {i['op']}"
+    else:
+        what = s.get("model") or s.get("docId") or ""
+    return f"{kind} {what} {i['op']}"
+
+
 def _visible(notes: dict[str, Any]) -> list[dict[str, Any]]:
     return [i for i in notes.get("items", []) if i.get("visibleToUsers")]
 
