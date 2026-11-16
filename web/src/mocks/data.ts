@@ -172,7 +172,68 @@ export const shopifyDetail: ApiDetail = {
   },
 };
 
+/** The Amazon SP-API vendor package as plume-l2 has it: 13 OpenAPI specs, the docs page, a changelog linked twice. */
+const AMAZON_SPECS = [
+  ['vendor-orders-api-model', 'vendorOrders.json'],
+  [
+    'vendor-direct-fulfillment-shipping-api-model',
+    'vendorDirectFulfillmentShipping_2021-12-28.json',
+  ],
+  ['vendor-direct-fulfillment-orders-api-model', 'vendorDirectFulfillmentOrders_2021-12-28.json'],
+  ['vendor-direct-fulfillment-inventory-api-model', 'vendorDirectFulfillmentInventory_v1.json'],
+  [
+    'vendor-direct-fulfillment-payments-api-model',
+    'vendorDirectFulfillmentPayments_2021-12-28.json',
+  ],
+  [
+    'vendor-direct-fulfillment-sandbox-test-data-api-model',
+    'vendorDirectFulfillmentSandboxData_2021-10-28.json',
+  ],
+  [
+    'vendor-direct-fulfillment-transactions-api-model',
+    'vendorDirectFulfillmentTransactions_2021-12-28.json',
+  ],
+  ['vendor-invoices-api-model', 'vendorInvoices.json'],
+  ['vendor-shipments-api-model', 'vendorShipments.json'],
+  ['vendor-transaction-status-api-model', 'vendorTransactionStatus.json'],
+  ['vendor-direct-fulfillment-shipping-api-model', 'vendorDirectFulfillmentShipping_v1.json'],
+  ['vendor-direct-fulfillment-orders-api-model', 'vendorDirectFulfillmentOrders_v1.json'],
+  ['vendor-direct-fulfillment-payments-api-model', 'vendorDirectFulfillmentPayments_v1.json'],
+] as const;
+
+export const amazonVendorDetail: ApiDetail = {
+  ...shopifyDetail,
+  id: 'amazon-sp-vendor',
+  name: 'Amazon SP-API (Vendor)',
+  docLink: 'https://developer-docs.amazon.com/sp-api/docs',
+  sources: [
+    {
+      url: 'https://developer-docs.amazon.com/sp-api/docs',
+      kind: 'docs',
+      fetchedAt: '2026-11-16T08:00:00Z',
+    },
+    ...AMAZON_SPECS.map(([dir, file]) => ({
+      url: `https://raw.githubusercontent.com/amzn/selling-partner-api-models/main/models/${dir}/${file}`,
+      kind: 'spec',
+      fetchedAt: '2026-11-16T08:05:00Z',
+    })),
+    {
+      url: 'https://developer-docs.amazon.com/sp-api/changelog',
+      kind: 'changelog',
+      fetchedAt: '2026-11-16T08:10:00Z',
+    },
+    // the same page on a host alias
+    {
+      url: 'https://developer-docs.amazon/sp-api/changelog',
+      kind: 'changelog',
+      fetchedAt: '2026-11-16T08:10:00Z',
+    },
+  ],
+  extractedAt: '2026-11-16T08:30:00Z',
+};
+
 export function detailFor(id: string): ApiDetail | undefined {
+  if (id === 'amazon-sp-vendor') return amazonVendorDetail;
   if (id === 'shopify')
     return {
       ...shopifyDetail,
@@ -188,6 +249,9 @@ export function detailFor(id: string): ApiDetail | undefined {
     isLive: base.status.kind === 'ready',
     sections: sectionCounts[id] ?? noSections,
     logo: { ...base.logo, url: null },
+    // one source (the manifest's docs url), as a package without a sources list has
+    sources: [{ url: `https://docs.example.com/${id}`, kind: 'docs', fetchedAt: null }],
+    extractedAt: '2026-11-14T08:30:00Z',
   };
 }
 

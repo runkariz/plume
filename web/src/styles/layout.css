@@ -161,7 +161,7 @@
 }
 .title-left {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 16px;
 }
 .h1-sm {
@@ -2602,4 +2602,79 @@ ul.plain {
   .change-values {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* ---- what changed between builds (public): badge, Changes tab, impact ---- */
+.docs-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  position: relative; /* above the card's stretched link */
+  z-index: 1;
+  margin-top: 8px;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  color: var(--ink);
+  text-decoration: none;
+  background: var(--surface);
+}
+.docs-badge.breaking {
+  border-color: var(--bad);
+}
+.docs-badge:hover,
+.docs-badge:focus-visible {
+  text-decoration: underline;
+}
+.build-timeline {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+.build-timeline li.on {
+  font-weight: 600;
+}
+.change-group {
+  margin-top: 14px;
+}
+.change-brief {
+  border-left: 3px solid var(--line);
+  padding: 4px 0 4px 10px;
+}
+.change-brief.change-hit {
+  border-left-color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+.change-subject {
+  overflow-wrap: anywhere;
+}
+.impact-banner ul {
+  margin: 8px 0 0;
+}
+.impact-rows li {
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+}
+
+.sources-line {
+  margin: 4px 0 0;
+}
+.sources-detail {
+  margin-top: 2px;
+}
+.sources-detail summary {
+  cursor: pointer;
+  color: var(--muted);
+  width: fit-content;
+}
+.sources-list {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+  max-height: 16rem;
+  overflow: auto;
+}
+.sources-list li {
+  overflow-wrap: anywhere;
 }

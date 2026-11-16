@@ -198,10 +198,25 @@ export function seedSets(): StoredSet[] {
   });
   return [
     at(
-      build(SET_OFFICIAL, 'Shop', 'official', [
-        orderItems(true, 'embedded'),
-        productVariants(true),
-      ]),
+      build(
+        SET_OFFICIAL,
+        'Shop',
+        'official',
+        [orderItems(true, 'embedded'), productVariants(true)],
+        {
+          // newer docs touch the Order mappings of this set (the set's status is the worst of its members)
+          impact: {
+            status: 'affected',
+            affectedCount: 3,
+            breakingCount: 1,
+            byMember: [
+              { concept: 'Order', status: 'affected', affectedCount: 3 },
+              { concept: 'Product', status: 'updated_unaffected', affectedCount: 0 },
+              { concept: 'Variant', status: 'unknown', affectedCount: 0 },
+            ],
+          },
+        },
+      ),
       '2026-11-16T10:00:00Z',
       'S-shop',
     ),
@@ -314,6 +329,7 @@ export const setListItem = (all: StoredSet[], x: StoredSet): SetListItem => {
     version: l.version,
     versions: l.versions,
     stale: x.set.stale ?? false,
+    ...(x.set.impact ? { impact: x.set.impact } : {}),
   };
 };
 

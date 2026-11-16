@@ -23,10 +23,12 @@ import {
   Segmented,
   Tile,
 } from '@/components';
+import { DocsUpdatedBadge } from '@/components/DocsUpdatedBadge';
 import { SourcesLine } from '@/components/SourcesLine';
 import { SearchIcon } from '@/icons';
 import { breakable } from '@/lib/breakable';
 import { operationOf } from '@/lib/docHref';
+import { ChangesTab } from './changes/ChangesTab';
 import { docHref } from './models/MappingTable';
 import { ModelList } from './models/ModelList';
 import { AuthPanel } from './sections/AuthPanel';
@@ -142,13 +144,24 @@ function Detail({ api }: { api: ApiDetail }) {
     [client, api.id],
   );
   const { state: mcpState } = useAsync(loadMcp);
+  // a Changes section exists only when the timeline has a build with notes: an older server (the route is missing) or
+  // an API without notes shows no tab and no empty state
+  const loadBuilds = useCallback(
+    (signal: AbortSignal) => client.getChangesTimeline(api.id, signal),
+    [client, api.id],
+  );
+  const { state: buildsState } = useAsync(loadBuilds);
+  const builds = buildsState.status === 'ready' ? buildsState.data : [];
+  const changes = builds.length > 0;
   // an MCP section exists only when the vendor runs an MCP server: otherwise no tab, no empty state
   const mcp =
     mcpState.status === 'ready' && mcpState.data.present && mcpState.data.servers.length > 0
       ? mcpState.data
       : null;
-  const section: 'browse' | 'auth' | 'triggers' | 'mcp' =
-    raw === 'auth' || raw === 'triggers' || (raw === 'mcp' && mcp) ? raw : 'browse';
+  const section: 'browse' | 'auth' | 'triggers' | 'mcp' | 'changes' =
+    raw === 'auth' || raw === 'triggers' || (raw === 'mcp' && mcp) || (raw === 'changes' && changes)
+      ? raw
+      : 'browse';
   return (
     <>
       <div className="titlerow">
@@ -176,6 +189,7 @@ function Detail({ api }: { api: ApiDetail }) {
               </span>
             </div>
             <SourcesLine sources={api.sources} extractedAt={api.extractedAt} />
+            <DocsUpdatedBadge api={api.id} docsUpdated={api.docsUpdated} />
           </div>
         </div>
         <div className="row">
@@ -225,12 +239,14 @@ function Detail({ api }: { api: ApiDetail }) {
                 value: 'triggers',
                 label: `Triggers${api.sections ? ` (${api.sections.triggers})` : ''}`,
               },
+              ...(changes ? [{ value: 'changes' as const, label: 'Changes' }] : []),
               ...(mcp ? [{ value: 'mcp' as const, label: `MCP (${mcp.servers.length})` }] : []),
             ]}
           />
           {section === 'auth' ? <AuthPanel apiId={api.id} /> : null}
           {section === 'triggers' ? <TriggersPanel apiId={api.id} /> : null}
           {section === 'mcp' && mcp ? <McpPanel mcp={mcp} /> : null}
+          {section === 'changes' && changes ? <ChangesTab api={api.id} builds={builds} /> : null}
           {section === 'browse' ? <Browse api={api} /> : null}
         </div>
         <div className="stack">

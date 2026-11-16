@@ -25,6 +25,21 @@ export interface ApiSummary {
   docsAsOf: string | null; // ISO date; null while unpublished
   status: ApiStatus;
   logo: { text: string; color: string; url?: string | null };
+  /**
+   * What the latest build's notes say users can see: counts of confirmed and likely changes (wording-only ones
+   * counted apart). Absent or null when the build has no notes or no visible non-wording change.
+   */
+  docsUpdated?: DocsUpdated | null;
+}
+
+export interface DocsUpdated {
+  build: string;
+  at: string;
+  confirmed: number;
+  likely: number;
+  breaking: number;
+  /** Wording-only changes are not in the counts above and never raise the badge. */
+  wordingOnly?: number;
 }
 
 export interface ApiList {
@@ -65,6 +80,8 @@ export interface ApiSource {
   url: string;
   kind: string;
   fetchedAt?: string | null;
+  /** How it was found ("entry", "given", "discovered from ..."): maintainer views carry it, the public API may not. */
+  role?: string | null;
 }
 
 export interface ApiDetail extends ApiSummary {
@@ -471,6 +488,7 @@ export interface ModelSnapshot {
   /** True when a pinned API has a newer build: the model is built on older docs. */
   stale?: boolean;
   staleInputs?: StaleInput[];
+  impact?: Impact | null;
   concept?: string;
   sessionId?: string;
   description: string;
@@ -585,6 +603,33 @@ export interface NewerVersion {
   url?: string;
 }
 
+/**
+ * How newer docs touch a model or set (server-side: it knows which document fields a mapping cites). `unknown` means a
+ * pinned build or one in between has no notes: never say "unaffected" then. Absent: the server does not say (an older
+ * server): the UI falls back to the stale mark.
+ */
+export type ImpactStatus = 'current' | 'updated_unaffected' | 'affected' | 'unknown';
+
+export interface Impact {
+  status: ImpactStatus;
+  affectedCount: number;
+  breakingCount: number;
+  /** A set: its status per member (the set's is the worst of them). */
+  byMember?: { concept: string; modelId?: string; status: ImpactStatus; affectedCount: number }[];
+}
+
+/** GET /v1/models/{id}/impact: which mappings a visible change touches. */
+export interface ModelImpact {
+  status: ImpactStatus;
+  affectedCount: number;
+  breakingCount: number;
+  pinned?: Record<string, string>;
+  latest?: Record<string, string | null>;
+  /** The mappings a visible change touches (`member`: the set member, on a set's). */
+  affected: { field: string; api: string; member?: string | null; change: PublicChange }[];
+  byMember?: { concept: string; modelId?: string; status: ImpactStatus; affectedCount: number }[];
+}
+
 export interface ModelListItem {
   id: string;
   name: string;
@@ -598,6 +643,7 @@ export interface ModelListItem {
   versions?: number;
   stale?: boolean;
   staleInputs?: StaleInput[];
+  impact?: Impact | null;
   /** Only in a My models list: a newer version of this lineage exists elsewhere (null/absent: this is the latest). */
   newerVersion?: NewerVersion | null;
 }
@@ -876,6 +922,7 @@ export interface ModelSet {
   inputs: ApiRef[];
   stale?: boolean;
   staleInputs?: StaleInput[];
+  impact?: Impact | null;
   members: SetMember[];
   relations: SetRelation[];
   /** Ids of the relations still to decide. */
@@ -901,6 +948,7 @@ export interface SetListItem {
   version?: number;
   versions?: number;
   stale?: boolean;
+  impact?: Impact | null;
   /** Only in a My models list: a newer version of this lineage exists elsewhere (null/absent: this is the latest). */
   newerVersion?: NewerVersion | null;
 }
@@ -1068,6 +1116,7 @@ export interface ChangeItem {
   wordingOnly?: boolean;
   from?: string;
   to?: string;
+  toDocsAsOf?: string | null;
   /** False for suspect/unknown (and renames): never shown to users. */
   visibleToUsers?: boolean;
   /** The class the server computed: what a demote goes back to. */
@@ -1208,4 +1257,78 @@ export interface RollbackResult {
   buildId: string;
   previous: string;
   review: ReleaseReview;
+}
+
+// ---- public changes (release notes the users see) ----
+
+/** One build of the public timeline (GET /v1/apis/{api}/changes/timeline): only builds that have notes, newest first. */
+export interface PublicBuild {
+  build: string;
+  from?: string | null;
+  docsAsOf?: string | null;
+  /** This build is `latest`. */
+  latest: boolean;
+  counts: { confirmed: number; likely: number; breaking: number; wordingOnly: number };
+}
+
+/**
+ * One change as users see it (GET /v1/apis/{api}/changes): only confirmed or likely, never an artifact rule, hash or
+ * review. `quote` is plain text from the vendor docs; `vendorUrl` is http(s) or null; `anchor` has no "#".
+ */
+export interface PublicChange {
+  id: string;
+  from?: string;
+  to?: string;
+  toDocsAsOf?: string | null;
+  kind: string;
+  op: string;
+  subject: ChangeSubject;
+  before?: ChangeValue | null;
+  after?: ChangeValue | null;
+  breaking: boolean;
+  breakingReason?: string | null;
+  class: 'confirmed' | 'likely';
+  /** True for a likely change: "per the vendor's changelog". */
+  perVendorChangelog?: boolean;
+  wordingOnly?: boolean;
+  quote?: string | null;
+  vendorUrl?: string | null;
+  anchor?: string | null;
+  sourceKind?: string | null;
+  /** The API path of the document (the build it was found in): not a web address. */
+  documentUrl?: string | null;
+  /** A whole endpoint or model was removed: there is no document to open any more. */
+  removedDocument?: boolean;
+}
+
+/** The counts of the selection after the filters but BEFORE the search and paging. */
+export interface ChangeTotals {
+  confirmed: number;
+  likely: number;
+  breaking: number;
+  wordingOnly: number;
+  byKind?: Record<string, number>;
+}
+
+export interface ChangesPage {
+  api?: string;
+  builds?: string[];
+  computedAt?: string | null;
+  totals: ChangeTotals;
+  /** How many match the search (before paging). */
+  matched?: number;
+  items: PublicChange[];
+  nextCursor: number | null;
+}
+
+export interface ChangesQuery {
+  build?: string;
+  since?: string;
+  breaking?: boolean;
+  /** One kind (the server matches it exactly). */
+  kind?: string;
+  wordingOnly?: boolean;
+  q?: string;
+  cursor?: number | null;
+  limit?: number;
 }

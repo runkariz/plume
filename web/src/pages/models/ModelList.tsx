@@ -7,6 +7,8 @@ import { useIsMaintainer } from '@/app/authStore';
 import { Card, Chip } from '@/components';
 import { formatDate } from '@/lib/format';
 import { apiLabel } from '@/lib/names';
+import { ImpactChip } from '@/components/ImpactChip';
+import { impactLine } from '@/lib/impact';
 import { StaleChip } from './StaleChip';
 
 /** The rows of a list of models (also used by the My models pages). */
@@ -33,7 +35,14 @@ export function ModelRows({ items }: { items: ModelListItem[] }) {
           {m.official ? <Chip tone="ok">Official</Chip> : null}
           {m.visibility === 'unlisted' ? <Chip tone="info">Unlisted</Chip> : null}
           {m.visibility === 'unreleased' ? <Chip tone="warn">Unreleased</Chip> : null}
-          {m.stale ? (
+          {m.impact ? (
+            // the server says how newer docs touch it: that replaces the blanket stale mark
+            impactLine(m.impact) ? (
+              <ImpactChip impact={m.impact} />
+            ) : m.official === undefined ? (
+              <Chip tone="ok">Current</Chip>
+            ) : null
+          ) : m.stale ? (
             <StaleChip inputs={m.staleInputs} short />
           ) : m.official === undefined ? (
             <Chip tone="ok">Current</Chip>

@@ -42,7 +42,9 @@ import {
   VisibilityChip,
 } from './ModelAccess';
 import { ModelWarnings } from './ModelWarnings';
+import { ImpactBanner } from './ImpactBanner';
 import { StaleChip } from './StaleChip';
+import { ImpactChip } from '@/components/ImpactChip';
 
 export function claudePrompt(s: ModelSnapshot): string {
   const apis = s.inputs.map((a) => a.shortName).join(', ');
@@ -156,7 +158,11 @@ export function ModelView() {
           <div className="row" style={{ gap: 8, marginTop: 6 }}>
             <VisibilityChip visibility={snap.visibility} />
             <Chip tone="warn">Generated, unverified</Chip>
-            {snap.stale ? <StaleChip inputs={snap.staleInputs} /> : null}
+            {snap.impact ? (
+              <ImpactChip impact={snap.impact} />
+            ) : snap.stale ? (
+              <StaleChip inputs={snap.staleInputs} />
+            ) : null}
             <Chip>{snap.inputs.length} APIs</Chip>
             <Chip>{countLeaves(snap)} fields</Chip>
             <Chip>snapshot {snap.id}</Chip>
@@ -206,7 +212,8 @@ export function ModelView() {
         <SameConceptLine snap={snap} />
         <ModelWarnings snap={snap} />
       </div>
-      {snap.stale ? (
+      {snap.impact ? <ImpactBanner snap={snap} /> : null}
+      {!snap.impact && snap.stale ? (
         <div className="stale-banner">
           <Banner tone="warn" title="This model is built on older docs">
             {staleSentence(snap)} The mappings and citations below are still checked against the

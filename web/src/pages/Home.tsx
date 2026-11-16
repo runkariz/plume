@@ -4,6 +4,7 @@ import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
 import type { ApiSummary } from '@/api/types';
 import { Card, Chip, EmptyState, ErrorState, Logo } from '@/components';
+import { DocsUpdatedBadge } from '@/components/DocsUpdatedBadge';
 import { SearchIcon } from '@/icons';
 import { categoryLabel, formatDate, formatScore, modelCount } from '@/lib/format';
 
@@ -58,6 +59,7 @@ export function ApiCard({ api }: { api: ApiSummary }) {
         </span>
         <StatusChip status={api.status} />
       </div>
+      <DocsUpdatedBadge api={api.id} docsUpdated={api.docsUpdated} />
     </article>
   );
 }
