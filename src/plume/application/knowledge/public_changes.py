@@ -17,7 +17,8 @@ from plume.domain.knowledge.tag import LATEST, TagName
 MAX_LIMIT = 200
 MAX_CHAIN = 100  # builds walked back from latest
 _KIND_ORDER = ("endpoint", "param", "request_field", "response_field", "model", "property",
-               "auth_scheme", "scope", "webhook_event", "guide")  # fmt: skip
+               "auth_scheme", "scope", "environment", "versioning", "webhook_event",
+               "guide")  # fmt: skip
 
 
 class ChangesInputError(ApplicationError):

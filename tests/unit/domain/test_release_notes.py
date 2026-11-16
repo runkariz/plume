@@ -207,3 +207,60 @@ def test_stream_conflicts_are_in_the_issues_text() -> None:
                         "conflicts": [conflict]})  # fmt: skip
     assert "Source conflicts stream reported (1)" in text
     assert "get-orders `status`: chosen enum (newer); values https://v/spec: string" in text
+
+
+ENV_URL = "https://vendor.example/docs/regions"
+
+
+def _app(envs: list[dict[str, object]], versions: tuple[str, ...] = ("v1",)) -> Document:
+    app = {"environments": envs, "apiVersioning": {"current": versions[-1], "scheme": "path",
+                                                    "versions": list(versions)}}  # fmt: skip
+    return Document("app:shop", DocumentKind.APP, "Shop", "Shop", source_url=ENV_URL,
+                    raw={"app": app})  # fmt: skip
+
+
+def _env(key: str, base: str, auth: str, name: str | None = None) -> dict[str, object]:
+    default = key in ("na", "production")
+    return {"key": key, "name": name or key, "baseUrl": base, "isDefault": default,
+            "servers": {"api": base, "auth": auth}}  # fmt: skip
+
+
+NA, EU = "https://na.example", "https://eu.example"
+
+
+def _envs(items: list[Item]) -> list[tuple[str, str, bool]]:
+    return [(i["op"], i["subject"]["fieldPath"], i["breaking"]) for i in items
+            if i["kind"] in ("environment", "versioning")]  # fmt: skip
+
+
+def test_environment_server_url_change_is_breaking_and_confirmed_when_the_page_shows_it() -> None:
+    old = [_app([_env("na", NA, "https://auth.example/o2/token"), _env("eu", EU, "x")])]
+    new = [_app([_env("na", NA, "https://auth.example"), _env("eu", EU, "x")])]
+    old_text = "auth https://auth.example/o2/token"
+    page_a = PackageMeta(page_hashes={ENV_URL: "h1"}, page_texts={ENV_URL: old_text})
+    new_text = "auth https://auth.example only"
+    page_b = PackageMeta(page_hashes={ENV_URL: "h2"}, page_texts={ENV_URL: new_text})
+    items = _run(old, new, page_a, page_b)
+    assert _envs(items) == [("changed", "environments.na.servers.auth", True)]
+    assert items[0]["class"] == "confirmed"
+    assert items[0]["visibleToUsers"]
+    same = _run(old, new, PackageMeta(page_hashes={ENV_URL: "h1"}),
+                PackageMeta(page_hashes={ENV_URL: "h1"}))  # fmt: skip
+    assert same[0]["class"] == "suspect"  # the page did not change: an extraction fix
+    assert "P0-page-unchanged" in same[0]["artifactRules"]
+
+
+def test_key_only_rename_is_a_hidden_rename_and_removals_are_breaking() -> None:
+    old = [_app([_env("production", NA, "a"), _env("production-2", EU, "a")], ("v1", "v2"))]
+    new = [_app([_env("na", NA, "a", "North America")], ("v2", "v3"))]
+    items = _run(old, new)
+    assert sorted(_envs(items)) == [
+        ("added", "apiVersioning.versions.v3", False),
+        ("changed", "apiVersioning.current", False),
+        ("removed", "apiVersioning.versions.v1", True),
+        ("removed", "environments.production-2", True),
+        ("renamed", "environments.na", False),
+    ]
+    renamed = next(i for i in items if i["op"] == "renamed")
+    assert renamed["rename"]
+    assert not renamed["visibleToUsers"]
