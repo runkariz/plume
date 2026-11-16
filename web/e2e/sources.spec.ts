@@ -82,6 +82,17 @@ for (const theme of THEMES) {
       await expectNoSeriousA11y(page);
       await shotOf(page.locator('.titlerow'), 'w25-amazon-sources-open', theme);
     });
+    test('a package with one source: a direct link, no disclosure', async ({ page }) => {
+      await page.goto('/apis/stripe');
+      await expect(page.getByRole('heading', { level: 1, name: 'Stripe API' })).toBeVisible();
+      await expect(page.getByTestId('sources-line')).toContainText(
+        'Sources: Docs · Extracted 14 Nov 2026',
+      );
+      await expect(page.getByTestId('sources-detail')).toHaveCount(0);
+      await settle(page);
+      await expectNoSeriousA11y(page);
+      await shotOf(page.locator('.titlerow'), 'w25-one-source', theme);
+    });
     test('amazon-sp-vendor header, 375 px', async ({ page }) => {
       await page.setViewportSize({ width: 375, height: 900 });
       await page.goto('/apis/amazon-sp-vendor');

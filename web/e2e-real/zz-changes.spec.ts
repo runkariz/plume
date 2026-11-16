@@ -9,7 +9,7 @@ import { expectNoSeriousA11y, settle, shotOf, test, THEMES } from '../e2e/helper
 const KIT = process.env.PLUME_E2E_KIT === 'true';
 const API = process.env.PLUME_E2E_API_URL ?? 'http://127.0.0.1:18480';
 const ID = 'woocommerce-test';
-const AMAZON = 'amazon-sp-api-vendor';
+const AMAZON = 'amazon-sp-vendor';
 
 test.skip(!KIT, 'needs the test kit and the Amazon package loaded: PLUME_E2E_KIT=true');
 
