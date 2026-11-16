@@ -78,7 +78,8 @@ class Settings(BaseSettings):
         pattern=r"^[a-z0-9-]{2,40}$",
         description="Location of the embedding model on the project URL (used whenever "
         "PLUME_VERTEX_PROJECT is set, with a key or ADC), e.g. europe-west3 to keep query text "
-        "in the EU. Without a project a key uses the location-less express URL.",
+        "in the EU; 'eu' / 'us' use the multi-region endpoints (aiplatform.eu.rep.googleapis.com, "
+        "needed for gemini-embedding-2). Without a project a key uses the express URL.",
     )
     trusted_proxy_hops: int = Field(
         default=0,

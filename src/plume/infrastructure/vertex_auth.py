@@ -97,7 +97,12 @@ def auth_headers(key: str | None, tokens: TokenSource | None) -> dict[str, str]:
     raise VertexAuthError("no Vertex key and no Application Default Credentials configured")
 
 
+REP_LOCATIONS = ("eu", "us")  # multi-region "regional endpoints" (gemini-embedding-2)
+
+
 def vertex_host(location: str) -> str:
+    if location in REP_LOCATIONS:
+        return f"aiplatform.{location}.rep.googleapis.com"
     return (
         "aiplatform.googleapis.com"
         if location == "global"

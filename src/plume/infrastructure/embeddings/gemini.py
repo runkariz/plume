@@ -37,6 +37,19 @@ VERTEX_PROJECT_URL = (
     "https://{host}/v1/projects/{project}/locations/{location}/publishers/google/models/"
     "{model}:predict"
 )
+VERTEX_BATCH_URL = (
+    "https://{host}/v1/projects/{project}/locations/{location}/publishers/google/models/"
+    "{model}:batchEmbedContents"
+)
+CONTENT_API_BATCH = 250  # batchEmbedContents accepts 1..250 requests (probed 2026-11-16)
+
+
+def uses_content_api(model: str) -> bool:
+    """gemini-embedding-2 answers only :embedContent / :batchEmbedContents (OAuth, no API
+    keys) on the project path; :predict gives FAILED_PRECONDITION. taskType is ignored by it."""
+    return model.startswith("gemini-embedding-2")
+
+
 _RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
 
 
@@ -69,15 +82,22 @@ class GeminiEmbedder:
             raise EmbeddingError("Vertex ADC needs PLUME_VERTEX_PROJECT (and backend vertex)")
         if project and backend != "vertex":
             raise EmbeddingError("a project applies to the vertex backend only")
-        self._key = api_key
-        self._tokens = None if api_key else token_source
+        self._content_api = backend == "vertex" and uses_content_api(model)
+        if self._content_api and (token_source is None or not project):
+            raise EmbeddingError(
+                f"{model} needs Application Default Credentials and a project "
+                "(PLUME_VERTEX_AUTH=adc, PLUME_VERTEX_PROJECT): it does not accept API keys"
+            )
+        self._key = "" if self._content_api else api_key
+        self._tokens = token_source if (self._content_api or not api_key) else None
         self._project = project
         self._location = location
         self._backend = backend
         self._model = model
         self._dims = dims
-        # Vertex's gemini-embedding-001 takes one instance per request.
-        self._batch = batch_size or (1 if backend == "vertex" else 100)
+        # Vertex's gemini-embedding-001 takes one instance per request; -2 batches up to 250.
+        default = 100 if self._content_api or backend != "vertex" else 1
+        self._batch = min(batch_size or default, CONTENT_API_BATCH)
         self._retries = max_retries
         self._client = client or httpx.Client(timeout=timeout)
         self._sleep = sleep
@@ -137,7 +157,23 @@ class GeminiEmbedder:
         )
 
     def _embed_batch(self, texts: Sequence[str], task: TaskType) -> list[Vector]:
-        if self._backend == "gemini":
+        if self._content_api:
+            data = self._post(
+                VERTEX_BATCH_URL.format(
+                    host=vertex_host(self._location),
+                    project=self._project,
+                    location=self._location,
+                    model=self._model,
+                ),
+                {
+                    "requests": [
+                        {"content": {"parts": [{"text": t}]}, "outputDimensionality": self._dims}
+                        for t in texts
+                    ]
+                },
+            )
+            raw = [e.get("values") for e in data.get("embeddings", [])]
+        elif self._backend == "gemini":
             data = self._post(
                 GEMINI_URL.format(model=self._model),
                 {

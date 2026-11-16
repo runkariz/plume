@@ -54,7 +54,7 @@ from plume.infrastructure.db.repos.model_set_repo import PostgresModelSetRepo
 from plume.infrastructure.db.repos.release_notes_repo import PostgresReleaseNotesRepo
 from plume.infrastructure.db.repos.tag_repo import PostgresTagRepo
 from plume.infrastructure.dumps.local_fs import LocalDumpStore
-from plume.infrastructure.embeddings.gemini import GeminiEmbedder
+from plume.infrastructure.embeddings.gemini import GeminiEmbedder, uses_content_api
 from plume.infrastructure.embeddings.hash_embedder import HashEmbedder
 from plume.infrastructure.events.log_events import LoggingJobEvents
 from plume.infrastructure.jobs.package_storage import LocalPackageStorage
@@ -139,7 +139,7 @@ class Container:
         kind = s.resolved_embedder
         if kind == "hash":
             return HashEmbedder(s.embed_dims)
-        if kind == "vertex" and s.vertex_uses_adc():
+        if kind == "vertex" and (s.vertex_uses_adc() or uses_content_api(s.embed_model)):
             return GeminiEmbedder(
                 api_key="",
                 backend="vertex",
