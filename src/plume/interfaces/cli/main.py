@@ -176,7 +176,7 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         """List the APIs."""
         for info in _need(deps.list_apis, "apis").execute():
             category = info.category.key if info.category else "-"
-            typer.echo(f"{info.api_id}\t{info.name}\t{category}")
+            typer.echo(f"{info.api_id}\t{info.display_name}\t{category}")
 
     @app.command()
     def builds(api: Annotated[str, typer.Argument(help="API id")]) -> None:

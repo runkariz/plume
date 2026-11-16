@@ -314,7 +314,7 @@ class SuggestConcepts:
     def _all(self, resolved: tuple[ResolvedBuild, ...]) -> list[ConceptSuggestion]:
         names: dict[str, str] = {}
         scans = {r.api.api_id.value: self._scan(r, names) for r in resolved}
-        labels = {r.api.api_id.value: r.api.name for r in resolved}
+        labels = {r.api.api_id.value: r.api.display_name for r in resolved}
         concepts: list[ConceptSuggestion] = []
         for key in sorted({k for sc in scans.values() for k in sc.groups}):
             coverage = {

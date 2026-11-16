@@ -17,6 +17,7 @@ from plume.application.errors import (
     SourcePackageError,
 )
 from plume.application.jobs.maintainer import JobStateError, MaintainerJobs
+from plume.application.knowledge.api_display import ApiDisplayName
 from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
 from plume.application.knowledge.public_changes import PublicChanges
@@ -46,6 +47,7 @@ from plume.domain.shared.errors import DomainError, InvalidIdentifierError
 from plume.domain.shared.ids import BuildId
 from plume.interfaces import payloads
 from plume.interfaces.http import schemas as s
+from plume.interfaces.http.api_display_routes import api_display_router
 from plume.interfaces.http.changes_routes import changes_router
 from plume.interfaces.http.maintainer import maintainer_router
 from plume.interfaces.http.model_sets_routes import model_sets_router
@@ -91,6 +93,7 @@ class HttpDependencies:
     collections: Callable[[], Collections] | None = None
     release_notes: Callable[[], ReleaseNotes] | None = None
     public_changes: Callable[[], PublicChanges] | None = None
+    api_display: Callable[[], ApiDisplayName] | None = None
     model_impact: Callable[[], ModelImpact] | None = None
 
 
@@ -119,7 +122,8 @@ def _summary(o: ApiOverview) -> s.ApiSummary:
     info = o.info
     return s.ApiSummary(
         id=info.api_id.value,
-        name=info.name,
+        name=info.display_name,
+        name_source=info.display_source,
         category=info.category.key if info.category else "other",
         summary=info.summary,
         endpoints=o.counts.get("endpoint", 0),
@@ -135,7 +139,7 @@ def _summary(o: ApiOverview) -> s.ApiSummary:
         # Only the package's own icon, served by Plume; never a remote URL.
         logo=_logo(
             info.api_id.value,
-            info.name,
+            info.display_name,
             f"/v1/apis/{info.api_id.value}/icon" if o.has_icon else None,
         ),
     )
@@ -606,6 +610,8 @@ def create_app(deps: HttpDependencies) -> FastAPI:
         )
     if deps.release_notes is not None:
         app.include_router(release_notes_router(deps.release_notes, deps.maintainer_tokens))
+    if deps.api_display is not None:
+        app.include_router(api_display_router(deps.api_display, deps.maintainer_tokens))
     if deps.public_changes is not None:
         app.include_router(
             changes_router(

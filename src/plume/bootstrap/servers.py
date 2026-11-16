@@ -62,6 +62,7 @@ def http_app(c: Container) -> FastAPI:
             web_public_url=s.web_public_url,
             collections=c.collections,
             release_notes=c.release_notes,
+            api_display=c.api_display,
             public_changes=c.public_changes,
             model_impact=c.model_impact,
         )
@@ -111,6 +112,7 @@ def maintainer_mcp_server(c: Container) -> MCPServer:
             web_public_url=c.settings.web_public_url,
             mcp_app_html=_app_html(c),
             release_notes=c.release_notes,
+            api_display=c.api_display,
         )
     )
 

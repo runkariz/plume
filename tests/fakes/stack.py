@@ -6,6 +6,7 @@ from pathlib import Path
 from plume.application.eval.run_eval_gate import RunEvalGate
 from plume.application.jobs.build_pipeline import BuildPipeline
 from plume.application.jobs.maintainer import MaintainerJobs
+from plume.application.knowledge.api_display import ApiDisplayName
 from plume.application.knowledge.chunk_documents import ChunkDocuments
 from plume.application.knowledge.embed_build import EmbedBuild
 from plume.application.knowledge.export_dump import ExportDump, RestoreDump
@@ -151,6 +152,9 @@ class FakeStack:
             notes=self.release_notes(),
             package_meta=StreamPackageMetaReader(),
         )
+
+    def api_display(self) -> ApiDisplayName:
+        return ApiDisplayName(self.apis)
 
     def public_changes(self) -> PublicChanges:
         return PublicChanges(self.notes_repo, self.tags)

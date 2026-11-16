@@ -40,7 +40,8 @@ def citation_payload(c: Citation) -> Json:
 def api_payload(o: ApiOverview) -> Json:
     return {
         "api": o.info.api_id.value,
-        "name": o.info.name,
+        "name": o.info.display_name,
+        "name_source": o.info.display_source,
         "summary": o.info.summary,
         "category": o.info.category.key if o.info.category else None,
         "doc_link": o.info.doc_link,
@@ -175,7 +176,7 @@ def api_ref(api: str, name: str) -> Json:
 def suggestions_payload(s: Suggestions) -> Json:
     return {
         "apis": [
-            api_ref(r.api.api_id.value, r.api.name) | {"build": r.build.build_id.value}
+            api_ref(r.api.api_id.value, r.api.display_name) | {"build": r.build.build_id.value}
             for r in s.apis
         ],
         "concepts": [
@@ -250,7 +251,7 @@ def related_payload(r: RelatedConcepts) -> Json:
     shown = len(r.related)
     return {
         "apis": [
-            api_ref(x.api.api_id.value, x.api.name) | {"build": x.build.build_id.value}
+            api_ref(x.api.api_id.value, x.api.display_name) | {"build": x.build.build_id.value}
             for x in r.apis
         ],
         "concept": {"id": r.concept, "name": r.name},
