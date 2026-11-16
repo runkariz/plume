@@ -91,6 +91,7 @@ class RunEvalGate:
                     {
                         "qid": q.qid,
                         "kind": q.kind.value,
+                        "source": q.source,
                         "rank": rank,
                         "top": list(ranked[:K]),
                         "missing": list(missing),

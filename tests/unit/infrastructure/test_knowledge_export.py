@@ -68,8 +68,8 @@ def test_without_export_nothing_changes(packages: Path, tmp_path: Path) -> None:
 
 def test_gold_import(packages: Path, tmp_path: Path) -> None:
     out = tmp_path / "woocommerce.json"
-    count, skipped = import_gold(str(packages / "woo-mini"), str(out))
-    assert (count, skipped) == (3, [])
+    counts, skipped, _ = import_gold(str(packages / "woo-mini"), str(out))
+    assert (counts, skipped) == ({"docs": 3}, [])
     gold, _ = JsonGoldSource().load(str(out))
     assert gold.api == "woocommerce"
     expected = {d for q in gold.questions for d in q.expect_docs}

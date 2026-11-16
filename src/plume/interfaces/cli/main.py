@@ -45,7 +45,10 @@ class CliDependencies:
     gold: Callable[[], GoldSource] | None = None
     export_dump: Callable[[], ExportDump] | None = None
     restore_dump: Callable[[], RestoreDump] | None = None
-    import_gold: Callable[[str, str], tuple[int, list[str]]] | None = None
+    # (written questions per source, skipped ids, the package's declared goldCounts or None)
+    import_gold: (
+        Callable[[str, str], tuple[dict[str, int], list[str], dict[str, int] | None]] | None
+    ) = None
     release_notes: Callable[[], ReleaseNotes] | None = None
     remove_api: Callable[[], RemoveApi] | None = None
 
@@ -167,6 +170,13 @@ def create_app(deps: CliDependencies) -> typer.Typer:
                 f"  eval: recall@{m['k']} {m['recall_at_k']}, MRR {m['mrr']}, "
                 f"facts {m['fact_accuracy']} - {result.gate.message}"
             )
+            by_source = m.get("by_source") or {}
+            if len(by_source) > 1:
+                for src, sm in by_source.items():
+                    typer.echo(
+                        f"    {src} ({sm['search_questions']}): recall@{m['k']} "
+                        f"{sm['recall_at_k']}, MRR {sm['mrr']}, top1 {sm['citation_hit_rate']}"
+                    )
         if result.tag:
             typer.echo(f"  tag {result.tag.tag} -> {result.build_id}")
         if gate_failed:
@@ -265,10 +275,17 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         if deps.import_gold is None:
             raise typer.BadParameter("gold-import is not available in this build")
         try:
-            count, skipped = deps.import_gold(package, out)
+            counts, skipped, declared = deps.import_gold(package, out)
         except (ApplicationError, DomainError) as exc:
             raise fail(exc) from exc
-        typer.echo(f"wrote {out}: {count} question(s); skipped {len(skipped)}")
+        per = ", ".join(f"{n} {s}" for s, n in counts.items()) or "none"
+        typer.echo(
+            f"wrote {out}: {sum(counts.values())} question(s) ({per}); skipped {len(skipped)}"
+        )
+        if declared:
+            typer.echo(
+                "  package goldCounts: " + ", ".join(f"{n} {s}" for s, n in declared.items())
+            )
 
     @app.command("export")
     def export_cmd(

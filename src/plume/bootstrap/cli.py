@@ -24,7 +24,9 @@ def build_app(container: Container | None = None) -> typer.Typer:
 
         run(c(), host, port)
 
-    def import_gold(package: str, out: str) -> tuple[int, list[str]]:
+    def import_gold(
+        package: str, out: str
+    ) -> tuple[dict[str, int], list[str], dict[str, int] | None]:
         from plume.infrastructure.sources.gold_import import import_gold as run  # noqa: PLC0415
 
         return run(package, out)

@@ -378,7 +378,7 @@ class Container:
             self.embedder,
             self.evals,
             self.clock,
-            GatePolicy(min_recall=s.gate_floor(), max_drop=s.gate_max_drop),
+            GatePolicy(min_recall=s.gate_floor(), max_drop=s.gate_max_drop, source=s.gate_source),
         )
 
     def export_dump(self) -> ExportDump:

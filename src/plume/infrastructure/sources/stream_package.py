@@ -925,6 +925,11 @@ def _renamed(model: Document, name: str) -> Document:
     return replace(model, title=name, resource=resource, text=text, source_id=original)
 
 
+def model_key(name: str) -> str:
+    """A gold ``model:<name>`` item (schema title or file stem) as a model document id."""
+    return slug_doc_id(DocumentKind.MODEL, _slug(name))
+
+
 def endpoint_key(endpoint_id: str, versions: tuple[str, ...]) -> str:
     """A producer endpoint id without a trailing ``-<API version>`` (one of the versions the
     package's app.json declares): a 1.2 id (``...-json-2026-10``) and the 1.1 id of the same
