@@ -112,3 +112,17 @@ for (const theme of THEMES) {
     });
   });
 }
+
+test('the GitHub link opens the project repository in a new tab', async ({ page, context }) => {
+  await page.goto('/');
+  const link = page.getByRole('link', { name: 'GitHub', exact: true });
+  await expect(link).toHaveAttribute('href', 'https://github.com/runkariz/plume');
+  await expect(link).toHaveAttribute('target', '_blank');
+  // a click opens a NEW page (tab) and leaves this one where it is; the request to github.com is cut
+  await context.route('https://github.com/**', (route) =>
+    route.fulfill({ status: 200, body: 'github' }),
+  );
+  const [popup] = await Promise.all([context.waitForEvent('page'), link.click()]);
+  expect(popup.url()).toBe('https://github.com/runkariz/plume');
+  expect(page.url()).not.toContain('github.com');
+});

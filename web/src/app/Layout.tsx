@@ -5,7 +5,8 @@ import { GitHubIcon, MoonIcon, SunIcon } from '@/icons';
 import { authStore, useIsMaintainer, useMaintainerName, useSessionExpiries } from './authStore';
 import { useTheme } from './theme';
 
-export const GITHUB_URL = 'https://github.com/';
+/** The project's repository: the header link opens it in a new tab. */
+export const GITHUB_URL = 'https://github.com/runkariz/plume';
 
 export function Layout() {
   const { theme, toggle } = useTheme();
@@ -50,7 +51,13 @@ export function Layout() {
             <NavLink className="nav-link" to="/models">
               Models
             </NavLink>
-            <a className="nav-link" href={GITHUB_URL} rel="noreferrer">
+            <a
+              className="nav-link"
+              href={GITHUB_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="GitHub (opens in a new tab)"
+            >
               <GitHubIcon /> <span className="nav-text">GitHub</span>
             </a>
             {maintainer ? (
