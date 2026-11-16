@@ -32,7 +32,7 @@ def test_constraints_reach_fields_facts_and_text(packages: Path, tmp_path: Path)
     doc = s.get_document().execute(API, "model:order").document
     currency = next(f for f in doc.fields if f.name == "currency")
     assert currency.constraint_dict == {"enum": ["EUR", "USD"], "pattern": "^[A-Z]{3}$"}
-    assert "[one of: EUR, USD; pattern ^[A-Z]{3}$]" in doc.text
+    assert "one of" not in doc.text  # on the field and the fact, not in the embedded text
     match = next(m for m in s.find_fact().execute(API, "currency").matches
                  if m.owner_id == "model:order")  # fmt: skip
     assert match.constraints == {"enum": ["EUR", "USD"], "pattern": "^[A-Z]{3}$"}
@@ -82,7 +82,7 @@ def test_rate_limits_on_documents_facts_api_and_release_notes(
         "group": {"scope": "operation", "group": "orders", "limit": 10, "windowSeconds": 1,
                   "algorithm": "token-bucket", "notes": "Burst 20."},
     }  # fmt: skip
-    assert "Rate limit: bucket orders, cost 1; 10 per 1 s (token-bucket); Burst 20." in doc.text
+    assert "Rate limit" not in doc.text  # on the document and the fact, not embedded
     fact = s.find_fact().execute(API, "rate limit", owner=doc_id).matches[0]
     assert fact.citation.quote == "bucket orders, cost 1; 10 per 1 s (token-bucket); Burst 20."
     assert s.sections().rate_limits(API)[0]["group"] == "orders"

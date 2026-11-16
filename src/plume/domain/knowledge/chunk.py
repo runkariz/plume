@@ -23,7 +23,9 @@ from plume.domain.shared.hashing import ContentHash, content_hash
 # 10: auth companion files (<scheme>.<suffix>.{sample,schema}.json) are no schemes.
 # 11: field constraints (enum, min/max, default, format, pattern) in fields and text; an
 # endpoint's fixed-version real path and its rate limit in its text.
-CHUNKER_VERSION = "11"
+# 12: endpoint text back to v10 (constraints, real path, rate limit stay off the embedded
+# text; they are on fields, facts and payloads).
+CHUNKER_VERSION = "12"
 DEFAULT_MAX_CHARS = 6000
 _HEADING = re.compile(r"^#{1,3} ", re.MULTILINE)
 

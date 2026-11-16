@@ -66,3 +66,62 @@ def test_remove_api_on_postgres(
     assert audit.counts["builds"] == 2
     assert c.resolver().resolve("shopify").build is not None
     c.engine.dispose()
+
+
+def _official_set_on_postgres(c: Container, packages: Path) -> tuple[str, list[str]]:
+    """A released (official) set with official members, built on the fake stack with the set
+    tests' helpers, then stored in Postgres (sessions first: foreign keys)."""
+    from tests.fakes.knowledge import WordEmbedder  # noqa: PLC0415
+    from tests.fakes.stack import FakeStack  # noqa: PLC0415
+    from tests.unit.application.test_model_sets import _relation, _set, _setup  # noqa: PLC0415
+
+    s = FakeStack(embedder=WordEmbedder())
+    for p in ("test-catalog", "second-catalog"):
+        s.load(str(packages / p))
+    sets = s.model_sets()
+    session, pins, ids = _setup(s, maintainer=True)
+    draft = sets.submit(session.session_id, _set(ids, _relation(s, pins)), maintainer=True)
+    released = sets.release(draft.snapshot.set_id).snapshot
+    for ms in s.models_repo.sessions.values():
+        c.models_repo.save_session(ms)
+    for snap in s.models_repo.snapshots.values():
+        c.models_repo.save_snapshot(snap)
+    for ss in s.sets_repo.sessions.values():
+        c.model_sets_repo.save_session(ss)
+    c.model_sets_repo.save_set(s.sets_repo.sets[released.set_id])
+    return released.set_id, list(ids.values())
+
+
+def test_forced_removal_retires_an_official_set_atomically(
+    clean_engine: Engine,
+    pg_url: str,
+    packages: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from plume.infrastructure.db.repos import api_removal  # noqa: PLC0415
+
+    c = Container(
+        settings=Settings(database_url=pg_url, embedder="hash", data_dir=tmp_path,
+                          gold_dirs=(GOLD,))
+    )  # fmt: skip
+    for p in ("test-catalog", "second-catalog"):
+        c.build_pipeline().execute("job", str(packages / p))
+    set_id, models = _official_set_on_postgres(c, packages)
+    pinned = {p["id"] for p in c.remove_api().pinned_by("second-catalog-api")}
+    assert {set_id, *models} <= pinned
+    # a failure after the retire step rolls EVERYTHING back (models and set untouched)
+    monkeypatch.setattr(api_removal, "_STEPS", (*api_removal._STEPS, ("boom", "SELECT 1/0")))
+    with pytest.raises(Exception, match="division by zero"):
+        c.remove_api().execute("second-catalog-api", "second-catalog-api", force=True)
+    assert c.model_sets_repo.get_set(set_id).visibility == "official"  # type: ignore[union-attr]
+    assert all(c.models_repo.get_snapshot(m).visibility == "official" for m in models)  # type: ignore[union-attr]
+    monkeypatch.undo()
+    out = c.remove_api().execute("second-catalog-api", "second-catalog-api", force=True)
+    now = {r["id"]: r["now"] for r in out["retired"]}
+    assert now[set_id] == "discarded"  # a set has no "superseded" state
+    assert all(now[m] == "superseded" for m in models)
+    assert c.model_sets_repo.get_set(set_id).visibility == "discarded"  # type: ignore[union-attr]
+    assert c.apis.get(__import__("plume.domain.knowledge.api", fromlist=["ApiId"]).ApiId(
+        "second-catalog-api")) is None  # fmt: skip
+    c.engine.dispose()
