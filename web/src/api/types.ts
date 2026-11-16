@@ -1053,6 +1053,10 @@ export interface ChangeItem {
   wordingOnly?: boolean;
   from?: string;
   to?: string;
+  /** False for suspect/unknown (and renames): never shown to users. */
+  visibleToUsers?: boolean;
+  /** The class the server computed: what a demote goes back to. */
+  computedClass?: ChangeClass;
   promotedBy?: string | null;
   promotedAt?: string | null;
 }
@@ -1065,17 +1069,24 @@ export interface ReleaseCounts {
   suspect?: number;
   unknown?: number;
   wordingOnly?: number;
+  renamed?: number;
+  total?: number;
+  byKind?: Record<string, number>;
 }
 
-/** One build on the timeline of an API (the review fields come with the maintainer token). */
-export interface BuildEntry {
-  id: string;
-  docsAsOf?: string | null;
-  tag?: string | null;
-  createdAt: string;
+/** One build's notes on the timeline of an API (GET /v1/apis/{api}/release-notes, newest first; only builds WITH notes). */
+export interface ReleaseSummary {
+  from: string;
+  /** The build the notes are about. */
+  to: string;
+  toDocsAsOf?: string | null;
+  computedAt: string;
+  review: ReleaseReview;
+  needsAttention: boolean;
+  attentionReason?: string | null;
+  /** This build is `latest`. */
+  tagged: boolean;
   counts: ReleaseCounts;
-  review?: ReleaseReview;
-  needsAttention?: boolean;
 }
 
 /** The suspect items of one artifact rule, with the server's own one-sentence explanation (the web holds no rule text). */
@@ -1093,17 +1104,32 @@ export interface ReleaseDecision {
   note?: string | null;
   reason?: string | null;
   item?: string | null;
+  fromClass?: ChangeClass | null;
 }
 
 /** What produced a build's package (stream and its rules): the A and B sides of a diff. */
 export interface BuildPackage {
   streamVersion?: string | null;
   rulesHash?: string | null;
+  runId?: string | null;
   extractedAt?: string | null;
+  /** Pages stream could not read, units it blocked, pages it saw change: lists or counts (the server may send either). */
+  failedPages?: unknown;
+  blockedUnits?: unknown;
+  changedPages?: unknown;
+  pageHashes?: unknown;
+  /** True when this package has no page text to compare with (only the baseline). */
+  baselineOnly?: boolean | null;
+  llmFiles?: unknown;
 }
 
 /** GET /v1/apis/{api}/builds/{build}/release-notes (maintainer): every item, the extraction report and the review. */
 export interface ReleaseNotes {
+  api?: string;
+  to?: string;
+  toDocsAsOf?: string | null;
+  /** stream or its rules changed between the two builds: suspect changes are likelier. */
+  extractorChanged?: boolean;
   review: ReleaseReview;
   needsAttention: boolean;
   attentionReason?: string | null;
@@ -1113,7 +1139,7 @@ export interface ReleaseNotes {
   decisions: ReleaseDecision[];
   counts: ReleaseCounts;
   report: ReportGroup[];
-  /** The confirmed and likely items users see. */
+  /** EVERY item (those users see carry `visibleToUsers`); can be thousands for a big API. */
   items?: ChangeItem[];
   from?: string | null;
   package?: { from?: BuildPackage | null; to?: BuildPackage | null } | null;

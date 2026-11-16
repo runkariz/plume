@@ -5,11 +5,10 @@ import { useAsync } from '@/api/useAsync';
 import { ApiError, type ReleaseNotes } from '@/api/types';
 import { Banner, Button, Card, Chip, Crumbs, ErrorState, Kv, LoadingState } from '@/components';
 import { formatClock, formatDate, shortBuild } from '@/lib/format';
-import { ChangeRow } from './ChangeRow';
-import { DECISION_LABEL, REVIEW_LABEL } from './notes';
+import { PagedChanges } from './PagedChanges';
+import { DECISION_LABEL, GOLD_LABEL, REVIEW_LABEL, size } from './notes';
 
 const REVIEW_TONE = { pending: 'warn', kept: 'ok', rolled_back: 'bad' } as const;
-const SHOWN = 50;
 
 /** The server's own reason for a refusal, in the maintainer's words. */
 function refusal(e: unknown, what: string): string {
@@ -43,7 +42,7 @@ export function ReleaseReview() {
   const [reason, setReason] = useState('');
   const [copied, setCopied] = useState<'idle' | 'ok' | 'fail'>('idle');
   const [moved, setMoved] = useState<string | null>(null);
-  const [more, setMore] = useState(false);
+  const [query, setQuery] = useState('');
 
   const crumbs = [
     { label: 'Maintainer', to: '/maintainer' },
@@ -82,7 +81,10 @@ export function ReleaseReview() {
   const canRollBack = n.tagged && Boolean(n.from) && n.review !== 'rolled_back';
   const canRollForward = n.review === 'rolled_back';
   const canKeep = n.review === 'pending';
-  const items = n.items ?? [];
+  // every item comes with the notes: the ones users see carry `visibleToUsers` (else the confirmed and likely ones)
+  const items = (n.items ?? []).filter(
+    (i) => i.visibleToUsers ?? (i.class === 'confirmed' || i.class === 'likely'),
+  );
 
   async function keep() {
     setBusy('keep');
@@ -240,15 +242,34 @@ export function ReleaseReview() {
               />
             </>
           ) : null}
+          {n.extractorChanged ? (
+            <p className="small">
+              <Chip tone="warn">The extractor changed</Chip> stream or its rules differ between
+              these builds, so suspect changes are likelier.
+            </p>
+          ) : null}
+          {n.package?.to?.baselineOnly ? (
+            <p className="small muted">
+              This package has no page text to compare with: most changes cannot be proven.
+            </p>
+          ) : null}
+          {n.package?.to && size(n.package.to.failedPages) > 0 ? (
+            <Kv label="pages not read" value={String(size(n.package.to.failedPages))} mono />
+          ) : null}
+          {n.package?.to && size(n.package.to.blockedUnits) > 0 ? (
+            <Kv label="units blocked" value={String(size(n.package.to.blockedUnits))} mono />
+          ) : null}
           {n.gold?.before && n.gold.after
-            ? Object.keys(n.gold.after).map((k) => (
-                <Kv
-                  key={k}
-                  label={k}
-                  value={`${n.gold?.before?.[k] ?? '?'} → ${n.gold?.after?.[k] ?? '?'}`}
-                  mono
-                />
-              ))
+            ? Object.keys(GOLD_LABEL)
+                .filter((k) => typeof n.gold?.after?.[k] === 'number')
+                .map((k) => (
+                  <Kv
+                    key={k}
+                    label={GOLD_LABEL[k] ?? k}
+                    value={`${n.gold?.before?.[k] ?? '?'} → ${n.gold?.after?.[k] ?? '?'}`}
+                    mono
+                  />
+                ))
             : null}
           {!n.package && !n.gold ? (
             <p className="muted small">No package or quality data for this build.</p>
@@ -359,6 +380,18 @@ export function ReleaseReview() {
         ) : null}
       </Card>
 
+      <div className="release-filter">
+        <label htmlFor="notes-filter" className="small">
+          Filter the changes below by path, field, model or document
+        </label>
+        <input
+          id="notes-filter"
+          className="input"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="e.g. orders.json, line_items, ProductVariant"
+        />
+      </div>
       <section aria-label="Extraction report" className="release-report">
         <h2 className="h2-sm">Extraction report</h2>
         {n.report.length === 0 ? (
@@ -376,11 +409,14 @@ export function ReleaseReview() {
               <Chip>{g.items.length}</Chip>
             </h3>
             <p className="muted small">{g.explanation}</p>
-            <ul className="plain change-list">
-              {g.items.map((i) => (
-                <ChangeRow key={i.id} api={apiId} build={buildId} item={i} onChanged={retry} />
-              ))}
-            </ul>
+            <PagedChanges
+              api={apiId}
+              build={buildId}
+              items={g.items}
+              query={query}
+              onChanged={retry}
+              label={`${g.title}: changes`}
+            />
           </Card>
         ))}
       </section>
@@ -392,16 +428,14 @@ export function ReleaseReview() {
             No confirmed or likely changes: users see nothing new for this build.
           </p>
         ) : (
-          <>
-            <ul className="plain change-list">
-              {items.slice(0, more ? items.length : SHOWN).map((i) => (
-                <ChangeRow key={i.id} api={apiId} build={buildId} item={i} onChanged={retry} />
-              ))}
-            </ul>
-            {items.length > SHOWN && !more ? (
-              <Button onClick={() => setMore(true)}>Show all {items.length}</Button>
-            ) : null}
-          </>
+          <PagedChanges
+            api={apiId}
+            build={buildId}
+            items={items}
+            query={query}
+            onChanged={retry}
+            label="Changes users see"
+          />
         )}
       </section>
 

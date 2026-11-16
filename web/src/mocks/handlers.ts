@@ -17,7 +17,6 @@ import type {
 import { apiRef, modelCandidates, productSnapshot, sampleSuggestions } from './modelData';
 import { relatedFor } from './relatedData';
 import {
-  buildsJson,
   demote,
   issuesText,
   keep,
@@ -25,6 +24,7 @@ import {
   promote,
   rollback,
   seedReleases,
+  timelineJson,
   type Failure,
   type MockApiBuilds,
   type MockBuild,
@@ -675,14 +675,16 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
       return HttpResponse.json(collectionJson(id));
     }),
     // ---- release notes: the review of a build after it was published (maintainer) ----
-    http.get(`${base}/v1/apis/:id/builds`, ({ params, request }) => {
+    http.get(`${base}/v1/apis/:id/release-notes`, ({ params, request }) => {
       if (!isMaintainer(request)) return unauthorized();
       const a = releases[String(params.id)];
-      return HttpResponse.json({ items: a ? buildsJson(a) : [] });
+      return HttpResponse.json({ items: a ? timelineJson(a) : [] });
     }),
     http.get(`${base}/v1/apis/:id/builds/:build/release-notes`, ({ params, request }) => {
       const r = releaseOf(request, String(params.id), String(params.build));
-      return r instanceof Response ? r : HttpResponse.json(notesJson(r.api, r.build));
+      return r instanceof Response
+        ? r
+        : HttpResponse.json(notesJson(r.api, r.build, String(params.id)));
     }),
     http.post(
       `${base}/v1/apis/:id/builds/:build/release-notes/keep`,
@@ -691,7 +693,7 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
         if (r instanceof Response) return r;
         const body = (await request.json().catch(() => ({}))) as { note?: string };
         const f = keep(r.api, r.build, body.note);
-        return f ? failure(f) : HttpResponse.json(notesJson(r.api, r.build));
+        return f ? failure(f) : HttpResponse.json(notesJson(r.api, r.build, String(params.id)));
       },
     ),
     http.post(

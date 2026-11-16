@@ -102,7 +102,7 @@ for (const theme of THEMES) {
       await page.getByRole('link', { name: 'Release review' }).first().click();
       await page.getByRole('link', { name: 'All builds' }).click();
       const list = page.getByRole('list', { name: 'Builds' });
-      await expect(list.getByRole('listitem')).toHaveCount(3);
+      await expect(list.getByRole('listitem')).toHaveCount(2);
       await settle(page);
       await expectNoSeriousA11y(page);
       await shotOf(list, 'w22-builds', theme);

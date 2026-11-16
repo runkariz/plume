@@ -10,12 +10,12 @@ import {
   type GenerateRequest,
   type GenerateJobResponse,
   type GenerateResponse,
-  type BuildEntry,
   type ChangeItem,
   type Collection,
   type CollectionRef,
   type ModelJob,
   type ReleaseNotes,
+  type ReleaseSummary,
   type RollbackResult,
   type RelatedConcepts,
   type SetSessionRequest,
@@ -225,8 +225,8 @@ export interface PlumeApi {
   discardJob(id: string, signal?: AbortSignal): Promise<Job>;
   downloadDump(id: string, signal?: AbortSignal): Promise<{ blob: Blob; filename: string | null }>;
   // release notes (maintainer): the review of a build after it was published
-  /** The builds of an API with their notes counts and review state (an API without notes answers an empty list). */
-  listBuilds(api: string, signal?: AbortSignal): Promise<BuildEntry[]>;
+  /** The notes of every build of an API that has some, newest first, with the review state and counts. */
+  listReleaseNotes(api: string, signal?: AbortSignal): Promise<ReleaseSummary[]>;
   getReleaseNotes(api: string, build: string, signal?: AbortSignal): Promise<ReleaseNotes>;
   /** Keep the build; on a rolled-back build this rolls forward (409 when `latest` moved on). */
   keepRelease(
@@ -665,11 +665,11 @@ export function createApiClient(
       const filename = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)?.[1] ?? null;
       return { blob: await res.blob(), filename: filename ? decodeURIComponent(filename) : null };
     },
-    listBuilds: async (api, signal) => {
-      const r = await call<{ items?: BuildEntry[] } | BuildEntry[]>(`/v1/apis/${enc(api)}/builds`, {
+    listReleaseNotes: async (api, signal) => {
+      const r = await call<{ items?: ReleaseSummary[] }>(`/v1/apis/${enc(api)}/release-notes`, {
         signal,
       });
-      return Array.isArray(r) ? r : (r.items ?? []);
+      return r.items ?? [];
     },
     getReleaseNotes: (api, build, signal) =>
       call<ReleaseNotes>(`/v1/apis/${enc(api)}/builds/${enc(build)}/release-notes`, { signal }),

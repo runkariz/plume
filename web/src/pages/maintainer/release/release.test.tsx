@@ -62,12 +62,13 @@ describe('wording and safety of what a package says', () => {
 });
 
 describe('the builds of an API', () => {
-  it('lists them newest first, with the review state, and links only builds that have notes', async () => {
+  it('lists the builds that have notes, newest first, with what each was compared with and its review state', async () => {
     renderApp('/maintainer/apis/shopify/builds');
     const list = await screen.findByRole('list', { name: 'Builds' });
     const rows = within(list).getAllByRole('listitem');
-    expect(rows).toHaveLength(3);
-    expect(rows[0]).toHaveTextContent('b-shopify-2026');
+    // the first build has nothing to compare with: it has no notes and is not on the timeline
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('compared with b-shopify-20261020');
     expect(within(rows[0] as HTMLElement).getByText('Pending review')).toBeInTheDocument();
     expect(within(rows[0] as HTMLElement).getByText('Needs attention')).toBeInTheDocument();
     expect(within(rows[0] as HTMLElement).getByText('latest')).toBeInTheDocument();
@@ -76,9 +77,8 @@ describe('the builds of an API', () => {
       `/maintainer/apis/shopify/builds/${REVIEW_SHOPIFY_NEW}/notes`,
     );
     expect(within(rows[1] as HTMLElement).getByText('Kept')).toBeInTheDocument();
-    // the first build has nothing to compare with: no notes, no link
-    expect(within(rows[2] as HTMLElement).getByText('no notes')).toBeInTheDocument();
-    expect(within(rows[2] as HTMLElement).queryByRole('link')).not.toBeInTheDocument();
+    expect(within(rows[1] as HTMLElement).queryByText('latest')).not.toBeInTheDocument();
+    expect(rows[1]).toHaveTextContent('compared with b-shopify-20260915');
   });
 
   it('says so when there are no builds with notes', async () => {
@@ -322,5 +322,112 @@ describe('the review of a build', () => {
         screen.queryByRole('heading', { name: 'Release review: shopify' }),
       ).not.toBeInTheDocument(),
     );
+  });
+});
+
+describe('a big report (a real Shopify run has thousands of changes)', () => {
+  /** n suspect removals of one document, as the server groups them under one rule. */
+  const many = (n: number): ChangeItem[] =>
+    Array.from({ length: n }, (_, k) => ({
+      id: `ch-big-${k}`,
+      kind: 'response_field',
+      op: 'removed',
+      class: 'suspect' as const,
+      breaking: true,
+      subject: {
+        method: 'GET',
+        path: '/admin/orders.json',
+        fieldPath: k % 2 ? `field_${k}` : `line_items[${k}].sku`,
+      },
+      before: { type: 'string' },
+      after: null,
+      artifactRules: ['A1-mass-removal'],
+      visibleToUsers: false,
+    }));
+  const bigNotes = (n: number) => ({
+    api: 'shopify',
+    from: REVIEW_SHOPIFY_OLD,
+    to: REVIEW_SHOPIFY_NEW,
+    toDocsAsOf: '2026-11-14',
+    computedAt: '2026-11-14T09:05:00Z',
+    review: 'pending',
+    decisions: [],
+    needsAttention: true,
+    attentionReason: 'A1 fired',
+    tagged: true,
+    extractorChanged: true,
+    counts: { confirmed: 0, likely: 0, suspect: n, unknown: 0, breaking: 0, total: n },
+    package: {
+      from: { streamVersion: '1.4.2', rulesHash: 'r1' },
+      to: {
+        streamVersion: '1.4.3',
+        rulesHash: 'r2',
+        failedPages: ['a', 'b', 'c'],
+        blockedUnits: 2,
+        baselineOnly: true,
+      },
+    },
+    gold: null,
+    items: many(n),
+    report: [
+      {
+        rule: 'A1-mass-removal',
+        title: 'Mass removal',
+        explanation: 'Most fields vanished.',
+        items: many(n),
+      },
+    ],
+  });
+
+  it('shows 50 at a time, says how many are left, and keeps the page light', async () => {
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/shopify/builds/${REVIEW_SHOPIFY_NEW}/release-notes`, () =>
+        HttpResponse.json(bigNotes(240)),
+      ),
+    );
+    await open();
+    const group = screen.getByRole('region', { name: 'Mass removal' });
+    expect(within(group).getAllByRole('listitem')).toHaveLength(50);
+    expect(
+      within(group).getByRole('button', { name: 'Show 50 more (190 left)' }),
+    ).toBeInTheDocument();
+    await userEvent.click(within(group).getByRole('button', { name: 'Show 50 more (190 left)' }));
+    expect(within(group).getAllByRole('listitem')).toHaveLength(100);
+    // nothing is a "user visible" change: users see nothing new
+    expect(
+      screen.getByText('No confirmed or likely changes: users see nothing new for this build.'),
+    ).toBeInTheDocument();
+  });
+
+  it('filters by path, field or model across the report', async () => {
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/shopify/builds/${REVIEW_SHOPIFY_NEW}/release-notes`, () =>
+        HttpResponse.json(bigNotes(240)),
+      ),
+    );
+    await open();
+    await userEvent.type(screen.getByLabelText(/Filter the changes below/), 'field_239');
+    const group = screen.getByRole('region', { name: 'Mass removal' });
+    expect(within(group).getAllByRole('listitem')).toHaveLength(1);
+    expect(within(group).getByRole('status')).toHaveTextContent('1 of 240 match “field_239”.');
+    await userEvent.clear(screen.getByLabelText(/Filter the changes below/));
+    await userEvent.type(screen.getByLabelText(/Filter the changes below/), 'nothing like this');
+    expect(within(group).getByText('Nothing matches.')).toBeInTheDocument();
+  });
+
+  it('says the extractor changed, what stream could not read, and that there is no page text to compare with', async () => {
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/shopify/builds/${REVIEW_SHOPIFY_NEW}/release-notes`, () =>
+        HttpResponse.json(bigNotes(3)),
+      ),
+    );
+    await open();
+    const pkg = screen.getByRole('region', { name: 'Package and quality' });
+    expect(pkg).toHaveTextContent('The extractor changed');
+    expect(pkg).toHaveTextContent('no page text to compare with');
+    expect(pkg).toHaveTextContent('pages not read');
+    expect(pkg).toHaveTextContent('3'); // a list of three failed pages
+    expect(pkg).toHaveTextContent('units blocked');
+    expect(pkg).toHaveTextContent('2'); // a plain count
   });
 });

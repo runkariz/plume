@@ -126,7 +126,9 @@ export function ChangeRow({
         ) : (
           'No vendor page'
         )}
-        {item.evidence?.anchor ? <span className="mono"> #{item.evidence.anchor}</span> : null}
+        {item.evidence?.anchor ? (
+          <span className="mono"> #{item.evidence.anchor.replace(/^#/, '')}</span>
+        ) : null}
         {hashNote ? <> · {hashNote}</> : null}
         {hashes?.pageHashBefore ? (
           <span className="mono faint">
@@ -143,6 +145,9 @@ export function ChangeRow({
           <Button disabled={busy !== null} onClick={() => void demote()}>
             {busy === 'demote' ? 'Demoting…' : 'Demote'}
           </Button>
+          {item.computedClass && item.computedClass !== 'confirmed' ? (
+            <span className="faint small"> (back to: {CLASS_LABEL[item.computedClass]})</span>
+          ) : null}
         </p>
       ) : null}
       {hidden && !item.promotedBy ? (

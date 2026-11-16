@@ -1,10 +1,10 @@
 import type {
-  BuildEntry,
   ChangeItem,
   ReleaseCounts,
   ReleaseDecision,
   ReleaseNotes,
   ReleaseReview,
+  ReleaseSummary,
   ReportGroup,
   RollbackResult,
 } from '@/api/types';
@@ -338,20 +338,25 @@ export function countsOf(b: MockBuild): ReleaseCounts {
     suspect: b.items.filter((i) => i.class === 'suspect').length,
     unknown: b.items.filter((i) => i.class === 'unknown').length,
     wordingOnly: v.filter((i) => i.wordingOnly).length,
+    renamed: 0,
+    total: b.items.length,
   };
 }
 
-export function buildsJson(api: MockApiBuilds): BuildEntry[] {
+export function timelineJson(api: MockApiBuilds): ReleaseSummary[] {
   return [...api.builds]
+    .filter((b) => b.hasNotes && b.from)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .map((b) => ({
-      id: b.id,
-      docsAsOf: b.docsAsOf,
-      tag: api.latest === b.id ? 'latest' : null,
-      createdAt: b.createdAt,
+      from: b.from as string,
+      to: b.id,
+      toDocsAsOf: b.docsAsOf,
+      computedAt: b.computedAt,
+      review: b.review,
+      needsAttention: b.needsAttention,
+      attentionReason: b.attentionReason,
+      tagged: api.latest === b.id,
       counts: countsOf(b),
-      // a build without notes carries no review fields (absent = not available)
-      ...(b.hasNotes ? { review: b.review, needsAttention: b.needsAttention } : {}),
     }));
 }
 
@@ -393,7 +398,7 @@ export function reportOf(b: MockBuild): ReportGroup[] {
   }));
 }
 
-export function notesJson(api: MockApiBuilds, b: MockBuild): ReleaseNotes {
+export function notesJson(api: MockApiBuilds, b: MockBuild, apiId = 'shopify'): ReleaseNotes {
   return {
     review: b.review,
     needsAttention: b.needsAttention,
@@ -403,8 +408,17 @@ export function notesJson(api: MockApiBuilds, b: MockBuild): ReleaseNotes {
     decisions: b.decisions,
     counts: countsOf(b),
     report: reportOf(b),
-    items: b.items.filter(visible),
+    // EVERY item: the visible ones carry `visibleToUsers`, the suspect and unknown ones do not
+    items: b.items.map((i) => ({
+      ...i,
+      visibleToUsers: visible(i),
+      computedClass: COMPUTED.get(`${b.id}/${i.id}`) ?? i.class,
+    })),
     from: b.from,
+    api: apiId,
+    to: b.id,
+    toDocsAsOf: b.docsAsOf,
+    extractorChanged: Boolean(b.package) && b.package?.from.rulesHash !== b.package?.to.rulesHash,
     package: b.package,
     gold: b.gold,
   };

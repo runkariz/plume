@@ -23,6 +23,7 @@ export const OP_LABEL: Record<string, string> = {
   description: 'description changed',
   enum: 'enum changed',
   renamed: 'renamed',
+  completeness: 'completeness flag changed',
 };
 
 /** Only an http(s) address is a link: a source URL is data from a package. */
@@ -60,4 +61,21 @@ export const DECISION_LABEL: Record<string, string> = {
   rollforward: 'Rolled forward',
   promote: 'Promoted to confirmed',
   demote: 'Demoted',
+};
+
+/** A count the server may send as a number or as the list itself (failed pages, blocked units). */
+export function size(v: unknown): number {
+  if (Array.isArray(v)) return v.length;
+  if (typeof v === 'number') return v;
+  if (v && typeof v === 'object') return Object.keys(v).length;
+  return 0;
+}
+
+/** The gold-score numbers worth showing (the server also sends counts of questions); anything else is left out. */
+export const GOLD_LABEL: Record<string, string> = {
+  recall_at_k: 'recall@k',
+  mrr: 'MRR',
+  fact_accuracy: 'fact accuracy',
+  citation_hit_rate: 'citation hits',
+  'recall@5': 'recall@5',
 };
