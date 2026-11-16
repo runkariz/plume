@@ -245,6 +245,10 @@ a group is filtered here), and keeps wording-only changes apart. Quotes are text
 `e2e-real/zz-changes.spec.ts` is skipped unless `PLUME_E2E_KIT=true`: load the SYNTHETIC kit
 (`plume-data/test-packages/base`, then `A-docs-changes`; API id `woocommerce-test`) and the real
 `amazon-sp-vendor-20261116-r7-extras` package into a fresh stack with `plume load`, then run it.
+`e2e-real/zz-impact.spec.ts` (skipped unless `PLUME_E2E_IMPACT=true`) checks impact on real data: with the kit BASE loaded,
+save and release a model over `woocommerce-test` + `woocommerce` that cites the notes endpoint (it becomes `affected`),
+another that cites only `model:order` id and total (`updated_unaffected`), and a set of the two; then load
+`A-docs-changes` and run the spec. It also feeds the widget in the stand-in host with the real MCP `get_model` results.
 
 ## Releasing models: replacing older ones, and warnings
 
