@@ -257,6 +257,19 @@ make e2e-live   # live embeddings (needs a key)
 make e2e-live-claude   # Claude Code as the client, opt-in and billed: docs/level2.md
 ```
 
+**Real-package tests (maintainers; run them in every gate).** They are skipped unless these are
+set, and they read only frozen package copies, never a folder stream is still writing:
+
+```bash
+D=~/source/repos/plume-data
+# suggestions, relations and models against the real Shopify / WooCommerce / Mirakl packages
+export PLUME_SUGGEST_PACKAGES=$D/shopify-20261115-v12-extras:$D/woocommerce-v3-20261115-v12-extras:$D/mirakl-20261115-v12-extras
+# release notes: the real Shopify v12 -> v12b pair (the truncations must come out as suspects)
+export PLUME_NOTES_PACKAGES=$D/shopify-20261115-v12-extras:$D/shopify-20261115-v12b-extras
+make test
+PLUME_CONTRACT_PACKAGES=$PLUME_SUGGEST_PACKAGES uv run pytest tests/contract/test_package_contract.py
+```
+
 Clean architecture, enforced by import-linter (`.importlinter`) and `tests/architecture`:
 
 ```
