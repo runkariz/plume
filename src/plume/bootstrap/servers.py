@@ -62,6 +62,8 @@ def http_app(c: Container) -> FastAPI:
             web_public_url=s.web_public_url,
             collections=c.collections,
             release_notes=c.release_notes,
+            public_changes=c.public_changes,
+            model_impact=c.model_impact,
         )
     )
 
@@ -87,6 +89,8 @@ def reader_server(c: Container) -> MCPServer:
             suggest_related=c.suggest_related,
             model_sets=c.model_sets,
             collections=c.collections,
+            public_changes=c.public_changes,
+            model_impact=c.model_impact,
             web_public_url=c.settings.web_public_url,
             mcp_app_html=_app_html(c),
         )

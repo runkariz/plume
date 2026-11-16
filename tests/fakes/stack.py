@@ -11,12 +11,14 @@ from plume.application.knowledge.embed_build import EmbedBuild
 from plume.application.knowledge.export_dump import ExportDump, RestoreDump
 from plume.application.knowledge.extract_facts import ExtractFacts
 from plume.application.knowledge.import_package import ImportPackage
+from plume.application.knowledge.public_changes import PublicChanges
 from plume.application.knowledge.release_notes import ReleaseNotes
 from plume.application.knowledge.seal_build import SealBuild
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.models.collections import Collections
 from plume.application.models.concepts import SuggestConcepts
 from plume.application.models.generate import GenerateModels
+from plume.application.models.impact import ModelImpact
 from plume.application.models.model_sets import ModelSets
 from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import ModelSessions
@@ -149,6 +151,12 @@ class FakeStack:
             notes=self.release_notes(),
             package_meta=StreamPackageMetaReader(),
         )
+
+    def public_changes(self) -> PublicChanges:
+        return PublicChanges(self.notes_repo, self.tags)
+
+    def model_impact(self) -> ModelImpact:
+        return ModelImpact(self.public_changes())
 
     def release_notes(self) -> ReleaseNotes:
         return ReleaseNotes(

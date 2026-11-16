@@ -141,3 +141,30 @@ def test_shape_ignores_wording() -> None:
     }
     c = {"type": "object", "properties": {"x": {"type": "integer"}}}
     assert shape_hash(a) == shape_hash(b) != shape_hash(c)
+
+
+def test_auth_companion_files_are_no_schemes(packages: Path, tmp_path: Path) -> None:
+    """<scheme>.<suffix>.{sample,schema}.json (e.g. Amazon's oauth-token-params) describe the
+    scheme; they are exposed on it, never listed as schemes of their own."""
+    import json as _json  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+
+    from plume.infrastructure.sources.stream_package import StreamPackageSource  # noqa: PLC0415
+
+    copy = tmp_path / "pkg"
+    shutil.copytree(packages / "shopify-mini", copy)
+    auth = copy / "connector" / "auth"
+    scheme = sorted(p for p in auth.glob("*.json") if p.name.count(".") == 1)[0].stem
+    (auth / f"{scheme}.oauth-token-params.schema.json").write_text(
+        _json.dumps({"type": "object", "properties": {"grant_type": {"type": "string"}}})
+    )
+    (auth / f"{scheme}.oauth-token-params.sample.json").write_text(
+        _json.dumps({"grant_type": "refresh_token"})
+    )
+    docs = [d for d in StreamPackageSource().load(str(copy)).documents if d.kind.value == "auth"]
+    before = [d for d in StreamPackageSource().load(str(packages / "shopify-mini")).documents
+              if d.kind.value == "auth"]  # fmt: skip
+    assert len(docs) == len(before)  # no extra schemes
+    mine = next(d for d in docs if d.raw and d.raw["file"] == f"{scheme}.json")
+    assert mine.raw is not None
+    assert mine.raw["companions"]["oauth-token-params"]["sample"] == {"grant_type": "refresh_token"}

@@ -18,6 +18,8 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from plume.application.models.collections import Collections
 from plume.application.models.concepts import SuggestFilter
 from plume.application.models.generate import ENDED, GenerateModels
+from plume.application.models.impact import ModelImpact, members_of
+from plume.application.models.impact import summary as impact_summary
 from plume.application.models.model_sets import ModelSets
 from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import (
@@ -102,6 +104,7 @@ def models_router(  # noqa: PLR0915
     suggest_related: Callable[[], SuggestRelated] | None = None,
     sets: Callable[[], ModelSets] | None = None,
     collections: Callable[[], Collections] | None = None,
+    impact: Callable[[], ModelImpact] | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["models"])
     auth = make_auth(tokens)
@@ -133,6 +136,8 @@ def models_router(  # noqa: PLR0915
             payloads.access_payload(snap, service.lineage_info(snap, maintainer), web_public_url)
         )
         body["supersedes"] = list(service.replaced_by(snap))
+        if impact is not None:
+            body["impact"] = impact_summary(impact().of_model(snap))
         return body
 
     def list_item(m: ModelSnapshot, maintainer: bool) -> s.ModelListItem:
@@ -157,6 +162,7 @@ def models_router(  # noqa: PLR0915
             same_concept=list(service.same_concept(m))
             if m.visibility == Visibility.OFFICIAL
             else [],
+            impact=s.ImpactSummary(**impact_summary(impact().of_model(m))) if impact else None,
         )
 
     def generator() -> GenerateModels:
@@ -386,6 +392,11 @@ def models_router(  # noqa: PLR0915
                         **payloads.set_list_item(
                             x, service.stale_inputs(x), service.lineage_info(x, False)["versions"]
                         ),
+                        **(
+                            {"impact": impact_summary(impact().of_set(x, members_of(service, x)))}
+                            if impact
+                            else {}
+                        ),
                         "newerVersion": payloads.newer_version(
                             c.newer.get(x.set_id), "set", web_public_url
                         ),
@@ -444,6 +455,17 @@ def models_router(  # noqa: PLR0915
         return s.ModelList(
             items=[list_item(m, maintainer) for m in models().list(api, limit, wanted)]
         )
+
+    if impact is not None:
+        impacts = impact
+
+        @router.get("/v1/models/{snapshot_id}/impact", responses=token_errors)
+        def model_impact(
+            snapshot_id: str, maintainer: Annotated[bool, Depends(optional)]
+        ) -> dict[str, Any]:
+            """What newer docs mean for this model: per mapping, the visible changes (confirmed
+            or likely, not wording-only) of the builds published since its pinned ones."""
+            return impacts().of_model(models().visible_snapshot(snapshot_id, maintainer))
 
     @router.get("/v1/models/{snapshot_id}", responses=token_errors)
     def get_model(

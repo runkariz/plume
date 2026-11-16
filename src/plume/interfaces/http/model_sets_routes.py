@@ -12,6 +12,8 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from plume.application.models.generate import GenerateModels
+from plume.application.models.impact import ModelImpact, members_of
+from plume.application.models.impact import summary as impact_summary
 from plume.application.models.model_sets import ModelSets
 from plume.application.models.sessions import ModelDraftRefusedError
 from plume.application.reader.resolve import BuildResolver
@@ -30,6 +32,7 @@ def model_sets_router(  # noqa: PLR0915 - one route per operation
     tokens: tuple[str, ...],
     web_public_url: str | None = None,
     generate_models: Callable[[], GenerateModels] | None = None,
+    impact: Callable[[], ModelImpact] | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["model sets"])
     auth = make_auth(tokens)
@@ -51,6 +54,14 @@ def model_sets_router(  # noqa: PLR0915 - one route per operation
                 out[a] = a
         return out
 
+    def item(service: ModelSets, x: ModelSetSnapshot, maintainer: bool) -> dict[str, Any]:
+        out = payloads.set_list_item(
+            x, service.stale_inputs(x), service.lineage_info(x, maintainer)["versions"]
+        )
+        if impact is not None:
+            out["impact"] = impact_summary(impact().of_set(x, members_of(service, x)))
+        return out
+
     def set_json(x: ModelSetSnapshot, maintainer: bool) -> dict[str, Any]:
         service = sets()
         body = payloads.set_payload(
@@ -62,6 +73,8 @@ def model_sets_router(  # noqa: PLR0915 - one route per operation
             web_public_url,
         )
         body["inputs"] = [{**i, "logo": logo(i["id"], i["name"])} for i in body["inputs"]]
+        if impact is not None:
+            body["impact"] = impact_summary(impact().of_set(x, members_of(service, x)))
         editable = service.editable_options(x)
         for rel in body["relations"]:
             rel["editableOptions"] = editable.get(rel["id"], [])
@@ -154,14 +167,7 @@ def model_sets_router(  # noqa: PLR0915 - one route per operation
     @router.post("/v1/model-sets/mine", responses=errors)
     def mine(body: s.MineRequest) -> dict[str, Any]:
         service = sets()
-        return {
-            "items": [
-                payloads.set_list_item(
-                    x, service.stale_inputs(x), service.lineage_info(x)["versions"]
-                )
-                for x in service.mine(body.owner_keys)
-            ]
-        }
+        return {"items": [item(service, x, False) for x in service.mine(body.owner_keys)]}
 
     @router.get("/v1/model-sets", responses=errors)
     def list_sets(
@@ -180,14 +186,19 @@ def model_sets_router(  # noqa: PLR0915 - one route per operation
             "all": Visibility.ALL,
         }[visibility]
         service = sets()
-        return {
-            "items": [
-                payloads.set_list_item(
-                    x, service.stale_inputs(x), service.lineage_info(x, maintainer)["versions"]
-                )
-                for x in service.list(api, limit, wanted)
-            ]
-        }
+        return {"items": [item(service, x, maintainer) for x in service.list(api, limit, wanted)]}
+
+    if impact is not None:
+        impacts = impact
+
+        @router.get("/v1/model-sets/{set_id}/impact", responses=errors)
+        def set_impact(
+            set_id: str, maintainer: Annotated[bool, Depends(optional)]
+        ) -> dict[str, Any]:
+            """What newer docs mean for the set: per member, its affected mappings."""
+            service = sets()
+            x = service.visible(set_id, maintainer)
+            return impacts().of_set(x, members_of(service, x))
 
     @router.get("/v1/model-sets/{set_id}", responses=errors)
     def get_set(set_id: str, maintainer: Annotated[bool, Depends(optional)]) -> dict[str, Any]:

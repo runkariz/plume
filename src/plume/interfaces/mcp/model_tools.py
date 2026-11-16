@@ -16,6 +16,8 @@ from mcp_types import CallToolResult
 from plume.application.errors import ApplicationError
 from plume.application.models.collections import Collections
 from plume.application.models.generate import GenerateModels
+from plume.application.models.impact import ModelImpact, widget_rows
+from plume.application.models.impact import summary as impact_summary
 from plume.application.models.model_sets import ModelSets
 from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import (
@@ -149,6 +151,7 @@ def register_model_tools(  # noqa: PLR0915
     related: Callable[[], SuggestRelated] | None = None,
     collections: Callable[[], Collections] | None = None,
     sets: Callable[[], ModelSets] | None = None,
+    impact: Callable[[], ModelImpact] | None = None,
 ) -> None:
     origin = Origin.MAINTAINER if maintainer else Origin.USER
 
@@ -167,12 +170,21 @@ def register_model_tools(  # noqa: PLR0915
         body.update(
             payloads.access_payload(snap, service.lineage_info(snap, maintainer), web_public_url)
         )
+        if impact is not None:  # the view has no network: the summary and a few rows
+            full = impact().of_model(snap)
+            body["impact"] = impact_summary(full) | {
+                "rows": widget_rows(full),
+                "impactUrl": f"/v1/models/{snap.snapshot_id}/impact",
+            }
         return body
 
     def list_item(m: ModelSnapshot) -> dict[str, Any]:
         service = models()
         versions = service.lineage_info(m, maintainer)["versions"]
-        return payloads.model_list_item(m, service.stale_inputs(m), versions)
+        out = payloads.model_list_item(m, service.stale_inputs(m), versions)
+        if impact is not None:
+            out["impact"] = impact_summary(impact().of_model(m))
+        return out
 
     if related is not None:
         rel = related

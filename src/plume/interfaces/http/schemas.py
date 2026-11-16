@@ -35,6 +35,14 @@ class Logo(Schema):
     url: str | None = None
 
 
+class DocsUpdated(Schema):
+    build: str
+    at: str = Field(description="docsAsOf of that build")
+    confirmed: int
+    likely: int
+    breaking: int
+
+
 class ApiSummary(Schema):
     id: str
     name: str
@@ -48,6 +56,11 @@ class ApiSummary(Schema):
     docs_as_of: str | None
     status: ApiStatus
     logo: Logo
+    docs_updated: DocsUpdated | None = Field(
+        default=None,
+        description="The latest build's visible docs changes (confirmed + likely, wording-only "
+        "excluded); null when it has none or no release notes.",
+    )
 
 
 class ApiList(Schema):
@@ -577,7 +590,16 @@ class StaleInput(Schema):
     current: str | None
 
 
+class ImpactSummary(Schema):
+    status: str = Field(description="current | updated_unaffected | affected | unknown")
+    affected_count: int
+    breaking_count: int
+
+
 class ModelListItem(Schema):
+    impact: ImpactSummary | None = Field(
+        default=None, description="What newer docs mean for its mappings (null: not computed)."
+    )
     id: str
     name: str
     concept: str
@@ -668,6 +690,12 @@ class AuthSchemeDetail(Schema):
     scheme: dict[str, Any] = Field(description="The auth JSON from the package, verbatim.")
     variables_schema: dict[str, Any] | None = Field(
         description="The scheme's .variables.schema.json (JSON Schema), verbatim."
+    )
+    companions: dict[str, dict[str, Any]] = Field(
+        default_factory=dict,
+        description="The scheme's companion files by suffix, verbatim: e.g. "
+        '"oauth-token-params": {"schema": …, "sample": …} (the OAuth token request params), '
+        '"variables": {"schema": …, "sample": …}.',
     )
     file: str | None
 
