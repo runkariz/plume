@@ -3,6 +3,7 @@
 import hashlib
 import math
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 from plume.application.errors import EmbeddingError
@@ -32,15 +33,28 @@ class FakeClock:
 class InMemoryApiRepo:
     def __init__(self) -> None:
         self.apis: dict[str, ApiInfo] = {}
+        self.overrides: dict[str, str] = {}
 
     def upsert(self, info: ApiInfo) -> None:
-        self.apis[info.api_id.value] = info
+        if info.name_override:
+            self.overrides[info.api_id.value] = info.name_override
+        self.apis[info.api_id.value] = replace(info, name_override=None)
+
+    def _out(self, info: ApiInfo) -> ApiInfo:
+        return replace(info, name_override=self.overrides.get(info.api_id.value))
 
     def get(self, api_id: ApiId) -> ApiInfo | None:
-        return self.apis.get(api_id.value)
+        info = self.apis.get(api_id.value)
+        return self._out(info) if info else None
 
     def list(self) -> list[ApiInfo]:
-        return [self.apis[k] for k in sorted(self.apis)]
+        return [self._out(self.apis[k]) for k in sorted(self.apis)]
+
+    def set_display_name(self, api_id: ApiId, name: str | None) -> None:
+        if name is None:
+            self.overrides.pop(api_id.value, None)
+        else:
+            self.overrides[api_id.value] = name
 
 
 class InMemoryBuildRepo:

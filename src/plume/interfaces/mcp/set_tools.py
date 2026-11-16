@@ -76,7 +76,7 @@ def register_set_tools(  # noqa: PLR0915
         out = {}
         for i in x.inputs:
             try:
-                out[i.api] = resolver().resolve(i.api).api.name
+                out[i.api] = resolver().resolve(i.api).api.display_name
             except ApplicationError:
                 out[i.api] = i.api
         return out

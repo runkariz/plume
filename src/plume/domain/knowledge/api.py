@@ -47,3 +47,15 @@ class ApiInfo:
     icon_url: str | None = None
     category: Category | None = None
     versions: tuple[str, ...] = ()
+    # "package": app.json title/displayName; "derived": from the package's id/name.
+    name_source: str = "derived"
+    # A maintainer's display name (per API, not per build; survives reloads). Wins over `name`.
+    name_override: str | None = None
+
+    @property
+    def display_name(self) -> str:
+        return self.name_override or self.name
+
+    @property
+    def display_source(self) -> str:
+        return "override" if self.name_override else self.name_source

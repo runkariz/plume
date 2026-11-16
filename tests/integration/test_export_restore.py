@@ -8,6 +8,7 @@ from sqlalchemy import Engine, text
 from sqlalchemy.engine import make_url
 
 from plume.bootstrap.container import Container
+from plume.domain.knowledge.api import ApiId
 from plume.infrastructure.db.alembic_migrator import AlembicMigrator
 from plume.infrastructure.settings import Settings
 
@@ -110,5 +111,32 @@ def test_release_notes_are_computed_on_postgres_and_travel_with_the_dump(
     assert dst.release_notes_repo.get_meta(second.build_id.value) == (
         src.release_notes_repo.get_meta(second.build_id.value)
     )
+    src.engine.dispose()
+    dst.engine.dispose()
+
+
+def test_api_display_name_survives_reloads_and_travels_with_the_dump(
+    clean_engine: Engine, pg_url: str, second_url: str, packages: Path, tmp_path: Path
+) -> None:
+    src = _container(pg_url, tmp_path)
+    src.build_pipeline().execute("job", str(packages / "test-catalog"))
+    info = src.apis.get(ApiId("test-catalog-api"))
+    assert info is not None
+    assert info.display_source == "derived"
+    out = src.api_display().set("test-catalog-api", "  Test  Catalog API ")
+    assert (out["name"], out["nameSource"]) == ("Test Catalog API", "override")
+    build = src.build_pipeline().execute("job", str(packages / "test-catalog")).build_id
+    again = src.apis.get(ApiId("test-catalog-api"))
+    assert again is not None
+    assert (again.display_name, again.name) == ("Test Catalog API", info.name)  # reload kept it
+    ref = src.export_dump().execute(build)
+
+    dst = _container(second_url, tmp_path)
+    AlembicMigrator(dst.engine).upgrade_to_head()
+    dst.restore_dump().execute(ref)
+    restored = dst.apis.get(ApiId("test-catalog-api"))
+    assert restored is not None
+    assert restored.display_name == "Test Catalog API"
+    assert dst.api_display().set("test-catalog-api", None)["nameSource"] == "derived"
     src.engine.dispose()
     dst.engine.dispose()

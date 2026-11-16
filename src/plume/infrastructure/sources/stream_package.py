@@ -520,9 +520,11 @@ class StreamPackageSource:
                 bundle_version=bundle if isinstance(bundle, int) else None,
             )
         summary = _str(app.get("summary")) or _str(app.get("description")) or ""
+        title = _str(app.get("title")) or _str(app.get("displayName"))
         return ApiInfo(
             api_id=ApiId.from_name(name),
-            name=display_name(name, [summary, _str(app.get("description")) or ""]),
+            name=title or display_name(name, [summary, _str(app.get("description")) or ""]),
+            name_source="package" if title else "derived",
             summary=summary,
             doc_link=_str(app.get("docLink")),
             icon_url=_str(app.get("iconUrl")),

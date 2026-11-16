@@ -35,6 +35,10 @@ class Logo(Schema):
     url: str | None = None
 
 
+class DisplayNameIn(Schema):
+    name: str | None = Field(description="The display name (1-80 chars); null clears it.")
+
+
 class DocsUpdated(Schema):
     build: str
     at: str = Field(description="docsAsOf of that build")
@@ -56,6 +60,11 @@ class ApiSummary(Schema):
     docs_as_of: str | None
     status: ApiStatus
     logo: Logo
+    name_source: str = Field(
+        default="derived",
+        description="Where `name` comes from: override (a maintainer set it) | package "
+        "(app.json title/displayName) | derived (from the package's id).",
+    )
     docs_updated: DocsUpdated | None = Field(
         default=None,
         description="The latest build's visible docs changes (confirmed + likely, wording-only "

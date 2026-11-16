@@ -54,6 +54,8 @@ def _api(a: ApiInfo) -> dict[str, Any]:
             else None
         ),
         "versions": list(a.versions),
+        "name_source": a.name_source,
+        "name_override": a.name_override,
     }
 
 
@@ -69,6 +71,8 @@ def _api_back(d: dict[str, Any]) -> ApiInfo:
         if c
         else None,
         versions=tuple(d.get("versions", [])),
+        name_source=d.get("name_source", "derived"),
+        name_override=d.get("name_override"),
     )
 
 

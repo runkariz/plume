@@ -49,7 +49,7 @@ def model_sets_router(  # noqa: PLR0915 - one route per operation
         out = {}
         for a in apis:
             try:
-                out[a] = resolver().resolve(a).api.name
+                out[a] = resolver().resolve(a).api.display_name
             except Exception:
                 out[a] = a
         return out

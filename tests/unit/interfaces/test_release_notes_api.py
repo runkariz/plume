@@ -119,3 +119,30 @@ def test_api_detail_shows_public_sources_only(stack: tuple[FakeStack, str, str])
     # the fixture's only source is a file:// url: never public; extractedAt from the manifest
     assert body["sources"] == []
     assert "extractedAt" in body
+
+
+def test_display_name_route(packages: Path) -> None:
+    s = FakeStack()
+    s.load(str(packages / "test-catalog"))
+    client = TestClient(
+        create_app(
+            HttpDependencies(
+                overviews=s.overviews, browse=s.browse, search=s.search,
+                get_document=s.get_document, find_fact=s.find_fact, check_call=s.check_call,
+                list_builds=lambda: ListBuilds(s.builds, s.tags),
+                diff_builds=lambda: DiffBuilds(s.builds), resolver=s.resolver,
+                rate_limit_per_minute=0, maintainer_tokens=(TOKEN,), api_display=s.api_display,
+            )
+        )
+    )  # fmt: skip
+    url = f"/v1/apis/{API}/display"
+    assert client.put(url, json={"name": "X"}).status_code == 401
+    out = client.put(url, json={"name": "Test Catalog"}, headers=AUTH).json()
+    assert (out["name"], out["nameSource"]) == ("Test Catalog", "override")
+    item = next(a for a in client.get("/v1/apis").json()["items"] if a["id"] == API)
+    assert (item["name"], item["nameSource"]) == ("Test Catalog", "override")
+    assert client.get(f"/v1/apis/{API}").json()["nameSource"] == "override"
+    assert client.put(url, json={"name": " "}, headers=AUTH).status_code in (400, 409, 422)
+    assert client.put("/v1/apis/nope/display", json={"name": "X"}, headers=AUTH).status_code == 404
+    cleared = client.put(url, json={"name": None}, headers=AUTH).json()
+    assert cleared["nameSource"] == "derived"
