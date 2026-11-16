@@ -1,7 +1,8 @@
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import datetime
+from typing import Any
 
 from plume.application.ports.collection_repo import Collection
 from plume.application.ports.model_repo import ModelJob, ModelSession
@@ -280,3 +281,30 @@ class InMemoryCollectionRepo:
         self.entries[source] = {}
         self.collections[source] = replace(self.collections[source], merged_into=into)
         return moved
+
+
+class InMemoryReleaseNotesRepo:
+    def __init__(self) -> None:
+        self.notes: dict[str, dict[str, Any]] = {}
+        self.meta: dict[str, dict[str, Any]] = {}
+
+    def save_meta(self, build_id: str, meta: Mapping[str, Any]) -> None:
+        self.meta[build_id] = json.loads(json.dumps(dict(meta)))
+
+    def get_meta(self, build_id: str) -> dict[str, Any] | None:
+        m = self.meta.get(build_id)
+        return json.loads(json.dumps(m)) if m is not None else None
+
+    def save(self, notes: Mapping[str, Any]) -> None:
+        self.notes[notes["to"]] = json.loads(json.dumps(dict(notes)))
+
+    def get(self, to_build: str) -> dict[str, Any] | None:
+        n = self.notes.get(to_build)
+        return json.loads(json.dumps(n)) if n is not None else None
+
+    def for_api(self, api_id: str) -> list[dict[str, Any]]:
+        rows = [n for n in self.notes.values() if n["api"] == api_id]
+        return [
+            json.loads(json.dumps(n))
+            for n in sorted(rows, key=lambda n: (n["computedAt"], n["to"]), reverse=True)
+        ]

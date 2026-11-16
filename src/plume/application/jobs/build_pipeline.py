@@ -6,7 +6,7 @@ join in slice 4.
 """
 
 from collections.abc import Callable
-from typing import TypeVar
+from typing import Any, TypeVar
 
 from plume.application.dto import GateSummary, PipelineResult, TagResult
 from plume.application.eval.run_eval_gate import RunEvalGate
@@ -14,11 +14,14 @@ from plume.application.knowledge.chunk_documents import ChunkDocuments
 from plume.application.knowledge.embed_build import EmbedBuild
 from plume.application.knowledge.extract_facts import ExtractFacts
 from plume.application.knowledge.import_package import ImportPackage
+from plume.application.knowledge.release_notes import ReleaseNotes
 from plume.application.knowledge.seal_build import SealBuild
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.ports.eval_repo import GoldSource
 from plume.application.ports.job_events import EventStatus, JobEvent, JobEvents
+from plume.application.ports.release_notes_repo import PackageMetaReader
 from plume.domain.knowledge.api import ApiId
+from plume.domain.shared.ids import BuildId
 
 T = TypeVar("T")
 
@@ -35,7 +38,11 @@ class BuildPipeline:
         events: JobEvents,
         evaluate: RunEvalGate | None = None,
         gold: GoldSource | None = None,
+        notes: ReleaseNotes | None = None,
+        package_meta: PackageMetaReader | None = None,
     ) -> None:
+        self._notes = notes
+        self._package_meta = package_meta
         self._import = import_package
         self._chunk = chunk
         self._embed = embed
@@ -57,6 +64,43 @@ class BuildPipeline:
             raise
         self._events.emit(JobEvent(job_id, step, EventStatus.DONE, source=source))
         return result
+
+    def _release_notes(
+        self, job_id: str, ref: str, api_id: ApiId, build_id: BuildId
+    ) -> dict[str, Any] | None:
+        """Notes against the build `latest` points to, before the tag moves. Never fails or
+        holds a load (the maintainer reviews afterwards)."""
+        if self._notes is None:
+            return None
+        self._events.emit(JobEvent(job_id, "notes", EventStatus.STARTED))
+        try:
+            meta = self._package_meta.read(ref) if self._package_meta else None
+            notes = self._notes.on_load(api_id, build_id, meta)
+        except Exception as exc:
+            self._events.emit(JobEvent(job_id, "notes", EventStatus.FAILED, message=str(exc)))
+            return None
+        if notes is None:
+            self._events.emit(
+                JobEvent(job_id, "notes", EventStatus.SKIPPED, message="no previous build")
+            )
+            return None
+        summary = {
+            "from": notes["from"],
+            "to": notes["to"],
+            "counts": notes["counts"],
+            "needsAttention": notes["needsAttention"],
+            "attentionReason": notes["attentionReason"],
+        }
+        self._events.emit(
+            JobEvent(
+                job_id,
+                "notes",
+                EventStatus.DONE,
+                message=notes["attentionReason"] or "",
+                data=summary,
+            )
+        )
+        return summary
 
     def execute(
         self,
@@ -125,6 +169,7 @@ class BuildPipeline:
             self._events.emit(
                 JobEvent(job_id, "evaluate", EventStatus.SKIPPED, message="no gold questions")
             )
+        notes = self._release_notes(job_id, ref, imported.api_id, build_id)
         tagged: TagResult | None = None
         if tag is not None and (gate is None or gate.passed):
             tagged = self._step(job_id, "tag", lambda: self._tag.execute(build_id, tag))
@@ -143,4 +188,5 @@ class BuildPipeline:
             facts=facts,
             tag=tagged,
             gate=gate,
+            notes=notes,
         )

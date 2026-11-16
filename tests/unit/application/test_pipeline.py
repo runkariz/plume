@@ -61,6 +61,7 @@ def test_full_pipeline_seals_and_tags(packages: Path) -> None:
         ("facts", "started"), ("facts", "done"),
         ("seal", "started"), ("seal", "done"),
         ("evaluate", "skipped"),
+        ("notes", "started"), ("notes", "skipped"),  # the first build has no predecessor
         ("tag", "started"), ("tag", "done"),
     ]  # fmt: skip
     progress = [e for e in stack.events.events if e.status.value == "progress"]

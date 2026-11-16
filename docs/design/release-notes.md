@@ -91,10 +91,16 @@ One record per atomic difference between build A (previous) and build B (new) of
 
 ## 4. Classification: did the docs change, or did the extraction change?
 
-Signals per item, from the page(s) the item's document came from (`sourceUrl`):
+Signals per item, from the page(s) the item's document came from (`sourceUrl`). The page
+text is stream's source snapshot (`pages.json` → `_sources/<sha>.txt`). The knowledge-export
+pages are NOT source text: they are LLM-written and vary between runs (found while building
+phase 2), so they never confirm or disprove a change.
 
-- **P (page)**: B's source page hash differs from A's. It is unknown when either side lacks a
-  hash.
+- **P (page)**: B's `cleanSha256` (text after stream's page cleaner) differs from A's. A
+  change in `contentSha256` alone means only page chrome moved. P is unknown when either side
+  lacks a hash, and when A's `pages.json` is a baseline written after its extraction
+  (`baselineKind: "snapshot-after-extraction"`, the three frozen 2026-11-15 packages): such a
+  baseline only serves the NEXT package.
 - **V (verbatim)**: the new value is in B's source text, using the same normalised containment
   as `QUOTE_NOT_FOUND`.
   - additions: field name plus description;
@@ -115,6 +121,8 @@ Signals per item, from the page(s) the item's document came from (`sourceUrl`):
   - A6 the unit's page is in `failedPages` or `_diagnostics` reports it unread or timed out;
   - A7 flapping: the item undoes a change from the build before (present, absent, present
     again);
+  - Files stream lists as LLM-written (`llmFiles`: rules, gold questions) vary between runs.
+    They are recorded and kept out of extraction judgements.
   - A8 extractor change: `streamVersion` or `rulesHash` differs between A and B. This alone
     doesn't make an item suspect; it lowers "unknown" items with any other artifact signal to
     suspect, and it is shown in the maintainer report.
@@ -174,28 +182,25 @@ ahead as today, and the existing eval gate stays. Afterwards the maintainer revi
   `promotedBy` and `promotedAt`. **Demote** undoes a promotion.
 - Same-shape renames are never flagged.
 
-## 6. What stream must add to packages (to take to stream via kariz-core-94)
+## 6. What stream adds to packages (approved by kariz-core-94, 2026-11-16)
 
-Without these, most items stay `unknown` or rest on artifact rules alone:
+Everything new sits outside `connector/`, and `manifest.json` is unchanged.
 
-1. `pages.json`: one entry per vendor page read:
-   - `{url, fetchedAt, httpStatus, contentSha256, snapshot, units: [unit ids]}`;
-   - `contentSha256` hashes the **normalised source text** (main content, whitespace
-     collapsed), computed before any LLM or extraction step;
-   - `snapshot` is a path to that text inside the package (`_sources/<sha>.txt`), or a stable
-     snapshot id in stream's archive.
+1. `pages.json`: per page `url` (no query or fragment), `fetchedAt`, `httpStatus` (or
+   `status`/`reason`), `contentSha256` (normalised text before cleaning or LLM),
+   `cleanSha256` (after stream's page cleaner) and `snapshot` (`_sources/<sha>.txt`). Plus a
+   `units` map: for each unit, all its pages with anchors, and `truncated` / `complete` /
+   `partialReason`.
+2. `changes.json`: `vendorChangelog` (`stream changelog --since`) and a deterministic
+   `pageDiff` against the previous package's `pages.json` (only when stream is given
+   `--previous`; absent for a first package).
+3. `llmFiles`: which files are LLM-written.
+4. The three frozen packages get a no-LLM ledger pass into NEW folder copies (`connector/`
+   byte-identical) with `baselineKind: "snapshot-after-extraction"`. They are a baseline only,
+   with no "confirmed" claims against 2026-11-15. Mirakl lists its spec document as a page.
 
-   This gives P and V for every unit, not only the 71 knowledge-export pages.
-2. `changes.json`: the output of `stream changelog --since <previous package's extractedAt>` for
-   this API, in the package. The previous `runId` and `extractedAt` are named in it.
-3. Unit to page mapping for every unit: all pages a unit used, with anchors, not only one
-   `sourceUrl`.
-4. Per-unit extraction flags:
-   - `truncated` (an output limit was hit), `complete` (as `x-complete`) and `partialReason`;
-   - the reading order stays deterministic, so two runs on unchanged pages give the same
-     output.
-5. Keep `streamVersion`, `rulesHash` and `runId` in the manifest (already there).
-   `failedPages` and the diagnostics also stay.
+Plume reads all of these at load (`infrastructure/sources/package_meta.py`). A missing file is
+"no evidence", never an error.
 
 ## 7. Storage, dumps, prod
 
@@ -337,8 +342,10 @@ prod `plume restore` (notes restored) → `plume tag latest` on prod.
 1. **Field-level diff and storage**: items, breaking rules, same-shape renames, gold delta,
    dump and restore, maintainer view. Everything `unknown` except the artifact-rule suspects,
    which already catch Order a–l, ProductVariant and the renames.
-2. **Classification with what packages have today**: P and V for the knowledge-export pages,
-   the quality report, `failedPages`, diagnostics.
+2. **Classification with what packages have today**: the artifact rules, quality blockers,
+   `failedPages`, `x-complete` flips and flapping. The knowledge-export pages turned out to be
+   LLM-written, so with today's packages nothing is `confirmed`: items are `suspect` (an
+   artifact fired) or `unknown`. Built 2026-11-16, together with phase 1 and the review.
 3. **After stream ships section 6**: P, V and C for every unit. Public surfaces (Changes tab,
    `what_changed`, Atom, `docsUpdated`, impact) are turned on once phase 3 makes
    confirmed/likely meaningful. Before that, users would see almost nothing, which is honest

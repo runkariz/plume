@@ -94,5 +94,9 @@ class InMemoryBuildImporter:
             s.evals.save(snapshot.eval)  # type: ignore[attr-defined]
         if snapshot.assets:
             s.assets.put(b.build_id, snapshot.assets)  # type: ignore[attr-defined]
+        if snapshot.package_meta:
+            s.notes_repo.save_meta(b.build_id.value, snapshot.package_meta)  # type: ignore[attr-defined]
+        if snapshot.release_notes:
+            s.notes_repo.save(snapshot.release_notes)  # type: ignore[attr-defined]
         for name in tags:
             s.tags.set(Tag.point(TagName(name), b))  # type: ignore[attr-defined]

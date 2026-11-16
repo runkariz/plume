@@ -239,6 +239,8 @@ def _lines(s: BuildSnapshot) -> Iterator[dict[str, Any]]:
         "api": _api(s.api),
         "build": _build(s.build),
         "eval": _eval(s.eval) if s.eval else None,
+        **({"release_notes": dict(s.release_notes)} if s.release_notes else {}),
+        **({"package_meta": dict(s.package_meta)} if s.package_meta else {}),
         "counts": {
             "documents": len(s.documents),
             "chunks": len(s.chunks),
@@ -342,6 +344,8 @@ def decode(data: bytes) -> BuildSnapshot:
             facts=tuple(facts),
             eval=_eval_back(manifest["eval"]) if manifest.get("eval") else None,
             assets=tuple(assets),
+            release_notes=manifest.get("release_notes"),
+            package_meta=manifest.get("package_meta"),
         )
     except DumpFormatError:
         raise

@@ -15,6 +15,7 @@ from plume.application.jobs.build_pipeline import BuildPipeline
 from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.export_dump import ExportDump, RestoreDump
 from plume.application.knowledge.list_builds import ListApis, ListBuilds
+from plume.application.knowledge.release_notes import ReleaseNotes
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.ports.eval_repo import GoldSource
 from plume.application.reader.resolve import BuildResolver
@@ -44,6 +45,7 @@ class CliDependencies:
     export_dump: Callable[[], ExportDump] | None = None
     restore_dump: Callable[[], RestoreDump] | None = None
     import_gold: Callable[[str, str], tuple[int, list[str]]] | None = None
+    release_notes: Callable[[], ReleaseNotes] | None = None
 
 
 def _need[T](factory: Callable[[], T] | None, name: str) -> T:
@@ -132,6 +134,7 @@ def create_app(deps: CliDependencies) -> typer.Typer:
                 if result.gate
                 else None
             ),
+            "notes": result.notes,
         }
         gate_failed = result.gate is not None and not result.gate.passed
         if as_json:
@@ -139,6 +142,17 @@ def create_app(deps: CliDependencies) -> typer.Typer:
             if gate_failed:
                 raise typer.Exit(code=2)
             return
+        if result.notes:
+            c = result.notes["counts"]
+            typer.echo(
+                f"  release notes vs {result.notes['from']}: {c['total']} change(s); "
+                f"{c['suspect']} suspect (extraction), {c['unknown']} unknown"
+                + (
+                    f"; NEEDS ATTENTION: {result.notes['attentionReason']}"
+                    if result.notes["needsAttention"]
+                    else ""
+                )
+            )
         state = "reused sealed build" if result.reused else "sealed"
         typer.echo(f"{result.api_id}: {result.build_id} {state}")
         typer.echo(
@@ -267,6 +281,67 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         except (ApplicationError, DomainError) as exc:
             raise fail(exc) from exc
         typer.echo(ref)
+
+    @app.command("notes")
+    def notes_cmd(
+        api: Annotated[str, typer.Argument(help="API id")],
+        build: Annotated[
+            str | None, typer.Option(help="Build id (default: the newest notes)")
+        ] = None,
+        as_json: Annotated[
+            bool, typer.Option("--json", help="Summary as JSON (for manifests)")
+        ] = False,
+        issues: Annotated[bool, typer.Option(help="Print the copy-issues text for stream")] = False,
+        recompute: Annotated[
+            str | None, typer.Option(help="Recompute BUILD's notes against this base build")
+        ] = None,
+    ) -> None:
+        """Release notes of a build: what changed against its predecessor (maintainer view)."""
+        service = _need(deps.release_notes, "notes")
+        try:
+            if recompute is not None:
+                if build is None:
+                    raise typer.BadParameter("--recompute needs --build")
+                service.compute(BuildId(recompute), BuildId(build))
+            target = build or next((n["to"] for n in service.summaries(api)), None)
+            if target is None:
+                typer.echo(f"{api}: no release notes yet")
+                return
+            if issues:
+                typer.echo(service.issues(api, target), nl=False)
+                return
+            n = service.get(api, target)
+        except (ApplicationError, DomainError) as exc:
+            raise fail(exc) from exc
+        summary = {
+            k: n[k]
+            for k in (
+                "api",
+                "from",
+                "to",
+                "toDocsAsOf",
+                "computedAt",
+                "review",
+                "counts",
+                "needsAttention",
+                "attentionReason",
+                "extractorChanged",
+                "gold",
+            )
+        }
+        if as_json:
+            typer.echo(json.dumps(summary))
+            return
+        c = n["counts"]
+        typer.echo(f"{api}: {n['from']} -> {n['to']} ({n['review']})")
+        typer.echo(
+            f"  {c['confirmed']} confirmed, {c['likely']} likely, {c['suspect']} suspect, "
+            f"{c['unknown']} unknown, {c['renamed']} renamed; {c['breaking']} visible breaking"
+        )
+        if n["needsAttention"]:
+            typer.echo(f"  NEEDS ATTENTION: {n['attentionReason']}")
+        for g in n["report"]:
+            typer.echo(f"  {g['rule']}: {len(g['items'])} ({g['title']})")
 
     @app.command("restore")
     def restore_cmd(

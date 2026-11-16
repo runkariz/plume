@@ -19,6 +19,7 @@ from plume.application.errors import (
 from plume.application.jobs.maintainer import JobStateError, MaintainerJobs
 from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
+from plume.application.knowledge.release_notes import ReleaseNotes
 from plume.application.models.collections import Collections
 from plume.application.models.concepts import ModelInputError, SuggestConcepts
 from plume.application.models.generate import GenerateModels
@@ -51,6 +52,7 @@ from plume.interfaces.http.rate_limit import (
     RateLimitMiddleware,
     SecurityHeadersMiddleware,
 )
+from plume.interfaces.http.release_notes_routes import release_notes_router
 from plume.interfaces.http.sections_routes import sections_router
 
 ApiPath = Annotated[str, Path(description="API id, e.g. shopify")]
@@ -84,6 +86,7 @@ class HttpDependencies:
     model_sets: Callable[[], ModelSets] | None = None
     web_public_url: str | None = None
     collections: Callable[[], Collections] | None = None
+    release_notes: Callable[[], ReleaseNotes] | None = None
 
 
 MAX_RAW_BYTES = 256 * 1024
@@ -573,6 +576,8 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 deps.generate_models,
             )
         )
+    if deps.release_notes is not None:
+        app.include_router(release_notes_router(deps.release_notes, deps.maintainer_tokens))
     if deps.maintainer is not None:
         app.include_router(
             maintainer_router(

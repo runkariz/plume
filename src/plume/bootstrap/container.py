@@ -16,6 +16,7 @@ from plume.application.knowledge.export_dump import ExportDump, RestoreDump
 from plume.application.knowledge.extract_facts import ExtractFacts
 from plume.application.knowledge.import_package import ImportPackage
 from plume.application.knowledge.list_builds import ListApis, ListBuilds
+from plume.application.knowledge.release_notes import ReleaseNotes
 from plume.application.knowledge.seal_build import SealBuild
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.models.collections import Collections
@@ -50,6 +51,7 @@ from plume.infrastructure.db.repos.document_repo import PostgresDocumentRepo
 from plume.infrastructure.db.repos.eval_repo import PostgresEvalRepo
 from plume.infrastructure.db.repos.model_repo import PostgresModelJobRepo, PostgresModelRepo
 from plume.infrastructure.db.repos.model_set_repo import PostgresModelSetRepo
+from plume.infrastructure.db.repos.release_notes_repo import PostgresReleaseNotesRepo
 from plume.infrastructure.db.repos.tag_repo import PostgresTagRepo
 from plume.infrastructure.dumps.local_fs import LocalDumpStore
 from plume.infrastructure.embeddings.gemini import GeminiEmbedder
@@ -64,6 +66,7 @@ from plume.infrastructure.search.postgres_fact_index import PostgresFactIndex
 from plume.infrastructure.search.postgres_search import PostgresFactQuery, PostgresSearchIndex
 from plume.infrastructure.settings import Settings, get_settings
 from plume.infrastructure.sources.gold_file import JsonGoldSource
+from plume.infrastructure.sources.package_meta import StreamPackageMetaReader
 from plume.infrastructure.sources.stream_package import StreamPackageSource
 from plume.infrastructure.vertex_auth import AdcTokenSource
 
@@ -313,6 +316,23 @@ class Container:
             events=events or self.events,
             evaluate=self.run_eval(),
             gold=self.gold,
+            notes=self.release_notes(),
+            package_meta=StreamPackageMetaReader(),
+        )
+
+    @cached_property
+    def release_notes_repo(self) -> PostgresReleaseNotesRepo:
+        return PostgresReleaseNotesRepo(self.engine)
+
+    def release_notes(self) -> ReleaseNotes:
+        return ReleaseNotes(
+            self.builds,
+            self.documents,
+            self.tags,
+            self.release_notes_repo,
+            self.clock,
+            self.evals,
+            self.settings.gate_max_drop,
         )
 
     def list_apis(self) -> ListApis:
@@ -351,6 +371,7 @@ class Container:
             self.evals,
             self.dumps,
             self.assets,
+            self.release_notes_repo,
         )
 
     def restore_dump(self) -> RestoreDump:
