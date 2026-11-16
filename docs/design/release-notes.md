@@ -202,6 +202,39 @@ Everything new sits outside `connector/`, and `manifest.json` is unchanged.
 Plume reads all of these at load (`infrastructure/sources/package_meta.py`). A missing file is
 "no evidence", never an error.
 
+## 6b. Several sources per package (owner-approved 2026-11-16)
+
+A package can come from several sources: Mirakl has a docs entry and an OpenAPI spec bundle,
+and changelogs or SDKs may follow. Stream ships these with the pages.json release; the shapes
+are agreed with kariz-core-94.
+
+- `manifest.json`:
+  - `sources[]`: `{url, kind (docs|spec|changelog|sdk|other), fetchedAt,
+    contentSha256|etag|version, role ("entry" | "discovered from <url>")}`;
+  - `changelogUrls`.
+- `pages.json` units map, per unit:
+  - `sources: [{url, kind, fields}]`;
+  - `conflicts: [{field, values: [{url, value}], chosen, reason}]`;
+  - `conflictsChecked`: false means "not compared", never "no conflicts".
+- The three frozen baselines carry `fieldsAttribution: "not-recorded"`.
+
+How Plume uses them:
+
+- `build_package_meta` stores the sources (unknown kinds become `other`), the changelog URLs,
+  the per-unit attribution, the conflicts and the compared/not-compared units. Dumps carry
+  them. A package without `sources[]` falls back to its `source.url` as one docs source with
+  role `entry`.
+- **Release notes**: when stream attributes a unit to sources, an item is judged by those
+  sources. Their hashes come from `sources[].contentSha256|etag` and the page hashes, and their
+  texts from the snapshots, so an item can say `evidence.sourceKind: spec | docs | mixed`.
+  Without recorded attribution (today's and the baseline packages), `sourceKind` is null and
+  `evidence.attribution` is `"not-recorded"`; Plume never guesses spec vs docs.
+- **Conflicts** are maintainer-only: they sit in the notes (`conflicts`, `conflictCheck
+  {checked, notCompared}`) and in the copy-issues text, never in public responses.
+- **Public**: `GET /v1/apis/{api}` has `sources: [{url, kind, fetchedAt}]` (http(s) URLs only)
+  and `extractedAt`. Both are null for builds without metadata. `runId` and `streamVersion`
+  stay in the maintainer review (`package.to`).
+
 ## 7. Storage, dumps, prod
 
 - Table `release_notes`:

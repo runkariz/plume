@@ -80,6 +80,18 @@
             "title": "Endpoints",
             "type": "integer"
           },
+          "extractedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When stream extracted it.",
+            "title": "Extractedat"
+          },
           "guides": {
             "title": "Guides",
             "type": "integer"
@@ -137,6 +149,21 @@
               }
             ],
             "description": "What the package contains: auth schemes, triggers, webhooks."
+          },
+          "sources": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SourceRef"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where the build's package came from (http(s) urls only). Null when the build has no recorded package metadata (older builds).",
+            "title": "Sources"
           },
           "status": {
             "$ref": "#/components/schemas/ApiStatus"
@@ -3483,6 +3510,36 @@
           "concepts"
         ],
         "title": "SetSessionRequest",
+        "type": "object"
+      },
+      "SourceRef": {
+        "properties": {
+          "fetchedAt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetchedat"
+          },
+          "kind": {
+            "description": "docs | spec | changelog | sdk | other",
+            "title": "Kind",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "kind"
+        ],
+        "title": "SourceRef",
         "type": "object"
       },
       "StaleInput": {

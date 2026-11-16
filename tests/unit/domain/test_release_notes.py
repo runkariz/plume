@@ -179,3 +179,31 @@ def test_removals_and_newly_required_inputs_are_confirmed_from_the_new_page() ->
     assert (status["class"], status["breakingReason"]) == ("confirmed", "newly required input")
     unchanged = PackageMeta(page_hashes={URL: "h1"}, page_texts=b.page_texts)
     assert _one(_run(old, new, a, unchanged), "gone", "removed")["class"] == "suspect"
+
+
+def test_a_unit_attributed_to_a_spec_is_judged_by_the_spec() -> None:
+    spec = "https://vendor.example/openapi.json"
+    old, new = [_ep([_f("id")])], [_ep([_f("id"), _f("x", desc="New x.")])]
+    attributed = {"get-orders": (spec,)}
+    sources = ({"url": spec, "kind": "spec", "contentSha256": "s1"},)
+    a = PackageMeta(sources=sources, unit_sources=attributed)
+    b = PackageMeta(sources=({**sources[0], "contentSha256": "s2"},), unit_sources=attributed,
+                    page_texts={spec: "x: New x."})  # fmt: skip
+    item = _one(_run(old, new, a, b), "x", "added")
+    assert item["class"] == "confirmed"  # the spec changed and says it
+    assert (item["evidence"]["sourceKind"], item["evidence"]["attribution"]) == (
+        "spec", "recorded",
+    )  # fmt: skip
+    same = PackageMeta(sources=sources, unit_sources=attributed, page_texts={spec: "x: New x."})
+    assert _one(_run(old, new, a, same), "x", "added")["class"] == "suspect"  # spec unchanged
+    plain = _one(_run(old, new), "x", "added")["evidence"]
+    assert (plain["sourceKind"], plain["attribution"]) == (None, "not-recorded")  # never guess
+
+
+def test_stream_conflicts_are_in_the_issues_text() -> None:
+    conflict = {"unit": "get-orders", "field": "status", "chosen": "enum", "reason": "newer",
+                "values": [{"url": "https://v/spec", "value": "string"}]}  # fmt: skip
+    text = issues_text({"api": "shop", "from": "a", "to": "b", "package": {}, "report": [],
+                        "conflicts": [conflict]})  # fmt: skip
+    assert "Source conflicts stream reported (1)" in text
+    assert "get-orders `status`: chosen enum (newer); values https://v/spec: string" in text

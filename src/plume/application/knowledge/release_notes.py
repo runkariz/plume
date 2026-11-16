@@ -141,6 +141,12 @@ class ReleaseNotes:
             "counts": counts(items),
             "needsAttention": reason is not None,
             "attentionReason": reason,
+            # maintainers only: stream's conflicts between sources, and which units it compared
+            "conflicts": [dict(c) for c in meta_b.conflicts],
+            "conflictCheck": {
+                "checked": len(meta_b.conflicts_checked),
+                "notCompared": len(meta_b.conflicts_unchecked),
+            },
             "items": items,
         }
         self._notes.save(notes)
@@ -156,6 +162,19 @@ class ReleaseNotes:
         if base is None or base.build_id == build_id:
             return None
         return self.compute(base.build_id, build_id)
+
+    def public_sources(self, build_id: str) -> dict[str, Any] | None:
+        """What the public may see about a build's sources: url (http(s) only), kind and
+        fetchedAt per source, and when the package was extracted. None without metadata."""
+        meta = self._notes.get_meta(build_id)
+        if meta is None:
+            return None
+        sources = [
+            {"url": s["url"], "kind": s.get("kind") or "other", "fetchedAt": s.get("fetchedAt")}
+            for s in meta.get("sources") or []
+            if str(s.get("url", "")).startswith(("https://", "http://"))
+        ]
+        return {"sources": sources, "extractedAt": meta.get("extractedAt")}
 
     # -- reading ----------------------------------------------------------------------------------
 
