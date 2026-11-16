@@ -25,7 +25,8 @@ from plume.domain.shared.hashing import ContentHash, content_hash
 # endpoint's fixed-version real path and its rate limit in its text.
 # 12: endpoint text back to v10 (constraints, real path, rate limit stay off the embedded
 # text; they are on fields, facts and payloads).
-CHUNKER_VERSION = "12"
+# 13: knowledge-export resource rules also go into their page's endpoints of that resource.
+CHUNKER_VERSION = "13"
 DEFAULT_MAX_CHARS = 6000
 _HEADING = re.compile(r"^#{1,3} ", re.MULTILINE)
 

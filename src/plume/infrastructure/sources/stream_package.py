@@ -973,6 +973,7 @@ def _apply_export(
                 doc, text=doc.text + "\n\n## Rules\n" + "\n".join(r.line() for r in pending)
             )
             used_rules.update(r.rule_id for r in pending)
+    _attach_resource_rules(out, export, by_source, versions)
     for page in export.pages:
         url = page.source_url.rstrip("/")
         page_rules = [
@@ -993,6 +994,39 @@ def _apply_export(
     if leftover:
         warnings.append(f"knowledge-export: {len(leftover)} rule(s) matched no endpoint or page")
     return out
+
+
+def _resource_key(name: str | None) -> str:
+    return re.sub(r"[^a-z0-9]", "", (name or "").lower())
+
+
+def _attach_resource_rules(
+    out: list[Document],
+    export: "knowledge_export.KnowledgeExport",
+    by_source: dict[str, int],
+    versions: tuple[str, ...],
+) -> None:
+    """A resource-scoped rule ("the Logistic Centers API requires the .../read scope") also goes
+    into the text of the endpoints its page lists for that resource. The page guide keeps it too:
+    the rule is about the endpoint, and a question about it should find the endpoint."""
+    pages = {p.source_url.split("#")[0].rstrip("/"): p for p in export.pages}
+    lines: dict[int, list[str]] = {}
+    for rule in export.rules:
+        if rule.scope != "resource" or not rule.resource or not rule.source_url:
+            continue
+        page = pages.get(rule.source_url.split("#")[0].rstrip("/"))
+        if page is None:
+            continue
+        for item_id, _ in page.items:
+            index = by_source.get(endpoint_key(item_id, versions))
+            if index is None:
+                continue
+            if _resource_key(out[index].resource) == _resource_key(rule.resource):
+                lines.setdefault(index, []).append(rule.line())
+    for index, rule_lines in lines.items():
+        doc = out[index]
+        text = "## Rules for this resource\n" + "\n".join(dict.fromkeys(rule_lines))
+        out[index] = replace(doc, text=doc.text + "\n\n" + text)
 
 
 def _page_guide(

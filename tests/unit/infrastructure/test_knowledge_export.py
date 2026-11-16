@@ -130,3 +130,52 @@ def test_unsplit_page_keeps_only_rules_and_an_index(packages: Path, tmp_path: Pa
 def test_unsplit_page_without_rules_adds_no_guide(packages: Path, tmp_path: Path) -> None:
     pkg = source.load(str(_unsplit_package(packages, tmp_path / "b", with_rule=False)))
     assert not any(d.doc_id.startswith("guide:page-") for d in pkg.documents)
+
+
+def test_resource_rules_reach_the_pages_endpoints_of_that_resource(
+    packages: Path, tmp_path: Path
+) -> None:
+    """Zalando's "the Logistic Centers API requires the .../read scope" is scoped to a resource,
+    not an endpoint: it also goes into the page's endpoints of that resource, so a question
+    about it finds the endpoint and not only the page guide."""
+    dst = tmp_path / "resource-rules"
+    shutil.copytree(packages / "woo-mini", dst)
+    rules_file = dst / "knowledge-export" / "rules.json"
+    rules = json.loads(rules_file.read_text())
+    url = "https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons/"
+    rules["rules"].extend(
+        [
+            {
+                "id": "r-scope",
+                "scope": "resource",
+                "type": "precondition",
+                "text": "Coupon calls need the coupons/write scope.",
+                "quote": "requires the coupons/write scope",
+                "sourceUrl": url,
+                "confidence": 0.95,
+                "resource": "coupon",
+            },
+            {
+                "id": "r-other",
+                "scope": "resource",
+                "type": "precondition",
+                "text": "Reports are cached for an hour.",
+                "quote": "cached for an hour",
+                "sourceUrl": url,
+                "confidence": 0.95,
+                "resource": "Report",
+            },
+        ]
+    )
+    rules_file.write_text(json.dumps(rules))
+    pkg = source.load(str(dst))
+    coupons = [
+        d for d in pkg.documents if d.kind is DocumentKind.ENDPOINT and d.resource == "Coupon"
+    ]
+    assert coupons
+    for doc in coupons:
+        assert "## Rules for this resource" in doc.text
+        assert "coupons/write scope" in doc.text
+        assert "cached for an hour" not in doc.text  # another resource
+    guide = next(d for d in pkg.documents if d.doc_id.startswith("guide:page-"))
+    assert "coupons/write scope" in guide.text  # the page guide keeps it
