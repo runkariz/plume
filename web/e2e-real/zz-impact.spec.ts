@@ -201,9 +201,15 @@ for (const theme of THEMES) {
           const frame = page.frameLocator('#app');
           const box = frame.getByTestId('widget-impact');
           if (name === 'Order') {
-            await expect(box).toContainText('mapping affected');
+            const impact = (result.structuredContent as { impact?: { rows: { text: string }[] } })
+              .impact;
+            const rows = impact?.rows ?? [];
+            expect(rows.length).toBeGreaterThan(0);
+            await expect(box).toContainText(/mappings? affected/);
             await expect(box).toContainText('Breaking');
-            await expect(box.getByRole('listitem').first()).toContainText('removed');
+            // each compact row is the server's one plain line, nothing else
+            await expect(box.getByRole('listitem')).toHaveCount(Math.min(5, rows.length));
+            for (const r of rows.slice(0, 5)) await expect(box).toContainText(r.text);
           } else {
             await expect(box).toContainText('Docs updated, your mappings are unaffected');
             await expect(box.getByRole('listitem')).toHaveCount(0);
