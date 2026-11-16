@@ -42,12 +42,12 @@ for (const theme of THEMES) {
       page,
     }) => {
       await signIn(page);
-      const row = page.locator('.m-row').filter({ hasText: 'Stripe' });
+      const row = page.locator('.m-row').filter({ hasText: 'Shopify' });
       await row.getByRole('button', { name: /^Remove / }).click();
-      const panel = page.getByRole('group', { name: 'Remove stripe' });
+      const panel = page.getByRole('group', { name: 'Remove shopify' });
       await expect(panel.getByRole('list', { name: /use this API/ })).toBeVisible();
-      const remove = panel.getByRole('button', { name: 'Remove stripe' });
-      await panel.getByLabel(/Type stripe to confirm/).fill('stripe');
+      const remove = panel.getByRole('button', { name: 'Remove shopify' });
+      await panel.getByLabel(/Type shopify to confirm/).fill('shopify');
       await expect(remove).toBeDisabled();
       await panel.getByRole('checkbox').check();
       await expect(remove).toBeEnabled();
@@ -55,9 +55,9 @@ for (const theme of THEMES) {
       await expectNoSeriousA11y(page);
       await shotOf(panel, 'w27-remove-panel', theme);
       await remove.click();
-      const notice = page.getByRole('status').filter({ hasText: 'Removed stripe' });
+      const notice = page.getByRole('status').filter({ hasText: 'Removed shopify' });
       await expect(notice).toContainText('Retired');
-      await expect(page.locator('.m-row').filter({ hasText: 'Stripe' })).toHaveCount(0);
+      await expect(page.locator('.m-row').filter({ hasText: 'Shopify' })).toHaveCount(0);
       await shotOf(notice, 'w27-remove-done', theme);
     });
   });

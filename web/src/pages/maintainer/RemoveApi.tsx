@@ -11,11 +11,11 @@ const VISIBILITY: Record<PinnedBy['visibility'], string> = {
 /** "releaseNotes" -> "release notes": the server's counts are named in camelCase. */
 const words = (key: string) => key.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
 
-/** What was removed, as "12 documents, 3 builds": only the counts above zero. */
+/** What was removed, as "documents 12, builds 3": only the counts above zero. */
 export function removedSummary(removed: RemoveApiResult['removed']): string {
   return Object.entries(removed)
     .filter(([key, n]) => typeof n === 'number' && n > 0 && key !== 'api')
-    .map(([key, n]) => `${n} ${words(key)}`)
+    .map(([key, n]) => `${words(key)} ${n}`)
     .join(', ');
 }
 
@@ -115,7 +115,7 @@ export function RemoveApi({
           </p>
           <Pinned items={pinned} />
           <label className="remove-force small">
-            <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />{' '}
+            <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
             Remove the API and retire {pinned.length === 1 ? 'it' : `these ${pinned.length}`}
           </label>
         </>
@@ -189,7 +189,12 @@ export function RemovedNotice({
               </ul>
             </>
           ) : null}
-          <button type="button" className="linkbtn small" onClick={onDismiss}>
+          <button
+            type="button"
+            className="linkbtn small"
+            style={{ marginTop: 8 }}
+            onClick={onDismiss}
+          >
             Dismiss
           </button>
         </div>

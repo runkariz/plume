@@ -1,4 +1,5 @@
 import { screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { createHandlers } from '@/mocks/handlers';
 import { renderApp } from '@/test/render';
@@ -22,10 +23,36 @@ describe('rate limits', () => {
   it('shows only what the package says when there are no numbers', async () => {
     renderApp('/apis/amazon-sp-vendor');
     const card = await screen.findByRole('region', { name: 'Rate limits' });
-    expect(card).toHaveTextContent('endpoint-group');
+    expect(card).toHaveTextContent('Per endpoint-group');
     expect(card).toHaveTextContent('leaky-bucket');
     expect(card).toHaveTextContent('Each operation has its own rate and burst.');
     expect(card).not.toHaveTextContent(/per \d+ s/);
+  });
+
+  it('a package with a limit per operation: the first rows, the rest on request', async () => {
+    const many = Array.from({ length: 40 }, (_, i) => ({
+      scope: 'operation',
+      group: `op${i}`,
+      limit: 10,
+      windowSeconds: 1,
+      algorithm: 'token-bucket',
+      headerNames: ['x-amzn-RateLimit-Limit'],
+    }));
+    const base = (await (await fetch(`${TEST_API_BASE}/v1/apis/shopify`)).json()) as object;
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/shopify`, () =>
+        HttpResponse.json({ ...base, rateLimits: many }),
+      ),
+    );
+    renderApp('/apis/shopify');
+    const card = await screen.findByRole('region', { name: 'Rate limits' });
+    expect(card).toHaveTextContent('Rate limits (40)');
+    expect(within(card).getAllByRole('row')).toHaveLength(1 + 8);
+    // the headers are named once
+    expect(within(card).getAllByText('x-amzn-RateLimit-Limit')).toHaveLength(1);
+    await userEvent.click(within(card).getByRole('button', { name: 'Show all 40' }));
+    expect(within(card).getAllByRole('row')).toHaveLength(1 + 40);
+    expect(within(card).getByRole('button', { name: 'Show the first 8' })).toBeInTheDocument();
   });
 
   it('shows no card for an API without rate limits', async () => {

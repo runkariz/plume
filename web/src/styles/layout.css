@@ -487,6 +487,16 @@ a.stretched:focus-visible {
 .m-row-extra {
   flex-basis: 100%;
 }
+.remove-force {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+.rollback-confirm .remove-force input {
+  width: auto;
+  margin: 0;
+}
 .remove-pinned {
   display: grid;
   gap: 4px;
@@ -1750,11 +1760,34 @@ th {
 .rate-limits {
   margin-bottom: 18px;
 }
-.rl-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.rl-detail {
+  font-weight: 400;
+}
+.rl-amount {
+  white-space: nowrap;
+}
+.rl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.rl-table th,
+.rl-table td {
+  text-align: left;
+  padding: 6px 10px 6px 0;
+  border-top: 1px solid var(--line2);
+  vertical-align: top;
+}
+.rl-table thead th {
+  border-top: 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--faint);
+}
+.rl-table tbody th {
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 .rl-kv {
   display: flex;

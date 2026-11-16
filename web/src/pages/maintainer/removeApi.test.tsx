@@ -38,7 +38,7 @@ describe('a maintainer removes an API', () => {
     await userEvent.click(button);
     const notice = await screen.findByRole('status');
     expect(notice).toHaveTextContent('Removed stripe');
-    expect(notice).toHaveTextContent('Deleted 12 documents');
+    expect(notice).toHaveTextContent('Deleted documents 12');
     // gone from the list
     await waitFor(() =>
       expect(screen.queryByRole('button', { name: 'Remove Stripe API' })).not.toBeInTheDocument(),
@@ -142,6 +142,6 @@ describe('removedSummary', () => {
   it('names the counts above zero in plain words', () => {
     expect(
       removedSummary({ documents: 12, releaseNotes: 2, packageMeta: 0, builds: 1, api: 1 }),
-    ).toBe('12 documents, 2 release notes, 1 builds');
+    ).toBe('documents 12, release notes 2, builds 1');
   });
 });
