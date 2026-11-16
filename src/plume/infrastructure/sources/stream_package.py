@@ -36,6 +36,7 @@ from plume.domain.knowledge.document import (
     slug_doc_id,
 )
 from plume.domain.knowledge.model_names import display_names, parse_bundled_title
+from plume.domain.shared.errors import InvalidIdentifierError
 from plume.infrastructure.sources import knowledge_export
 
 JsonObj = dict[str, Any]
@@ -204,6 +205,20 @@ def shape_hash(schema: Any) -> str:
     """Structure of a JSON schema, ignoring titles, descriptions, examples and x- keys."""
     canonical = json.dumps(_shape_of(schema), sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode()).hexdigest()[:16]
+
+
+def _api_id(app: JsonObj, name: str) -> ApiId:
+    """app.json `systemName` (Core's stable id) when present, else the slug of `name`."""
+    system = _str(app.get("systemName"))
+    if system is None:
+        return ApiId.from_name(name)
+    try:
+        return ApiId(system.strip())
+    except InvalidIdentifierError as exc:
+        raise SourcePackageError(
+            f"app.json systemName {system!r} is not a valid id (lower case, digits, inner "
+            "dashes; max 64)"
+        ) from exc
 
 
 def display_name(name: str, texts: list[str]) -> str:
@@ -520,9 +535,15 @@ class StreamPackageSource:
                 bundle_version=bundle if isinstance(bundle, int) else None,
             )
         summary = _str(app.get("summary")) or _str(app.get("description")) or ""
-        title = _str(app.get("title")) or _str(app.get("displayName"))
+        api_id = _api_id(app, name)
+        # Core's convention: `name` is the display name, `systemName` the stable id.
+        title = (
+            _str(app.get("title"))
+            or _str(app.get("displayName"))
+            or (name if _str(app.get("systemName")) and name != api_id.value else None)
+        )
         return ApiInfo(
-            api_id=ApiId.from_name(name),
+            api_id=api_id,
             name=title or display_name(name, [summary, _str(app.get("description")) or ""]),
             name_source="package" if title else "derived",
             summary=summary,

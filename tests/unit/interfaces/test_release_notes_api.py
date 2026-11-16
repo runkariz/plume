@@ -145,4 +145,4 @@ def test_display_name_route(packages: Path) -> None:
     assert client.put(url, json={"name": " "}, headers=AUTH).status_code in (400, 409, 422)
     assert client.put("/v1/apis/nope/display", json={"name": "X"}, headers=AUTH).status_code == 404
     cleared = client.put(url, json={"name": None}, headers=AUTH).json()
-    assert cleared["nameSource"] == "derived"
+    assert cleared["nameSource"] == "package"  # app.json name differs from systemName

@@ -122,7 +122,7 @@ def test_api_display_name_survives_reloads_and_travels_with_the_dump(
     src.build_pipeline().execute("job", str(packages / "test-catalog"))
     info = src.apis.get(ApiId("test-catalog-api"))
     assert info is not None
-    assert info.display_source == "derived"
+    assert info.display_source == "package"
     out = src.api_display().set("test-catalog-api", "  Test  Catalog API ")
     assert (out["name"], out["nameSource"]) == ("Test Catalog API", "override")
     build = src.build_pipeline().execute("job", str(packages / "test-catalog")).build_id
@@ -137,6 +137,6 @@ def test_api_display_name_survives_reloads_and_travels_with_the_dump(
     restored = dst.apis.get(ApiId("test-catalog-api"))
     assert restored is not None
     assert restored.display_name == "Test Catalog API"
-    assert dst.api_display().set("test-catalog-api", None)["nameSource"] == "derived"
+    assert dst.api_display().set("test-catalog-api", None)["nameSource"] == "package"
     src.engine.dispose()
     dst.engine.dispose()
