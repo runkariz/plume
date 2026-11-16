@@ -75,7 +75,10 @@ One record per atomic difference between build A (previous) and build B (new) of
 
 ## 3. Computing the diff (at load, against the previous build)
 
-1. **Base**: the build the API's `latest` tag pointed to before this load. If there is none, B
+1. **Base**: the build the API's `latest` tag pointed to before this load (what users see).
+   A load that failed the eval gate is not tagged, so the NEXT load is compared with the
+   older tagged build (e.g. a test fixture), not with the failed one. `plume notes --build
+   <b> --recompute <base>` compares with any build. If there is none, B
    is the first build and has no notes. A yanked or superseded build is never a base. When a
    tag moves back, no notes are recomputed: notes always belong to a (from, to) pair and stay
    stored.
