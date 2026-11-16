@@ -15,6 +15,7 @@ import {
   type CollectionRef,
   type ModelJob,
   type ReleaseNotes,
+  type ApiDisplayName,
   type ReleaseSummary,
   type ChangesPage,
   type ChangesQuery,
@@ -229,6 +230,12 @@ export interface PlumeApi {
   publishJob(id: string, signal?: AbortSignal): Promise<Job>;
   discardJob(id: string, signal?: AbortSignal): Promise<Job>;
   downloadDump(id: string, signal?: AbortSignal): Promise<{ blob: Blob; filename: string | null }>;
+  /** Rename an API for display (maintainer): a name of 1 to 80 characters, or null to go back to the package's. */
+  setApiDisplayName(
+    api: string,
+    name: string | null,
+    signal?: AbortSignal,
+  ): Promise<ApiDisplayName>;
   // release notes users see (public): feature-detected, absent on a server without them
   /** The builds that have notes, newest first (empty: the API has none: no Changes tab). */
   getChangesTimeline(api: string, signal?: AbortSignal): Promise<PublicBuild[]>;
@@ -366,7 +373,7 @@ export function createApiClient(
   async function raw(
     path: string,
     init: {
-      method?: 'GET' | 'POST';
+      method?: 'GET' | 'POST' | 'PUT';
       body?: unknown;
       form?: FormData;
       signal?: AbortSignal;
@@ -719,6 +726,12 @@ export function createApiClient(
         `/v1/apis/${enc(api)}/builds/${enc(build)}/release-notes/report/${enc(rule)}?cursor=${cursor}&limit=${limit}`,
         { signal },
       ),
+    setApiDisplayName: (api, name, signal) =>
+      call<ApiDisplayName>(`/v1/apis/${enc(api)}/display`, {
+        method: 'PUT',
+        body: { name },
+        signal,
+      }),
     keepRelease: (api, build, note, signal) =>
       call<ReleaseNotes>(`/v1/apis/${enc(api)}/builds/${enc(build)}/release-notes/keep`, {
         method: 'POST',

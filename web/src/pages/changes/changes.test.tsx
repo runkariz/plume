@@ -244,7 +244,8 @@ describe('the Changes tab', () => {
   it('chips carry the counts of the whole build; Breaking and a kind group filter; the filter is in the URL', async () => {
     const panel = await open();
     await within(panel).findByRole('region', { name: 'GET /admin/api/latest/orders.json' });
-    const chip = (name: RegExp) => within(panel).getByRole('button', { name });
+    const chip = (name: RegExp) =>
+      within(panel).getByRole('radio', { name }).closest('label') as HTMLElement;
     await waitFor(() => expect(chip(/^All/)).toHaveTextContent('3'));
     expect(chip(/^Breaking/)).toHaveTextContent('2');
     expect(chip(/^Endpoints/)).toHaveTextContent('1');
@@ -262,7 +263,7 @@ describe('the Changes tab', () => {
       expect(within(panel).queryByText(/fulfillment_status/)).not.toBeInTheDocument(),
     );
     expect(within(panel).getByText(/tax_lines/)).toBeInTheDocument();
-    expect(chip(/^Endpoints/)).toHaveAttribute('aria-pressed', 'true');
+    expect(within(panel).getByRole('radio', { name: /^Endpoints/ })).toBeChecked();
   });
 
   it('a search narrows the list; "No changes match" says so', async () => {

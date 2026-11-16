@@ -235,6 +235,17 @@ data and is skipped unless `PLUME_E2E_RELEASE_NOTES=true`: load two builds of an
 (for Shopify the frozen `shopify-20261115-v12-extras`, then `...-v12b-extras`), point `latest` at the second with
 `plume tag <build> latest --force` (its eval gate failed, as a forced publish would have), then run the spec.
 
+## What changed between builds (public)
+
+`GET /v1/apis/{api}/changes/timeline` decides whether an API has a **Changes** section; `docsUpdated` on an API decides
+its "Docs updated" badge; `impact` on a model, set or list item decides the impact chip and banner (the stale mark is
+the fallback when it is absent). Each shows only when the server sends it. The Changes tab lists one build at a time
+(100 per page), filters by Breaking and by kind groups (Endpoints, Fields, Auth: the server matches one kind exactly, so
+a group is filtered here), and keeps wording-only changes apart. Quotes are text, vendor links are http(s) only.
+`e2e-real/zz-changes.spec.ts` is skipped unless `PLUME_E2E_KIT=true`: load the SYNTHETIC kit
+(`plume-data/test-packages/base`, then `A-docs-changes`; API id `woocommerce-test`) and the real
+`amazon-sp-vendor-20261116-r7-extras` package into a fresh stack with `plume load`, then run it.
+
 ## Releasing models: replacing older ones, and warnings
 
 - **Release asks which older official models of the same concept it replaces** (`ReleaseChoice`): the candidates come

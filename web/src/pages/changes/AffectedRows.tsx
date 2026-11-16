@@ -12,7 +12,16 @@ import { changeText, vendorHref } from './ChangeBrief';
  * page) with what changed in plain text, BREAKING as text, and the vendor's page. `kind` picks the model's or the set's
  * route. Says so when the list cannot be loaded; nothing when there are no rows.
  */
-export function AffectedRows({ id, kind }: { id: string; kind: 'model' | 'set' }) {
+export function AffectedRows({
+  id,
+  kind,
+  count = 0,
+}: {
+  id: string;
+  kind: 'model' | 'set';
+  /** How many rows the impact summary says there are: their room is kept while they load, so the page does not jump. */
+  count?: number;
+}) {
   const client = useApiClient();
   const [params] = useSearchParams();
   const load = useCallback(
@@ -22,7 +31,15 @@ export function AffectedRows({ id, kind }: { id: string; kind: 'model' | 'set' }
   );
   const { state } = useAsync(load);
   if (state.status === 'loading')
-    return <p className="faint small">Loading the affected mappings…</p>;
+    return (
+      <ul className="plain impact-rows" aria-busy="true" aria-label="Affected mappings">
+        {Array.from({ length: Math.min(count, 10) || 1 }, (_, i) => (
+          <li key={i} className="faint small">
+            {i === 0 ? 'Loading the affected mappings…' : null}
+          </li>
+        ))}
+      </ul>
+    );
   if (state.status === 'error')
     return <p className="faint small">The list of affected mappings could not be loaded.</p>;
   if (state.data.affected.length === 0) return null;

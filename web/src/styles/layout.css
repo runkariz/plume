@@ -2655,6 +2655,8 @@ ul.plain {
 .impact-rows li {
   padding: 4px 0;
   border-top: 1px solid var(--line);
+  /* two lines: the room is kept while the rows load, so the page below does not jump */
+  min-height: 3.4rem;
 }
 
 .sources-line {

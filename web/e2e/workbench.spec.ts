@@ -1,5 +1,5 @@
 import { expect, type Locator } from '@playwright/test';
-import { expectNoSeriousA11y, pickMapping, settle, shot, test, THEMES } from './helpers';
+import { expectNoSeriousA11y, pickMapping, settle, shot, test, THEMES, openModel } from './helpers';
 
 async function boxOf(locator: Locator) {
   const b = await locator.boundingBox();
@@ -44,7 +44,7 @@ for (const theme of THEMES) {
     test('whole model, WooCommerce only: the others are greyed out, nothing is hidden, the URL keeps it', async ({
       page,
     }) => {
-      await page.goto(ORDER);
+      await openModel(page, ORDER);
       await expect(page.getByRole('heading', { level: 1, name: 'Order' })).toBeVisible();
       await page.getByRole('radio', { name: 'Graph' }).click({ force: true });
       await expect(page.getByRole('radio', { name: 'Graph' })).toBeChecked();
@@ -72,7 +72,7 @@ for (const theme of THEMES) {
     test('selected field: the view fits the selection and the detail panel shows the mapping', async ({
       page,
     }) => {
-      await page.goto(ORDER);
+      await openModel(page, ORDER);
       await page.getByRole('radio', { name: 'Graph' }).click({ force: true });
       await expect(page.getByRole('radio', { name: 'Graph' })).toBeChecked();
       await expect(page.getByRole('radio', { name: 'Selected field' })).toBeChecked();

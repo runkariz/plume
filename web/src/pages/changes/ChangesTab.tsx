@@ -8,7 +8,7 @@ import {
   type PublicBuild,
   type PublicChange,
 } from '@/api/types';
-import { Button, Card, Chip, ErrorState, LoadingState } from '@/components';
+import { Button, Card, Chip, ErrorState, LoadingState, Segmented } from '@/components';
 import { formatDate } from '@/lib/format';
 import { ChangeBrief, subjectOf } from './ChangeBrief';
 
@@ -282,23 +282,16 @@ export function ChangesTab({ api, builds }: { api: string; builds: PublicBuild[]
       </Card>
 
       <Card className="pad" role="region" aria-label={`Changes of ${when}`}>
-        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }} role="group" aria-label="Filter">
-          {FILTERS.map((f) => {
+        <Segmented
+          label="Filter"
+          variant="pills"
+          value={filter}
+          onChange={(v) => set({ filter: v === 'all' ? null : v, item: null })}
+          options={FILTERS.map((f) => {
             const n = totals ? filterCount(f.id, totals, build.counts.wordingOnly) : null;
-            return (
-              <button
-                key={f.id}
-                type="button"
-                className={`pill${filter === f.id ? ' on' : ''}`}
-                aria-pressed={filter === f.id}
-                onClick={() => set({ filter: f.id === 'all' ? null : f.id, item: null })}
-              >
-                {f.label}
-                {n !== null ? <span className="faint small"> {n}</span> : null}
-              </button>
-            );
+            return { value: f.id, label: n === null ? f.label : `${f.label} ${n}` };
           })}
-        </div>
+        />
         <label className="small" htmlFor="changes-q" style={{ display: 'block', marginTop: 10 }}>
           Search the changes (path, model or field)
         </label>
@@ -337,7 +330,13 @@ export function ChangesTab({ api, builds }: { api: string; builds: PublicBuild[]
                   <h3 className="h3-sm mono">{g.title}</h3>
                   <ul className="plain stack">
                     {g.items.map((i) => (
-                      <ChangeBrief key={i.id} api={api} item={i} highlighted={i.id === item} />
+                      <ChangeBrief
+                        key={i.id}
+                        api={api}
+                        item={i}
+                        highlighted={i.id === item}
+                        inGroup
+                      />
                     ))}
                   </ul>
                 </section>

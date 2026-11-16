@@ -43,7 +43,9 @@ export function SetImpactBanner({ set }: { set: ModelSet }) {
             })}
           </ul>
         ) : null}
-        {line.status === 'affected' ? <AffectedRows id={set.id} kind="set" /> : null}
+        {line.status === 'affected' ? (
+          <AffectedRows id={set.id} kind="set" count={set.impact?.affectedCount} />
+        ) : null}
         {line.status === 'unknown' ? (
           <span className="muted">
             A build behind this set has no release notes, so Plume cannot say whether newer docs

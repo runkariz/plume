@@ -56,3 +56,13 @@ export async function pickMapping(page: Page, name: string | RegExp) {
 export async function settle(page: Page) {
   await page.evaluate(() => document.fonts.ready);
 }
+
+/**
+ * Opens a model page and waits until what loads after it (the impact banner's affected mappings) has loaded: those rows
+ * change the height of the banner, so a click aimed at the page below would land on the wrong spot if it came sooner.
+ */
+export async function openModel(page: Page, path: string) {
+  await page.goto(path);
+  await page.getByRole('heading', { level: 1 }).first().waitFor();
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+}

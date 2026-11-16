@@ -680,8 +680,9 @@ export const inventorySnapshot: ModelSnapshot = {
 };
 
 export const productSnapshot: ModelSnapshot = {
-  impact: { status: 'current', affectedCount: 0, breakingCount: 0 },
   ...inventorySnapshot,
+  // current: the pinned build is still latest (after the spread: Inventory's impact must not leak in)
+  impact: { status: 'current', affectedCount: 0, breakingCount: 0 },
   id: 'snap_prod01',
   name: 'Product',
   description: 'Items for sale: title, SKU, price, status, variants and descriptions.',

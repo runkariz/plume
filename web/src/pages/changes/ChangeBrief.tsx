@@ -39,10 +39,13 @@ export function ChangeBrief({
   api,
   item,
   highlighted = false,
+  inGroup = false,
 }: {
   api: string;
   item: PublicChange;
   highlighted?: boolean;
+  /** Listed under its document's heading: the subject is not repeated, only the field. */
+  inGroup?: boolean;
 }) {
   const vendor = vendorHref(item);
   const inPlume =
@@ -59,9 +62,11 @@ export function ChangeBrief({
           </Chip>
         ) : null}
         <span className="mono small change-subject">
-          {item.subject.fieldPath
-            ? `${subjectOf(item)} · ${item.subject.fieldPath}`
-            : subjectOf(item)}
+          {inGroup
+            ? (item.subject.fieldPath ?? subjectOf(item))
+            : item.subject.fieldPath
+              ? `${subjectOf(item)} · ${item.subject.fieldPath}`
+              : subjectOf(item)}
         </span>
       </div>
       {item.op !== 'description' || item.before || item.after ? (

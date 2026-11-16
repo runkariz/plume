@@ -4,6 +4,7 @@ import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
 import { Card, Crumbs, EmptyState, ErrorState, LoadingState, Logo } from '@/components';
 import { formatDate } from '@/lib/format';
+import { DisplayNameEditor } from './DisplayNameEditor';
 import { ReleaseReviewLink } from './release/BuildsPage';
 
 export function MaintainerHome() {
@@ -34,6 +35,7 @@ export function MaintainerHome() {
                 <Logo text={a.logo.text} color={a.logo.color} url={a.logo.url} size={36} />
                 <div className="m-main">
                   <b>{a.name}</b>
+                  <DisplayNameEditor api={a} onChanged={retry} />
                   <span className="muted small">
                     {a.docsAsOf ? `Docs as of ${formatDate(a.docsAsOf)}` : 'No docs published yet'}
                   </span>

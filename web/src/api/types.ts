@@ -8,9 +8,22 @@ export type ApiStatus =
   | { kind: 'unpublished'; recallAt5?: number | null }
   | { kind: 'updating'; progress: number };
 
+/** Where an API's display name comes from: a maintainer's override, the package's own title, or derived from the id. */
+export type NameSource = 'override' | 'package' | 'derived';
+
+/** PUT /v1/apis/{api}/display: the resolved name, where it comes from, and what clearing the override gives back. */
+export interface ApiDisplayName {
+  api: string;
+  name: string;
+  nameSource: NameSource;
+  packageName: string;
+}
+
 export interface ApiSummary {
   id: string;
   name: string;
+  /** Where `name` comes from (absent on an older server). */
+  nameSource?: NameSource;
   /** The producer's category key, e.g. "e-commerce"; "other" when missing. Use categoryLabel() to show it. */
   category: string;
   summary: string;

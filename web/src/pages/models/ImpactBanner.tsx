@@ -32,7 +32,7 @@ export function ImpactBanner({ snap }: { snap: ModelSnapshot }) {
       >
         {line.status === 'affected' ? (
           <>
-            <AffectedRows id={snap.id} kind="model" />
+            <AffectedRows id={snap.id} kind="model" count={snap.impact?.affectedCount} />
             {maintainer || !snap.official ? regenerate : null}
           </>
         ) : line.status === 'unknown' ? (
