@@ -23,20 +23,19 @@ export const FILTERS = [
 ] as const;
 export type FilterId = (typeof FILTERS)[number]['id'];
 
-/** The kinds a filter covers. The server matches one kind exactly, so a group is filtered here, over what it sends. */
+/** The kinds a filter covers: the server takes them as a comma list (`kind=param,property`). */
 export const KINDS: Record<'endpoints' | 'fields' | 'auth', string[]> = {
   endpoints: ['endpoint', 'webhook_event'],
   fields: ['param', 'request_field', 'response_field', 'model', 'property'],
   auth: ['auth_scheme', 'scope'],
 };
 
-export const isGroup = (f: FilterId): f is 'endpoints' | 'fields' | 'auth' =>
-  f === 'endpoints' || f === 'fields' || f === 'auth';
-
-/** What to ask the server for a filter (a kind group asks for everything but wording: the rest is done here). */
-export function filterQuery(f: FilterId): Pick<ChangesQuery, 'breaking' | 'wordingOnly'> {
+/** What to ask the server for a filter: wording is always asked for apart, the kind groups as a comma list. */
+export function filterQuery(f: FilterId): Pick<ChangesQuery, 'breaking' | 'kind' | 'wordingOnly'> {
   if (f === 'breaking') return { breaking: true, wordingOnly: false };
   if (f === 'wording') return { wordingOnly: true };
+  if (f === 'endpoints' || f === 'fields' || f === 'auth')
+    return { kind: KINDS[f].join(','), wordingOnly: false };
   return { wordingOnly: false };
 }
 
@@ -60,8 +59,6 @@ export function filterCount(f: FilterId, t: ChangeTotals, wording = 0): number |
 }
 
 const PAGE = 100;
-/** A kind group reads the build in pages of 200 up to this many, then says it stopped. */
-const GROUP_PAGES = 10;
 
 function countsText(b: PublicBuild): string {
   const c = b.counts;
@@ -91,8 +88,6 @@ type Loaded = {
   items: PublicChange[];
   next: number | null;
   computedAt: string | null;
-  /** A kind group stopped reading after GROUP_PAGES pages. */
-  truncated: boolean;
 };
 type State =
   { status: 'loading' } | { status: 'error'; message: string; notFound: boolean } | Loaded;
@@ -150,7 +145,7 @@ export function ChangesTab({ api, builds }: { api: string; builds: PublicBuild[]
       ...filterQuery(filter),
       q,
       cursor,
-      limit: isGroup(filter) ? 200 : PAGE,
+      limit: PAGE,
     }),
     [buildId, filter, q],
   );
@@ -160,39 +155,26 @@ export function ChangesTab({ api, builds }: { api: string; builds: PublicBuild[]
     const ctrl = new AbortController();
     // eslint-disable-next-line react-hooks/set-state-in-effect -- reload when the build, filter or search changes
     setState({ status: 'loading' });
-    (async () => {
-      let items: PublicChange[] = [];
-      let cursor: number | null = null;
-      let computedAt: string | null = null;
-      let pages = 0;
-      let truncated = false;
-      for (;;) {
-        const p = await client.getChanges(api, base(cursor), ctrl.signal);
-        computedAt = p.computedAt ?? computedAt;
-        items = [...items, ...p.items];
-        cursor = p.nextCursor;
-        pages += 1;
-        // a group reads on until its page of 100 is full or the build ends
-        if (!isGroup(filter) || cursor === null) break;
-        const want = items.filter((i) => KINDS[filter].includes(i.kind)).length;
-        if (want >= PAGE) break;
-        if (pages >= GROUP_PAGES) {
-          truncated = true;
-          break;
-        }
-      }
-      if (isGroup(filter)) items = items.filter((i) => KINDS[filter].includes(i.kind));
-      setState({ status: 'ready', items, next: cursor, computedAt, truncated });
-    })().catch((e: unknown) => {
-      if (ctrl.signal.aborted) return;
-      setState({
-        status: 'error',
-        message: e instanceof Error && e.message ? e.message : 'Could not load the changes.',
-        notFound: e instanceof ApiError && e.status === 404,
+    client
+      .getChanges(api, base(), ctrl.signal)
+      .then((p) =>
+        setState({
+          status: 'ready',
+          items: p.items,
+          next: p.nextCursor,
+          computedAt: p.computedAt ?? null,
+        }),
+      )
+      .catch((e: unknown) => {
+        if (ctrl.signal.aborted) return;
+        setState({
+          status: 'error',
+          message: e instanceof Error && e.message ? e.message : 'Could not load the changes.',
+          notFound: e instanceof ApiError && e.status === 404,
+        });
       });
-    });
     return () => ctrl.abort();
-  }, [client, api, base, buildId, filter]);
+  }, [client, api, base, buildId]);
 
   // the search box is typed freely; the URL follows a moment later
   useEffect(() => {
@@ -208,24 +190,8 @@ export function ChangesTab({ api, builds }: { api: string; builds: PublicBuild[]
     setMore(true);
     setMoreError(null);
     try {
-      let items: PublicChange[] = [];
-      let cursor: number | null = state.next;
-      let pages = 0;
-      let truncated = false;
-      for (;;) {
-        const p = await client.getChanges(api, base(cursor));
-        items = [...items, ...p.items];
-        cursor = p.nextCursor;
-        pages += 1;
-        if (!isGroup(filter) || cursor === null) break;
-        if (items.filter((i) => KINDS[filter].includes(i.kind)).length >= PAGE) break;
-        if (pages >= GROUP_PAGES) {
-          truncated = true;
-          break;
-        }
-      }
-      if (isGroup(filter)) items = items.filter((i) => KINDS[filter].includes(i.kind));
-      setState({ ...state, items: [...state.items, ...items], next: cursor, truncated });
+      const p = await client.getChanges(api, base(state.next));
+      setState({ ...state, items: [...state.items, ...p.items], next: p.nextCursor });
     } catch (e) {
       setMoreError(e instanceof Error && e.message ? e.message : 'Could not load more changes.');
     } finally {
@@ -348,9 +314,6 @@ export function ChangesTab({ api, builds }: { api: string; builds: PublicBuild[]
                   {more ? 'Loading…' : 'Show more'}
                 </Button>
               </p>
-            ) : null}
-            {state.truncated && state.next !== null ? (
-              <p className="faint small">Stopped reading here: use the search to narrow it.</p>
             ) : null}
             {moreError ? (
               <p role="alert" className="form-error small">

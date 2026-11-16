@@ -9,7 +9,7 @@ import { server, TEST_API_BASE } from '@/test/server';
 import type { PublicChange } from '@/api/types';
 import { MemoryRouter } from 'react-router-dom';
 import { ChangeBrief, vendorHref } from './ChangeBrief';
-import { filterCount, filterQuery, groupByDocument, isGroup } from './ChangesTab';
+import { filterCount, filterQuery, groupByDocument } from './ChangesTab';
 
 beforeEach(() => {
   localStorage.clear();
@@ -114,12 +114,16 @@ describe('helpers', () => {
     expect(filterCount('auth', t, 1)).toBe(0);
     expect(filterCount('fields', { ...t, byKind: undefined }, 1)).toBeNull();
   });
-  it('kind groups are filtered here (the server matches one kind), breaking and wording by the server', () => {
+  it('a kind group is asked for as a comma list; breaking and wording have their own flags', () => {
     expect(filterQuery('breaking')).toEqual({ breaking: true, wordingOnly: false });
     expect(filterQuery('wording')).toEqual({ wordingOnly: true });
-    expect(filterQuery('fields')).toEqual({ wordingOnly: false });
-    expect(isGroup('fields')).toBe(true);
-    expect(isGroup('breaking')).toBe(false);
+    expect(filterQuery('all')).toEqual({ wordingOnly: false });
+    expect(filterQuery('fields')).toEqual({
+      kind: 'param,request_field,response_field,model,property',
+      wordingOnly: false,
+    });
+    expect(filterQuery('auth').kind).toBe('auth_scheme,scope');
+    expect(filterQuery('endpoints').kind).toBe('endpoint,webhook_event');
   });
   it('groups by document in the order they first appear', () => {
     const g = groupByDocument([
@@ -264,6 +268,49 @@ describe('the Changes tab', () => {
     );
     expect(within(panel).getByText(/tax_lines/)).toBeInTheDocument();
     expect(within(panel).getByRole('radio', { name: /^Endpoints/ })).toBeChecked();
+  });
+
+  it('a kind group is one server request with a comma list, and "Show more" pages the same selection', async () => {
+    const urls: string[] = [];
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/shopify/changes`, ({ request }) => {
+        urls.push(request.url);
+        const q = new URL(request.url).searchParams;
+        const cursor = Number(q.get('cursor') ?? 0);
+        const item = (n: number) => ({
+          id: `ch-f${n}`,
+          kind: 'param',
+          op: 'added',
+          subject: { docId: 'endpoint:GET~/x', method: 'GET', path: '/x', fieldPath: `p${n}` },
+          breaking: false,
+          class: 'confirmed',
+        });
+        return HttpResponse.json({
+          totals: {
+            confirmed: 150,
+            likely: 0,
+            breaking: 0,
+            wordingOnly: 0,
+            byKind: { param: 150 },
+          },
+          items: Array.from({ length: cursor === 0 ? 100 : 50 }, (_, i) => item(cursor + i)),
+          nextCursor: cursor === 0 ? 100 : null,
+        });
+      }),
+    );
+    const panel = await open(`${tab}&filter=fields`);
+    await waitFor(() => expect(within(panel).getAllByRole('listitem')).toHaveLength(100));
+    const group = urls.filter((u) => new URL(u).searchParams.has('kind'));
+    expect(group.length).toBeGreaterThan(0);
+    expect(new URL(group[0] ?? '').searchParams.get('kind')).toBe(
+      'param,request_field,response_field,model,property',
+    );
+    expect(new URL(group[0] ?? '').searchParams.get('wordingOnly')).toBe('false');
+    await userEvent.click(within(panel).getByRole('button', { name: 'Show more' }));
+    await waitFor(() => expect(within(panel).getAllByRole('listitem')).toHaveLength(150));
+    expect(new URL(urls[urls.length - 1] ?? '').searchParams.get('cursor')).toBe('100');
+    expect(new URL(urls[urls.length - 1] ?? '').searchParams.get('kind')).toContain('param');
+    expect(within(panel).queryByRole('button', { name: 'Show more' })).not.toBeInTheDocument();
   });
 
   it('a search narrows the list; "No changes match" says so', async () => {

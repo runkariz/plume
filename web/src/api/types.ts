@@ -1338,7 +1338,7 @@ export interface ChangesQuery {
   build?: string;
   since?: string;
   breaking?: boolean;
-  /** One kind (the server matches it exactly). */
+  /** One kind, or several as a comma list ("param,property"). */
   kind?: string;
   wordingOnly?: boolean;
   q?: string;

@@ -717,7 +717,14 @@ export function changesJson(api: MockApiBuilds, p: ChangesParams): ChangesPage |
     .flatMap(userItems)
     .map((i) => publicOf(i))
     .filter((i) => !p.breaking || i.breaking)
-    .filter((i) => !p.kind || i.kind === p.kind)
+    .filter(
+      (i) =>
+        !p.kind ||
+        p.kind
+          .split(',')
+          .map((k) => k.trim())
+          .includes(i.kind),
+    )
     .filter(
       (i) =>
         p.wordingOnly === null ||
