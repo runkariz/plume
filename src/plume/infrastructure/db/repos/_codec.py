@@ -26,6 +26,7 @@ def fields_to_json(fields: Sequence[FieldSpec]) -> str:
                 "required": f.required,
                 "description": f.description,
                 "pointer": f.pointer,
+                **({"constraints": f.constraints} if f.constraints else {}),
             }
             for f in fields
         ]
@@ -42,6 +43,7 @@ def fields_from_json(raw: Any) -> tuple[FieldSpec, ...]:
             required=bool(i.get("required")),
             description=i.get("description"),
             pointer=i.get("pointer"),
+            constraints=i.get("constraints"),
         )
         for i in items
     )
@@ -66,4 +68,6 @@ def document_from_row(row: Any) -> Document:
         shape=row.shape,
         tags=tuple(row.tags or ()),
         raw=(json.loads(row.raw) if isinstance(row.raw, str) else row.raw),
+        real_path=getattr(row, "real_path", None),
+        rate_limit=getattr(row, "rate_limit", None),
     )

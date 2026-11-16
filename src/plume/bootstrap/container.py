@@ -19,6 +19,7 @@ from plume.application.knowledge.import_package import ImportPackage
 from plume.application.knowledge.list_builds import ListApis, ListBuilds
 from plume.application.knowledge.public_changes import PublicChanges
 from plume.application.knowledge.release_notes import ReleaseNotes
+from plume.application.knowledge.remove_api import RemoveApi
 from plume.application.knowledge.seal_build import SealBuild
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.models.collections import Collections
@@ -46,6 +47,7 @@ from plume.infrastructure.clock import SystemClock
 from plume.infrastructure.db.alembic_migrator import AlembicMigrator
 from plume.infrastructure.db.archive import PostgresBuildImporter
 from plume.infrastructure.db.engine import make_engine
+from plume.infrastructure.db.repos.api_removal import PostgresApiRemoval
 from plume.infrastructure.db.repos.api_repo import PostgresApiRepo
 from plume.infrastructure.db.repos.asset_repo import PostgresAssetRepo
 from plume.infrastructure.db.repos.build_repo import PostgresBuildRepo
@@ -330,6 +332,11 @@ class Container:
 
     def api_display(self) -> ApiDisplayName:
         return ApiDisplayName(self.apis)
+
+    def remove_api(self) -> RemoveApi:
+        return RemoveApi(
+            self.apis, PostgresApiRemoval(self.engine), self.models_repo, self.model_sets_repo
+        )
 
     def public_changes(self) -> PublicChanges:
         return PublicChanges(self.release_notes_repo, self.tags)

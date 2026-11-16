@@ -63,6 +63,7 @@ def http_app(c: Container) -> FastAPI:
             collections=c.collections,
             release_notes=c.release_notes,
             api_display=c.api_display,
+            remove_api=c.remove_api,
             public_changes=c.public_changes,
             model_impact=c.model_impact,
         )
@@ -113,6 +114,7 @@ def maintainer_mcp_server(c: Container) -> MCPServer:
             mcp_app_html=_app_html(c),
             release_notes=c.release_notes,
             api_display=c.api_display,
+            remove_api=c.remove_api,
         )
     )
 

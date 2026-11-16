@@ -10,7 +10,7 @@ from plume.domain.shared.ids import BuildId
 
 _COLUMNS = (
     "kind, owner_id, owner_kind, resource, name, location, type, required, complete, "
-    "doc_id, source_url, anchor, quote"
+    "doc_id, source_url, anchor, quote, constraints"
 )
 
 
@@ -28,6 +28,7 @@ def fact_from_row(row: Any) -> Fact:
         type=row.type,
         required=row.required,
         complete=row.complete,
+        constraints=row.constraints,
     )
 
 
@@ -39,7 +40,7 @@ def replace_facts(conn: Connection, build_id: BuildId, facts: Sequence[Fact]) ->
         text(
             f"INSERT INTO facts (build_id, fact_id, {_COLUMNS}) VALUES "  # noqa: S608
             "(:b, :id, :kind, :owner_id, :owner_kind, :resource, :name, :location, "
-            ":type, :required, :complete, :doc_id, :source_url, :anchor, :quote)"
+            ":type, :required, :complete, :doc_id, :source_url, :anchor, :quote, :constraints)"
         ),
         [
             {
@@ -58,6 +59,7 @@ def replace_facts(conn: Connection, build_id: BuildId, facts: Sequence[Fact]) ->
                 "source_url": f.evidence.source_url,
                 "anchor": f.evidence.anchor,
                 "quote": f.evidence.quote,
+                "constraints": f.constraints,
             }
             for f in facts
         ],

@@ -1,6 +1,7 @@
 """Reader outputs. Every result names the build it was read from and its date."""
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from plume.application.ports.eval_repo import EvalRecord
 from plume.domain.knowledge.api import ApiInfo
@@ -73,6 +74,7 @@ class FactMatch:
     required: bool
     complete: bool
     citation: Citation
+    constraints: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,3 +121,4 @@ class CheckCallResult:
     citation: Citation | None
     alternatives: tuple[str, ...] = ()
     """Other operations documented at the same METHOD + path (distinct ids)."""
+    matched_real_path: str | None = None  # the package's own path (fixed version), if any

@@ -20,6 +20,7 @@ from plume.application.reader.dto import (
     SearchHit,
     SearchResult,
 )
+from plume.domain.knowledge import rate_limits
 from plume.domain.knowledge.citation import Citation
 from plume.domain.models.canonical_model import CanonicalField
 from plume.domain.models.model_set import ModelSetSnapshot
@@ -86,6 +87,8 @@ def document_payload(r: DocumentResult) -> Json:
         "resource": d.resource,
         "method": d.method,
         "path": d.path,
+        "real_path": d.real_path,
+        "rate_limit": rate_limits.as_dict(d.rate_limit),
         "deprecated": d.deprecated,
         "complete": d.complete,
         "source_url": d.source_url,
@@ -113,6 +116,7 @@ def find_fact_payload(r: FindFactResult) -> Json:
                 "type": m.type,
                 "required": m.required,
                 "complete": m.complete,
+                "constraints": m.constraints,
                 "evidence": citation_payload(m.citation),
             }
             for m in r.matches
@@ -131,7 +135,12 @@ def check_call_payload(r: CheckCallResult) -> Json:
         "verdict": r.verdict,
         "complete": r.complete,
         "matched": (
-            {"doc_id": r.matched_id, "method": r.matched_method, "path": r.matched_path}
+            {
+                "doc_id": r.matched_id,
+                "method": r.matched_method,
+                "path": r.matched_path,
+                "real_path": r.matched_real_path,
+            }
             if r.matched_id
             else None
         ),

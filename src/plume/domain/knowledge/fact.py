@@ -9,6 +9,7 @@ from enum import StrEnum
 
 from plume.domain.knowledge.citation import Citation
 from plume.domain.knowledge.document import Document, DocumentKind, FieldLocation
+from plume.domain.knowledge.rate_limits import describe
 from plume.domain.shared.hashing import content_hash
 
 
@@ -16,6 +17,7 @@ class FactKind(StrEnum):
     ENDPOINT = "endpoint"
     FIELD = "field"
     SCOPE = "scope"
+    RATE_LIMIT = "rate_limit"
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +32,7 @@ class Fact:
     type: str | None = None
     required: bool = False
     complete: bool = True
+    constraints: str | None = None  # JSON text, see FieldSpec.constraints
 
     @property
     def fact_id(self) -> str:
@@ -71,6 +74,25 @@ def facts_of(document: Document) -> list[Fact]:
                 type=spec.type,
                 required=spec.required,
                 complete=document.complete,
+                constraints=spec.constraints,
+            )
+        )
+    if document.rate_limit:
+        facts.append(
+            Fact(
+                kind=FactKind.RATE_LIMIT,
+                owner_id=document.doc_id,
+                owner_kind=document.kind,
+                name="rate limit",
+                evidence=Citation(
+                    doc_id=document.doc_id,
+                    source_url=document.source_url,
+                    anchor=document.anchor,
+                    quote=describe(document.rate_limit),
+                ),
+                resource=document.resource,
+                complete=document.complete,
+                constraints=document.rate_limit,
             )
         )
     for scope in document.scopes:

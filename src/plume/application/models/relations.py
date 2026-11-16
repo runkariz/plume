@@ -30,6 +30,7 @@ from plume.application.models.concepts import (
     concept_label,
     last_literal,
     resolve_apis,
+    tidy_concept,
 )
 from plume.application.ports.document_repo import DocumentRepo
 from plume.application.ports.fact_index import FactIndex
@@ -563,23 +564,45 @@ class SuggestRelated:
                 by_other[c.child].append(c)
             elif c.child == key:
                 by_other[c.parent].append(c)
-        related = []
+        related: list[RelatedConcept] = []
+        known = set(labels) | {c.parent for c in cands} | {c.child for c in cands}
+        last_words = {v.split()[-1].lower() for v in labels.values() if " " in v}
+        named: dict[str, RelatedConcept] = {}
         for other, cs in by_other.items():
+            name = tidy_concept(
+                labels.get(other, concept_label(other)), known - {other}, last_words
+            )
+            if name is None:
+                continue
             kinds = {
                 r.api.api_id.value: tuple(
                     sorted({k for c in cs for k in c.kinds(r.api.api_id.value)}, key=KINDS.index)
                 )
                 for r in resolved
             }
-            related.append(
-                RelatedConcept(
-                    key=other,
-                    name=labels.get(other, concept_label(other)),
-                    candidates=tuple(cs),
-                    kinds=kinds,
-                    evidence=sum(len(es) for c in cs for es in c.sources.values()),
-                )
+            item = RelatedConcept(
+                key=other,
+                name=name,
+                candidates=tuple(cs),
+                kinds=kinds,
+                evidence=sum(len(es) for c in cs for es in c.sources.values()),
             )
+            twin = named.get(name.lower())
+            if twin is None:
+                named[name.lower()] = item
+                related.append(item)
+            else:  # two keys, one name ("Customer Customer Address"): one entry
+                merged = RelatedConcept(
+                    key=twin.key,
+                    name=twin.name,
+                    candidates=twin.candidates + item.candidates,
+                    kinds={
+                        a: tuple(dict.fromkeys(twin.kinds[a] + item.kinds[a])) for a in twin.kinds
+                    },
+                    evidence=twin.evidence + item.evidence,
+                )
+                related[related.index(twin)] = merged
+                named[name.lower()] = merged
         related.sort(key=lambda r: (-sum(bool(v) for v in r.kinds.values()), -r.evidence, r.key))
         limit = max(1, min(limit, 100))
         offset = max(0, offset)

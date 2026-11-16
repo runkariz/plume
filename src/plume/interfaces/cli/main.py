@@ -16,6 +16,7 @@ from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.export_dump import ExportDump, RestoreDump
 from plume.application.knowledge.list_builds import ListApis, ListBuilds
 from plume.application.knowledge.release_notes import ReleaseNotes
+from plume.application.knowledge.remove_api import ApiInUseError, RemoveApi
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.ports.eval_repo import GoldSource
 from plume.application.reader.resolve import BuildResolver
@@ -46,6 +47,7 @@ class CliDependencies:
     restore_dump: Callable[[], RestoreDump] | None = None
     import_gold: Callable[[str, str], tuple[int, list[str]]] | None = None
     release_notes: Callable[[], ReleaseNotes] | None = None
+    remove_api: Callable[[], RemoveApi] | None = None
 
 
 def _need[T](factory: Callable[[], T] | None, name: str) -> T:
@@ -281,6 +283,35 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         except (ApplicationError, DomainError) as exc:
             raise fail(exc) from exc
         typer.echo(ref)
+
+    @app.command("remove")
+    def remove_cmd(
+        api: Annotated[str, typer.Argument(help="API id")],
+        yes: Annotated[bool, typer.Option("--yes", help="Confirm the removal")] = False,
+        force: Annotated[
+            bool, typer.Option(help="Retire official/unreleased models and sets that pin it")
+        ] = False,
+        reason: Annotated[str | None, typer.Option(help="Why (kept in the audit row)")] = None,
+    ) -> None:
+        """PERMANENTLY remove an API with all its builds, tags, evals, notes and jobs."""
+        service = _need(deps.remove_api, "remove")
+        if not yes:
+            pinned = service.pinned_by(api)
+            typer.echo(f"would remove {api}; pinned by {len(pinned)} model(s)/set(s)")
+            for p in pinned:
+                typer.echo(f"  {p['type']} {p['id']} {p['name']} ({p['visibility']})")
+            typer.echo("re-run with --yes to remove")
+            raise typer.Exit(code=1)
+        try:
+            out = service.execute(api, api, force, reason)
+        except ApiInUseError as exc:
+            typer.echo(f"error: {exc}", err=True)
+            for p in exc.pinned:
+                typer.echo(f"  {p['type']} {p['id']} {p['name']} ({p['visibility']})", err=True)
+            raise typer.Exit(code=1) from exc
+        except (ApplicationError, DomainError) as exc:
+            raise fail(exc) from exc
+        typer.echo(json.dumps(out, indent=2))
 
     @app.command("notes")
     def notes_cmd(

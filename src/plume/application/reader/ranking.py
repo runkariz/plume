@@ -43,3 +43,32 @@ def pair_pages_with_endpoints(
         rest.insert(0, victim)
         protected.add(candidate)
     return top + rest
+
+
+def lift_operation_endpoints(
+    ranked: Sequence[str], k: int, owner_of: Callable[[str], str | None]
+) -> list[str]:
+    """`ranked` reordered (same ids) so a per-operation model in the top-`k` (Mirakl's
+    `a02-response-200-...`: a piece of PUT /api/account's response) has its endpoint just before
+    it, when the pool holds that endpoint. The pieces stay; the endpoint the question is about
+    comes first."""
+    top, rest = list(ranked[:k]), list(ranked[k:])
+    placed: set[str] = set()
+    for doc in list(top):
+        if doc not in top:  # pushed out by an earlier lift
+            continue
+        owner = owner_of(doc)
+        if owner is None or owner in placed:
+            continue
+        placed.add(owner)
+        if owner in top:
+            if top.index(owner) > top.index(doc):
+                top.remove(owner)
+                top.insert(top.index(doc), owner)
+            continue
+        if owner not in rest:
+            continue
+        rest.remove(owner)
+        top.insert(top.index(doc), owner)
+        rest.insert(0, top.pop())
+    return top + rest

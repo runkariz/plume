@@ -10,7 +10,7 @@ from plume.infrastructure.db.repos._codec import document_from_row, fields_to_js
 
 _DOC_COLUMNS = (
     "doc_id, kind, title, text, source_url, anchor, resource, method, path, deprecated, "
-    "complete, fields, scopes, source_id, shape, tags, raw"
+    "complete, fields, scopes, source_id, shape, tags, raw, real_path, rate_limit"
 )
 
 
@@ -76,6 +76,8 @@ def insert_documents(conn: Connection, build_id: BuildId, documents: Sequence[Do
             "shape": d.shape,
             "tags": list(d.tags),
             "raw": json.dumps(d.raw) if d.raw is not None else None,
+            "real_path": d.real_path,
+            "rate_limit": d.rate_limit,
             "content_hash": d.content_hash.value,
         }
         for d in documents
@@ -86,7 +88,8 @@ def insert_documents(conn: Connection, build_id: BuildId, documents: Sequence[Do
             INSERT INTO documents (build_id, {_DOC_COLUMNS}, content_hash)
             VALUES (:b, :doc_id, :kind, :title, :text, :source_url, :anchor, :resource,
                     :method, :path, :deprecated, :complete, CAST(:fields AS jsonb),
-                    :scopes, :source_id, :shape, :tags, CAST(:raw AS jsonb), :content_hash)
+                    :scopes, :source_id, :shape, :tags, CAST(:raw AS jsonb), :real_path,
+                    :rate_limit, :content_hash)
             ON CONFLICT (build_id, doc_id) DO UPDATE SET
                 kind = EXCLUDED.kind, title = EXCLUDED.title, text = EXCLUDED.text,
                 source_url = EXCLUDED.source_url, anchor = EXCLUDED.anchor,
@@ -95,6 +98,7 @@ def insert_documents(conn: Connection, build_id: BuildId, documents: Sequence[Do
                 complete = EXCLUDED.complete, fields = EXCLUDED.fields,
                 scopes = EXCLUDED.scopes, source_id = EXCLUDED.source_id,
                 shape = EXCLUDED.shape, tags = EXCLUDED.tags, raw = EXCLUDED.raw,
+                real_path = EXCLUDED.real_path, rate_limit = EXCLUDED.rate_limit,
                 content_hash = EXCLUDED.content_hash
             """  # noqa: S608 - constant column list
         ),

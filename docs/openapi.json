@@ -156,6 +156,15 @@
             ],
             "description": "Null until the eval gate runs."
           },
+          "rateLimits": {
+            "description": "app.json rateLimits[] verbatim (scope, group, limit, windowSeconds, algorithm, notes, ...); empty when the package states none.",
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Ratelimits",
+            "type": "array"
+          },
           "sections": {
             "anyOf": [
               {
@@ -933,6 +942,18 @@
             ],
             "title": "Path"
           },
+          "realPath": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The package's own path when it fixes the API version (e.g. /vendor/orders/v1/purchaseOrders); null when the version is variable ({version} in `path`) or absent.",
+            "title": "Realpath"
+          },
           "resource": {
             "anyOf": [
               {
@@ -1619,6 +1640,19 @@
             ],
             "title": "Path"
           },
+          "rateLimit": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Verbatim: {bucket, cost, group: {scope, group, limit, windowSeconds, algorithm, notes} | null} from request.json rateLimitCost and app.json rateLimits.",
+            "title": "Ratelimit"
+          },
           "raw": {
             "anyOf": [
               {
@@ -1637,6 +1671,18 @@
             "description": "True when raw was over 256 KB and is omitted.",
             "title": "Rawtruncated",
             "type": "boolean"
+          },
+          "realPath": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The package's own path when it fixes the API version (e.g. /vendor/orders/v1/purchaseOrders); null when the version is variable ({version} in `path`) or absent.",
+            "title": "Realpath"
           },
           "resource": {
             "anyOf": [
@@ -1690,6 +1736,12 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "versionFixed": {
+            "default": false,
+            "description": "The package fixes this operation's API version.",
+            "title": "Versionfixed",
+            "type": "boolean"
           }
         },
         "required": [
@@ -1932,6 +1984,18 @@
             "title": "Complete",
             "type": "boolean"
           },
+          "constraints": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Constraints"
+          },
           "evidence": {
             "$ref": "#/components/schemas/Citation"
           },
@@ -2013,6 +2077,19 @@
       },
       "FieldOut": {
         "properties": {
+          "constraints": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Verbatim from the package schema: enum, minimum, maximum, default, format, pattern, minLength/maxLength, minItems/maxItems (null when none).",
+            "title": "Constraints"
+          },
           "description": {
             "anyOf": [
               {
@@ -2066,7 +2143,8 @@
                 "enum": [
                   "endpoint",
                   "field",
-                  "scope"
+                  "scope",
+                  "rate_limit"
                 ],
                 "type": "string"
               },
@@ -2619,6 +2697,18 @@
           "path": {
             "title": "Path",
             "type": "string"
+          },
+          "realPath": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The package's own path when it fixes the API version (e.g. /vendor/orders/v1/purchaseOrders); null when the version is variable ({version} in `path`) or absent.",
+            "title": "Realpath"
           }
         },
         "required": [
@@ -3200,6 +3290,38 @@
           }
         },
         "title": "ReleaseRequest",
+        "type": "object"
+      },
+      "RemoveApiIn": {
+        "properties": {
+          "confirm": {
+            "description": "The API id, typed again.",
+            "title": "Confirm",
+            "type": "string"
+          },
+          "force": {
+            "default": false,
+            "description": "Retire official (-> superseded) and unreleased (-> discarded) models and sets that pin the API's builds, then remove.",
+            "title": "Force",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "confirm"
+        ],
+        "title": "RemoveApiIn",
         "type": "object"
       },
       "ReviewRequest": {
@@ -4309,6 +4431,103 @@
       }
     },
     "/v1/apis/{api}": {
+      "delete": {
+        "description": "Remove the API and everything it owns (builds, documents, tags, evals, release\nnotes, package meta, jobs, display name) in one transaction, with an audit row.\n`confirm` must be the API id. 409 api_in_use (with `pinnedBy`) while official or\nunreleased models/sets pin its builds; `force: true` retires them first\n(official -> superseded, unreleased -> discarded).",
+        "operationId": "remove_api_v1_apis__api__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "api",
+            "required": true,
+            "schema": {
+              "title": "Api",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveApiIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Remove Api V1 Apis  Api  Delete"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Api",
+        "tags": [
+          "maintainer"
+        ]
+      },
       "get": {
         "operationId": "get_api_v1_apis__api__get",
         "parameters": [
@@ -6755,6 +6974,97 @@
           }
         },
         "summary": "List Notes",
+        "tags": [
+          "maintainer"
+        ]
+      }
+    },
+    "/v1/apis/{api}/removal": {
+      "get": {
+        "description": "What removing the API would hit: the official/unreleased models and sets that\npin its builds (removal is refused while any exist, unless forced).",
+        "operationId": "removal_check_v1_apis__api__removal_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "api",
+            "required": true,
+            "schema": {
+              "title": "Api",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Removal Check V1 Apis  Api  Removal Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Removal Check",
         "tags": [
           "maintainer"
         ]

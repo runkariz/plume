@@ -22,6 +22,7 @@ from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
 from plume.application.knowledge.public_changes import PublicChanges
 from plume.application.knowledge.release_notes import ReleaseNotes
+from plume.application.knowledge.remove_api import RemoveApi
 from plume.application.models.collections import Collections
 from plume.application.models.concepts import ModelInputError, SuggestConcepts
 from plume.application.models.generate import GenerateModels
@@ -42,6 +43,7 @@ from plume.application.reader.use_cases import (
     ReaderInputError,
     SearchDocs,
 )
+from plume.domain.knowledge import rate_limits
 from plume.domain.knowledge.api import ApiId
 from plume.domain.shared.errors import DomainError, InvalidIdentifierError
 from plume.domain.shared.ids import BuildId
@@ -94,6 +96,7 @@ class HttpDependencies:
     release_notes: Callable[[], ReleaseNotes] | None = None
     public_changes: Callable[[], PublicChanges] | None = None
     api_display: Callable[[], ApiDisplayName] | None = None
+    remove_api: Callable[[], RemoveApi] | None = None
     model_impact: Callable[[], ModelImpact] | None = None
 
 
@@ -299,6 +302,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 mcp_url=deps.mcp_url,
             ),
             sections=_section_counts(api, version),
+            rate_limits=deps.sections().rate_limits(api, version) if deps.sections else [],
             **_sources(o.ref.build),
         )
 
@@ -336,6 +340,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                     title=i.title,
                     method=i.method,
                     path=i.path,
+                    real_path=i.real_path,
                     resource=i.resource,
                     deprecated=i.deprecated,
                     tags=list(i.tags),
@@ -365,6 +370,9 @@ def create_app(deps: HttpDependencies) -> FastAPI:
             resource=d.resource,
             method=d.method,
             path=d.path,
+            real_path=d.real_path,
+            version_fixed=d.real_path is not None,
+            rate_limit=rate_limits.as_dict(d.rate_limit),
             deprecated=d.deprecated,
             complete=d.complete,
             source_url=d.source_url,
@@ -377,6 +385,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                     type=f.type,
                     required=f.required,
                     description=f.description,
+                    constraints=f.constraint_dict or None,
                 )
                 for f in d.fields
             ],
@@ -455,7 +464,10 @@ def create_app(deps: HttpDependencies) -> FastAPI:
             complete=r.complete,
             matched=(
                 s.MatchedEndpoint(
-                    id=r.matched_id, method=r.matched_method or "", path=r.matched_path or ""
+                    id=r.matched_id,
+                    method=r.matched_method or "",
+                    path=r.matched_path or "",
+                    real_path=r.matched_real_path,
                 )
                 if r.matched_id
                 else None
@@ -611,7 +623,9 @@ def create_app(deps: HttpDependencies) -> FastAPI:
     if deps.release_notes is not None:
         app.include_router(release_notes_router(deps.release_notes, deps.maintainer_tokens))
     if deps.api_display is not None:
-        app.include_router(api_display_router(deps.api_display, deps.maintainer_tokens))
+        app.include_router(
+            api_display_router(deps.api_display, deps.maintainer_tokens, deps.remove_api)
+        )
     if deps.public_changes is not None:
         app.include_router(
             changes_router(

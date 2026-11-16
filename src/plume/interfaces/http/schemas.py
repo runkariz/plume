@@ -5,6 +5,11 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic.alias_generators import to_camel
 
+_REAL_PATH = (
+    "The package's own path when it fixes the API version (e.g. /vendor/orders/v1/"
+    "purchaseOrders); null when the version is variable ({version} in `path`) or absent."
+)
+
 
 class Schema(BaseModel):
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, frozen=True)
@@ -33,6 +38,16 @@ class Logo(Schema):
     text: str
     color: str
     url: str | None = None
+
+
+class RemoveApiIn(Schema):
+    confirm: str = Field(description="The API id, typed again.")
+    force: bool = Field(
+        default=False,
+        description="Retire official (-> superseded) and unreleased (-> discarded) models and "
+        "sets that pin the API's builds, then remove.",
+    )
+    reason: str | None = Field(default=None, max_length=500)
 
 
 class DisplayNameIn(Schema):
@@ -133,6 +148,11 @@ class ApiDetail(ApiSummary):
         "build has no recorded package metadata (older builds).",
     )
     extracted_at: str | None = Field(default=None, description="When stream extracted it.")
+    rate_limits: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="app.json rateLimits[] verbatim (scope, group, limit, windowSeconds, "
+        "algorithm, notes, ...); empty when the package states none.",
+    )
 
 
 class BrowseItem(Schema):
@@ -141,6 +161,7 @@ class BrowseItem(Schema):
     title: str
     method: str | None = None
     path: str | None = None
+    real_path: str | None = Field(default=None, description=_REAL_PATH)
     resource: str | None = None
     deprecated: bool = False
     tags: list[str] = Field(default_factory=list, description="The package's tags, verbatim.")
@@ -245,6 +266,7 @@ class MatchedEndpoint(Schema):
     id: str
     method: str
     path: str
+    real_path: str | None = Field(default=None, description=_REAL_PATH)
 
 
 class ParamCheck(Schema):
@@ -282,7 +304,7 @@ class CheckCallResponse(Schema):
 
 class FindFactRequest(Schema):
     name: str = Field(min_length=1, max_length=300)
-    kind: Literal["endpoint", "field", "scope"] | None = None
+    kind: Literal["endpoint", "field", "scope", "rate_limit"] | None = None
     owner: str | None = Field(default=None, description="Document id to look in.")
     resource: str | None = None
     location: Literal["path", "query", "header", "body", "response", "model"] | None = None
@@ -300,6 +322,7 @@ class FactMatch(Schema):
     required: bool
     complete: bool
     evidence: Citation
+    constraints: dict[str, Any] | None = None
 
 
 class FindFactResponse(Schema):
@@ -323,6 +346,11 @@ class FieldOut(Schema):
     type: str | None
     required: bool
     description: str | None
+    constraints: dict[str, Any] | None = Field(
+        default=None,
+        description="Verbatim from the package schema: enum, minimum, maximum, default, "
+        "format, pattern, minLength/maxLength, minItems/maxItems (null when none).",
+    )
 
 
 class DocumentOut(Schema):
@@ -335,6 +363,15 @@ class DocumentOut(Schema):
     resource: str | None
     method: str | None
     path: str | None
+    real_path: str | None = Field(default=None, description=_REAL_PATH)
+    version_fixed: bool = Field(
+        default=False, description="The package fixes this operation's API version."
+    )
+    rate_limit: dict[str, Any] | None = Field(
+        default=None,
+        description="Verbatim: {bucket, cost, group: {scope, group, limit, windowSeconds, "
+        "algorithm, notes} | null} from request.json rateLimitCost and app.json rateLimits.",
+    )
     deprecated: bool
     complete: bool
     source_url: str | None

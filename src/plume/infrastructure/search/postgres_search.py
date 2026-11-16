@@ -48,6 +48,7 @@ def _summary(row: Any) -> DocumentSummary:
         path=row.path,
         deprecated=row.deprecated,
         tags=tuple(getattr(row, "tags", None) or ()),
+        real_path=getattr(row, "real_path", None),
     )
 
 
@@ -117,7 +118,7 @@ class PostgresSearchIndex:
             rows = conn.execute(
                 text(
                     "SELECT d.doc_id, d.kind, d.title, d.resource, d.method, d.path, "  # noqa: S608
-                    "d.deprecated, d.tags, "
+                    "d.deprecated, d.tags, d.real_path, "
                     f"count(*) OVER () AS total FROM documents d WHERE {_BROWSE_FILTER} "
                     "ORDER BY d.kind, d.doc_id LIMIT :n OFFSET :o"
                 ),
@@ -153,7 +154,8 @@ class PostgresSearchIndex:
         with self._engine.connect() as conn:
             rows = conn.execute(
                 text(
-                    "SELECT doc_id, kind, title, resource, method, path, deprecated, tags "
+                    "SELECT doc_id, kind, title, resource, method, path, deprecated, tags, "
+                    "real_path "
                     "FROM documents WHERE build_id = :b AND doc_id = ANY(:ids)"
                 ),
                 {"b": build_id.value, "ids": list(doc_ids)},
@@ -187,7 +189,7 @@ class PostgresSearchIndex:
 
 _FACT_COLUMNS = (
     "kind, owner_id, owner_kind, resource, name, location, type, required, complete, "
-    "doc_id, source_url, anchor, quote"
+    "doc_id, source_url, anchor, quote, constraints"
 )
 
 

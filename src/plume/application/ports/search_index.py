@@ -30,6 +30,7 @@ class DocumentSummary:
     path: str | None
     deprecated: bool
     tags: tuple[str, ...] = ()
+    real_path: str | None = None  # the package's own path when it fixes the version
 
 
 class SearchIndex(Protocol):
