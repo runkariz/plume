@@ -141,22 +141,38 @@ Decision, in order:
 - `unknown` items are listed for maintainers with "no source evidence". After stream's additions
   (section 6) they should be rare.
 
-## 5. The gate
+## 5. Post-release review (owner decision 2026-11-16: no blocking gate)
 
-At load the notes get a status:
+A new build is **never held** because of suspect items. Publishing (the `latest` tag) goes
+ahead as today, and the existing eval gate stays. Afterwards the maintainer reviews the notes.
 
-- `clear`: no suspect breaking items, and gold recall did not drop beyond `PLUME_GATE_MAX_DROP`.
-- `review`: suspect breaking items exist. Publishing (the `latest` tag in the maintainer job,
-  `plume tag latest` locally) is **blocked** until a maintainer decides:
-  - **accept**: publish; suspect items stay hidden, and the decision (who, when, note) is
-    stored;
-  - **reject**: don't publish; the build stays loaded but untagged, and the extraction report
-    goes to stream.
-
-  Threshold: any suspect removed endpoint, or 5 or more suspect breaking items
-  (`PLUME_NOTES_SUSPECT_BREAKING_MAX`, default 5).
-- Same-shape renames never block.
-- The existing eval gate stays as it is. The notes add the extraction check next to it.
+- **Review status** per notes: `pending` (new) → `kept` | `rolled_back`. Every decision is
+  recorded in `decisions[]` (who, when, decision, note or reason).
+- **needsAttention** (bool) with **attentionReason** (one plain line) raises the review's
+  priority, never blocks. It is set when any of these holds:
+  - any suspect removed endpoint;
+  - 5 or more suspect breaking items (`PLUME_NOTES_ATTENTION_SUSPECT_BREAKING`);
+  - gold recall dropped by more than `PLUME_GATE_MAX_DROP`;
+  - A1 or A3 fired (30% of a document's fields or a model's properties, or 20 or more fields).
+- **Keep**: the build stays `latest`; the status becomes `kept`.
+- **Roll back** (one click, a reason is required, at most 500 characters): moves `latest` from
+  this build back to its base (`from`). The build stays loaded but untagged, and the status
+  becomes `rolled_back`.
+  - Only the build that is currently `latest` can be rolled back. Otherwise, and for a first
+    build (no base), the answer is 409 `invalid_state`.
+  - Prod follows through the usual flow (dump, restore, tag); nothing else changes.
+- **Roll forward** (undo): keeping a `rolled_back` build moves `latest` to it again, as long as
+  `latest` is still its base (409 otherwise). There is no general tag-move endpoint;
+  `plume tag` stays the CLI's.
+- **Copy issues**: the extraction report as one ready-to-paste text for stream (Markdown or
+  plain), built on the server. It contains build ids, `streamVersion` and `rulesHash`, then per
+  artifact rule: the subject (unit or page), A/B values, the source URL and the page hashes. It
+  is capped at 200 items, followed by "+N more, see the web report".
+- **Promote** a suspect or unknown item to `confirmed` by hand, with a quote the server VERIFIES
+  against B's source text (or B's document) using the same normalised containment as model
+  citations. A failed check is 422 `QUOTE_NOT_VERIFIED`. On success the item records
+  `promotedBy` and `promotedAt`. **Demote** undoes a promotion.
+- Same-shape renames are never flagged.
 
 ## 6. What stream must add to packages (to take to stream via kariz-core-94)
 
@@ -215,20 +231,36 @@ All reads; suspect and unknown items need the maintainer token.
     WHOLE selection, ignoring paging and the q filter, so chips show true counts, plus
     `computedAt` of the notes.
   - `since` spans builds (section 9); items carry `from`, `to` and `toDocsAsOf` for grouping.
-- `GET /v1/apis/{api}/builds/{build}/release-notes` (maintainer): everything, plus the
-  extraction report (suspects grouped by artifact rule, with A/B values and page hashes;
-  unknown items as "no source evidence"). It also carries `status`
-  (clear|review|accepted|rejected), `blocks` (bool), `gateReason` (e.g. "2 suspect removed
-  endpoints"), `computedAt`, and `decisions` (history: who, when, accept|reject, note).
-- `POST …/decision {decision: accept|reject, note}` answers 409 `invalid_state` when the notes
-  are already decided or don't block. A recomputation that changes the counts keeps the
-  decision history and updates `computedAt`.
+- **Maintainer** (bearer):
+  - `GET /v1/apis/{api}/builds/{build}/release-notes` returns every item, plus:
+    - `review` (pending|kept|rolled_back), `needsAttention` and `attentionReason`;
+    - `tagged` (whether this build is `latest`), `computedAt` and `decisions[]`;
+    - the extraction report: `report: [{rule, title, explanation, items}]`, where
+      `explanation` is one plain sentence written by the server; unknown items appear as rule
+      `unknown` ("no source evidence");
+    - `package` (streamVersion, rulesHash, extractedAt) for A and B, and the gold delta.
+  - `POST …/release-notes/keep {note?}`: on a rolled-back build it rolls forward (see
+    section 5).
+  - `POST …/release-notes/rollback {reason}` → `{tag: "latest", buildId: <from>, previous:
+    <to>, review: "rolled_back"}`.
+  - Both answer 409 `invalid_state` when not applicable: a first build, a build that is not
+    `latest`, or `latest` that moved on.
+  - `GET …/release-notes/issues?format=markdown|text` returns the copy-issues text
+    (`text/markdown` or `text/plain`, at most 200 items).
+  - `POST …/release-notes/items/{itemId}/promote {quote}` → the item, or 422
+    `QUOTE_NOT_VERIFIED`. `POST …/items/{itemId}/demote` undoes it.
+  - `GET /v1/apis/{api}/builds` (maintainer) carries per build `review`, `needsAttention` and
+    counts.
+  - A recomputation keeps the decision history and updates `computedAt`.
+- **Maintainer MCP**: `review_release_notes(api, build?)` (the summary, report groups and
+  attention), `keep_release(api, build, note?)`, `rollback_release(api, build, reason)`,
+  `release_issues(api, build)` (the copy-issues text), and `promote_change(api, build, item,
+  quote)` / `demote_change(api, build, item)`.
 - `GET /v1/apis/{api}/changes.atom`: one Atom entry per build with visible items (title:
   counts and BREAKING; content: plain-text list with links to `sourceUrl`).
 - MCP reader `what_changed(api, since)`: the same visible items. The text tells Claude to
   report only these as API changes, quote the evidence, and say "docs updated, no API change"
-  when only descriptions changed. MCP maintainer: `review_release_notes(api, build)` and
-  `decide_release(api, build, accept|reject, note)`.
+  when only descriptions changed (phase 3).
 - **Model impact** (server-side, since it knows which document fields a mapping cites):
   - `GET /v1/models/{id}/impact` → `{pinned: {api: build}, latest: {api: build}, status:
     current|updated_unaffected|affected|unknown, affected: [{field, api, change: <item>}],
@@ -252,10 +284,12 @@ All reads; suspect and unknown items need the maintainer token.
 
 ## 8b. Web (plume-9a)
 
-- **Maintainer first (phase 1)**: the wizard's Publish step shows the gate (status,
-  `gateReason`), the extraction report (suspects grouped by artifact rule with A/B values and
-  page hashes; unknown items as "no source evidence"), Accept/Reject with a note, and the
-  decision history. Suspect and unknown items appear only on a separate maintainer route
+- **Maintainer first (phase 1)**: after a publish, the build shows its review: status,
+  `needsAttention` / `attentionReason`, and the extraction report (groups by rule with the
+  server's explanation, A/B values, page hashes; unknown items as "no source evidence"). It
+  offers Keep (note), Roll back (reason, with a confirm that says the tag moves back to the
+  previous build and can be rolled forward while that build is still `latest`), Copy issues
+  (the server's text), Promote/Demote with a quote, and the decision history. Suspect and unknown items appear only on a separate maintainer route
   (`/maintainer/apis/:api/builds/:build/notes`), never mixed into public pages.
 - **Public (phase 3)**:
   - API card badge, e.g. "Docs updated 14 Nov: 3 changes, 1 breaking" (text and icon, never
@@ -310,12 +344,12 @@ prod `plume restore` (notes restored) → `plume tag latest` on prod.
    confirmed/likely meaningful. Before that, users would see almost nothing, which is honest
    but not useful.
 
-## 12. Open questions for the owner
+## 12. Owner decisions
 
-1. Thresholds: A1/A3 at 30% (or 20 fields), and the gate at 5 suspect breaking items or any
-   suspect removed endpoint.
-2. Should `likely` (changelog only, no verbatim proof) be visible to users, labelled "per the
-   vendor's changelog"? Proposed: yes.
-3. Should a maintainer be able to promote a suspect item to confirmed by hand (with a quote)?
-   Proposed: yes, recorded in the decision.
-4. Should public surfaces wait for phase 3? Proposed: yes.
+Decided by the owner (2026-11-16):
+
+1. Thresholds as proposed, used as **needsAttention flags only**: no build is blocked.
+2. `likely` is user-visible, labelled "per the vendor's changelog".
+3. A maintainer may promote a suspect item to confirmed by hand, with a quote that is verified
+   and recorded (and may demote it again).
+4. Public surfaces wait for phase 3 (stream's page hashes). Phases 1 and 2 are built now.
