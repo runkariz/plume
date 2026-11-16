@@ -296,6 +296,7 @@ See [docs/adr/0001-clean-architecture.md](docs/adr/0001-clean-architecture.md).
 | [maintainer-api.md](docs/maintainer-api.md) | jobs, uploads, live events, publish, the gate |
 | [canonical-models.md](docs/canonical-models.md) | sessions, evidence, draft format, refusal codes |
 | [security.md](docs/security.md) | surface, controls, known gaps |
+| [embedding-models.md](docs/embedding-models.md) | gemini-embedding-001 (in use) vs -2: measurements, what -2 needs, the switch recipe |
 | [level2.md](docs/level2.md) | Claude Code as the client (harness) |
 | [openapi.json](docs/openapi.json) | the HTTP contract |
 
