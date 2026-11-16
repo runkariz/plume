@@ -1,6 +1,8 @@
 """``BuildImporter``: restore a snapshot in ONE transaction (all or nothing)."""
 
+import json
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import Engine, text
 
@@ -75,5 +77,30 @@ class PostgresBuildImporter:
                 save_eval(conn, snapshot.eval)
             if snapshot.assets:
                 put_assets(conn, b.build_id, snapshot.assets)
+            if snapshot.package_meta:
+                conn.execute(
+                    text(
+                        "INSERT INTO build_package_meta (build_id, meta) "
+                        "VALUES (:b, CAST(:m AS jsonb)) ON CONFLICT (build_id) DO NOTHING"
+                    ),
+                    {"b": b.build_id.value, "m": json.dumps(dict(snapshot.package_meta))},
+                )
+            if snapshot.release_notes:
+                n = snapshot.release_notes
+                conn.execute(
+                    text(
+                        "INSERT INTO release_notes (to_build, api_id, from_build, computed_at, "
+                        "review, body) VALUES (:t, :a, :f, :c, :r, CAST(:j AS jsonb)) "
+                        "ON CONFLICT (to_build) DO NOTHING"
+                    ),
+                    {
+                        "t": n["to"],
+                        "a": n["api"],
+                        "f": n["from"],
+                        "c": datetime.fromisoformat(n["computedAt"]),
+                        "r": n["review"],
+                        "j": json.dumps(dict(n), ensure_ascii=False),
+                    },
+                )
             for name in tags:
                 set_tag(conn, Tag.point(TagName(name), b))

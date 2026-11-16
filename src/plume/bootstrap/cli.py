@@ -51,6 +51,7 @@ def build_app(container: Container | None = None) -> typer.Typer:
             gold=lambda: c().gold,
             export_dump=lambda: c().export_dump(),
             restore_dump=lambda: c().restore_dump(),
+            release_notes=lambda: c().release_notes(),
             import_gold=import_gold,
         )
     )

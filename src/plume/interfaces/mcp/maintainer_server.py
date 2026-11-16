@@ -10,10 +10,12 @@ from dataclasses import dataclass
 from typing import Any
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
 from plume import __version__
 from plume.application.jobs.maintainer import MaintainerJobs, job_payload
+from plume.application.knowledge.release_notes import ReleaseNotes
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.models.concepts import SuggestConcepts, SuggestFilter
 from plume.application.models.generate import GenerateModels
@@ -72,6 +74,7 @@ class McpMaintainerDependencies:
     suggest_related: Callable[[], SuggestRelated] | None = None
     model_sets: Callable[[], ModelSets] | None = None
     mcp_app_html: str | None = None
+    release_notes: Callable[[], ReleaseNotes] | None = None
 
 
 def _names(resolver: BuildResolver, apis: list[str]) -> dict[str, str]:
@@ -82,6 +85,65 @@ def _names(resolver: BuildResolver, apis: list[str]) -> dict[str, str]:
         except Exception:
             out[a] = a
     return out
+
+
+def _register_release_notes(server: MCPServer, notes: Callable[[], ReleaseNotes]) -> None:
+    """The post-release review: notes of a build (with suspect items), keep / roll back,
+    copy issues for stream, promote / demote with a verified quote. Nothing blocks a publish."""
+
+    def build_of(api: str, build: str | None) -> str:
+        if build:
+            return build
+        items = notes().summaries(api)
+        if not items:
+            raise ToolError(f"no release notes for {api} yet")
+        return str(items[0]["to"])
+
+    @server.tool(annotations=READ, structured_output=True)
+    async def review_release_notes(api: str, build: str | None = None) -> dict[str, Any]:
+        """Release notes of a build (default: the newest) against its predecessor: counts,
+        needsAttention, the review state, and the extraction report grouped by rule (suspect
+        items are extraction problems, NEVER API changes to tell users about)."""
+
+        def go() -> dict[str, Any]:
+            n = notes().get(api, build_of(api, build))
+            return {k: v for k, v in n.items() if k != "items"} | {
+                "visibleItems": [i for i in n["items"] if i["visibleToUsers"]][:100]
+            }
+
+        return await _run(go)
+
+    @server.tool(annotations=WRITE, structured_output=True)
+    async def keep_release(api: str, build: str, note: str | None = None) -> dict[str, Any]:
+        """Keep a build after review (rolls a rolled-back build forward while latest is still
+        its base). ASK the maintainer first."""
+        return await _run(lambda: _without_items(notes().keep(api, build, note)))
+
+    @server.tool(annotations=WRITE, structured_output=True)
+    async def rollback_release(api: str, build: str, reason: str) -> dict[str, Any]:
+        """Move `latest` from this build back to the previous one (the build stays loaded).
+        ASK the maintainer first; a reason is required."""
+        return await _run(lambda: notes().rollback(api, build, reason))
+
+    @server.tool(annotations=READ, structured_output=True)
+    async def release_issues(api: str, build: str, format: str = "markdown") -> dict[str, Any]:
+        """The extraction report as ready-to-paste text for stream (markdown or text)."""
+        return await _run(lambda: {"text": notes().issues(api, build, format)})
+
+    @server.tool(annotations=WRITE, structured_output=True)
+    async def promote_change(api: str, build: str, item: str, quote: str) -> dict[str, Any]:
+        """Confirm a suspect/unknown item by hand with a quote from the new docs; Plume verifies
+        the quote against the build's source and refuses it otherwise."""
+        return await _run(lambda: notes().promote(api, build, item, quote))
+
+    @server.tool(annotations=WRITE, structured_output=True)
+    async def demote_change(api: str, build: str, item: str) -> dict[str, Any]:
+        """Undo a promotion."""
+        return await _run(lambda: notes().demote(api, build, item))
+
+
+def _without_items(n: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in n.items() if k != "items"}
 
 
 def create_maintainer_server(deps: McpMaintainerDependencies) -> MCPServer:
@@ -128,6 +190,9 @@ def create_maintainer_server(deps: McpMaintainerDependencies) -> MCPServer:
             deps.web_public_url,
             deps.generate,
         )
+
+    if deps.release_notes is not None:
+        _register_release_notes(server, deps.release_notes)
 
     @server.tool(annotations=WRITE, structured_output=True, meta=MODEL_ONLY_META)
     async def publish_build(api: str, build: str, tag: str = "latest") -> dict[str, Any]:

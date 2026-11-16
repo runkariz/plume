@@ -74,3 +74,41 @@ def test_restore_into_empty_database_gives_the_same_answers(
     assert dst.restore_dump().execute(dumps[0]).restored is False
     src.engine.dispose()
     dst.engine.dispose()
+
+
+def test_release_notes_are_computed_on_postgres_and_travel_with_the_dump(
+    clean_engine: Engine, pg_url: str, second_url: str, packages: Path, tmp_path: Path
+) -> None:
+    import json  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+
+    src = _container(pg_url, tmp_path)
+    first = src.build_pipeline().execute("job", str(packages / "test-catalog")).build_id
+    copy = tmp_path / "catalog-v2"
+    shutil.copytree(packages / "test-catalog", copy)
+    path = copy / "connector" / "models" / "order.schema.json"
+    schema = json.loads(path.read_text())
+    schema["properties"].pop("currency")
+    path.write_text(json.dumps(schema))
+    second = src.build_pipeline().execute("job", str(copy))
+    assert second.notes is not None
+    assert second.notes["from"] == first.value
+    notes = src.release_notes().get("test-catalog-api", second.build_id.value)
+    assert any(i["subject"]["fieldPath"] == "currency" and i["op"] == "removed"
+               for i in notes["items"])  # fmt: skip
+    rolled = src.release_notes().rollback("test-catalog-api", second.build_id.value, "test")
+    assert rolled["buildId"] == first.value
+    ref = src.export_dump().execute(second.build_id)
+
+    dst = _container(second_url, tmp_path)
+    AlembicMigrator(dst.engine).upgrade_to_head()
+    dst.restore_dump().execute(ref)
+    restored = dst.release_notes_repo.get(second.build_id.value)
+    assert restored == src.release_notes_repo.get(second.build_id.value)
+    assert restored is not None
+    assert restored["review"] == "rolled_back"
+    assert dst.release_notes_repo.get_meta(second.build_id.value) == (
+        src.release_notes_repo.get_meta(second.build_id.value)
+    )
+    src.engine.dispose()
+    dst.engine.dispose()
