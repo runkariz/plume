@@ -191,3 +191,36 @@ def test_quality_after_publish(stack: FakeStack, packages: Path) -> None:
     assert q["goldQuestions"] == 8
     assert q["gatePassed"] is True
     assert q["inventedEndpoints"] is None
+    assert [r["source"] for r in q["bySource"]] == ["docs"]  # a set without sources is docs
+
+
+def test_quality_per_question_source(packages: Path, tmp_path: Path) -> None:
+    gold_dir = tmp_path / "gold"
+    gold_dir.mkdir()
+    data = json.loads((GOLD / "test-catalog-api.json").read_text())
+    search = [q for q in data["questions"] if q.get("kind", "search") == "search"]
+    for q in search[:2]:
+        q["source"] = "spec"
+    (gold_dir / "test-catalog-api.json").write_text(json.dumps(data))
+    stack = FakeStack(
+        embedder=WordEmbedder(), gold=JsonGoldSource([gold_dir]), data_dir=tmp_path / "data"
+    )
+    client = _client(stack)
+    jid = client.post(
+        "/v1/packages",
+        headers=AUTH,
+        files={"file": ("c.zip", zip_dir(packages / "test-catalog"), "application/zip")},
+    ).json()["id"]
+    client.post(
+        f"/v1/jobs/{jid}/review", headers=AUTH, json={"apiId": "test-catalog-api", "tag": "latest"}
+    )
+    client.post(f"/v1/jobs/{jid}/build", headers=AUTH)
+    keys = [r["key"] for r in client.get(f"/v1/jobs/{jid}", headers=AUTH).json()["eval"]["metrics"]]
+    assert {"docs.recall_at_k", "spec.recall_at_k", "spec.mrr"} <= set(keys)
+    client.post(f"/v1/jobs/{jid}/publish", headers=AUTH)
+    q = client.get("/v1/apis/test-catalog-api").json()["quality"]
+    rows = {r["source"]: r for r in q["bySource"]}
+    assert set(rows) == {"docs", "spec"}
+    assert rows["spec"]["questions"] == 2
+    assert rows["docs"]["questions"] == len(search) - 2
+    assert set(rows["spec"]) == {"source", "recallAt5", "mrr", "citationHitRate", "questions"}

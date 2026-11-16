@@ -38,6 +38,7 @@ from plume.application.ports.jobs import (
 from plume.application.ports.package_source import PackageSource, SourcePackage
 from plume.application.ports.tag_repo import TagRepo
 from plume.application.ports.vector_index import VectorIndex
+from plume.domain.eval.metrics import EvalMetrics
 from plume.domain.knowledge.api import ApiId
 from plume.domain.knowledge.chunk import chunk_document
 from plume.domain.knowledge.diff import diff_items
@@ -136,6 +137,16 @@ def _package_info(
         "validation": checks,
         "suggested": suggested,
     }
+
+
+def _metric_values(m: EvalMetrics | None) -> dict[str, float | int]:
+    """Flat metric values; per-source search metrics as ``<source>.<metric>``."""
+    if m is None:
+        return {}
+    out: dict[str, float | int] = {k: v for k, v in m.as_dict().items() if k != "by_source"}
+    for src, sm in m.by_source:
+        out.update({f"{src}.{k}": v for k, v in sm.as_dict().items()})
+    return out
 
 
 def _valid(job: Job) -> bool:
@@ -416,15 +427,26 @@ class MaintainerJobs:
             return None
         live = self._evals.get(BuildId(job.live_build)) if job.live_build else None
         rows: list[JsonObj] = []
-        for key, label, better in (
+        staged_m, live_m = (
+            _metric_values(record.metrics),
+            _metric_values(live.metrics if live else None),
+        )
+        keys: list[tuple[str, str, str]] = [
             ("recall_at_k", f"Recall@{record.metrics.k}", "up"),
             ("mrr", "MRR", "up"),
             ("citation_hit_rate", "Top-1 citation hit", "up"),
             ("fact_accuracy", "Fact accuracy", "up"),
             ("missing_expected", "Missing expected docs", "down"),
-        ):
-            s_val = record.metrics.as_dict()[key]
-            l_val = live.metrics.as_dict()[key] if live else None
+        ]
+        if len(record.metrics.by_source) > 1:
+            for src, _ in record.metrics.by_source:
+                keys += [
+                    (f"{src}.recall_at_k", f"Recall@{record.metrics.k} ({src} questions)", "up"),
+                    (f"{src}.mrr", f"MRR ({src} questions)", "up"),
+                ]
+        for key, label, better in keys:
+            s_val = staged_m[key]
+            l_val = live_m.get(key)
             delta = None if l_val is None else float(s_val) - float(l_val)
             tone = "neutral"
             if delta is not None and abs(delta) > 1e-9:

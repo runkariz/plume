@@ -103,8 +103,16 @@ class Connect(Schema):
     mcp_url: str
 
 
-class Quality(Schema):
+class SourceQuality(Schema):
+    source: str = Field(description="docs | spec")
     recall_at5: float
+    mrr: float
+    citation_hit_rate: float = Field(description="Top-1: the first result is an expected one.")
+    questions: int = Field(description="Search questions of this source.")
+
+
+class Quality(Schema):
+    recall_at5: float = Field(description="All search questions (docs and spec combined).")
     mrr: float
     citation_hit_rate: float
     fact_accuracy: float
@@ -115,6 +123,11 @@ class Quality(Schema):
     gold_questions: int
     gate_passed: bool
     evaluated_at: str
+    by_source: list[SourceQuality] = Field(
+        default_factory=list,
+        description="The same metrics per question source (docs, spec), for the sources the "
+        "gold set has; the fields above are over all of them.",
+    )
 
 
 class SectionCounts(Schema):

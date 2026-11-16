@@ -36,7 +36,7 @@ class TagResult:
 class GateSummary:
     passed: bool
     message: str
-    metrics: dict[str, float | int]
+    metrics: dict[str, Any]  # EvalMetrics.as_dict()
     baseline: str | None
 
 

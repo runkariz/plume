@@ -3,7 +3,8 @@
 Format::
 
     {"api": "shopify", "version": "1", "questions": [
-      {"id": "q1", "kind": "search", "question": "...", "expect": ["endpoint:GET~/..."]},
+      {"id": "q1", "kind": "search", "question": "...", "expect": ["endpoint:GET~/..."],
+       "source": "spec"},
       {"id": "q2", "kind": "absent", "name": "loyalty_points"},
       {"id": "q3", "kind": "present", "name": "since_id"}]}
 """
@@ -14,7 +15,7 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from plume.application.errors import SourcePackageError
-from plume.domain.eval.gold import GoldKind, GoldQuestion, GoldSet
+from plume.domain.eval.gold import DOCS, GoldKind, GoldQuestion, GoldSet
 
 
 class JsonGoldSource:
@@ -40,6 +41,7 @@ class JsonGoldSource:
                     question=q.get("question", q.get("name", "")),
                     expect_docs=tuple(q.get("expect", [])),
                     fact_name=q.get("name"),
+                    source=q.get("source") or DOCS,
                 )
                 for q in data["questions"]
             )
@@ -51,6 +53,9 @@ class JsonGoldSource:
         return gold, "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
+_PROVENANCE = ("sourceUrl", "specFile", "operationId", "quote", "quoteField")
+
+
 def convert_stream_gold(
     gold_path: Path,
     api: str,
@@ -59,8 +64,10 @@ def convert_stream_gold(
 ) -> tuple[dict[str, object], list[str]]:
     """Stream's ``gold-questions.json`` -> a Plume gold set (search questions).
 
-    ``endpoint_ids`` maps the producer's endpoint ids to Plume document ids. Questions whose
-    expected items are all unknown are skipped (returned in the second value)."""
+    ``endpoint_ids`` maps the producer's item ids (endpoints, ``model:<name>``) to Plume document
+    ids. Questions whose expected items are all unknown are skipped (returned in the second
+    value). The question's ``source`` (docs when missing) and its spec provenance (``specFile``,
+    ``operationId``, ``quote``, ``quoteField``, ``sourceUrl``) are kept."""
     data = json.loads(gold_path.read_text(encoding="utf-8"))
     raw = data.get("questions", []) if isinstance(data, dict) else data
     questions: list[dict[str, object]] = []
@@ -71,7 +78,13 @@ def convert_stream_gold(
         if not expected or not q.get("question"):
             skipped.append(str(q.get("id")))
             continue
-        questions.append(
-            {"id": str(q["id"]), "kind": "search", "question": q["question"], "expect": expected}
-        )
+        item: dict[str, object] = {
+            "id": str(q["id"]),
+            "kind": "search",
+            "question": q["question"],
+            "expect": expected,
+            "source": q.get("source") or DOCS,
+        }
+        item.update({k: q[k] for k in _PROVENANCE if q.get(k) is not None})
+        questions.append(item)
     return {"api": api, "version": "stream-1", "questions": questions}, skipped

@@ -288,6 +288,16 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                     gold_questions=o.eval.metrics.questions,
                     gate_passed=o.eval.passed,
                     evaluated_at=o.eval.evaluated_at.isoformat(),
+                    by_source=[
+                        s.SourceQuality(
+                            source=name,
+                            recall_at5=m.recall_at_k,
+                            mrr=m.mrr,
+                            citation_hit_rate=m.citation_hit_rate,
+                            questions=m.search_questions,
+                        )
+                        for name, m in o.eval.metrics.by_source
+                    ],
                 )
                 if o.eval
                 else None

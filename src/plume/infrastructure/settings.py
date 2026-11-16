@@ -124,6 +124,11 @@ class Settings(BaseSettings):
     )
     gate_min_recall: float = Field(default=0.6, ge=0, le=1)
     gate_max_drop: float = Field(default=0.05, ge=0, le=1)
+    gate_source: Literal["combined", "docs", "spec"] = Field(
+        default="combined",
+        description="Which gold questions the recall floor reads (a set without questions of "
+        "that source falls back to combined). The regression check covers each source.",
+    )
     gate_min_recall_by_embedder: dict[str, float] = Field(
         default_factory=dict,
         description='Per-embedder recall floor, e.g. {"vertex": 0.75}; others use '

@@ -206,6 +206,7 @@ Reader routes are public and rate limited; maintainer routes need `Authorization
 | `PLUME_MAINTAINER_TOKENS` | `[]` | list (JSON `["a","b"]` or comma-separated `a,b`), each ≥ 16 chars; empty = maintainer API off (503) |
 | `PLUME_GOLD_DIRS` | `[]` | folders of `<api>.json` gold sets |
 | `PLUME_GATE_MIN_RECALL` / `PLUME_GATE_MAX_DROP` | `0.6` / `0.05` | the quality gate |
+| `PLUME_GATE_SOURCE` | `combined` | which gold questions the recall floor reads: `combined`, `docs` or `spec` |
 | `PLUME_GATE_MIN_RECALL_BY_EMBEDDER` | `{}` | per-embedder recall floor, e.g. `{"vertex": 0.75}`; others use `PLUME_GATE_MIN_RECALL` |
 | `PLUME_READER_RATE_LIMIT_PER_MINUTE` | `120` | per client address; `0` = off |
 | `PLUME_TRUSTED_PROXY_HOPS` | `0` | behind N proxies that append to `X-Forwarded-For`, the limiter counts the Nth entry from the right (e.g. `client, traefik` with `2` → `client`); `0` = the TCP peer. See docs/security.md |

@@ -5,6 +5,11 @@ from enum import StrEnum
 
 from plume.domain.shared.errors import InvalidIdentifierError
 
+# Where a question was written from: the vendor's docs pages or its spec (OpenAPI etc.).
+DOCS = "docs"
+SPEC = "spec"
+GOLD_SOURCES = (DOCS, SPEC)
+
 
 class GoldKind(StrEnum):
     SEARCH = "search"  # the expected documents must be retrieved
@@ -19,8 +24,11 @@ class GoldQuestion:
     question: str
     expect_docs: tuple[str, ...] = ()
     fact_name: str | None = None
+    source: str = DOCS
 
     def __post_init__(self) -> None:
+        if self.source not in GOLD_SOURCES:
+            raise ValueError(f"{self.qid}: source must be one of {', '.join(GOLD_SOURCES)}")
         if not self.qid.strip():
             raise InvalidIdentifierError("gold question id is empty")
         if self.kind is GoldKind.SEARCH and not self.expect_docs:

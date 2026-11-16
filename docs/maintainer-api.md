@@ -42,3 +42,10 @@ fails the gate when recall@5 is below `PLUME_GATE_MIN_RECALL` (0.6), when a fact
 wrong, when an expected document is missing, or when recall@5/MRR fall more than
 `PLUME_GATE_MAX_DROP` (0.05) below the live build's eval on the same gold set. A failed build is
 sealed but never tagged; `plume tag --force` overrides.
+
+Each search question has a `source`: `docs` (written from the vendor's pages; the default) or
+`spec` (written from its spec file). The eval reports recall@5, MRR and top-1 for docs, spec and
+both combined (`metrics.by_source`; the top-level metrics are the combined ones; the API detail's
+`quality.bySource`). `PLUME_GATE_SOURCE` (`combined` | `docs` | `spec`, default `combined`) picks the
+questions the recall floor reads; a set without questions of that source uses combined. The
+regression check covers combined and, when the set has both, docs and spec separately.
