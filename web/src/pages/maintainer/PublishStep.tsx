@@ -4,6 +4,7 @@ import { useApiClient } from '@/api/context';
 import { Banner, Button, Card, Chip, ErrorState, Kv, LoadingState } from '@/components';
 import { WizardFrame } from './WizardFrame';
 import { shortBuild } from '@/lib/format';
+import { ReleaseReviewLink } from './release/BuildsPage';
 import { stepFor, stepPath, useJob } from './useJob';
 
 export function PublishStep() {
@@ -165,9 +166,12 @@ export function PublishStep() {
       {published ? (
         <div className="actions">
           <span />
-          <Link className="btn primary lg" to={`/apis/${job.apiId}`}>
-            View {job.displayName}
-          </Link>
+          <span className="row">
+            <ReleaseReviewLink api={job.apiId} label="Review the release notes" />
+            <Link className="btn primary lg" to={`/apis/${job.apiId}`}>
+              View {job.displayName}
+            </Link>
+          </span>
         </div>
       ) : (
         <div className="actions">
