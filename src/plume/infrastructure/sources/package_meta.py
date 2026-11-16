@@ -47,7 +47,7 @@ def _url(entry: Any) -> str | None:
     return None
 
 
-def read_package_meta(ref: str) -> PackageMeta:  # noqa: PLR0912 - one pass over optional files
+def read_package_meta(ref: str) -> PackageMeta:  # noqa: PLR0912 - one pass, optional files
     root = _root(ref)
     manifest = _json(root / "manifest.json") or {}
     blocked: set[str] = set()
@@ -78,11 +78,8 @@ def read_package_meta(ref: str) -> PackageMeta:  # noqa: PLR0912 - one pass over
                 text = path.read_text(encoding="utf-8", errors="replace")
                 budget -= len(text)
                 texts[url] = text
-    units = pages.get("units") if isinstance(pages, dict) else None
-    if isinstance(units, dict):
-        for unit_id, u in units.items():
-            if isinstance(u, dict) and (u.get("truncated") or u.get("complete") is False):
-                blocked.add(str(unit_id))
+    units = _Units(pages.get("units") if isinstance(pages, dict) else None)
+    blocked |= units.blocked
     changes = _json(root / "changes.json") or {}
     named: set[str] = set()
     for c in _entries(changes, "vendorChangelog"):
@@ -91,6 +88,7 @@ def read_package_meta(ref: str) -> PackageMeta:  # noqa: PLR0912 - one pass over
             named.add(url)
         if isinstance(c, dict):
             named.update(str(u) for u in (c.get("units") or []) if u)
+    sources = _sources(manifest)
     llm: set[str] = set()
     for source in (pages, changes, manifest):
         if isinstance(source, dict):
@@ -108,7 +106,77 @@ def read_package_meta(ref: str) -> PackageMeta:  # noqa: PLR0912 - one pass over
         and pages.get("baselineKind") == "snapshot-after-extraction",
         llm_files=frozenset(llm),
         page_texts=texts,
+        sources=sources,
+        changelog_urls=tuple(
+            u for u in manifest.get("changelogUrls") or [] if isinstance(u, str) and u
+        ),
+        unit_sources=units.sources,
+        conflicts=tuple(units.conflicts),
+        conflicts_checked=frozenset(units.checked),
+        conflicts_unchecked=frozenset(units.unchecked),
     )
+
+
+class _Units:
+    """pages.json's units map: truncation, attributed sources, conflicts, conflictsChecked."""
+
+    def __init__(self, units: Any) -> None:
+        self.blocked: set[str] = set()
+        self.sources: dict[str, tuple[str, ...]] = {}
+        self.conflicts: list[dict[str, Any]] = []
+        self.checked: set[str] = set()
+        self.unchecked: set[str] = set()
+        for unit_id, u in units.items() if isinstance(units, dict) else ():
+            if isinstance(u, dict):
+                self._one(str(unit_id), u)
+
+    def _one(self, unit: str, u: dict[str, Any]) -> None:
+        if u.get("truncated") or u.get("complete") is False:
+            self.blocked.add(unit)
+        if u.get("fieldsAttribution") != "not-recorded":
+            urls = tuple(x for x in (_url(src) for src in u.get("sources") or []) if x)
+            if urls:
+                self.sources[unit] = urls
+        if u.get("conflictsChecked") is True:
+            self.checked.add(unit)
+        elif u.get("conflictsChecked") is False:
+            self.unchecked.add(unit)  # not compared: never read as "no conflicts"
+        self.conflicts += [{"unit": unit, **c} for c in u.get("conflicts") or []
+                           if isinstance(c, dict)]  # fmt: skip
+
+
+KINDS = ("docs", "spec", "changelog", "sdk", "other")
+
+
+def _sources(manifest: dict[str, Any]) -> tuple[dict[str, Any], ...]:
+    """manifest sources[] ({url, kind, fetchedAt, contentSha256|etag|version, role}); without
+    them (today's packages) the manifest's source.url as the one entry docs source."""
+    out: list[dict[str, Any]] = []
+    for src in manifest.get("sources") or []:
+        if not isinstance(src, dict) or not isinstance(src.get("url"), str):
+            continue
+        kind = str(src.get("kind") or "other").lower()
+        out.append(
+            {
+                "url": src["url"],
+                "kind": kind if kind in KINDS else "other",
+                "fetchedAt": src.get("fetchedAt"),
+                "contentSha256": src.get("contentSha256"),
+                "etag": src.get("etag"),
+                "version": src.get("version"),
+                "role": src.get("role"),
+            }
+        )
+    if not out:
+        entry = (
+            (manifest.get("source") or {}).get("url")
+            if isinstance(manifest.get("source"), dict)
+            else None
+        )
+        if isinstance(entry, str) and entry:
+            out.append({"url": entry, "kind": "docs", "fetchedAt": None, "role": "entry",
+                        "fallback": True})  # fmt: skip
+    return tuple(out)
 
 
 class StreamPackageMetaReader:

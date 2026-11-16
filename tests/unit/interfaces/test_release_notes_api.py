@@ -111,3 +111,11 @@ async def test_maintainer_mcp_tools(stack: tuple[FakeStack, str, str]) -> None:
             "rollback_release", {"api": API, "build": second, "reason": "extraction bug"}
         )
         assert (rolled.structured_content or {})["buildId"] == first
+
+
+def test_api_detail_shows_public_sources_only(stack: tuple[FakeStack, str, str]) -> None:
+    s, _, _ = stack
+    body = _client(s).get(f"/v1/apis/{API}").json()
+    # the fixture's only source is a file:// url: never public; extractedAt from the manifest
+    assert body["sources"] == []
+    assert "extractedAt" in body

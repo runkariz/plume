@@ -86,6 +86,12 @@ class SectionCounts(Schema):
     webhook_endpoints: int
 
 
+class SourceRef(Schema):
+    url: str
+    kind: str = Field(description="docs | spec | changelog | sdk | other")
+    fetched_at: str | None = None
+
+
 class ApiDetail(ApiSummary):
     chunks: int
     is_live: bool
@@ -99,6 +105,12 @@ class ApiDetail(ApiSummary):
     sections: SectionCounts | None = Field(
         default=None, description="What the package contains: auth schemes, triggers, webhooks."
     )
+    sources: list[SourceRef] | None = Field(
+        default=None,
+        description="Where the build's package came from (http(s) urls only). Null when the "
+        "build has no recorded package metadata (older builds).",
+    )
+    extracted_at: str | None = Field(default=None, description="When stream extracted it.")
 
 
 class BrowseItem(Schema):

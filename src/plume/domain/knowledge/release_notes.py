@@ -94,6 +94,15 @@ class PackageMeta:
     llm_files: frozenset[str] = frozenset()  # files stream lists as LLM-written (vary per run)
     # url -> source snapshot text (_sources/<sha>.txt); kept in memory at load, not stored
     page_texts: Mapping[str, str] = field(default_factory=dict, compare=False)
+    # manifest sources[]: {url, kind (docs|spec|changelog|sdk|other), fetchedAt, contentSha256,
+    # etag, role}; a package without them falls back to its source.url as one docs source
+    sources: tuple[Mapping[str, Any], ...] = ()
+    changelog_urls: tuple[str, ...] = ()
+    unit_sources: Mapping[str, tuple[str, ...]] = field(default_factory=dict)  # unit -> urls
+    # stream's conflicts between sources: {unit, field, values: [{url, value}], chosen, reason}
+    conflicts: tuple[Mapping[str, Any], ...] = ()
+    conflicts_checked: frozenset[str] = frozenset()  # units stream compared
+    conflicts_unchecked: frozenset[str] = frozenset()  # conflictsChecked: false (not compared)
 
     def as_json(self) -> dict[str, Any]:
         return {
@@ -107,6 +116,12 @@ class PackageMeta:
             "changedPages": sorted(self.changed_pages),
             "baselineOnly": self.baseline_only,
             "llmFiles": sorted(self.llm_files),
+            "sources": [dict(x) for x in self.sources],
+            "changelogUrls": list(self.changelog_urls),
+            "unitSources": {u: list(v) for u, v in sorted(self.unit_sources.items())},
+            "conflicts": [dict(x) for x in self.conflicts],
+            "conflictsChecked": sorted(self.conflicts_checked),
+            "conflictsUnchecked": sorted(self.conflicts_unchecked),
         }
 
     @classmethod
@@ -123,7 +138,21 @@ class PackageMeta:
             frozenset(d.get("changedPages") or ()),
             bool(d.get("baselineOnly")),
             frozenset(d.get("llmFiles") or ()),
+            sources=tuple(d.get("sources") or ()),
+            changelog_urls=tuple(d.get("changelogUrls") or ()),
+            unit_sources={u: tuple(v) for u, v in (d.get("unitSources") or {}).items()},
+            conflicts=tuple(d.get("conflicts") or ()),
+            conflicts_checked=frozenset(d.get("conflictsChecked") or ()),
+            conflicts_unchecked=frozenset(d.get("conflictsUnchecked") or ()),
         )
+
+    def source_kind(self, url: str | None) -> str | None:
+        """The kind of the source a URL belongs to (docs, spec, changelog, sdk, other)."""
+        target = _url(url)
+        for src in self.sources:
+            if target and _url(src.get("url")) == target:
+                return str(src.get("kind") or "other")
+        return None
 
 
 # -- the diff ---------------------------------------------------------------------------------
@@ -511,6 +540,17 @@ class _Context:
 _INVERSE = {"added": "removed", "removed": "added"}
 
 
+def _hashes(meta: PackageMeta) -> dict[str, str]:
+    """Page hashes (pages.json) plus whole-source hashes (manifest sources[], e.g. a spec)."""
+    out = {
+        _url(s.get("url")): str(s.get("contentSha256") or s.get("etag"))
+        for s in meta.sources
+        if s.get("url") and (s.get("contentSha256") or s.get("etag"))
+    }
+    out.update({_url(u): h for u, h in meta.page_hashes.items()})
+    return out
+
+
 def _rules(it: Item, doc: Document | None, url: str, ctx: _Context) -> list[str]:
     subj = it["subject"]
     rules: list[str] = []
@@ -532,19 +572,32 @@ def _rules(it: Item, doc: Document | None, url: str, ctx: _Context) -> list[str]
     return rules
 
 
+def _side(
+    urls: Sequence[str], pages: Mapping[str, str], hashes: Mapping[str, str]
+) -> tuple[str | None, str | None]:
+    texts = [pages[u] for u in urls if u in pages]
+    known = [hashes.get(u) or (text_hash(pages[u]) if u in pages else None) for u in urls]
+    digest = "+".join(h for h in known if h) if all(known) and known else None
+    return ("\n".join(texts) or None), digest
+
+
 def _classify_one(it: Item, ctx: _Context) -> None:
     subj = it["subject"]
     doc = ctx.docs_b.get(subj["docId"]) or ctx.docs_a.get(subj["docId"])
     url = _url(doc.source_url if doc else None)
-    ta, tb = ctx.pages_a.get(url), ctx.pages_b.get(url)
-    ha = ctx.hashes_a.get(url) or (text_hash(ta) if ta else None)
-    hb = ctx.hashes_b.get(url) or (text_hash(tb) if tb else None)
-    if ctx.meta_old.baseline_only and url in ctx.hashes_a:
+    unit = doc.source_id if doc else None
+    # The sources stream attributes the unit to (a spec and/or docs pages), else its page.
+    attributed = ctx.meta_new.unit_sources.get(unit or "") or ctx.meta_old.unit_sources.get(
+        unit or ""
+    )
+    urls = sorted({_url(u) for u in attributed}) if attributed else ([url] if url else [])
+    ta, ha = _side(urls, ctx.pages_a, ctx.hashes_a)
+    tb, hb = _side(urls, ctx.pages_b, ctx.hashes_b)
+    if ctx.meta_old.baseline_only and any(u in ctx.hashes_a for u in urls):
         ha = None  # a baseline written after the old extraction says nothing about its content
     rules = _rules(it, doc, url, ctx)
     holds, quote = _verbatim(it, ta, tb) if (ta or tb) else (False, None)
     page_changed = None if (ha is None or hb is None) else ha != hb
-    unit = doc.source_id if doc else None
     named = bool(url and url in ctx.changed) or bool(unit and unit in ctx.changed)
     if it.get("rename"):
         cls = UNKNOWN  # never shown: no change for users
@@ -562,8 +615,13 @@ def _classify_one(it: Item, ctx: _Context) -> None:
     it["class"] = cls
     it["computedClass"] = cls
     it["artifactRules"] = rules
+    # Spec vs docs only from stream's recorded attribution; older builds: "not recorded".
+    kinds = sorted({ctx.meta_new.source_kind(u) or "other" for u in urls}) if attributed else []
     it["evidence"] = {
         "sourceUrl": doc.source_url if doc else None,
+        "sources": urls if attributed else [],
+        "sourceKind": kinds[0] if len(kinds) == 1 else ("mixed" if kinds else None),
+        "attribution": "recorded" if attributed else "not-recorded",
         "anchor": (doc.anchor or "").lstrip("#") or None if doc else None,
         "quote": _quote(quote) if cls == CONFIRMED else None,
         "pageHashBefore": ha,
@@ -597,8 +655,8 @@ def classify(
             (p["subject"].get("docId"), p["subject"].get("fieldPath"), p["kind"], p["op"])
             for p in previous_items
         },
-        {_url(u): h for u, h in meta_old.page_hashes.items()},
-        {_url(u): h for u, h in meta_new.page_hashes.items()},
+        _hashes(meta_old),
+        _hashes(meta_new),
         frozenset(_url(u) if "://" in u else u for u in meta_new.changed_pages),
         frozenset(_url(u) for u in meta_new.failed_pages),
     )
@@ -757,5 +815,15 @@ def issues_text(notes: Mapping[str, Any], fmt: str = "markdown", cap: int = 200)
         lines.append("")
     if total > shown:
         lines.append(f"+{total - shown} more, see the web report")
+    conflicts = notes.get("conflicts") or []
+    if conflicts:
+        title = f"Source conflicts stream reported ({len(conflicts)})"
+        lines += ["", ("## " if md else "") + title]
+        for c in conflicts[:cap]:
+            values = "; ".join(f"{v.get('url')}: {v.get('value')}" for v in c.get("values") or [])
+            lines.append(
+                f"- {c.get('unit') or '-'} `{c.get('field') or '-'}`: chosen "
+                f"{c.get('chosen')!s} ({c.get('reason') or '-'}); values {values or '-'}"
+            )
     text = "\n".join(lines).rstrip() + "\n"
     return text if md else text.replace("`", "")

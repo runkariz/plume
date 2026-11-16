@@ -282,7 +282,20 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 mcp_url=deps.mcp_url,
             ),
             sections=_section_counts(api, version),
+            **_sources(o.ref.build),
         )
+
+    def _sources(build: str) -> dict[str, Any]:
+        info = deps.release_notes().public_sources(build) if deps.release_notes else None
+        if info is None:
+            return {}
+        return {
+            "sources": [
+                s.SourceRef(url=x["url"], kind=x["kind"], fetched_at=x["fetchedAt"])
+                for x in info["sources"]
+            ],
+            "extracted_at": info["extractedAt"],
+        }
 
     @app.get(
         "/v1/apis/{api}/items", response_model=s.BrowseResult, tags=["reader"], responses=responses
