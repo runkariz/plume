@@ -96,7 +96,7 @@ this review and have tests in `tests/unit/interfaces/test_hardening.py`.
   | Mode | Embeddings | Generation |
   |---|---|---|
   | key, no `PLUME_VERTEX_PROJECT` | `aiplatform.googleapis.com` (express URL) | `aiplatform.googleapis.com` (express URL) |
-  | key + project | `{EMBED_LOCATION}-aiplatform.googleapis.com` (`aiplatform.googleapis.com` for `global`) | `{VERTEX_LOCATION}-aiplatform.googleapis.com` (`aiplatform.googleapis.com` for `global`) |
+  | key + project | `{EMBED_LOCATION}-aiplatform.googleapis.com` (`aiplatform.googleapis.com` for `global`; `aiplatform.eu.rep.googleapis.com` / `aiplatform.us.rep.googleapis.com` for `eu` / `us`, where `gemini-embedding-2` lives, ADC only) | `{VERTEX_LOCATION}-aiplatform.googleapis.com` (`aiplatform.googleapis.com` for `global`) |
   | ADC (+ project) | as key + project | as key + project; plus `oauth2.googleapis.com` / the GKE metadata server (`169.254.169.254`) for tokens |
   | `PLUME_EMBEDDER=gemini` | `generativelanguage.googleapis.com` | – |
   | `PLUME_EMBEDDER=hash` | none | – |

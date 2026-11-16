@@ -1,6 +1,7 @@
 """Vertex through Application Default Credentials (Workload Identity): a fake credentials
 provider; no live ADC here."""
 
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -186,3 +187,40 @@ def test_the_container_passes_project_and_embed_location_in_key_mode() -> None:
     c = Container(settings=settings)
     url = c.embedder._vertex_url()  # type: ignore[attr-defined]
     assert url.startswith("https://europe-west4-aiplatform.googleapis.com/v1/projects/proj/")
+
+
+def test_gemini_embedding_2_uses_batch_embed_contents_on_the_rep_host() -> None:
+    seen: list[httpx.Request] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        n = len(json.loads(request.content)["requests"])
+        return httpx.Response(200, json={"embeddings": [{"values": [3.0, 4.0]}] * n})
+
+    embedder = GeminiEmbedder(
+        api_key="k-ignored",  # -2 does not take API keys: the ADC token is used
+        model="gemini-embedding-2",
+        dims=2,
+        batch_size=1000,  # capped at the API's 250
+        client=httpx.Client(transport=httpx.MockTransport(handle)),
+        token_source=_source(FakeCreds(), [NOW.timestamp()]),
+        project="proj",
+        location="eu",
+    )
+    out = embedder.embed_documents([f"t{i}" for i in range(300)])
+    assert len(out) == 300
+    assert out[0] == (0.6, 0.8)
+    assert [len(json.loads(r.content)["requests"]) for r in seen] == [250, 50]
+    assert str(seen[0].url) == (
+        "https://aiplatform.eu.rep.googleapis.com/v1/projects/proj/locations/eu/publishers/"
+        "google/models/gemini-embedding-2:batchEmbedContents"
+    )
+    body = json.loads(seen[0].content)["requests"][0]
+    assert body == {"content": {"parts": [{"text": "t0"}]}, "outputDimensionality": 2}
+    assert seen[0].headers["authorization"] == "Bearer tok-1"
+    assert "x-goog-api-key" not in seen[0].headers
+
+
+def test_gemini_embedding_2_needs_adc_and_a_project() -> None:
+    with pytest.raises(EmbeddingError, match="does not accept API keys"):
+        GeminiEmbedder(api_key="k", model="gemini-embedding-2", project="proj")
