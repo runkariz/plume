@@ -2,10 +2,67 @@ import { useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
-import { ApiError } from '@/api/types';
-import { Card, Chip, Crumbs, ErrorState, LoadingState, RawJson } from '@/components';
+import { ApiError, type TriggerPayload } from '@/api/types';
+import { Card, Chip, Crumbs, ErrorState, FieldTable, LoadingState, RawJson } from '@/components';
+import { docHref } from '@/lib/docHref';
 import { apiTitle } from '@/lib/names';
 import { primitiveEntries } from './AuthSchemePage';
+
+/**
+ * What the event carries, as the package states it: the payload schema's fields (the same table as a model's) and
+ * the sample, or a link to the connector model the payload is. Refs the server could not read are shown as text.
+ */
+function PayloadSection({ api, payload: p }: { api: string; payload: TriggerPayload }) {
+  const hasSample = p.sample !== null && p.sample !== undefined;
+  const unread = !p.model && p.fields.length === 0 && !hasSample;
+  return (
+    <>
+      <Card className="pad doc-fields" role="region" aria-label="Payload">
+        <h2 className="h2-sm">Payload</h2>
+        {p.model ? (
+          <p>
+            The payload is the model{' '}
+            <Link to={docHref(api, p.model.docId)}>{p.model.title ?? p.model.docId}</Link>.
+          </p>
+        ) : null}
+        {unread ? (
+          <p className="muted">
+            The package names a payload, but Plume could not read it
+            {p.schemaRef ? (
+              <>
+                {' '}
+                (schema <span className="mono">{p.schemaRef}</span>)
+              </>
+            ) : null}
+            {p.sampleRef ? (
+              <>
+                {' '}
+                (sample <span className="mono">{p.sampleRef}</span>)
+              </>
+            ) : null}
+            .
+          </p>
+        ) : null}
+        {!p.model && !unread ? (
+          <p className="faint small">
+            {[
+              p.schemaRef ? `Schema: ${p.schemaRef}` : '',
+              p.sampleRef ? `Sample: ${p.sampleRef}` : '',
+            ]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        ) : null}
+      </Card>
+      {!p.model && p.fields.length > 0 ? (
+        <FieldTable title="Payload fields" fields={p.fields} />
+      ) : null}
+      {hasSample ? (
+        <RawJson raw={p.sample} title="Sample payload, as in the package" label="Sample payload" />
+      ) : null}
+    </>
+  );
+}
 
 /** One trigger / webhook event: what it is and when it fires (from the package), with the event JSON verbatim. */
 export function TriggerPage() {
@@ -56,6 +113,8 @@ export function TriggerPage() {
   const d = state.data;
   // plain facts the event carries, besides what the header already shows
   const shown = new Set(['key', 'title', 'description', 'resource', 'delivery']);
+  // the Payload section already says where the payload comes from
+  if (d.payload) for (const k of ['payloadSchemaRef', 'sampleRef']) shown.add(k);
   const extra = primitiveEntries(d.event).filter(([k]) => !shown.has(k));
 
   return (
@@ -102,6 +161,8 @@ export function TriggerPage() {
           </dl>
         ) : null}
       </Card>
+
+      {d.payload ? <PayloadSection api={apiId} payload={d.payload} /> : null}
 
       <RawJson raw={d.event} title="Event JSON, as in the package" label="Event JSON" open />
       <div style={{ height: 40 }} />
