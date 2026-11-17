@@ -43,9 +43,10 @@ from plume.domain.knowledge.document import (
     constraint_dict,
 )
 from plume.domain.knowledge.fact import Fact, FactKind
-from plume.domain.knowledge.ranking import reciprocal_rank_fusion
+from plume.domain.knowledge.ranking import Fusion, reciprocal_rank_fusion
 from plume.domain.shared.ids import BuildId
 
+DEFAULT_FUSION = Fusion()
 SearchMode = Literal["hybrid", "dense", "text"]
 MAX_TOP_K = 50
 SNIPPET_CHARS = 320
@@ -185,7 +186,11 @@ class BrowseDocuments:
 
 
 def fuse_hits(
-    dense: Sequence[ChunkHit], text: Sequence[ChunkHit], query: str, top_k: int
+    dense: Sequence[ChunkHit],
+    text: Sequence[ChunkHit],
+    query: str,
+    top_k: int,
+    fusion: Fusion = DEFAULT_FUSION,
 ) -> list[SearchHit]:
     def best_per_doc(hits: Sequence[ChunkHit]) -> list[ChunkHit]:
         seen: dict[str, ChunkHit] = {}
@@ -197,7 +202,11 @@ def fuse_hits(
     by_doc_d = {h.doc_id: h for h in d}
     by_doc_t = {h.doc_id: h for h in t}
     max_text = max((h.score for h in t), default=0.0) or 1.0
-    fused = reciprocal_rank_fusion([[h.doc_id for h in d], [h.doc_id for h in t]])
+    fused = reciprocal_rank_fusion(
+        [[h.doc_id for h in d], [h.doc_id for h in t]],
+        k=fusion.k,
+        weights=(fusion.dense_weight, 1.0),
+    )
     out = []
     for f in fused[:top_k]:
         hd, ht = by_doc_d.get(f.key), by_doc_t.get(f.key)
@@ -306,11 +315,13 @@ class SearchDocs:
         index: SearchIndex,
         embedder: Embedder,
         documents: DocumentRepo,
+        fusion: Fusion = DEFAULT_FUSION,
     ) -> None:
         self._resolver = resolver
         self._index = index
         self._embedder = embedder
         self._documents = documents
+        self._fusion = fusion
 
     def execute(
         self,
@@ -360,7 +371,9 @@ class SearchDocs:
                 "full-text search",
                 lambda: self._index.text(build_id, query, pool, kinds),
             )
-        fused = _timed(trace, "plume", "fuse (RRF)", lambda: fuse_hits(dense, text, query, pool))
+        fused = _timed(
+            trace, "plume", "fuse (RRF)", lambda: fuse_hits(dense, text, query, pool, self._fusion)
+        )
         wider_hits: list[ChunkHit] = []
 
         def wider() -> list[str]:

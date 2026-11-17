@@ -12,6 +12,8 @@ from typing import Annotated, Any, Literal
 from pydantic import Field, PostgresDsn, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+from plume.domain.knowledge.ranking import SEMANTIC_FUSION, Fusion
+
 MIN_TOKEN_LENGTH = 16
 
 
@@ -124,6 +126,18 @@ class Settings(BaseSettings):
     )
     gate_min_recall: float = Field(default=0.6, ge=0, le=1)
     gate_max_drop: float = Field(default=0.05, ge=0, le=1)
+    search_rrf_k: int | None = Field(
+        default=None,
+        ge=1,
+        description="Hybrid search RRF k. Default: 10 with a real embedding model, 60 with the "
+        "offline hash embedder.",
+    )
+    search_dense_weight: float | None = Field(
+        default=None,
+        gt=0,
+        description="Weight of the dense (embedding) ranking in hybrid search; full text weighs "
+        "1. Default: 5 with a real embedding model, 1 with the offline hash embedder.",
+    )
     gate_source: Literal["combined", "docs", "spec"] = Field(
         default="combined",
         description="Which gold questions the recall floor reads (a set without questions of "
@@ -214,6 +228,14 @@ class Settings(BaseSettings):
     def gate_floor(self) -> float:
         """The eval gate's recall floor for the embedder in use (per-embedder override)."""
         return self.gate_min_recall_by_embedder.get(self.resolved_embedder, self.gate_min_recall)
+
+    def fusion(self) -> Fusion:
+        """Hybrid search fusion for the embedder in use (env overrides either value)."""
+        base = Fusion() if self.resolved_embedder == "hash" else SEMANTIC_FUSION
+        return Fusion(
+            k=self.search_rrf_k or base.k,
+            dense_weight=self.search_dense_weight or base.dense_weight,
+        )
 
     def vertex_uses_adc(self) -> bool:
         """Vertex through Application Default Credentials (no key; a project is required)."""

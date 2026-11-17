@@ -48,3 +48,29 @@ def test_normalize_call_path_and_specificity() -> None:
         "/admin/api/{version}/products/1.json"
     )
     assert specificity("/a/{id}/b") == 2
+
+
+def test_semantic_fusion_keeps_a_clear_dense_winner_that_text_misses() -> None:
+    """The Zalando case: the right unit is dense #1 but absent from full text, while a generic
+    sibling is dense #4 and text #1. Plain RRF ranks the sibling first; the semantic fusion keeps
+    the dense winner."""
+    from plume.application.ports.search_index import ChunkHit  # noqa: PLC0415
+    from plume.application.reader.use_cases import fuse_hits  # noqa: PLC0415
+    from plume.domain.knowledge.document import DocumentKind  # noqa: PLC0415
+    from plume.domain.knowledge.ranking import SEMANTIC_FUSION, Fusion  # noqa: PLC0415
+
+    def hits(ids: list[str]) -> list[ChunkHit]:
+        return [
+            ChunkHit(f"{d}#0", d, DocumentKind.GUIDE, d, "", 1.0 - i / 10)
+            for i, d in enumerate(ids)
+        ]
+
+    dense = hits(["right", "page", "other", "sibling"])
+    text = hits(["sibling", "x", "y", "z"])
+    plain = [h.doc_id for h in fuse_hits(dense, text, "q", 10)]
+    semantic = [h.doc_id for h in fuse_hits(dense, text, "q", 10, SEMANTIC_FUSION)]
+    assert plain[0] == "sibling"
+    assert semantic[0] == "right"
+    assert semantic.index("sibling") < semantic.index("x")  # text still counts
+    with pytest.raises(ValueError, match="fusion"):
+        Fusion(k=0)

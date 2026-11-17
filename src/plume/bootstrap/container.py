@@ -379,6 +379,7 @@ class Container:
             self.evals,
             self.clock,
             GatePolicy(min_recall=s.gate_floor(), max_drop=s.gate_max_drop, source=s.gate_source),
+            s.fusion(),
         )
 
     def export_dump(self) -> ExportDump:
@@ -414,7 +415,13 @@ class Container:
         return BrowseDocuments(self.resolver(), self.search_index)
 
     def search(self) -> SearchDocs:
-        return SearchDocs(self.resolver(), self.search_index, self.embedder, self.documents)
+        return SearchDocs(
+            self.resolver(),
+            self.search_index,
+            self.embedder,
+            self.documents,
+            self.settings.fusion(),
+        )
 
     def get_document(self) -> GetDocument:
         return GetDocument(self.resolver(), self.documents)
