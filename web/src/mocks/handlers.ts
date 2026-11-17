@@ -1611,11 +1611,14 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
         packageName: found.name,
       });
     }),
-    http.get(`${base}/v1/apis/:id`, ({ params }) => {
+    http.get(`${base}/v1/apis/:id`, ({ params, request }) => {
       const found = removedApis.has(String(params.id)) ? undefined : detailFor(String(params.id));
       if (!found) return notFound();
       const d = docsUpdatedOf(releases[String(params.id)]);
-      return HttpResponse.json(named(d ? { ...found, docsUpdated: d } : found));
+      // like the server: the manifest warnings only go with the maintainer token (the field is absent otherwise)
+      const { packageWarnings, ...rest } = found;
+      const out = isMaintainer(request) ? { ...rest, packageWarnings } : rest;
+      return HttpResponse.json(named(d ? { ...out, docsUpdated: d } : out));
     }),
     // A stored document (what a citation points at). The mock builds one from the id.
     http.get(`${base}/v1/apis/:id/documents/*`, ({ params, request }) => {

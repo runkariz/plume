@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { authStore } from '@/app/authStore';
 import { warningText } from '@/components/Notices';
+import { shopifyDetail } from '@/mocks/data';
 import { createHandlers } from '@/mocks/handlers';
 import { renderApp } from '@/test/render';
 import { server, TEST_API_BASE } from '@/test/server';
@@ -80,7 +81,7 @@ describe('package warnings (maintainer view)', () => {
   });
 
   it('a signed-in maintainer sees a code chip and the text, the code said once', async () => {
-    authStore.signIn('k');
+    authStore.signIn('pl_k');
     renderApp('/apis/shopify');
     const card = await screen.findByRole('region', { name: 'Package warnings' });
     expect(card).toHaveTextContent('Package warnings (5)');
@@ -91,8 +92,36 @@ describe('package warnings (maintainer view)', () => {
     expect(items[1]?.textContent?.match(/knowledge-links/g)).toHaveLength(1);
   });
 
+  it('sends the maintainer token on the API call, and none for a reader', async () => {
+    const seen: (string | null)[] = [];
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/shopify`, ({ request }) => {
+        seen.push(request.headers.get('authorization'));
+        return HttpResponse.json({ ...shopifyDetail });
+      }),
+    );
+    const { unmount } = renderApp('/apis/shopify');
+    await screen.findByRole('heading', { level: 1, name: 'Shopify Admin REST API' });
+    expect(seen).toEqual([null]);
+    unmount();
+    authStore.signIn('pl_k');
+    renderApp('/apis/shopify');
+    await screen.findByRole('heading', { level: 1, name: 'Shopify Admin REST API' });
+    expect(seen.at(-1)).toBe('Bearer pl_k');
+  });
+
+  it('a field the server leaves out (a reader) means no warnings', async () => {
+    authStore.signIn('pl_k');
+    const { packageWarnings: _omitted, ...without } = shopifyDetail;
+    void _omitted;
+    server.use(http.get(`${TEST_API_BASE}/v1/apis/shopify`, () => HttpResponse.json(without)));
+    renderApp('/apis/shopify');
+    await screen.findByRole('heading', { level: 1, name: 'Shopify Admin REST API' });
+    expect(screen.queryByRole('region', { name: 'Package warnings' })).not.toBeInTheDocument();
+  });
+
   it('collapses a long list', async () => {
-    authStore.signIn('k');
+    authStore.signIn('pl_k');
     const many = Array.from({ length: 9 }, (_, i) => ({ code: `c${i}`, text: `c${i}: text ${i}` }));
     const base = (await (await fetch(`${TEST_API_BASE}/v1/apis/shopify`)).json()) as object;
     server.use(
@@ -108,7 +137,7 @@ describe('package warnings (maintainer view)', () => {
   });
 
   it('no card for no warnings or an older server', async () => {
-    authStore.signIn('k');
+    authStore.signIn('pl_k');
     const base = (await (await fetch(`${TEST_API_BASE}/v1/apis/shopify`)).json()) as Record<
       string,
       unknown
