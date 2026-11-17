@@ -15,11 +15,12 @@ from plume.application.ports.embedder import Embedder, Vector
 from plume.application.ports.eval_repo import EvalRecord, EvalRepo
 from plume.application.ports.search_index import FactQuery, SearchIndex
 from plume.application.ports.tag_repo import TagRepo
-from plume.application.reader.use_cases import WIDER_POOL, fuse_hits, rank_order
+from plume.application.reader.use_cases import DEFAULT_FUSION, WIDER_POOL, fuse_hits, rank_order
 from plume.domain.eval.gate import GateDecision, GatePolicy, decide
 from plume.domain.eval.gold import GoldKind, GoldSet
 from plume.domain.eval.metrics import K, QuestionOutcome, score
 from plume.domain.knowledge.document import DocumentKind
+from plume.domain.knowledge.ranking import Fusion
 from plume.domain.knowledge.tag import LATEST, TagName
 from plume.domain.shared.clock import Clock
 from plume.domain.shared.ids import BuildId
@@ -47,7 +48,9 @@ class RunEvalGate:
         evals: EvalRepo,
         clock: Clock,
         policy: GatePolicy | None = None,
+        fusion: Fusion = DEFAULT_FUSION,
     ) -> None:
+        self._fusion = fusion
         self._builds = builds
         self._tags = tags
         self._documents = documents
@@ -79,7 +82,7 @@ class RunEvalGate:
                 vector = self._embedder.embed_query(q.question)
                 dense = self._index.dense(build_id, vector, POOL)
                 text = self._index.text(build_id, q.question, POOL)
-                fused = [h.doc_id for h in fuse_hits(dense, text, q.question, POOL)]
+                fused = [h.doc_id for h in fuse_hits(dense, text, q.question, POOL, self._fusion)]
                 wider = partial(self._endpoints_for, build_id, vector)
                 ranked = tuple(rank_order(self._documents, build_id, fused, K, wider))
                 # Expected docs are alternatives: missing only when none of them is in the build.

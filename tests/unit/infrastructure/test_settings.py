@@ -69,3 +69,13 @@ def test_a_kubernetes_service_link_is_refused_with_a_clear_message(
     monkeypatch.setenv("PLUME_API_PORT", "tcp://10.96.0.12:18480")
     with pytest.raises(ValidationError, match="enableServiceLinks: false"):
         Settings()
+
+
+def test_fusion_follows_the_embedder_and_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    from plume.domain.knowledge.ranking import SEMANTIC_FUSION, Fusion  # noqa: PLC0415
+
+    assert Settings(embedder="hash").fusion() == Fusion()
+    assert Settings(embedder="vertex").fusion() == SEMANTIC_FUSION
+    monkeypatch.setenv("PLUME_SEARCH_RRF_K", "30")
+    monkeypatch.setenv("PLUME_SEARCH_DENSE_WEIGHT", "2")
+    assert Settings(embedder="vertex").fusion() == Fusion(k=30, dense_weight=2.0)
