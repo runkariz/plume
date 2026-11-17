@@ -97,10 +97,54 @@ describe('guide page', () => {
     renderApp(`/apis/shopify/documents/${guide}`);
     const card = await screen.findByRole('region', { name: 'About these endpoints' });
     const links = within(card).getAllByRole('link');
-    expect(links).toHaveLength(2);
+    expect(links).toHaveLength(3);
     expect(links[0]).toHaveAttribute('href', `/apis/shopify/documents/${ep}`);
     expect(links[0]).toHaveTextContent('GET');
     expect(links[0]).toHaveTextContent('/orders.json');
+  });
+});
+
+describe('guide link basis', () => {
+  it('says why each endpoint is linked, in words', async () => {
+    renderApp(`/apis/shopify/documents/${guide}`);
+    const card = await screen.findByRole('region', { name: 'About these endpoints' });
+    expect(within(card).getByText('names it')).toBeInTheDocument();
+    expect(within(card).getByText('same docs page')).toBeInTheDocument();
+    expect(within(card).getByText('matching names')).toBeInTheDocument();
+  });
+
+  it('shows an unknown basis as sent, and no label when the server sends none', async () => {
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/shopify/documents/*`, () =>
+        HttpResponse.json({
+          api: 'shopify',
+          build: 'b',
+          docsAsOf: '2026-11-14',
+          id: 'guide:g',
+          kind: 'guide',
+          title: 'G',
+          resource: null,
+          method: null,
+          path: null,
+          deprecated: false,
+          complete: true,
+          sourceUrl: null,
+          anchor: null,
+          text: 't',
+          fields: [],
+          scopes: [],
+          linkedEndpoints: ['endpoint:GET~/a', 'endpoint:GET~/b'],
+          endpointLinks: [{ endpointId: 'endpoint:GET~/a', linkBasis: 'embedding' }],
+        }),
+      ),
+    );
+    renderApp('/apis/shopify/documents/guide%3Ag');
+    const card = await screen.findByRole('region', { name: 'About these endpoints' });
+    expect(within(card).getByText('embedding')).toBeInTheDocument();
+    expect(within(card).getAllByRole('link')).toHaveLength(2);
+    expect(
+      within(card).getAllByText(/names it|same docs page|matching names|embedding/),
+    ).toHaveLength(1);
   });
 });
 

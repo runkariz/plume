@@ -2842,3 +2842,12 @@ ul.plain {
 .quality-sources th:first-child {
   white-space: normal;
 }
+.linked-list li:has(.link-basis) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+}
+.link-basis {
+  font-weight: 500;
+}

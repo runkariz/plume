@@ -209,7 +209,18 @@ function linksOf(docId: string, kind: string, method: string | null) {
       guides: ['guide:pagination', 'guide:rate-limits'],
     };
   if (docId === 'guide:pagination')
-    return { linkedEndpoints: ['endpoint:GET~/orders.json', 'endpoint:GET~/products.json'] };
+    return {
+      linkedEndpoints: [
+        'endpoint:GET~/orders.json',
+        'endpoint:GET~/products.json',
+        'endpoint:GET~/customers/{customer_id}.json',
+      ],
+      endpointLinks: [
+        { endpointId: 'endpoint:GET~/orders.json', linkBasis: 'text' },
+        { endpointId: 'endpoint:GET~/products.json', linkBasis: 'page' },
+        { endpointId: 'endpoint:GET~/customers/{customer_id}.json', linkBasis: 'slug' },
+      ],
+    };
   return {};
 }
 

@@ -20,6 +20,13 @@ export function EndpointLink({ api, id }: { api: string; id: string }) {
   );
 }
 
+/** Why a guide is linked to an endpoint, in words; an unknown basis is shown as the server sent it. */
+export const BASIS_LABEL: Record<string, string> = {
+  text: 'names it',
+  page: 'same docs page',
+  slug: 'matching names',
+};
+
 /**
  * The endpoints a guide is about, or the endpoints that need a scope: links, the first `collapseAt` shown and the
  * rest behind a button. Nothing when the list is empty or absent.
@@ -29,11 +36,14 @@ export function EndpointLinks({
   ids,
   label,
   collapseAt = 6,
+  basis,
 }: {
   api: string;
   ids: string[] | undefined;
   label: string;
   collapseAt?: number;
+  /** Why each endpoint is linked (by endpoint id); nothing is shown for an id without one. */
+  basis?: Record<string, string>;
 }) {
   const [all, setAll] = useState(false);
   if (!ids || ids.length === 0) return null;
@@ -44,6 +54,11 @@ export function EndpointLinks({
         {shown.map((id) => (
           <li key={id}>
             <EndpointLink api={api} id={id} />
+            {basis?.[id] ? (
+              <span className="chip link-basis" title="Why this guide is linked to the endpoint">
+                {BASIS_LABEL[basis[id]] ?? basis[id]}
+              </span>
+            ) : null}
           </li>
         ))}
       </ul>

@@ -270,6 +270,9 @@ export function DocumentPage() {
             api={apiId}
             ids={d.linkedEndpoints}
             label="Endpoints this guide is about"
+            basis={Object.fromEntries(
+              (d.endpointLinks ?? []).map((l) => [l.endpointId, l.linkBasis]),
+            )}
           />
         </Card>
       ) : null}
