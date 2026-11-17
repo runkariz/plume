@@ -316,7 +316,9 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
                 return {
                     **payloads.ref_payload(ref),
                     "present": bool(views or hooks),
-                    "triggers": [{k: v for k, v in x.items() if k != "event"} for x in views],
+                    "triggers": [
+                        {k: v for k, v in x.items() if k not in ("event", "payload")} for x in views
+                    ],
                     "webhooks": hooks,
                     "endpoint_refs": sections().endpoint_refs(
                         api,
@@ -329,7 +331,10 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
 
         @server.tool(annotations=READ_ONLY, structured_output=True)
         async def get_trigger(api: str, key: str, version: str | None = None) -> dict[str, Any]:
-            """One trigger by key (e.g. "orders/create") or document id; event JSON verbatim."""
+            """One trigger by key (e.g. "orders/create") or document id; event JSON verbatim.
+            payload: the event's payload schema fields (like a model's) and sample, or the
+            connector model it names (read it with get_document(model.doc_id)); null when the
+            event has none."""
 
             def run() -> dict[str, Any]:
                 ref, doc = sections().trigger(api, key, version)

@@ -14,7 +14,7 @@ DNS-rebinding protection (allowed hosts from `PLUME_MCP_ALLOWED_HOSTS`). Every r
 | `list_builds` | `api` | builds (newest first) with tags |
 | `diff_builds` | `api, from_version, to_version?, limit?` | added / changed / removed chunk ids |
 | `list_auth_schemes` / `get_auth_scheme` | `api[, scheme_id], version?` | auth schemes as the package states them; detail = the auth JSON + variables schema verbatim |
-| `list_triggers` / `get_trigger` | `api[, key], version?` | trigger events / webhook topics; `present: false` when the package has none |
+| `list_triggers` / `get_trigger` | `api[, key], version?` | trigger events / webhook topics; `present: false` when the package has none. `get_trigger` adds `payload`: the event's payload schema fields (like a model's), schema and sample, or the connector `model` its ref names; null when the event has no refs |
 | `get_environments` | `api, version?` | environments, base URLs, versioning and the variables schema, verbatim |
 | `get_vendor_mcp` | `api, version?` | the vendor's own MCP server(s) and tools when the package lists them; `present: false` otherwise |
 | `start_set_session` / `get_set_context` / `get_set_session` | `apis, concepts, aliases?` / `set_session` | a model set: pinned builds, one model session per member, relation candidates. **Ask the user about every relation** |

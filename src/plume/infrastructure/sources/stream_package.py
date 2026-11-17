@@ -28,6 +28,7 @@ from plume.domain.knowledge import rate_limits
 from plume.domain.knowledge.api import ApiId, ApiInfo, Category
 from plume.domain.knowledge.asset import CONTENT_TYPES, ICON, MAX_ASSET_BYTES, Asset
 from plume.domain.knowledge.document import (
+    TRIGGER_PAYLOAD_KEY,
     Document,
     DocumentKind,
     FieldLocation,
@@ -484,7 +485,9 @@ class StreamPackageSource:
         for doc, origin in self._guides_and_auth(connector, warnings):
             add(doc, origin)
         for path in sorted((connector / "triggers" / "events").glob("*.json")):
-            add(self._trigger(path), path.name)
+            if not _COMPANION.match(path.name):  # <event>.payload.{schema,sample}.json
+                add(self._trigger(path), path.name)
+        documents = _attach_payloads(documents, connector, warnings)
         icon, extra_hashed = self._icon(connector, package_root)
         export = package_root / "knowledge-export"
         if export.is_dir() and knowledge_export.detect(export):
@@ -930,6 +933,123 @@ def _renamed(model: Document, name: str) -> Document:
     body = model.text.split("\n\n", 1)[1] if "\n\n" in model.text else ""
     text = f"# {name} (model)\n\nSource title: {original}" + (f"\n\n{body}" if body else "")
     return replace(model, title=name, resource=resource, text=text, source_id=original)
+
+
+MAX_REFS_SHOWN = 5
+
+
+def _ref_path(connector: Path, ref: str) -> Path | None:
+    """A payload/sample ref as a file inside the connector: relative to triggers/events/ (the
+    stream contract), else to the connector root. None when missing or outside the connector."""
+    events = connector / "triggers" / "events"
+    root = connector.resolve()
+    for base in (events, connector):
+        path = (base / ref).resolve()
+        if path.is_file() and path.is_relative_to(root):
+            return path
+    return None
+
+
+def _model_ref(connector: Path, ref: str, schema: JsonObj | None) -> str | None:
+    """The model a payload ref names: ``model:<name>``, a file in connector/models/, or a
+    payload schema that is only a ``$ref`` to one. None when it is not a model ref."""
+    if ref.startswith("model:"):
+        return model_key(ref.removeprefix("model:").strip())
+    models = (connector / "models").resolve()
+    targets = [ref]
+    only_ref = schema is not None and not set(schema) - {"$ref", "title", "description", "$schema"}
+    if schema is not None and only_ref and isinstance(schema.get("$ref"), str):
+        targets.append(str(schema["$ref"]).partition("#")[0])
+    for target in targets:
+        path = _ref_path(connector, target) if target else None
+        if path is not None and path.parent == models and path.name.endswith(".schema.json"):
+            return model_key(path.name.removesuffix(".schema.json"))
+    return None
+
+
+def _payload_of(
+    doc: Document, connector: Path, model_ids: dict[str, Document], missing: list[str]
+) -> Document:
+    """A trigger with its payload resolved: the schema's fields (rendered like a model's), or a
+    link to the connector model it names, plus the sample. Unresolvable refs go to `missing`."""
+    data = dict(doc.raw or {})
+    schema_ref = _str(data.get("payloadSchemaRef"))
+    sample_ref = _str(data.get("sampleRef"))
+    if schema_ref is None and sample_ref is None:
+        return doc
+    schema: JsonObj | None = None
+    model: Document | None = None
+    fields: list[FieldSpec] = []
+    if schema_ref is not None:
+        path = None if schema_ref.startswith("model:") else _ref_path(connector, schema_ref)
+        if path is not None:
+            try:
+                schema = _read_json(path)
+            except SourcePackageError:
+                path = None
+        model_id = _model_ref(connector, schema_ref, schema)
+        model = model_ids.get(model_id) if model_id else None
+        if model is not None:
+            schema = None  # link the model instead of repeating its fields
+        elif schema is not None and path is not None:
+            fields = list(
+                _walk_fields(
+                    schema,
+                    FieldLocation.BODY,
+                    f"{path.name}#",
+                    scope=_RefScope(schema, path.name, path.parent),
+                )
+            )
+        else:
+            missing.append(f"{doc.source_id}: payloadSchemaRef {schema_ref}")
+    sample: Any = None
+    if sample_ref is not None:
+        sample_path = _ref_path(connector, sample_ref)
+        try:
+            sample = (
+                json.loads(sample_path.read_text(encoding="utf-8-sig")) if sample_path else None
+            )
+        except (OSError, json.JSONDecodeError):
+            sample_path = None
+        if sample_path is None:
+            missing.append(f"{doc.source_id}: sampleRef {sample_ref}")
+    payload = {
+        "schemaRef": schema_ref,
+        "schema": schema,
+        "sampleRef": sample_ref,
+        "sample": sample,
+        "model": {"docId": model.doc_id, "title": model.title} if model is not None else None,
+    }
+    parts = [doc.text]
+    if model is not None:
+        parts.append(f"Payload: the {model.title} model (`{model.doc_id}`).")
+    section = _fields_section("Payload fields", fields)
+    if section:
+        parts.append(section)
+    return replace(
+        doc,
+        text="\n\n".join(parts),
+        fields=tuple(fields),
+        raw={**data, TRIGGER_PAYLOAD_KEY: payload},
+    )
+
+
+def _attach_payloads(
+    documents: list[Document], connector: Path, warnings: list[str]
+) -> list[Document]:
+    """Trigger events' payloadSchemaRef / sampleRef, read; one warning for every ref that
+    does not resolve."""
+    model_ids = {d.doc_id: d for d in documents if d.kind is DocumentKind.MODEL}
+    missing: list[str] = []
+    out = [
+        _payload_of(d, connector, model_ids, missing) if d.kind is DocumentKind.TRIGGER else d
+        for d in documents
+    ]
+    if missing:
+        shown = "; ".join(missing[:MAX_REFS_SHOWN])
+        more = f"; +{len(missing) - MAX_REFS_SHOWN} more" if len(missing) > MAX_REFS_SHOWN else ""
+        warnings.append(f"triggers: {len(missing)} payload ref(s) not found ({shown}{more})")
+    return out
 
 
 def doc_anchor(value: Any) -> str | None:

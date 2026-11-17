@@ -824,11 +824,38 @@ class TriggerList(Schema):
     )
 
 
+class ModelRef(Schema):
+    doc_id: str
+    title: str | None
+
+
+class TriggerPayload(Schema):
+    schema_ref: str | None = Field(description="The event's payloadSchemaRef, verbatim.")
+    sample_ref: str | None = Field(description="The event's sampleRef, verbatim.")
+    model: ModelRef | None = Field(
+        description="The connector model the payload ref names (then `schema` is null and "
+        "`fields` empty: read the model)."
+    )
+    payload_schema: dict[str, Any] | None = Field(
+        alias="schema",
+        serialization_alias="schema",
+        description="The payload JSON schema, verbatim (null when unresolved or a model).",
+    )
+    sample: Any = Field(description="The payload sample, verbatim (null when none).")
+    fields: list[FieldOut] = Field(
+        description="The payload schema's fields as dotted paths, like a model's fields."
+    )
+
+
 class TriggerDetail(TriggerSummary):
     api: str
     build: str
     source_url: str | None
     event: dict[str, Any] = Field(description="The event JSON from the package, verbatim.")
+    payload: TriggerPayload | None = Field(
+        default=None,
+        description="payloadSchemaRef / sampleRef read (null when the event states neither).",
+    )
 
 
 class EnvironmentsOut(Schema):

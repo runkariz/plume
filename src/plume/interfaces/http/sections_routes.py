@@ -164,6 +164,7 @@ def sections_router(sections: Callable[[], PackageSections]) -> APIRouter:
             build=ref.build,
             source_url=v["source_url"],
             event=v["event"],
+            payload=s.TriggerPayload.model_validate(v["payload"]) if v["payload"] else None,
         )
 
     @router.get(

@@ -12,7 +12,7 @@ from plume.application.reader.links import scope_endpoints
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
 from plume.domain.knowledge import rate_limits
 from plume.domain.knowledge.asset import ICON, Asset
-from plume.domain.knowledge.document import Document, DocumentKind
+from plume.domain.knowledge.document import TRIGGER_PAYLOAD_KEY, Document, DocumentKind
 
 WEBHOOKS_TAG = "webhooks"
 MAX_SECTION_ITEMS = 1000
@@ -206,8 +206,35 @@ def scheme_view(d: Document) -> dict[str, Any]:
     }
 
 
+def _payload_view(d: Document, payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The event's payload as the loader resolved it: the schema's fields (like a model's), or
+    the connector model it names, and the sample; None when the event states neither."""
+    if payload is None:
+        return None
+    model = _obj(payload.get("model"))
+    return {
+        "schema_ref": payload.get("schemaRef"),
+        "sample_ref": payload.get("sampleRef"),
+        "model": {"doc_id": model.get("docId"), "title": model.get("title")} if model else None,
+        "schema": payload.get("schema"),
+        "sample": payload.get("sample"),
+        "fields": [
+            {
+                "name": f.name,
+                "location": f.location.value,
+                "type": f.type,
+                "required": f.required,
+                "description": f.description,
+                "constraints": f.constraint_dict or None,
+            }
+            for f in d.fields
+        ],
+    }
+
+
 def trigger_view(d: Document) -> dict[str, Any]:
     raw = dict(d.raw or {})
+    payload = _obj(raw.pop(TRIGGER_PAYLOAD_KEY, None))
     return {
         "key": d.source_id or raw.get("key"),
         "doc_id": d.doc_id,
@@ -218,6 +245,7 @@ def trigger_view(d: Document) -> dict[str, Any]:
         "sync_endpoint_id": raw.get("syncEndpointId"),
         "source_url": d.source_url,
         "event": raw,
+        "payload": _payload_view(d, payload),
     }
 
 

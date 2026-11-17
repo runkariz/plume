@@ -13,6 +13,7 @@ from plume.interfaces.http.app import HttpDependencies, create_app
 from plume.interfaces.mcp.reader_server import McpReaderDependencies, create_reader_server
 from tests.fakes.knowledge import WordEmbedder
 from tests.fakes.stack import FakeStack
+from tests.unit.infrastructure.test_trigger_payload import payload_package
 
 
 @pytest.fixture
@@ -275,3 +276,71 @@ def test_unit_documents_state_the_basis_of_each_endpoint_link(
         {"endpointId": post, "linkBasis": "page"},
     ]
     assert c.get(f"/v1/apis/woocommerce/documents/{post}").json()["endpointLinks"] == []
+
+
+def _payload_stack(packages: Path, tmp_path: Path) -> FakeStack:
+    s = FakeStack(embedder=WordEmbedder())
+    s.load(str(payload_package(packages, tmp_path)))
+    return s
+
+
+def test_trigger_detail_carries_the_payload(packages: Path, tmp_path: Path) -> None:
+    stack = _payload_stack(packages, tmp_path)
+    app = create_app(
+        HttpDependencies(
+            overviews=stack.overviews,
+            browse=stack.browse,
+            search=stack.search,
+            get_document=stack.get_document,
+            find_fact=stack.find_fact,
+            check_call=stack.check_call,
+            list_builds=lambda: ListBuilds(stack.builds, stack.tags),
+            diff_builds=lambda: DiffBuilds(stack.builds),
+            resolver=stack.resolver,
+            sections=stack.sections,
+            rate_limit_per_minute=0,
+        )
+    )
+    http = TestClient(app)
+    cart = http.get("/v1/apis/shopify/triggers/carts/create").json()
+    payload = cart["payload"]
+    assert payload["schemaRef"] == "carts-create.payload.schema.json"
+    assert payload["schema"]["required"] == ["id"]
+    assert payload["sample"] == {"id": 7, "line_items": [{"sku": "A-1"}]}
+    assert payload["model"] is None
+    assert [f["name"] for f in payload["fields"]] == ["id", "line_items", "line_items[].sku"]
+    assert payload["fields"][0]["location"] == "body"
+    assert "_payload" not in cart["event"]
+    draft = http.get("/v1/apis/shopify/triggers/draft_orders/create").json()
+    assert draft["payload"]["model"] == {"docId": "model:customer", "title": "Customer"}
+    assert draft["payload"]["schema"] is None
+    scopes = http.get("/v1/apis/shopify/triggers/app/scopes_update").json()
+    assert scopes["payload"]["fields"] == []
+    listed = http.get("/v1/apis/shopify/triggers").json()
+    assert "payload" not in listed["items"][0]
+
+
+@pytest.mark.anyio
+async def test_mcp_get_trigger_carries_the_payload(packages: Path, tmp_path: Path) -> None:
+    stack = _payload_stack(packages, tmp_path)
+    server = create_reader_server(
+        McpReaderDependencies(
+            overviews=stack.overviews,
+            search=stack.search,
+            get_document=stack.get_document,
+            find_fact=stack.find_fact,
+            check_call=stack.check_call,
+            list_builds=lambda: ListBuilds(stack.builds, stack.tags),
+            diff_builds=lambda: DiffBuilds(stack.builds),
+            resolver=stack.resolver,
+            sections=stack.sections,
+        )
+    )
+    async with Client(server) as client:
+        result = await client.call_tool("get_trigger", {"api": "shopify", "key": "carts/create"})
+        assert not result.is_error, result.content
+        trig = dict(result.structured_content or {})
+        assert trig["payload"]["sample"]["id"] == 7
+        assert {f["name"] for f in trig["payload"]["fields"]} >= {"id", "line_items[].sku"}
+        listed = await client.call_tool("list_triggers", {"api": "shopify"})
+        assert all("payload" not in t for t in (listed.structured_content or {})["triggers"])
