@@ -385,3 +385,7 @@ pre.code {
   object-fit: contain;
   display: block;
 }
+.metric-hint {
+  display: block;
+  font-weight: 400;
+}

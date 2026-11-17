@@ -146,6 +146,14 @@ export function withEval(job: Job, passed = true): Job {
           tone: passed ? 'neutral' : 'bad',
         },
         {
+          key: 'top1_rate',
+          label: 'Top-1 hit rate',
+          live: '0.96',
+          staged: passed ? '0.97' : '0.88',
+          delta: passed ? '+0.01' : '-0.08',
+          tone: passed ? 'ok' : 'bad',
+        },
+        {
           key: 'docs.recall_at_k',
           label: 'Recall@5 (docs questions)',
           live: '0.95',

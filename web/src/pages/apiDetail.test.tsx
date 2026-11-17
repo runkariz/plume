@@ -40,10 +40,44 @@ describe('API detail', () => {
     expect(screen.getByText('0.94')).toBeInTheDocument();
   });
 
+  it('names the top-1 score and says what it is; the old name is gone', async () => {
+    renderApp('/apis/shopify');
+    const card = (await screen.findByRole('heading', { name: 'Answer quality' })).closest('.card');
+    expect(card).toHaveTextContent('Top-1 hit rate');
+    expect(card).toHaveTextContent('Share of questions whose answer ranks first.');
+    expect(card).toHaveTextContent('0.97');
+    expect(card).not.toHaveTextContent('Citation hit');
+  });
+
+  it('shows the server note on a small gold set, and none when it is null', async () => {
+    const { shopifyDetail } = await import('@/mocks/data');
+    const note = 'Too few questions to measure; a sanity check only.';
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/:id`, () =>
+        HttpResponse.json({
+          ...shopifyDetail,
+          quality: { ...shopifyDetail.quality, goldQuestions: 8, note },
+        }),
+      ),
+    );
+    const { unmount } = renderApp('/apis/shopify');
+    const shown = await screen.findByRole('list', { name: 'About this score' });
+    expect(shown).toHaveTextContent(note);
+    unmount();
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/:id`, () =>
+        HttpResponse.json({ ...shopifyDetail, quality: { ...shopifyDetail.quality, note: null } }),
+      ),
+    );
+    renderApp('/apis/shopify');
+    await screen.findAllByText('Top-1 hit rate');
+    expect(screen.queryByRole('list', { name: 'About this score' })).not.toBeInTheDocument();
+  });
+
   it('shows no per-source rows for one source, or when the server does not send them', async () => {
     const { shopifyDetail } = await import('@/mocks/data');
     for (const bySource of [
-      [{ source: 'docs', recallAt5: 0.94, mrr: 0.81, citationHitRate: 0.97, questions: 40 }],
+      [{ source: 'docs', recallAt5: 0.94, mrr: 0.81, top1Rate: 0.97, questions: 40 }],
       undefined,
     ]) {
       server.use(
@@ -68,7 +102,7 @@ describe('API detail', () => {
           quality: {
             ...shopifyDetail.quality,
             inventedEndpoints: null,
-            citationHitRate: 0.88,
+            top1Rate: 0.88,
             factAccuracy: 0.9,
             missingExpected: 2,
           },
@@ -76,7 +110,7 @@ describe('API detail', () => {
       }),
     );
     renderApp('/apis/shopify');
-    expect(await screen.findByText('Citation hit rate')).toBeInTheDocument();
+    expect((await screen.findAllByText('Top-1 hit rate')).length).toBeGreaterThan(0);
     expect(screen.getByText('0.88')).toBeInTheDocument();
     expect(screen.getByText('Fact accuracy')).toBeInTheDocument();
     expect(screen.getByText('Expected docs missing')).toBeInTheDocument();

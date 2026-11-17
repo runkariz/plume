@@ -17,8 +17,8 @@ export function QualityBySource({ rows }: { rows: SourceQuality[] | undefined })
           <th scope="col">Questions</th>
           <th scope="col">Recall@5</th>
           <th scope="col">MRR</th>
-          <th scope="col" title="The first result is an expected one">
-            Top-1 hit
+          <th scope="col" title="Share of questions whose answer ranks first">
+            Top-1 hit rate
           </th>
         </tr>
       </thead>
@@ -33,7 +33,7 @@ export function QualityBySource({ rows }: { rows: SourceQuality[] | undefined })
             </th>
             <td className="mono">{formatScore(r.recallAt5)}</td>
             <td className="mono">{formatScore(r.mrr)}</td>
-            <td className="mono">{formatScore(r.citationHitRate)}</td>
+            <td className="mono">{formatScore(r.top1Rate)}</td>
           </tr>
         ))}
       </tbody>
