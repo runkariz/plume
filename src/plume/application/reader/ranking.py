@@ -118,3 +118,27 @@ def pair_units_with_endpoints(
         rest.insert(0, victim)
         protected.add(candidate)
     return top + rest
+
+
+MIN_ENDPOINTS = 2
+
+
+def keep_endpoints(ranked: Sequence[str], k: int, minimum: int = MIN_ENDPOINTS) -> list[str]:
+    """At least ``minimum`` endpoints in the top-k when the pool has them: the best-ranked
+    endpoints below the top-k replace its lowest-ranked other results (which move to the front
+    of the rest); the top-k keeps the pool's order. Knowledge units outnumber endpoints several
+    times over, and a question about an operation was otherwise answered by guides alone."""
+    top, rest = list(ranked[:k]), list(ranked[k:])
+    have = sum(1 for d in top if d.startswith("endpoint:"))
+    for candidate in [d for d in rest if d.startswith("endpoint:")]:
+        if have >= min(minimum, k):
+            break
+        victim = next((d for d in reversed(top) if not d.startswith("endpoint:")), None)
+        if victim is None:
+            break
+        top[top.index(victim)] = candidate
+        rest.remove(candidate)
+        rest.insert(0, victim)
+        have += 1
+    position = {d: i for i, d in enumerate(ranked)}
+    return sorted(top, key=position.__getitem__) + rest

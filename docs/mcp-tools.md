@@ -7,7 +7,7 @@ DNS-rebinding protection (allowed hosts from `PLUME_MCP_ALLOWED_HOSTS`). Every r
 | Tool | Arguments | Returns |
 |---|---|---|
 | `list_apis` | – | APIs with latest build, tags, counts |
-| `search_docs` | `api, query, kind?, top_k?, version?` | hybrid (vector + full-text, weighted RRF: with a real embedding model k 10 and the vector ranking weighted 5:1, see `PLUME_SEARCH_RRF_K`/`PLUME_SEARCH_DENSE_WEIGHT`) hits, one per document; a knowledge-export page in the top results keeps one of its endpoints right after it (pages are never demoted) |
+| `search_docs` | `api, query, kind?, top_k?, version?` | hybrid (vector + full-text, weighted RRF: with a real embedding model k 10 and the vector ranking weighted 5:1, see `PLUME_SEARCH_RRF_K`/`PLUME_SEARCH_DENSE_WEIGHT`) hits, one per document; a knowledge-export page in the top results keeps one of its endpoints right after it (pages are never demoted); at least two endpoints of the pool stay in the top results |
 | `get_document` | `api, doc_id, version?` | full text, fields, source URL, anchor, citation |
 | `find_fact` | `api, name, kind?, owner?, resource?, location?, version?` | exact matches with evidence, or `found:false` with `checked`, `complete`, `text_mentions` and the wording to use |
 | `check_call` | `api, method, path, params?, version?` | `documented` / `not_documented`, matched endpoint, per-param location |
