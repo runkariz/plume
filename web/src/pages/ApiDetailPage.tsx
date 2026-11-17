@@ -320,7 +320,13 @@ function Detail({ api }: { api: ApiDetail }) {
 export function ApiDetailPage() {
   const { apiId = '' } = useParams();
   const client = useApiClient();
-  const load = useCallback((signal: AbortSignal) => client.getApi(apiId, signal), [client, apiId]);
+  // the manifest warnings come only with the maintainer token: read the API again when the session changes
+  const isMaintainer = useIsMaintainer();
+  const load = useCallback(
+    (signal: AbortSignal) => client.getApi(apiId, signal),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [client, apiId, isMaintainer],
+  );
   const { state, retry } = useAsync(load);
 
   const name = state.status === 'ready' ? state.data.name : 'API';
