@@ -87,7 +87,7 @@ class ReleaseNotes:
         ra, rb = self._evals.get(a), self._evals.get(b)
         if ra is None or rb is None:
             return None
-        keep = ("recall_at_k", "mrr", "fact_accuracy", "citation_hit_rate")
+        keep = ("recall_at_k", "mrr", "fact_accuracy", "top1_rate")
         return {
             side: {k: v for k, v in r.metrics.as_dict().items() if k in keep}
             for side, r in (("before", ra), ("after", rb))

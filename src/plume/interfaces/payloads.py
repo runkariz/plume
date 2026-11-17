@@ -21,6 +21,7 @@ from plume.application.reader.dto import (
     SearchHit,
     SearchResult,
 )
+from plume.domain.eval.metrics import few_questions_note
 from plume.domain.knowledge import rate_limits
 from plume.domain.knowledge.citation import Citation
 from plume.domain.models.canonical_model import CanonicalField
@@ -51,7 +52,15 @@ def api_payload(o: ApiOverview) -> Json:
         "tags": list(o.tags),
         "latest": ref_payload(o.ref) if o.ref else None,
         "counts": o.counts,
-        "quality": ({**o.eval.metrics.as_dict(), "gate_passed": o.eval.passed} if o.eval else None),
+        "quality": (
+            {
+                **o.eval.metrics.as_dict(),
+                "gate_passed": o.eval.passed,
+                "note": few_questions_note(o.eval.metrics.questions),
+            }
+            if o.eval
+            else None
+        ),
     }
 
 

@@ -189,6 +189,9 @@ def test_quality_after_publish(stack: FakeStack, packages: Path) -> None:
     assert item["status"] == {"kind": "ready", "recallAt5": 1.0}
     q = client.get("/v1/apis/test-catalog-api").json()["quality"]
     assert q["goldQuestions"] == 8
+    assert q["note"] == "Too few questions to measure; a sanity check only."  # 8 < 10
+    assert "top1Rate" in q
+    assert "citationHitRate" not in q
     assert q["gatePassed"] is True
     assert q["inventedEndpoints"] is None
     assert [r["source"] for r in q["bySource"]] == ["docs"]  # a set without sources is docs
@@ -223,4 +226,4 @@ def test_quality_per_question_source(packages: Path, tmp_path: Path) -> None:
     assert set(rows) == {"docs", "spec"}
     assert rows["spec"]["questions"] == 2
     assert rows["docs"]["questions"] == len(search) - 2
-    assert set(rows["spec"]) == {"source", "recallAt5", "mrr", "citationHitRate", "questions"}
+    assert set(rows["spec"]) == {"source", "recallAt5", "mrr", "top1Rate", "questions"}

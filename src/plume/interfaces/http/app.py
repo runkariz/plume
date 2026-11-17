@@ -44,6 +44,7 @@ from plume.application.reader.use_cases import (
     ReaderInputError,
     SearchDocs,
 )
+from plume.domain.eval.metrics import few_questions_note
 from plume.domain.knowledge import rate_limits
 from plume.domain.knowledge.api import ApiId
 from plume.domain.shared.errors import DomainError, InvalidIdentifierError
@@ -299,10 +300,11 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 s.Quality(
                     recall_at5=o.eval.metrics.recall_at_k,
                     mrr=o.eval.metrics.mrr,
-                    citation_hit_rate=o.eval.metrics.citation_hit_rate,
+                    top1_rate=o.eval.metrics.top1_rate,
                     fact_accuracy=o.eval.metrics.fact_accuracy,
                     missing_expected=o.eval.metrics.missing_expected,
                     gold_questions=o.eval.metrics.questions,
+                    note=few_questions_note(o.eval.metrics.questions),
                     gate_passed=o.eval.passed,
                     evaluated_at=o.eval.evaluated_at.isoformat(),
                     by_source=[
@@ -310,7 +312,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                             source=name,
                             recall_at5=m.recall_at_k,
                             mrr=m.mrr,
-                            citation_hit_rate=m.citation_hit_rate,
+                            top1_rate=m.top1_rate,
                             questions=m.search_questions,
                         )
                         for name, m in o.eval.metrics.by_source

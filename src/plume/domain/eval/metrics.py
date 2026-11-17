@@ -27,20 +27,36 @@ class QuestionOutcome:
         return None
 
 
+FEW_QUESTIONS = 10  # below this, a gold set is a sanity check, not a measurement
+FEW_QUESTIONS_NOTE = "Too few questions to measure; a sanity check only."
+LEGACY_TOP1 = "citation_hit_rate"  # the old name of top1_rate in stored eval results
+
+
+def _top1(d: dict[str, Any]) -> float:
+    """top1_rate: the share of questions whose first result is an expected one (stored results
+    from before the rename call it citation_hit_rate)."""
+    return float(d["top1_rate"] if "top1_rate" in d else d[LEGACY_TOP1])
+
+
+def few_questions_note(questions: int) -> str | None:
+    """The quality hint for a gold set too small to measure (None otherwise)."""
+    return FEW_QUESTIONS_NOTE if questions < FEW_QUESTIONS else None
+
+
 @dataclass(frozen=True, slots=True)
 class SourceMetrics:
     """Search metrics over the questions of one source (docs or spec), or all of them."""
 
     recall_at_k: float
     mrr: float
-    citation_hit_rate: float
+    top1_rate: float
     search_questions: int
 
     def as_dict(self) -> dict[str, float | int]:
         return {
             "recall_at_k": self.recall_at_k,
             "mrr": self.mrr,
-            "citation_hit_rate": self.citation_hit_rate,
+            "top1_rate": self.top1_rate,
             "search_questions": self.search_questions,
         }
 
@@ -49,7 +65,7 @@ class SourceMetrics:
         return cls(
             recall_at_k=float(d["recall_at_k"]),
             mrr=float(d["mrr"]),
-            citation_hit_rate=float(d["citation_hit_rate"]),
+            top1_rate=_top1(d),
             search_questions=int(d["search_questions"]),
         )
 
@@ -58,7 +74,7 @@ class SourceMetrics:
 class EvalMetrics:
     recall_at_k: float
     mrr: float
-    citation_hit_rate: float
+    top1_rate: float
     fact_accuracy: float
     missing_expected: int
     questions: int
@@ -71,9 +87,7 @@ class EvalMetrics:
 
     @property
     def combined(self) -> SourceMetrics:
-        return SourceMetrics(
-            self.recall_at_k, self.mrr, self.citation_hit_rate, self.search_questions
-        )
+        return SourceMetrics(self.recall_at_k, self.mrr, self.top1_rate, self.search_questions)
 
     def source(self, name: str) -> SourceMetrics | None:
         """The search metrics of ``docs``, ``spec`` or ``combined`` (None: no such questions).
@@ -89,7 +103,7 @@ class EvalMetrics:
         return {
             "recall_at_k": self.recall_at_k,
             "mrr": self.mrr,
-            "citation_hit_rate": self.citation_hit_rate,
+            "top1_rate": self.top1_rate,
             "fact_accuracy": self.fact_accuracy,
             "missing_expected": self.missing_expected,
             "questions": self.questions,
@@ -104,7 +118,7 @@ class EvalMetrics:
         return cls(
             recall_at_k=float(d["recall_at_k"]),
             mrr=float(d["mrr"]),
-            citation_hit_rate=float(d["citation_hit_rate"]),
+            top1_rate=_top1(d),
             fact_accuracy=float(d["fact_accuracy"]),
             missing_expected=int(d["missing_expected"]),
             questions=int(d["questions"]),
@@ -158,7 +172,7 @@ def score(
     return EvalMetrics(
         recall_at_k=combined.recall_at_k,
         mrr=combined.mrr,
-        citation_hit_rate=combined.citation_hit_rate,
+        top1_rate=combined.top1_rate,
         fact_accuracy=round(correct / len(facts), 4) if facts else 1.0,
         missing_expected=sum(len(o.missing_expected) for o in outcomes),
         questions=len(questions),

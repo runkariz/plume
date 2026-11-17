@@ -2,7 +2,13 @@ import pytest
 
 from plume.domain.eval.gate import GatePolicy, decide
 from plume.domain.eval.gold import GoldKind, GoldQuestion, GoldSet
-from plume.domain.eval.metrics import EvalMetrics, QuestionOutcome, SourceMetrics, score
+from plume.domain.eval.metrics import (
+    EvalMetrics,
+    QuestionOutcome,
+    SourceMetrics,
+    few_questions_note,
+    score,
+)
 
 Q = [
     GoldQuestion("a", GoldKind.SEARCH, "q a", ("d1",)),
@@ -24,7 +30,7 @@ def test_score() -> None:
     )
     assert m.recall_at_k == 1.0
     assert m.mrr == pytest.approx((1 + 1 / 3) / 2, abs=1e-4)
-    assert m.citation_hit_rate == 0.5
+    assert m.top1_rate == 0.5
     assert m.fact_accuracy == 1.0
     assert (m.questions, m.search_questions, m.fact_questions) == (4, 2, 2)
 
@@ -99,7 +105,7 @@ def test_metrics_per_source_and_combined() -> None:
     docs, spec = m.source("docs"), m.source("spec")
     assert docs == SourceMetrics(1.0, 0.75, 0.5, 2)
     assert spec == SourceMetrics(0.5, 0.5, 0.5, 2)
-    assert (m.recall_at_k, m.mrr, m.citation_hit_rate) == (0.75, 0.625, 0.5)
+    assert (m.recall_at_k, m.mrr, m.top1_rate) == (0.75, 0.625, 0.5)
     assert m.source("combined") == m.combined
     assert EvalMetrics.from_dict(m.as_dict()) == m
     assert set(m.as_dict()["by_source"]) == {"docs", "spec"}
@@ -143,3 +149,37 @@ def test_gate_reads_the_chosen_source_and_checks_each_for_regression() -> None:
 def test_gold_source_must_be_known() -> None:
     with pytest.raises(ValueError, match="source must be"):
         GoldQuestion("x", GoldKind.SEARCH, "q", ("d",), source="sdk")
+
+
+def test_top1_rate_reads_the_old_stored_name() -> None:
+    old = {
+        "recall_at_k": 0.9,
+        "mrr": 0.8,
+        "citation_hit_rate": 0.7,  # eval results stored before the rename
+        "fact_accuracy": 1.0,
+        "missing_expected": 0,
+        "questions": 12,
+        "search_questions": 10,
+        "fact_questions": 2,
+        "by_source": {
+            "docs": {
+                "recall_at_k": 0.9,
+                "mrr": 0.8,
+                "citation_hit_rate": 0.6,
+                "search_questions": 10,
+            }
+        },
+    }
+    m = EvalMetrics.from_dict(old)
+    assert m.top1_rate == 0.7
+    assert dict(m.by_source)["docs"].top1_rate == 0.6
+    out = m.as_dict()
+    assert out["top1_rate"] == 0.7
+    assert "citation_hit_rate" not in out
+    assert out["by_source"]["docs"]["top1_rate"] == 0.6
+    assert EvalMetrics.from_dict(out) == m
+
+
+def test_few_questions_note() -> None:
+    assert few_questions_note(9) == "Too few questions to measure; a sanity check only."
+    assert few_questions_note(10) is None

@@ -175,7 +175,7 @@ def create_app(deps: CliDependencies) -> typer.Typer:
                 for src, sm in by_source.items():
                     typer.echo(
                         f"    {src} ({sm['search_questions']}): recall@{m['k']} "
-                        f"{sm['recall_at_k']}, MRR {sm['mrr']}, top1 {sm['citation_hit_rate']}"
+                        f"{sm['recall_at_k']}, MRR {sm['mrr']}, top1 {sm['top1_rate']}"
                     )
         if result.tag:
             typer.echo(f"  tag {result.tag.tag} -> {result.build_id}")
