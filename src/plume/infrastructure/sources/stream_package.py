@@ -495,6 +495,10 @@ class StreamPackageSource:
             for path in sorted(export.rglob("*.md")):
                 add(self._export_page(path, export), str(path.relative_to(export)))
 
+        if export.is_dir():
+            documents = _merge_unit_links(
+                documents, knowledge_export.load_unit_links(export), warnings
+            )
         documents = _link_documents(documents, warnings, info.versions)
         documents = _flag_unresolved_includes(documents, warnings)
         manifest = _opt_json(package_root / "manifest.json") or {}
@@ -718,8 +722,11 @@ class StreamPackageSource:
             text=body.strip() or title,
             source_url=_str(meta.get("sourceUrl")),
             source_id=key,
-            # resolved to endpoint document ids by _link_documents once all endpoints are read
-            raw={"endpointIds": linked} if linked else None,
+            # resolved to endpoint document ids by _link_documents once all endpoints are read;
+            # the unit's own links are "text" links (knowledge-export/unit-links.json adds more)
+            raw={"endpointIds": linked, "linkBasis": dict.fromkeys(linked, CONNECTOR_BASIS)}
+            if linked
+            else None,
         )
 
     @staticmethod
@@ -982,7 +989,8 @@ def _apply_export(
                 doc, text=doc.text + "\n\n## Rules\n" + "\n".join(r.line() for r in pending)
             )
             used_rules.update(r.rule_id for r in pending)
-    _attach_resource_rules(out, export, by_source, versions)
+    linked_rules = _attach_linked_rules(out, export, by_source, versions, used_rules)
+    _attach_resource_rules(out, export, by_source, versions, linked_rules)
     for page in export.pages:
         url = page.source_url.rstrip("/")
         page_rules = [
@@ -1014,6 +1022,45 @@ def _unit_endpoint_ids(meta: JsonObj) -> list[str]:
     return list(dict.fromkeys(i.strip() for i in ids if isinstance(i, str) and i.strip()))
 
 
+CONNECTOR_BASIS = "text"  # a unit's own endpointId/endpointIds come from its text
+
+
+def _merge_unit_links(
+    documents: list[Document],
+    links: dict[str, tuple[tuple[str, ...], str]],
+    warnings: list[str],
+) -> list[Document]:
+    """Add ``knowledge-export/unit-links.json``'s page/slug links to the knowledge units. The
+    unit's own (text) links come first and keep their basis; the export only adds endpoints."""
+    if not links:
+        return documents
+    seen: set[str] = set()
+    out = []
+    for doc in documents:
+        entry = links.get(doc.source_id or "") if doc.kind is DocumentKind.GUIDE else None
+        if entry is None or doc.doc_id.startswith("guide:page-"):
+            out.append(doc)
+            continue
+        seen.add(doc.source_id or "")
+        ids, basis = entry
+        raw = dict(doc.raw or {})
+        current = [i for i in raw.get("endpointIds") or [] if isinstance(i, str)]
+        bases = dict(raw.get("linkBasis") or dict.fromkeys(current, CONNECTOR_BASIS))
+        for item in ids:
+            if item not in bases:
+                bases[item] = basis
+                current.append(item)
+        raw.update(endpointIds=current, linkBasis=bases)
+        out.append(replace(doc, raw=raw))
+    unknown = sorted(set(links) - seen)
+    if unknown:
+        warnings.append(
+            f"knowledge-export: unit-links.json names {len(unknown)} unknown unit(s), e.g. "
+            + ", ".join(unknown[:3])
+        )
+    return out
+
+
 def _link_documents(
     documents: list[Document], warnings: list[str], versions: tuple[str, ...]
 ) -> list[Document]:
@@ -1043,19 +1090,23 @@ def _link_unit(
     guides_of: dict[str, list[str]],
     warnings: list[str],
 ) -> Document:
-    ids = doc.raw.get("endpointIds") if doc.kind is DocumentKind.GUIDE and doc.raw else None
+    raw = dict(doc.raw) if doc.kind is DocumentKind.GUIDE and doc.raw else {}
+    ids = raw.get("endpointIds")
     if not isinstance(ids, list) or not ids:
         return doc
-    targets: list[str] = []
+    found = raw.get("linkBasis")
+    bases: dict[str, Any] = found if isinstance(found, dict) else {}
+    basis_of: dict[str, str] = {}
     for item in ids:
         target = by_source.get(endpoint_key(item, versions))
         if target is None:
             warnings.append(f"knowledge {doc.source_id}: unknown endpoint {item}")
             continue
-        targets.append(target)
+        basis_of.setdefault(target, str(bases.get(item) or CONNECTOR_BASIS))
         if doc.doc_id not in guides_of.setdefault(target, []):
             guides_of[target].append(doc.doc_id)
-    return replace(doc, raw={**(doc.raw or {}), "endpoints": list(dict.fromkeys(targets))})
+    links = [{"endpoint": t, "linkBasis": b} for t, b in basis_of.items()]
+    return replace(doc, raw={**raw, "endpoints": list(basis_of), "endpointLinks": links})
 
 
 def _scope_endpoints(documents: list[Document]) -> dict[str, dict[str, list[str]]]:
@@ -1091,6 +1142,36 @@ def _with_links(
     return doc
 
 
+def _attach_linked_rules(
+    out: list[Document],
+    export: "knowledge_export.KnowledgeExport",
+    by_source: dict[str, int],
+    versions: tuple[str, ...],
+    used_rules: set[str],
+) -> set[str]:
+    """A rule's ``endpointIds`` put it into those endpoints (before the resource fallback). An
+    endpoint-scoped rule is then used; a resource rule stays in its page guide too. Returns the
+    ids of the rules placed this way."""
+    lines: dict[int, list[str]] = {}
+    placed: set[str] = set()
+    for rule in export.rules:
+        if rule.rule_id in used_rules or not rule.endpoint_ids:
+            continue
+        for item in rule.endpoint_ids:
+            index = by_source.get(endpoint_key(item, versions))
+            if index is not None:
+                lines.setdefault(index, []).append(rule.line())
+                placed.add(rule.rule_id)
+    for index, rule_lines in lines.items():
+        doc = out[index]
+        text = "## Rules\n" + "\n".join(dict.fromkeys(rule_lines))
+        out[index] = replace(doc, text=doc.text + "\n\n" + text)
+    used_rules.update(
+        r.rule_id for r in export.rules if r.rule_id in placed and r.scope != "resource"
+    )
+    return placed
+
+
 def _resource_key(name: str | None) -> str:
     return re.sub(r"[^a-z0-9]", "", (name or "").lower())
 
@@ -1100,6 +1181,7 @@ def _attach_resource_rules(
     export: "knowledge_export.KnowledgeExport",
     by_source: dict[str, int],
     versions: tuple[str, ...],
+    skip: set[str] | None = None,
 ) -> None:
     """A resource-scoped rule ("the Logistic Centers API requires the .../read scope") also goes
     into the text of the endpoints its page lists for that resource. The page guide keeps it too:
@@ -1108,6 +1190,8 @@ def _attach_resource_rules(
     lines: dict[int, list[str]] = {}
     for rule in export.rules:
         if rule.scope != "resource" or not rule.resource or not rule.source_url:
+            continue
+        if skip and rule.rule_id in skip:  # placed by its endpointIds
             continue
         page = pages.get(rule.source_url.split("#")[0].rstrip("/"))
         if page is None:

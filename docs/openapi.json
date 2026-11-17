@@ -1594,6 +1594,14 @@
             "title": "Docsasof",
             "type": "string"
           },
+          "endpointLinks": {
+            "description": "Knowledge unit: linkedEndpoints with the basis of each link.",
+            "items": {
+              "$ref": "#/components/schemas/EndpointLink"
+            },
+            "title": "Endpointlinks",
+            "type": "array"
+          },
           "errors": {
             "description": "Endpoint errors[] from the package, verbatim.",
             "items": {
@@ -1635,7 +1643,7 @@
             "type": "string"
           },
           "linkedEndpoints": {
-            "description": "Knowledge unit: the endpoints it names (endpointId/endpointIds).",
+            "description": "Knowledge unit: its endpoints (its own endpointId/endpointIds, then the page/slug links of knowledge-export/unit-links.json).",
             "items": {
               "type": "string"
             },
@@ -1862,6 +1870,25 @@
           "issues"
         ],
         "title": "DraftRefused",
+        "type": "object"
+      },
+      "EndpointLink": {
+        "properties": {
+          "endpointId": {
+            "title": "Endpointid",
+            "type": "string"
+          },
+          "linkBasis": {
+            "description": "text (the unit names the endpoint) | page (same documentation page) | slug (matching names), from knowledge-export/unit-links.json",
+            "title": "Linkbasis",
+            "type": "string"
+          }
+        },
+        "required": [
+          "endpointId",
+          "linkBasis"
+        ],
+        "title": "EndpointLink",
         "type": "object"
       },
       "EndpointRef": {

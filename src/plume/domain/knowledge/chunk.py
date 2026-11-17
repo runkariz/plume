@@ -28,7 +28,9 @@ from plume.domain.shared.hashing import ContentHash, content_hash
 # 13: knowledge-export resource rules also go into their page's endpoints of that resource.
 # 14: links in raw (text unchanged): units' endpointId/endpointIds both ways, auth schemes'
 # endpoints per scope from requiredScopes.
-CHUNKER_VERSION = "14"
+# 15: knowledge-export rules with endpointIds go into those endpoints; unit-links.json adds
+#     page/slug unit links (raw only).
+CHUNKER_VERSION = "15"
 DEFAULT_MAX_CHARS = 6000
 _HEADING = re.compile(r"^#{1,3} ", re.MULTILINE)
 

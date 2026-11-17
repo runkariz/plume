@@ -98,6 +98,7 @@ def document_payload(r: DocumentResult) -> Json:
         "required_scopes": links.required_scopes(d),
         "guides": links.linked_guides(d),
         "linked_endpoints": links.linked_endpoints(d),
+        "endpoint_links": links.endpoint_links(d),
         "text": d.text,
         "citation": citation_payload(r.citation),
     }

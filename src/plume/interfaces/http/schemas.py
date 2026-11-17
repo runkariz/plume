@@ -111,6 +111,14 @@ class SourceQuality(Schema):
     questions: int = Field(description="Search questions of this source.")
 
 
+class EndpointLink(Schema):
+    endpoint_id: str
+    link_basis: str = Field(
+        description="text (the unit names the endpoint) | page (same documentation page) | "
+        "slug (matching names), from knowledge-export/unit-links.json"
+    )
+
+
 class Quality(Schema):
     recall_at5: float = Field(description="All search questions (docs and spec combined).")
     mrr: float
@@ -403,7 +411,12 @@ class DocumentOut(Schema):
     )
     linked_endpoints: list[str] = Field(
         default_factory=list,
-        description="Knowledge unit: the endpoints it names (endpointId/endpointIds).",
+        description="Knowledge unit: its endpoints (its own endpointId/endpointIds, then the "
+        "page/slug links of knowledge-export/unit-links.json).",
+    )
+    endpoint_links: list[EndpointLink] = Field(
+        default_factory=list,
+        description="Knowledge unit: linkedEndpoints with the basis of each link.",
     )
     tags: list[str] = Field(default_factory=list)
     responses: list[dict[str, Any]] = Field(
