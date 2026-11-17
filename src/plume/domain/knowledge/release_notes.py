@@ -204,6 +204,8 @@ def _keyed(docs: Iterable[Document]) -> dict[tuple[str, str], Document]:
     for d in docs:
         if d.kind.value not in _DOC_KIND:
             continue  # the app document is package metadata, not API surface
+        if is_export_page(d):
+            continue  # knowledge-export text, not API surface: see docs_updated
         if d.kind is DocumentKind.MODEL:
             out[("model", _model_key(d))] = d
         elif d.kind is DocumentKind.GUIDE:
@@ -211,6 +213,26 @@ def _keyed(docs: Iterable[Document]) -> dict[tuple[str, str], Document]:
         else:
             out[(d.kind.value, d.doc_id)] = d
     return out
+
+
+EXPORT_PAGE_PREFIX = "guide:page-"
+
+
+def is_export_page(d: Document) -> bool:
+    """A guide built from a knowledge-export page (Plume's own reading of the docs)."""
+    return d.kind is DocumentKind.GUIDE and d.doc_id.startswith(EXPORT_PAGE_PREFIX)
+
+
+def docs_updated(old: Sequence[Document], new: Sequence[Document]) -> dict[str, int]:
+    """Knowledge-export pages added, removed and changed between two builds: documentation
+    churn, reported apart from the API changes (a re-run export alone changes no API)."""
+    a = {d.doc_id: _norm(d.text) for d in old if is_export_page(d)}
+    b = {d.doc_id: _norm(d.text) for d in new if is_export_page(d)}
+    return {
+        "added": len(set(b) - set(a)),
+        "removed": len(set(a) - set(b)),
+        "changed": sum(1 for k in set(a) & set(b) if a[k] != b[k]),
+    }
 
 
 _DOC_KIND = {

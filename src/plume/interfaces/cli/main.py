@@ -376,7 +376,7 @@ def create_app(deps: CliDependencies) -> typer.Typer:
                 "extractorChanged",
                 "gold",
             )
-        }
+        } | {"docsUpdated": n.get("docsUpdated")}
         if as_json:
             typer.echo(json.dumps(summary))
             return
@@ -386,6 +386,12 @@ def create_app(deps: CliDependencies) -> typer.Typer:
             f"  {c['confirmed']} confirmed, {c['likely']} likely, {c['suspect']} suspect, "
             f"{c['unknown']} unknown, {c['renamed']} renamed; {c['breaking']} visible breaking"
         )
+        docs = n.get("docsUpdated")
+        if docs and any(docs.values()):
+            typer.echo(
+                f"  documentation pages (not API changes): {docs['added']} added, "
+                f"{docs['changed']} changed, {docs['removed']} removed"
+            )
         if n["needsAttention"]:
             typer.echo(f"  NEEDS ATTENTION: {n['attentionReason']}")
         for g in n["report"]:

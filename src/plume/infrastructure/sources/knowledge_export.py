@@ -146,8 +146,10 @@ def parse_page(path: Path) -> ExportPage:
     source = str(meta.get("source") or "")
     starts: list[tuple[int, int, str, str]] = []  # (start, heading end, item id, anchor)
     for item in meta.get("items") or []:
-        if not isinstance(item, dict) or not item.get("anchor") or not item.get("id"):
+        if not isinstance(item, dict) or not item.get("id"):
             continue
+        if not str(item.get("anchor") or "").lstrip("#").strip():
+            continue  # no anchor, or an empty fragment
         m = _heading_pattern(str(item["anchor"])).search(body)
         if m is not None:
             starts.append((m.start(), m.end(), str(item["id"]), str(item["anchor"])))
@@ -197,7 +199,9 @@ def load(root: Path) -> KnowledgeExport:
                     text=str(r["text"]),
                     quote=str(r["quote"]),
                     source_url=r.get("sourceUrl"),
-                    anchor=r.get("anchor"),
+                    anchor=r.get("anchor")
+                    if str(r.get("anchor") or "").lstrip("#").strip()
+                    else None,
                     confidence=float(conf) if isinstance(conf, int | float) else None,
                     resource=r.get("resource"),
                     endpoint_ids=_id_list(r.get("endpointIds")),

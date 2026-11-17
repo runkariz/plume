@@ -313,3 +313,21 @@ def test_webhook_mechanism_call_values_and_events() -> None:
         ("webhook", "changed", "webhooks.hooks.unsubscribe.idVar", True),
         ("webhook", "removed", "webhooks.hooks.events.b/y", True),
     ]
+
+
+def test_export_pages_are_docs_churn_not_api_changes() -> None:
+    from plume.domain.knowledge.release_notes import docs_updated  # noqa: PLC0415
+
+    def page(slug: str, text: str) -> Document:
+        return Document(f"guide:page-{slug}", DocumentKind.GUIDE, slug, text, source_url=URL)
+
+    def unit(text: str) -> Document:
+        return Document("guide:orders-limits", DocumentKind.GUIDE, "Limits", text)
+
+    ep = _ep([_f("id")])
+    old = [ep, page("orders", "# Orders\nOld rules."), page("gone", "x"), unit("At most 50.")]
+    new = [ep, page("orders", "# Orders\nNew rules."), page("new", "y"), unit("At most 100.")]
+    items = _run(old, new)
+    assert [i["subject"]["docId"] for i in items] == ["guide:orders-limits"]  # units still count
+    assert docs_updated(old, new) == {"added": 1, "removed": 1, "changed": 1}
+    assert docs_updated(old, old) == {"added": 0, "removed": 0, "changed": 0}

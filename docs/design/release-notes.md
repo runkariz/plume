@@ -111,6 +111,9 @@ One record per atomic difference between build A (previous) and build B (new) of
 2. Load the facts and documents of A and B. Match endpoints, then fields per owner, then models
    and properties (by source title), auth schemes and scopes, webhook events (trigger
    documents), and guides (by source URL). Emit one item per difference.
+   Knowledge-export page guides (`guide:page-*`, Plume's reading of the docs pages) are not API
+   surface: a re-run export changes no API, so they give no items, only `docsUpdated`
+   `{added, changed, removed}` (counts of pages) next to `counts`.
 3. Descriptions: report a change only when the normalised text differs. Whitespace, case,
    backticks and Markdown don't count, using the same normalisation as model citations.
 4. Classify every item (section 4), apply the gate (section 5), and store.

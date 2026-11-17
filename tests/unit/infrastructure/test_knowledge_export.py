@@ -179,3 +179,26 @@ def test_resource_rules_reach_the_pages_endpoints_of_that_resource(
         assert "cached for an hour" not in doc.text  # another resource
     guide = next(d for d in pkg.documents if d.doc_id.startswith("guide:page-"))
     assert "coupons/write scope" in guide.text  # the page guide keeps it
+
+
+def test_an_empty_fragment_is_no_anchor() -> None:
+    from plume.infrastructure.sources.stream_package import doc_anchor  # noqa: PLC0415
+
+    assert doc_anchor("#") is None
+    assert doc_anchor(" # ") is None
+    assert doc_anchor("") is None
+    assert doc_anchor(None) is None
+    assert doc_anchor("#list-orders") == "#list-orders"
+
+
+def test_endpoints_with_an_empty_doc_anchor_have_none(packages: Path, tmp_path: Path) -> None:
+    pkg = tmp_path / "woo"
+    shutil.copytree(packages / "woo-mini", pkg)
+    request = pkg / "connector/endpoints/get-wp-json-wc-v3-coupons/request.json"
+    data = json.loads(request.read_text())
+    data.setdefault("provenance", {})["docAnchor"] = "#"
+    request.write_text(json.dumps(data))
+    doc = next(
+        d for d in source.load(str(pkg)).documents if d.source_id == "get-wp-json-wc-v3-coupons"
+    )
+    assert doc.anchor != "#"
