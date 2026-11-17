@@ -636,7 +636,7 @@ class StreamPackageSource:
                 deprecated,
             ),
             source_url=_str(provenance.get("sourceUrl")) or _str(req.get("docLink")),
-            anchor=_str(provenance.get("docAnchor")),
+            anchor=doc_anchor(provenance.get("docAnchor")),
             resource=_str(req.get("resource")),
             method=method,
             path=path,
@@ -932,6 +932,12 @@ def _renamed(model: Document, name: str) -> Document:
     return replace(model, title=name, resource=resource, text=text, source_id=original)
 
 
+def doc_anchor(value: Any) -> str | None:
+    """A page fragment, or None: an empty fragment ("#", "") is no anchor."""
+    text = value.strip() if isinstance(value, str) else ""
+    return text if text.lstrip("#").strip() else None
+
+
 def model_key(name: str) -> str:
     """A gold ``model:<name>`` item (schema title or file stem) as a model document id."""
     return slug_doc_id(DocumentKind.MODEL, _slug(name))
@@ -978,7 +984,9 @@ def _apply_export(
                 extra.append("## Rules\n" + "\n".join(r.line() for r in rules))
                 used_rules.update(r.rule_id for r in rules)
             out[index] = replace(
-                doc, text=doc.text + "\n\n" + "\n\n".join(extra), anchor=doc.anchor or anchor
+                doc,
+                text=doc.text + "\n\n" + "\n\n".join(extra),
+                anchor=doc.anchor or doc_anchor(anchor),
             )
     for scope, rules in rules_by_scope.items():  # endpoint rules whose page section was not found
         index = by_source.get(scope)

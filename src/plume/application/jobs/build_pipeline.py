@@ -88,6 +88,7 @@ class BuildPipeline:
             "from": notes["from"],
             "to": notes["to"],
             "counts": notes["counts"],
+            "docsUpdated": notes.get("docsUpdated"),
             "needsAttention": notes["needsAttention"],
             "attentionReason": notes["attentionReason"],
         }

@@ -22,6 +22,7 @@ from plume.domain.knowledge.release_notes import (
     classify,
     counts,
     diff_documents,
+    docs_updated,
     finish,
     in_text,
     issues_text,
@@ -139,6 +140,7 @@ class ReleaseNotes:
             and meta_a.rules_hash is not None,
             "gold": gold,
             "counts": counts(items),
+            "docsUpdated": docs_updated(old, new),
             "needsAttention": reason is not None,
             "attentionReason": reason,
             # maintainers only: stream's conflicts between sources, and which units it compared
@@ -230,7 +232,7 @@ class ReleaseNotes:
                     "attentionReason",
                 )
             }
-            | {"tagged": latest == n["to"]}
+            | {"tagged": latest == n["to"], "docsUpdated": n.get("docsUpdated")}
             for n in self._notes.for_api(api)
         ]
 
