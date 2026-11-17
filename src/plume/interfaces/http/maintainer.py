@@ -20,6 +20,15 @@ WAIT_SECONDS = 5.0  # max time one wait blocks (then disconnects and job state a
 KEEPALIVE_SECONDS = 15.0
 
 
+def is_maintainer(authorization: str | None, tokens: tuple[str, ...]) -> bool:
+    """True only for a bearer token that matches one of the maintainer tokens (no error: for
+    public routes that add maintainer-only fields)."""
+    scheme, _, token = (authorization or "").partition(" ")
+    if not tokens or scheme.lower() != "bearer" or not token:
+        return False
+    return any(hmac.compare_digest(token.encode(), t.encode()) for t in tokens)
+
+
 def make_auth(tokens: tuple[str, ...]) -> Callable[..., str]:
     def require_maintainer(
         authorization: Annotated[str | None, Header()] = None,

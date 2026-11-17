@@ -5,9 +5,9 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Annotated, Any
 
-from fastapi import FastAPI, HTTPException, Path, Query, Request
+from fastapi import FastAPI, Header, HTTPException, Path, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 from plume import __version__
 from plume.application.errors import (
@@ -52,7 +52,7 @@ from plume.interfaces import payloads
 from plume.interfaces.http import schemas as s
 from plume.interfaces.http.api_display_routes import api_display_router
 from plume.interfaces.http.changes_routes import changes_router
-from plume.interfaces.http.maintainer import maintainer_router
+from plume.interfaces.http.maintainer import is_maintainer, maintainer_router
 from plume.interfaces.http.model_sets_routes import model_sets_router
 from plume.interfaces.http.models_routes import models_router
 from plume.interfaces.http.rate_limit import (
@@ -265,7 +265,24 @@ def create_app(deps: HttpDependencies) -> FastAPI:
         )
 
     @app.get("/v1/apis/{api}", response_model=s.ApiDetail, tags=["reader"], responses=responses)
-    def get_api(api: ApiPath, version: Version = None) -> s.ApiDetail:
+    def get_api(
+        api: ApiPath,
+        version: Version = None,
+        authorization: Annotated[str | None, Header(include_in_schema=False)] = None,
+    ) -> Response:
+        """One API. packageWarnings only for a maintainer bearer token (absent otherwise);
+        notices are public."""
+        maintainer = is_maintainer(authorization, deps.maintainer_tokens)
+        detail = _api_detail(api, version, maintainer)
+        body = detail.model_dump(
+            mode="json", by_alias=True, exclude=None if maintainer else {"package_warnings"}
+        )
+        headers = {"Vary": "Authorization"}  # the body depends on the token
+        if maintainer:
+            headers["Cache-Control"] = "private, no-store"
+        return JSONResponse(body, headers=headers)
+
+    def _api_detail(api: str, version: str | None, maintainer: bool) -> s.ApiDetail:
         o = deps.overviews().one(api, version)
         base = _with_docs(_summary(o))
         if o.ref is None:  # pragma: no cover - one() always resolves a build
@@ -314,17 +331,23 @@ def create_app(deps: HttpDependencies) -> FastAPI:
             ),
             sections=_section_counts(api, version),
             rate_limits=deps.sections().rate_limits(api, version) if deps.sections else [],
-            **_warnings(api, version),
+            **_warnings(api, version, maintainer),
             **_sources(o.ref.build),
         )
 
-    def _warnings(api: str, version: str | None) -> dict[str, Any]:
+    def _warnings(api: str, version: str | None, maintainer: bool) -> dict[str, Any]:
+        """Notices for everyone; the package's own warnings only for a maintainer."""
         if deps.sections is None:
-            return {}
-        found = deps.sections().package_warnings(api, version)
+            return {"package_warnings": [] if maintainer else None}
+        sections = deps.sections()
+        found = sections.package_warnings(api, version) if maintainer else []
         return {
-            "package_warnings": [s.PackageWarningOut(code=w.code, text=w.text) for w in found],
-            "notices": [s.Notice(**n) for n in deps.sections().notices(api, None, version)],
+            "package_warnings": (
+                [s.PackageWarningOut(code=w.code, text=w.text) for w in found]
+                if maintainer
+                else None
+            ),
+            "notices": [s.Notice(**n) for n in sections.notices(api, None, version)],
         }
 
     def _sources(build: str) -> dict[str, Any]:
