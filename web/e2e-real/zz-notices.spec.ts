@@ -8,6 +8,7 @@ import { expectNoSeriousA11y, settle, shotOf, test, THEMES } from '../e2e/helper
  */
 const NOTICES = process.env.PLUME_E2E_NOTICES === 'true';
 const TOKEN = process.env.PLUME_E2E_TOKEN ?? 'pl_dev_local_web_e2e';
+const API = process.env.PLUME_E2E_API_URL ?? 'http://127.0.0.1:18480';
 
 async function signIn(page: Page) {
   await page.goto('/maintainer');
@@ -70,3 +71,23 @@ for (const theme of THEMES) {
     });
   });
 }
+
+test('the server sends packageWarnings only with the maintainer token (notices stay public)', async ({
+  request,
+}) => {
+  test.skip(!NOTICES, 'set PLUME_E2E_NOTICES=true with the Kaufland package loaded');
+  const get = async (headers: Record<string, string>) => {
+    const res = await request.get(`${API}/v1/apis/kaufland`, { headers });
+    expect(res.ok()).toBe(true); // a wrong token is not a 401 here
+    return { body: (await res.json()) as Record<string, unknown>, res };
+  };
+  const reader = await get({});
+  expect('packageWarnings' in reader.body).toBe(false);
+  expect((reader.body.notices as unknown[]).length).toBeGreaterThan(0);
+  expect(reader.res.headers()['vary']).toContain('Authorization');
+  const wrong = await get({ Authorization: 'Bearer pl_not_the_token' });
+  expect('packageWarnings' in wrong.body).toBe(false);
+  const maintainer = await get({ Authorization: `Bearer ${TOKEN}` });
+  expect((maintainer.body.packageWarnings as unknown[]).length).toBe(5);
+  expect(maintainer.res.headers()['cache-control']).toContain('no-store');
+});
