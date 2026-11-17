@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
-import { Card, Chip, EmptyState, ErrorState, LoadingState } from '@/components';
+import { Card, Chip, EmptyState, ErrorState, LoadingState, Notices } from '@/components';
 
 /** The auth schemes of the package (type, grant, header or query parameter, scopes, variables), one card each. */
 export function AuthPanel({ apiId }: { apiId: string }) {
@@ -20,6 +20,7 @@ export function AuthPanel({ apiId }: { apiId: string }) {
           onRetry={retry}
         />
       ) : null}
+      {state.status === 'ready' ? <Notices items={state.data.notices} /> : null}
       {state.status === 'ready' && (!state.data.present || state.data.schemes.length === 0) ? (
         <EmptyState title="Not in this package">
           {state.data.note

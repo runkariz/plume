@@ -2851,3 +2851,44 @@ ul.plain {
 .link-basis {
   font-weight: 500;
 }
+.notices {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 12px;
+}
+.notice {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 14px;
+  border-radius: var(--r);
+  background: var(--warn-soft);
+  color: var(--warn);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+.notice-mark {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  font: 700 12px/15px var(--font-serif);
+  text-align: center;
+}
+.pw-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+.pw-list li {
+  overflow-wrap: anywhere;
+}
+.package-warnings .show-all {
+  padding-top: 8px;
+}

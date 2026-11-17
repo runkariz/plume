@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
-import { Card, Chip } from '@/components';
+import { Card, Chip, Notices } from '@/components';
 
 /**
  * Where the API lives (environments with their base URLs) and how it is versioned, from the package. It renders
@@ -18,10 +18,13 @@ export function EnvironmentsCard({ apiId }: { apiId: string }) {
   const { present, environments, versioning } = state.data;
   // the current version is usually also in the list of versions: say it once
   const others = (versioning?.versions ?? []).filter((v) => v !== versioning?.current);
-  if (!present || (environments.length === 0 && !versioning)) return null;
+  const notices = state.data.notices ?? [];
+  // a note about the environments is shown even when the package lists none: it may say why
+  if ((!present || (environments.length === 0 && !versioning)) && notices.length === 0) return null;
   return (
     <Card className="pad" role="region" aria-label="Environments">
       <h2 className="h2-sm">Environments</h2>
+      <Notices items={notices} />
       <ul className="sec-list">
         {environments.map((e, i) => (
           <li key={`${e.key ?? e.name ?? i}`} className="sec-item env-item">

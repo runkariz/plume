@@ -103,6 +103,14 @@ export function authFor(api: string): AuthList {
           variables: 1,
         },
       ],
+      // a note about the package's auth, as the server words it (mock text)
+      notices: [
+        {
+          code: 'auth-requires-signature',
+          section: 'auth',
+          text: 'Every request must be signed (see the setup text); there is no ready auth option yet.',
+        },
+      ],
     };
   return { api, build: BUILD, present: false, note: 'not in this package', schemes: [] };
 }
@@ -388,6 +396,13 @@ export function environmentsFor(api: string): EnvironmentsOut {
       },
       baseUrls: ['https://{{app_env.vars.host}}'],
       variablesSchema: null,
+      notices: [
+        {
+          code: 'default-environment-by-order',
+          section: 'environments',
+          text: 'The package does not say which environment is the default; the first one listed is used.',
+        },
+      ],
     };
   return {
     api,

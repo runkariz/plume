@@ -176,6 +176,22 @@ export const shopifyDetail: ApiDetail = {
       { source: 'spec', recallAt5: 0.91, mrr: 0.76, citationHitRate: 0.93, questions: 14 },
     ],
   },
+  packageWarnings: [
+    {
+      code: 'default-environment-by-order',
+      text: 'default-environment-by-order: 2 environments, none marked default',
+    },
+    { code: 'knowledge-links', text: 'knowledge-links: 3 units with endpointId' },
+    {
+      code: 'unknown-endpoint',
+      text: 'unknown-endpoint: knowledge unit pagination names an endpoint that is not in the package',
+    },
+    { code: 'icon-missing', text: 'icon-missing: no connector/icon.* in the package' },
+    {
+      code: 'partial-model',
+      text: 'partial-model: 4 models are marked incomplete (x-complete false)',
+    },
+  ],
   index: {
     embedding: 'gemini-embedding-001',
     dimensions: 768,

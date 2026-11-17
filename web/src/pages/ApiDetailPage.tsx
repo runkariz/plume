@@ -22,8 +22,10 @@ import {
   Metric,
   Segmented,
   Tile,
+  PackageWarningsCard,
   RateLimitsCard,
 } from '@/components';
+import { useIsMaintainer } from '@/app/authStore';
 import { DocsUpdatedBadge } from '@/components/DocsUpdatedBadge';
 import { QualityBySource } from '@/components/QualityBySource';
 import { SourcesLine } from '@/components/SourcesLine';
@@ -138,6 +140,7 @@ function Browse({ api }: { api: ApiSummary }) {
 }
 
 function Detail({ api }: { api: ApiDetail }) {
+  const isMaintainer = useIsMaintainer();
   const client = useApiClient();
   const [params, setParams] = useSearchParams();
   const raw = params.get('section');
@@ -298,6 +301,7 @@ function Detail({ api }: { api: ApiDetail }) {
           </Card>
           <RateLimitsCard limits={api.rateLimits} />
           <EnvironmentsCard apiId={api.id} />
+          {isMaintainer ? <PackageWarningsCard warnings={api.packageWarnings} /> : null}
           <ModelList api={api.id} title="Canonical models" />
           <Card className="pad" id="connect">
             <h2 style={{ marginBottom: 12 }}>Connect</h2>
