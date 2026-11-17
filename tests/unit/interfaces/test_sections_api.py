@@ -13,6 +13,7 @@ from plume.interfaces.http.app import HttpDependencies, create_app
 from plume.interfaces.mcp.reader_server import McpReaderDependencies, create_reader_server
 from tests.fakes.knowledge import WordEmbedder
 from tests.fakes.stack import FakeStack
+from tests.unit.infrastructure.test_manifest_warnings import warned_package
 from tests.unit.infrastructure.test_trigger_payload import payload_package
 
 
@@ -344,3 +345,83 @@ async def test_mcp_get_trigger_carries_the_payload(packages: Path, tmp_path: Pat
         assert {f["name"] for f in trig["payload"]["fields"]} >= {"id", "line_items[].sku"}
         listed = await client.call_tool("list_triggers", {"api": "shopify"})
         assert all("payload" not in t for t in (listed.structured_content or {})["triggers"])
+
+
+def _warned_stack(packages: Path, tmp_path: Path) -> FakeStack:
+    s = FakeStack(embedder=WordEmbedder())
+    s.load(str(warned_package(packages, tmp_path)))
+    s.load(str(packages / "woo-mini"))
+    return s
+
+
+def test_package_warnings_and_notices_over_http(packages: Path, tmp_path: Path) -> None:
+    stack = _warned_stack(packages, tmp_path)
+    http = TestClient(
+        create_app(
+            HttpDependencies(
+                overviews=stack.overviews,
+                browse=stack.browse,
+                search=stack.search,
+                get_document=stack.get_document,
+                find_fact=stack.find_fact,
+                check_call=stack.check_call,
+                list_builds=lambda: ListBuilds(stack.builds, stack.tags),
+                diff_builds=lambda: DiffBuilds(stack.builds),
+                resolver=stack.resolver,
+                sections=stack.sections,
+                rate_limit_per_minute=0,
+            )
+        )
+    )
+    detail = http.get("/v1/apis/shopify").json()
+    assert [w["code"] for w in detail["packageWarnings"]] == [
+        "auth-requires-signature",
+        "default-environment-by-order",
+        "knowledge-links",
+    ]
+    assert detail["packageWarnings"][2]["text"] == "knowledge-links: 3 units with endpointId"
+    assert [(n["code"], n["section"]) for n in detail["notices"]] == [
+        ("auth-requires-signature", "auth"),
+        ("default-environment-by-order", "environments"),
+    ]
+    auth = http.get("/v1/apis/shopify/auth").json()
+    assert [n["code"] for n in auth["notices"]] == ["auth-requires-signature"]
+    assert auth["notices"][0]["text"].startswith("Every request must be signed")
+    env = http.get("/v1/apis/shopify/environments").json()
+    assert [n["code"] for n in env["notices"]] == ["default-environment-by-order"]
+    woo = http.get("/v1/apis/woocommerce").json()
+    assert woo["packageWarnings"] == []
+    assert woo["notices"] == []
+    assert http.get("/v1/apis/woocommerce/auth").json()["notices"] == []
+
+
+@pytest.mark.anyio
+async def test_mcp_tools_carry_the_notices(packages: Path, tmp_path: Path) -> None:
+    stack = _warned_stack(packages, tmp_path)
+    server = create_reader_server(
+        McpReaderDependencies(
+            overviews=stack.overviews,
+            search=stack.search,
+            get_document=stack.get_document,
+            find_fact=stack.find_fact,
+            check_call=stack.check_call,
+            list_builds=lambda: ListBuilds(stack.builds, stack.tags),
+            diff_builds=lambda: DiffBuilds(stack.builds),
+            resolver=stack.resolver,
+            sections=stack.sections,
+        )
+    )
+
+    async def call(client: Client, tool: str, **args: Any) -> dict[str, Any]:
+        result = await client.call_tool(tool, args)
+        assert not result.is_error, result.content
+        return dict(result.structured_content or {})
+
+    async with Client(server) as client:
+        apis = {a["api"]: a for a in (await call(client, "list_apis"))["apis"]}
+        assert [n["section"] for n in apis["shopify"]["notices"]] == ["auth", "environments"]
+        assert apis["woocommerce"]["notices"] == []
+        auth = await call(client, "list_auth_schemes", api="shopify")
+        assert [n["code"] for n in auth["notices"]] == ["auth-requires-signature"]
+        env = await call(client, "get_environments", api="shopify")
+        assert [n["code"] for n in env["notices"]] == ["default-environment-by-order"]

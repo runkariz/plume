@@ -33,7 +33,8 @@ from plume.domain.shared.hashing import ContentHash, content_hash
 # 16: an empty page fragment ("#") is no anchor (endpoint docAnchor, export items and rules).
 # 17: trigger events read payloadSchemaRef / sampleRef (payload fields or model in the text);
 #     events/*.payload.{schema,sample}.json are companions, not triggers.
-CHUNKER_VERSION = "17"
+# 18: manifest.json warnings kept on the app document (raw only; text unchanged).
+CHUNKER_VERSION = "18"
 DEFAULT_MAX_CHARS = 6000
 _HEADING = re.compile(r"^#{1,3} ", re.MULTILINE)
 

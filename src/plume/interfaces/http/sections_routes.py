@@ -12,6 +12,7 @@ from plume.application.reader.sections import (
     scheme_view,
     trigger_view,
 )
+from plume.domain.knowledge.package_warnings import AUTH, ENVIRONMENTS
 from plume.interfaces.http import schemas as s
 
 NOT_IN_PACKAGE = "not in this package"
@@ -59,6 +60,7 @@ def sections_router(sections: Callable[[], PackageSections]) -> APIRouter:
             present=bool(views),
             note=None if views else NOT_IN_PACKAGE,
             schemes=[_scheme_summary(v) for v in views],
+            notices=[s.Notice(**n) for n in sections().notices(api, AUTH, version)],
         )
 
     @router.get(
@@ -104,6 +106,7 @@ def sections_router(sections: Callable[[], PackageSections]) -> APIRouter:
             versioning=env["versioning"] if isinstance(env["versioning"], dict) else None,
             base_urls=env["base_urls"] if isinstance(env["base_urls"], list) else None,
             variables_schema=env["variables_schema"],
+            notices=[s.Notice(**n) for n in sections().notices(api, ENVIRONMENTS, version)],
         )
 
     @router.get("/v1/apis/{api}/triggers", response_model=s.TriggerList, responses=errors)

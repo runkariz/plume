@@ -6,16 +6,16 @@ DNS-rebinding protection (allowed hosts from `PLUME_MCP_ALLOWED_HOSTS`). Every r
 
 | Tool | Arguments | Returns |
 |---|---|---|
-| `list_apis` | – | APIs with latest build, tags, counts |
+| `list_apis` | – | APIs with latest build, tags, counts and `notices` [{code, section, text}] for package warnings Plume knows (signed requests, no default environment) |
 | `search_docs` | `api, query, kind?, top_k?, version?` | hybrid (vector + full-text, weighted RRF: with a real embedding model k 10 and the vector ranking weighted 5:1, see `PLUME_SEARCH_RRF_K`/`PLUME_SEARCH_DENSE_WEIGHT`) hits, one per document; a knowledge-export page in the top results keeps one of its endpoints right after it (pages are never demoted); at least two endpoints of the pool stay in the top results |
 | `get_document` | `api, doc_id, version?` | full text, fields, source URL, anchor, citation |
 | `find_fact` | `api, name, kind?, owner?, resource?, location?, version?` | exact matches with evidence, or `found:false` with `checked`, `complete`, `text_mentions` and the wording to use |
 | `check_call` | `api, method, path, params?, version?` | `documented` / `not_documented`, matched endpoint, per-param location |
 | `list_builds` | `api` | builds (newest first) with tags |
 | `diff_builds` | `api, from_version, to_version?, limit?` | added / changed / removed chunk ids |
-| `list_auth_schemes` / `get_auth_scheme` | `api[, scheme_id], version?` | auth schemes as the package states them; detail = the auth JSON + variables schema verbatim |
+| `list_auth_schemes` / `get_auth_scheme` | `api[, scheme_id], version?` | auth schemes as the package states them; detail = the auth JSON + variables schema verbatim; the list carries auth `notices` |
 | `list_triggers` / `get_trigger` | `api[, key], version?` | trigger events / webhook topics; `present: false` when the package has none. `get_trigger` adds `payload`: the event's payload schema fields (like a model's), schema and sample, or the connector `model` its ref names; null when the event has no refs |
-| `get_environments` | `api, version?` | environments, base URLs, versioning and the variables schema, verbatim |
+| `get_environments` | `api, version?` | environments, base URLs, versioning and the variables schema, verbatim, plus environment `notices` |
 | `get_vendor_mcp` | `api, version?` | the vendor's own MCP server(s) and tools when the package lists them; `present: false` otherwise |
 | `start_set_session` / `get_set_context` / `get_set_session` | `apis, concepts, aliases?` / `set_session` | a model set: pinned builds, one model session per member, relation candidates. **Ask the user about every relation** |
 | `submit_model_set` / `get_model_set` / `revise_model_set` | `set_session, draft, based_on?` / `set_id` | the set (members + relations, validated); `get_model_set` renders the view |
