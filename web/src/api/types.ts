@@ -129,6 +129,10 @@ export interface ApiDetail extends ApiSummary {
     /** The same scores per question source the gold set has; one "docs" row when it has no sources. Absent on older servers. */
     bySource?: SourceQuality[];
   } | null;
+  /** All the warnings of the package's manifest (the server sends them to everyone; the page shows them to maintainers). */
+  packageWarnings?: PackageWarning[];
+  /** Notices for the sections of the API; the auth and environments sections show their own. */
+  notices?: Notice[];
   index: {
     embedding: string | null;
     dimensions: number | null;
@@ -884,6 +888,22 @@ export interface AuthList {
   /** "not in this package" when absent. */
   note: string | null;
   schemes: AuthSchemeSummary[];
+  /** What the package's warnings mean for this section; absent on older servers. */
+  notices?: Notice[];
+}
+
+/** A user-facing note about a package (from its warnings), with the section it applies to. Untrusted text. */
+export interface Notice {
+  code: string;
+  /** "auth" or "environments". */
+  section: string;
+  text: string;
+}
+
+/** One warning of the package's manifest.json, verbatim (maintainer view). */
+export interface PackageWarning {
+  code: string;
+  text: string;
 }
 
 export interface AuthSchemeDetail {
@@ -985,6 +1005,7 @@ export interface EnvironmentsOut {
   versioning: { format?: string; scheme?: string; current?: string; versions?: string[] } | null;
   baseUrls: string[] | null;
   variablesSchema: Record<string, unknown> | null;
+  notices?: Notice[];
 }
 
 /** GET /v1/apis/{api}/mcp: only when the vendor runs an MCP server. Docs-only packages have none (present=false). */
