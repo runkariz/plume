@@ -103,11 +103,14 @@ class Connect(Schema):
     mcp_url: str
 
 
+TOP1 = "Top-1 hit rate: the share of questions whose answer ranks first."
+
+
 class SourceQuality(Schema):
     source: str = Field(description="docs | spec")
     recall_at5: float
     mrr: float
-    citation_hit_rate: float = Field(description="Top-1: the first result is an expected one.")
+    top1_rate: float = Field(description=TOP1)
     questions: int = Field(description="Search questions of this source.")
 
 
@@ -122,7 +125,7 @@ class EndpointLink(Schema):
 class Quality(Schema):
     recall_at5: float = Field(description="All search questions (docs and spec combined).")
     mrr: float
-    citation_hit_rate: float
+    top1_rate: float = Field(description=TOP1)
     fact_accuracy: float
     invented_endpoints: int | None = Field(
         default=None, description="Not measured yet (Level 2 with Claude); always null."
@@ -135,6 +138,11 @@ class Quality(Schema):
         default_factory=list,
         description="The same metrics per question source (docs, spec), for the sources the "
         "gold set has; the fields above are over all of them.",
+    )
+    note: str | None = Field(
+        default=None,
+        description='"Too few questions to measure; a sanity check only." when the gold set '
+        "has fewer than 10 questions; null otherwise.",
     )
 
 

@@ -3377,10 +3377,6 @@
             "title": "Bysource",
             "type": "array"
           },
-          "citationHitRate": {
-            "title": "Citationhitrate",
-            "type": "number"
-          },
           "evaluatedAt": {
             "title": "Evaluatedat",
             "type": "string"
@@ -3417,16 +3413,33 @@
             "title": "Mrr",
             "type": "number"
           },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "\"Too few questions to measure; a sanity check only.\" when the gold set has fewer than 10 questions; null otherwise.",
+            "title": "Note"
+          },
           "recallAt5": {
             "description": "All search questions (docs and spec combined).",
             "title": "Recallat5",
+            "type": "number"
+          },
+          "top1Rate": {
+            "description": "Top-1 hit rate: the share of questions whose answer ranks first.",
+            "title": "Top1Rate",
             "type": "number"
           }
         },
         "required": [
           "recallAt5",
           "mrr",
-          "citationHitRate",
+          "top1Rate",
           "factAccuracy",
           "missingExpected",
           "goldQuestions",
@@ -3948,11 +3961,6 @@
       },
       "SourceQuality": {
         "properties": {
-          "citationHitRate": {
-            "description": "Top-1: the first result is an expected one.",
-            "title": "Citationhitrate",
-            "type": "number"
-          },
           "mrr": {
             "title": "Mrr",
             "type": "number"
@@ -3970,13 +3978,18 @@
             "description": "docs | spec",
             "title": "Source",
             "type": "string"
+          },
+          "top1Rate": {
+            "description": "Top-1 hit rate: the share of questions whose answer ranks first.",
+            "title": "Top1Rate",
+            "type": "number"
           }
         },
         "required": [
           "source",
           "recallAt5",
           "mrr",
-          "citationHitRate",
+          "top1Rate",
           "questions"
         ],
         "title": "SourceQuality",

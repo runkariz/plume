@@ -434,7 +434,7 @@ class MaintainerJobs:
         keys: list[tuple[str, str, str]] = [
             ("recall_at_k", f"Recall@{record.metrics.k}", "up"),
             ("mrr", "MRR", "up"),
-            ("citation_hit_rate", "Top-1 citation hit", "up"),
+            ("top1_rate", "Top-1 hit rate", "up"),
             ("fact_accuracy", "Fact accuracy", "up"),
             ("missing_expected", "Missing expected docs", "down"),
         ]
