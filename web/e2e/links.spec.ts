@@ -25,7 +25,8 @@ for (const theme of THEMES) {
     test('a guide lists the endpoints it is about', async ({ page }) => {
       await page.goto(`/apis/shopify/documents/${GUIDE}`);
       const card = page.getByRole('region', { name: 'About these endpoints' });
-      await expect(card.getByRole('link')).toHaveCount(2);
+      await expect(card.getByRole('link')).toHaveCount(3);
+      await expect(card).toContainText('same docs page');
       await settle(page);
       await expectNoSeriousA11y(page);
       await shotOf(card, 'w28-guide-endpoints', theme);

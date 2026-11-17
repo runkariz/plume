@@ -4,7 +4,8 @@ import { expectNoSeriousA11y, settle, shotOf, test, THEMES } from '../e2e/helper
 /**
  * The links a package states, as the real API sends them: an endpoint's required scopes per auth scheme and its
  * guides, a guide's endpoints, a scope's endpoints. Needs a Shopify package whose knowledge units carry
- * endpointId/endpointIds and whose products endpoint has requiredScopes with an authId: PLUME_E2E_LINKS=true.
+ * endpointId/endpointIds and whose products endpoint has requiredScopes with an authId, and a WooCommerce copy whose
+ * unit `authentication` has endpointId and a knowledge-export/unit-links.json page link: PLUME_E2E_LINKS=true.
  */
 const API = process.env.PLUME_E2E_API_URL ?? 'http://127.0.0.1:18480';
 const LINKS = process.env.PLUME_E2E_LINKS === 'true';
@@ -57,6 +58,27 @@ for (const theme of THEMES) {
       await expect(page).toHaveURL(
         new RegExp(encodeURIComponent(CREATE).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
       );
+    });
+
+    test('a guide says why each endpoint is linked (text, then page)', async ({
+      page,
+      request,
+    }) => {
+      // WooCommerce copy with a unit that names an endpoint and a unit-links.json page link for the same unit
+      const body = (await (
+        await request.get(
+          `${API}/v1/apis/woocommerce/documents/${encodeURIComponent('guide:authentication')}`,
+        )
+      ).json()) as { endpointLinks: { linkBasis: string }[] };
+      expect(body.endpointLinks.map((l) => l.linkBasis)).toEqual(['text', 'page']);
+      await page.goto(`/apis/woocommerce/documents/${encodeURIComponent('guide:authentication')}`);
+      const card = page.getByRole('region', { name: 'About these endpoints' });
+      await expect(card.getByRole('link')).toHaveCount(2);
+      await expect(card).toContainText('names it');
+      await expect(card).toContainText('same docs page');
+      await settle(page);
+      await expectNoSeriousA11y(page);
+      await shotOf(card, 'w30-real-link-basis', theme);
     });
 
     test('the auth scheme shows the endpoints of the scopes that name them', async ({ page }) => {

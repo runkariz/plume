@@ -778,6 +778,15 @@ export interface DocumentOut {
   guides?: string[];
   /** Guide: the endpoints it is about, as document ids. */
   linkedEndpoints?: string[];
+  /** Guide: the same endpoints with why each is linked (text | page | slug); absent on older servers. */
+  endpointLinks?: EndpointLinkOut[];
+}
+
+/** One endpoint a guide is linked to, and the basis of the link. */
+export interface EndpointLinkOut {
+  endpointId: string;
+  /** "text": the guide names the endpoint; "page": same docs page; "slug": matching names. Others are shown as sent. */
+  linkBasis: string;
 }
 
 /** The scopes an endpoint needs under one auth scheme, verbatim from the package. */
