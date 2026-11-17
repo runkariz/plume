@@ -10,7 +10,7 @@ from plume.application.ports.search_index import SearchIndex
 from plume.application.reader.dto import BuildRef
 from plume.application.reader.links import scope_endpoints
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
-from plume.domain.knowledge import rate_limits
+from plume.domain.knowledge import package_warnings, rate_limits
 from plume.domain.knowledge.asset import ICON, Asset
 from plume.domain.knowledge.document import TRIGGER_PAYLOAD_KEY, Document, DocumentKind
 
@@ -81,6 +81,20 @@ class PackageSections:
         """app.json rateLimits[] verbatim (empty when the package states none)."""
         r = self._resolver.resolve(api, version)
         return rate_limits.groups(self._app_raw(r).get("app"))
+
+    def package_warnings(
+        self, api: str, version: str | None = None
+    ) -> list[package_warnings.PackageWarning]:
+        """manifest.json warnings of the build's package (all codes; maintainer view)."""
+        r = self._resolver.resolve(api, version)
+        return package_warnings.parse(self._app_raw(r).get("package_warnings"))
+
+    def notices(
+        self, api: str, section: str | None = None, version: str | None = None
+    ) -> list[dict[str, str]]:
+        """User-facing notices for the package warnings Plume knows ({code, section, text})."""
+        found = package_warnings.notices(self.package_warnings(api, version), section)
+        return [{"code": n.code, "section": n.section, "text": n.text} for n in found]
 
     def webhooks(self, api: str, version: str | None = None) -> list[dict[str, Any]]:
         """connector/triggers/webhooks/*.json (the delivery mechanism), verbatim."""

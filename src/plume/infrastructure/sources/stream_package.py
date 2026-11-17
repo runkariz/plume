@@ -505,10 +505,20 @@ class StreamPackageSource:
         documents = _link_documents(documents, warnings, info.versions)
         documents = _flag_unresolved_includes(documents, warnings)
         manifest = _opt_json(package_root / "manifest.json") or {}
+        produced = manifest.get("warnings")
+        if isinstance(produced, list):  # the producer's own warnings, on the app document
+            app_index = next(i for i, d in enumerate(documents) if d.kind is DocumentKind.APP)
+            app_raw = {**(documents[app_index].raw or {}), "package_warnings": produced}
+            documents[app_index] = replace(documents[app_index], raw=app_raw)
         return SourcePackage(
             api=info,
             documents=tuple(documents),
-            package_hash=self._hash(connector, export if export.is_dir() else None, extra_hashed),
+            package_hash=self._hash(
+                connector,
+                export if export.is_dir() else None,
+                extra_hashed,
+                produced if isinstance(produced, list) else None,
+            ),
             source_ref=str(package_root),
             run_id=_str(manifest.get("runId")),
             contract_version=contract_version,
@@ -519,8 +529,18 @@ class StreamPackageSource:
     # -- pieces --------------------------------------------------------------------------------
 
     @staticmethod
-    def _hash(connector: Path, export: Path | None, extra: list[Path] | None = None) -> str:
+    def _hash(
+        connector: Path,
+        export: Path | None,
+        extra: list[Path] | None = None,
+        manifest_warnings: list[Any] | None = None,
+    ) -> str:
+        """The bytes Plume reads. Of manifest.json only its warnings count (run ids and
+        timestamps do not); a package without warnings hashes as before."""
         digest = hashlib.sha256()
+        if manifest_warnings:
+            digest.update(b"manifest/warnings\0")
+            digest.update(json.dumps(manifest_warnings, sort_keys=True).encode())
         for path in extra or []:  # files outside connector/ that Plume reads (e.g. _icon/)
             digest.update(f"extra/{path.name}\0".encode())
             digest.update(path.read_bytes())

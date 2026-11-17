@@ -150,6 +150,17 @@ class SourceRef(Schema):
     fetched_at: str | None = None
 
 
+class PackageWarningOut(Schema):
+    code: str = Field(description='The text before the first ":".')
+    text: str = Field(description="The producer's warning, verbatim.")
+
+
+class Notice(Schema):
+    code: str = Field(description="The package warning code it comes from.")
+    section: str = Field(description='Where it applies: "auth" or "environments".')
+    text: str = Field(description="What to tell the user.")
+
+
 class ApiDetail(ApiSummary):
     chunks: int
     is_live: bool
@@ -173,6 +184,14 @@ class ApiDetail(ApiSummary):
         default_factory=list,
         description="app.json rateLimits[] verbatim (scope, group, limit, windowSeconds, "
         "algorithm, notes, ...); empty when the package states none.",
+    )
+    package_warnings: list[PackageWarningOut] = Field(
+        default_factory=list,
+        description="manifest.json warnings, all of them (maintainer view).",
+    )
+    notices: list[Notice] = Field(
+        default_factory=list,
+        description="User-facing notices for the warning codes Plume knows, with their section.",
     )
 
 
@@ -759,6 +778,9 @@ class AuthList(Schema):
     present: bool
     note: str | None
     schemes: list[AuthSchemeSummary]
+    notices: list[Notice] = Field(
+        default_factory=list, description="User-facing notices about auth (package warnings)."
+    )
 
 
 class AuthSchemeDetail(Schema):
@@ -870,6 +892,10 @@ class EnvironmentsOut(Schema):
     base_urls: list[str] | None
     variables_schema: dict[str, Any] | None = Field(
         description="connector/environment.variables.schema.json, verbatim."
+    )
+    notices: list[Notice] = Field(
+        default_factory=list,
+        description="User-facing notices about environments (package warnings).",
     )
 
 

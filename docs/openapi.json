@@ -145,6 +145,22 @@
             "title": "Namesource",
             "type": "string"
           },
+          "notices": {
+            "description": "User-facing notices for the warning codes Plume knows, with their section.",
+            "items": {
+              "$ref": "#/components/schemas/Notice"
+            },
+            "title": "Notices",
+            "type": "array"
+          },
+          "packageWarnings": {
+            "description": "manifest.json warnings, all of them (maintainer view).",
+            "items": {
+              "$ref": "#/components/schemas/PackageWarningOut"
+            },
+            "title": "Packagewarnings",
+            "type": "array"
+          },
           "quality": {
             "anyOf": [
               {
@@ -526,6 +542,14 @@
               }
             ],
             "title": "Note"
+          },
+          "notices": {
+            "description": "User-facing notices about auth (package warnings).",
+            "items": {
+              "$ref": "#/components/schemas/Notice"
+            },
+            "title": "Notices",
+            "type": "array"
           },
           "present": {
             "title": "Present",
@@ -1972,6 +1996,14 @@
             ],
             "title": "Note"
           },
+          "notices": {
+            "description": "User-facing notices about environments (package warnings).",
+            "items": {
+              "$ref": "#/components/schemas/Notice"
+            },
+            "title": "Notices",
+            "type": "array"
+          },
           "present": {
             "title": "Present",
             "type": "boolean"
@@ -3182,6 +3214,52 @@
           "summary"
         ],
         "title": "NotModeled",
+        "type": "object"
+      },
+      "Notice": {
+        "properties": {
+          "code": {
+            "description": "The package warning code it comes from.",
+            "title": "Code",
+            "type": "string"
+          },
+          "section": {
+            "description": "Where it applies: \"auth\" or \"environments\".",
+            "title": "Section",
+            "type": "string"
+          },
+          "text": {
+            "description": "What to tell the user.",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "section",
+          "text"
+        ],
+        "title": "Notice",
+        "type": "object"
+      },
+      "PackageWarningOut": {
+        "properties": {
+          "code": {
+            "description": "The text before the first \":\".",
+            "title": "Code",
+            "type": "string"
+          },
+          "text": {
+            "description": "The producer's warning, verbatim.",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "text"
+        ],
+        "title": "PackageWarningOut",
         "type": "object"
       },
       "ParamCheck": {

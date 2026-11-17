@@ -34,6 +34,7 @@ from plume.application.reader.use_cases import (
     SearchDocs,
 )
 from plume.domain.knowledge.api import ApiId
+from plume.domain.knowledge.package_warnings import AUTH, ENVIRONMENTS
 from plume.domain.shared.errors import DomainError
 from plume.interfaces import payloads
 from plume.interfaces.mcp.apps.model_view import (
@@ -113,10 +114,20 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
 
     @server.tool(annotations=READ_ONLY, structured_output=True)
     async def list_apis() -> dict[str, Any]:
-        """List the APIs Plume knows, with their latest build, tags and document counts."""
-        return await _run(
-            lambda: {"apis": [payloads.api_payload(o) for o in deps.overviews().execute()]}
-        )
+        """List the APIs Plume knows, with their latest build, tags and document counts.
+        notices: what to tell the user before they connect (e.g. requests must be signed;
+        choose a region), each with the section it concerns."""
+
+        def run() -> dict[str, Any]:
+            apis = []
+            for o in deps.overviews().execute():
+                item = payloads.api_payload(o)
+                if deps.sections is not None and o.ref is not None:
+                    item["notices"] = deps.sections().notices(o.info.api_id.value)
+                apis.append(item)
+            return {"apis": apis}
+
+        return await _run(run)
 
     @server.tool(annotations=READ_ONLY, structured_output=True)
     async def search_docs(
@@ -239,7 +250,8 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
         @server.tool(annotations=READ_ONLY, structured_output=True)
         async def list_auth_schemes(api: str, version: str | None = None) -> dict[str, Any]:
             """Auth schemes as the package states them (type, header/query parameter, scopes,
-            variables). present=false when the package documents none."""
+            variables). present=false when the package documents none. notices: tell the user
+            (e.g. every request must be signed)."""
 
             def run() -> dict[str, Any]:
                 ref, docs = sections().auth_schemes(api, version)
@@ -264,6 +276,7 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
                         }
                         for v in views
                     ],
+                    "notices": sections().notices(api, AUTH, version),
                 }
 
             return await _run(run)
@@ -299,7 +312,8 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
 
             def run() -> dict[str, Any]:
                 ref, env = sections().environments(api, version)
-                return {**payloads.ref_payload(ref), **env}
+                notices = sections().notices(api, ENVIRONMENTS, version)
+                return {**payloads.ref_payload(ref), **env, "notices": notices}
 
             return await _run(run)
 

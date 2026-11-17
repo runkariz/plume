@@ -314,8 +314,18 @@ def create_app(deps: HttpDependencies) -> FastAPI:
             ),
             sections=_section_counts(api, version),
             rate_limits=deps.sections().rate_limits(api, version) if deps.sections else [],
+            **_warnings(api, version),
             **_sources(o.ref.build),
         )
+
+    def _warnings(api: str, version: str | None) -> dict[str, Any]:
+        if deps.sections is None:
+            return {}
+        found = deps.sections().package_warnings(api, version)
+        return {
+            "package_warnings": [s.PackageWarningOut(code=w.code, text=w.text) for w in found],
+            "notices": [s.Notice(**n) for n in deps.sections().notices(api, None, version)],
+        }
 
     def _sources(build: str) -> dict[str, Any]:
         info = deps.release_notes().public_sources(build) if deps.release_notes else None
