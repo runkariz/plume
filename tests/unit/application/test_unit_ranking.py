@@ -64,3 +64,26 @@ def test_an_endpoint_already_in_the_top_is_enough() -> None:
     out, asked = _pair(ranked, 4, ["endpoint:GET~/logistic-centers/{id}"])
     assert out == ranked
     assert asked == 0
+
+
+def test_keep_endpoints_brings_two_endpoints_into_the_top_k() -> None:
+    from plume.application.reader.ranking import keep_endpoints  # noqa: PLC0415
+
+    ranked = [
+        "guide:a",
+        "guide:b",
+        "model:m",
+        "guide:c",
+        "guide:d",
+        "endpoint:1",
+        "x",
+        "endpoint:2",
+    ]
+    out = keep_endpoints(ranked, 5)
+    assert out[:5] == ["guide:a", "guide:b", "model:m", "endpoint:1", "endpoint:2"]
+    assert out[5:7] == ["guide:c", "guide:d"]  # evicted ones lead the rest
+    assert sorted(out) == sorted(ranked)
+    already = ["endpoint:1", "guide:a", "endpoint:2", "guide:b", "guide:c", "endpoint:3"]
+    assert keep_endpoints(already, 5) == already
+    assert keep_endpoints(["guide:a", "guide:b"], 5) == ["guide:a", "guide:b"]  # none in pool
+    assert keep_endpoints(["guide:a", "endpoint:1"], 1) == ["endpoint:1", "guide:a"]

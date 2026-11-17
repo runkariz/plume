@@ -28,6 +28,7 @@ from plume.application.reader.dto import (
 )
 from plume.application.reader.ranking import (
     is_page,
+    keep_endpoints,
     lift_operation_endpoints,
     pair_pages_with_endpoints,
     pair_units_with_endpoints,
@@ -280,7 +281,7 @@ def rank_order(
     owners = operation_owners(documents, build_id)
     if owners:
         order = lift_operation_endpoints(order, k, lambda d: _operation_owner(d, owners))
-    return order
+    return keep_endpoints(order, k)
 
 
 def page_endpoints(documents: DocumentRepo, build_id: BuildId, doc_id: str) -> list[str]:
