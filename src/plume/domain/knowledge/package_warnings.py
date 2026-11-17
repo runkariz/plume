@@ -30,6 +30,11 @@ KNOWN: dict[str, tuple[str, str]] = {
     ),
     "auth-requires-signature": (AUTH, SIGNED),
     "auth-none-public-sources": (AUTH, SIGNED),
+    "auth-needs-core-change": (
+        AUTH,
+        "This API's auth uses a variant the connector can't express yet; calls won't "
+        "authenticate until Kariz supports it (see the setup text).",
+    ),
 }
 
 

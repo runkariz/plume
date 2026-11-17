@@ -45,3 +45,19 @@ def test_auth_none_public_sources_alone_is_an_auth_notice() -> None:
 
 def test_unknown_codes_give_no_notice() -> None:
     assert notices(parse(["knowledge-links: 3", "robots-disallowed: x"])) == []
+
+
+def test_auth_needs_core_change_is_an_auth_notice_once() -> None:
+    found = notices(
+        parse(
+            [
+                "auth-needs-core-change: token field is access_token_value",
+                "auth-needs-core-change: token sent without Bearer",
+                "auth-requires-signature: x",
+            ]
+        ),
+        AUTH,
+    )
+    assert [n.code for n in found] == ["auth-needs-core-change", "auth-requires-signature"]
+    assert found[0].text.startswith("This API's auth uses a variant the connector can't")
+    assert found[0].text.endswith("until Kariz supports it (see the setup text).")
