@@ -154,12 +154,19 @@
             "type": "array"
           },
           "packageWarnings": {
-            "description": "manifest.json warnings, all of them (maintainer view).",
-            "items": {
-              "$ref": "#/components/schemas/PackageWarningOut"
-            },
-            "title": "Packagewarnings",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PackageWarningOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "manifest.json warnings, all of them. Only with a valid maintainer bearer token; the key is absent otherwise.",
+            "title": "Packagewarnings"
           },
           "quality": {
             "anyOf": [
@@ -4822,6 +4829,7 @@
         ]
       },
       "get": {
+        "description": "One API. packageWarnings only for a maintainer bearer token (absent otherwise);\nnotices are public.",
         "operationId": "get_api_v1_apis__api__get",
         "parameters": [
           {

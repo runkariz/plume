@@ -370,10 +370,22 @@ def test_package_warnings_and_notices_over_http(packages: Path, tmp_path: Path) 
                 resolver=stack.resolver,
                 sections=stack.sections,
                 rate_limit_per_minute=0,
+                maintainer_tokens=("maint-secret",),
             )
         )
     )
-    detail = http.get("/v1/apis/shopify").json()
+    public = http.get("/v1/apis/shopify")
+    assert "packageWarnings" not in public.json()  # absent, not empty, without a token
+    assert "Authorization" in public.headers["Vary"]
+    assert [n["code"] for n in public.json()["notices"]] == [
+        "auth-requires-signature",
+        "default-environment-by-order",
+    ]
+    wrong = http.get("/v1/apis/shopify", headers={"Authorization": "Bearer nope"}).json()
+    assert "packageWarnings" not in wrong
+    signed = http.get("/v1/apis/shopify", headers={"Authorization": "Bearer maint-secret"})
+    assert signed.headers["Cache-Control"] == "private, no-store"
+    detail = signed.json()
     assert [w["code"] for w in detail["packageWarnings"]] == [
         "auth-requires-signature",
         "default-environment-by-order",
@@ -389,8 +401,10 @@ def test_package_warnings_and_notices_over_http(packages: Path, tmp_path: Path) 
     assert auth["notices"][0]["text"].startswith("Every request must be signed")
     env = http.get("/v1/apis/shopify/environments").json()
     assert [n["code"] for n in env["notices"]] == ["default-environment-by-order"]
+    woo = http.get("/v1/apis/woocommerce", headers={"Authorization": "Bearer maint-secret"})
+    assert woo.json()["packageWarnings"] == []
     woo = http.get("/v1/apis/woocommerce").json()
-    assert woo["packageWarnings"] == []
+    assert "packageWarnings" not in woo
     assert woo["notices"] == []
     assert http.get("/v1/apis/woocommerce/auth").json()["notices"] == []
 
@@ -420,6 +434,7 @@ async def test_mcp_tools_carry_the_notices(packages: Path, tmp_path: Path) -> No
     async with Client(server) as client:
         apis = {a["api"]: a for a in (await call(client, "list_apis"))["apis"]}
         assert [n["section"] for n in apis["shopify"]["notices"]] == ["auth", "environments"]
+        assert "package_warnings" not in apis["shopify"]  # the reader MCP never shows them
         assert apis["woocommerce"]["notices"] == []
         auth = await call(client, "list_auth_schemes", api="shopify")
         assert [n["code"] for n in auth["notices"]] == ["auth-requires-signature"]

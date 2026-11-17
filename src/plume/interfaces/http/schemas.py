@@ -185,9 +185,10 @@ class ApiDetail(ApiSummary):
         description="app.json rateLimits[] verbatim (scope, group, limit, windowSeconds, "
         "algorithm, notes, ...); empty when the package states none.",
     )
-    package_warnings: list[PackageWarningOut] = Field(
-        default_factory=list,
-        description="manifest.json warnings, all of them (maintainer view).",
+    package_warnings: list[PackageWarningOut] | None = Field(
+        default=None,
+        description="manifest.json warnings, all of them. Only with a valid maintainer bearer "
+        "token; the key is absent otherwise.",
     )
     notices: list[Notice] = Field(
         default_factory=list,
