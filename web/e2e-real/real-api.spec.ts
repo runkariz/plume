@@ -88,7 +88,7 @@ for (const theme of THEMES) {
           recallAt5: number;
           goldQuestions: number;
           inventedEndpoints: number | null;
-          citationHitRate?: number;
+          top1Rate?: number;
         } | null;
       };
       await page.goto('/apis/shopify');
@@ -104,8 +104,8 @@ for (const theme of THEMES) {
         await expect(page.getByText('null')).toHaveCount(0);
         if (detail.quality.inventedEndpoints === null)
           await expect(page.getByText('Invented endpoints')).toHaveCount(0);
-        if (detail.quality.citationHitRate !== undefined)
-          await expect(page.getByText('Citation hit rate')).toBeVisible();
+        if (detail.quality.top1Rate !== undefined)
+          await expect(page.getByText('Top-1 hit rate').first()).toBeVisible();
       } else {
         await expect(page.getByText('Not evaluated yet.')).toBeVisible();
       }

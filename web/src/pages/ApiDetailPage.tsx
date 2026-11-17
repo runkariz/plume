@@ -22,6 +22,7 @@ import {
   Metric,
   Segmented,
   Tile,
+  Notices,
   PackageWarningsCard,
   RateLimitsCard,
 } from '@/components';
@@ -268,10 +269,11 @@ function Detail({ api }: { api: ApiDetail }) {
                     tone={api.quality.inventedEndpoints === 0 ? 'ok' : undefined}
                   />
                 ) : null}
-                {api.quality.citationHitRate !== undefined ? (
+                {api.quality.top1Rate !== undefined ? (
                   <Metric
-                    label="Citation hit rate"
-                    value={formatScore(api.quality.citationHitRate)}
+                    label="Top-1 hit rate"
+                    hint="Share of questions whose answer ranks first."
+                    value={formatScore(api.quality.top1Rate)}
                   />
                 ) : null}
                 {api.quality.factAccuracy !== undefined ? (
@@ -281,6 +283,12 @@ function Detail({ api }: { api: ApiDetail }) {
                   <Metric label="Expected docs missing" value={api.quality.missingExpected} />
                 ) : null}
                 <QualityBySource rows={api.quality.bySource} />
+                {api.quality.note ? (
+                  <Notices
+                    label="About this score"
+                    items={[{ code: 'quality-note', section: 'quality', text: api.quality.note }]}
+                  />
+                ) : null}
                 <p className="faint small" style={{ marginTop: 10 }}>
                   Gold set of {api.quality.goldQuestions} questions · evaluated{' '}
                   {formatDate(api.quality.evaluatedAt)}

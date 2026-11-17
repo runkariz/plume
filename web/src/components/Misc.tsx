@@ -3,10 +3,24 @@ import { useApiBaseUrl } from '@/api/context';
 import { iconSrc } from '@/lib/icon';
 import { useState, type ReactNode } from 'react';
 
-export function Metric({ label, value, tone }: { label: string; value: ReactNode; tone?: 'ok' }) {
+export function Metric({
+  label,
+  value,
+  tone,
+  hint,
+}: {
+  label: string;
+  value: ReactNode;
+  tone?: 'ok';
+  /** One line under the label that says what the number is. */
+  hint?: string;
+}) {
   return (
     <div className="metric">
-      <span className="muted">{label}</span>
+      <span className="muted">
+        {label}
+        {hint ? <span className="faint small metric-hint">{hint}</span> : null}
+      </span>
       <b className={tone}>{value}</b>
     </div>
   );

@@ -121,13 +121,16 @@ export interface ApiDetail extends ApiSummary {
     inventedEndpoints: number | null;
     goldQuestions: number;
     evaluatedAt: string; // ISO date
-    citationHitRate?: number;
+    /** Share of questions whose answer ranks first (was citationHitRate). */
+    top1Rate?: number;
     factAccuracy?: number;
     /** Gold questions whose expected document was not found. */
     missingExpected?: number;
     gatePassed?: boolean;
     /** The same scores per question source the gold set has; one "docs" row when it has no sources. Absent on older servers. */
     bySource?: SourceQuality[];
+    /** e.g. "Too few questions to measure; a sanity check only." (fewer than 10 gold questions); null otherwise. */
+    note?: string | null;
   } | null;
   /** All the warnings of the package's manifest (the server sends them to everyone; the page shows them to maintainers). */
   packageWarnings?: PackageWarning[];
@@ -727,8 +730,8 @@ export interface SourceQuality {
   source: string;
   recallAt5: number;
   mrr: number;
-  /** Top-1: the first result is an expected one. */
-  citationHitRate: number;
+  /** Share of this source's questions whose answer ranks first. */
+  top1Rate: number;
   /** Search questions of this source. */
   questions: number;
 }

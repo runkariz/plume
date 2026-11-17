@@ -76,7 +76,9 @@ export const GOLD_LABEL: Record<string, string> = {
   recall_at_k: 'recall@k',
   mrr: 'MRR',
   fact_accuracy: 'fact accuracy',
-  citation_hit_rate: 'citation hits',
+  top1_rate: 'top-1 hit rate',
+  // notes made before the rename keep the old key in their stored gold block
+  citation_hit_rate: 'top-1 hit rate',
   'recall@5': 'recall@5',
 };
 
