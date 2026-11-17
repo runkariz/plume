@@ -947,6 +947,23 @@ export interface TriggerDetail extends TriggerSummary {
   sourceUrl: string | null;
   /** The event JSON, verbatim (untrusted). */
   event: Record<string, unknown>;
+  /** What the event carries; null (or absent on older servers) when the event states no payload. */
+  payload?: TriggerPayload | null;
+}
+
+/** The payload an event states (payloadSchemaRef / sampleRef), read by the server. All text is untrusted. */
+export interface TriggerPayload {
+  /** The event's refs, verbatim. */
+  schemaRef: string | null;
+  sampleRef: string | null;
+  /** The payload JSON schema, verbatim; null when unresolved or when the ref names a model. */
+  schema: Record<string, unknown> | null;
+  /** The payload sample, verbatim; null when none. */
+  sample: unknown;
+  /** The connector model the ref names; then `schema` is null and `fields` empty. */
+  model: { docId: string; title: string | null } | null;
+  /** The schema's fields as dotted paths (line_items[].sku), like a model's. */
+  fields: DocumentOut['fields'];
 }
 
 export interface Environment {

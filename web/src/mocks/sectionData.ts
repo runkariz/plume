@@ -3,6 +3,7 @@ import type {
   AuthSchemeDetail,
   EnvironmentsOut,
   TriggerDetail,
+  TriggerPayload,
   TriggerList,
   McpOut,
   TriggerSummary,
@@ -282,6 +283,62 @@ export function mcpFor(api: string): McpOut {
   };
 }
 
+/** What the sample events carry: a schema with fields and a sample, a model, a ref the server could not read, none. */
+function payloadOf(key: string): TriggerPayload | null {
+  if (key === 'orders/create')
+    return {
+      schemaRef: 'orders-create.payload.schema.json',
+      sampleRef: 'orders-create.payload.sample.json',
+      model: null,
+      schema: { type: 'object', required: ['id'] },
+      sample: { id: 7, line_items: [{ sku: 'A-1', quantity: 2 }] },
+      fields: [
+        { name: 'id', location: 'model', type: 'integer', required: true, description: 'Order id' },
+        {
+          name: 'financial_status',
+          location: 'model',
+          type: 'string',
+          required: false,
+          description: null,
+          constraints: { enum: ['pending', 'paid', 'refunded'] },
+        },
+        {
+          name: 'line_items',
+          location: 'model',
+          type: 'array',
+          required: false,
+          description: null,
+        },
+        {
+          name: 'line_items[].sku',
+          location: 'model',
+          type: 'string',
+          required: false,
+          description: 'Stock keeping unit',
+        },
+      ],
+    };
+  if (key === 'app/uninstalled')
+    return {
+      schemaRef: 'model:shop',
+      sampleRef: null,
+      model: { docId: 'model:order', title: 'Order' },
+      schema: null,
+      sample: null,
+      fields: [],
+    };
+  if (key === 'app/scopes_update')
+    return {
+      schemaRef: 'nope.json',
+      sampleRef: '../../../x.json',
+      model: null,
+      schema: null,
+      sample: null,
+      fields: [],
+    };
+  return null;
+}
+
 export function triggerDetailFor(api: string, key: string): TriggerDetail | undefined {
   if (api !== 'shopify') return undefined;
   const t = SHOPIFY_EVENTS.find((e) => e.key === key || e.docId === key);
@@ -291,6 +348,7 @@ export function triggerDetailFor(api: string, key: string): TriggerDetail | unde
     api,
     build: BUILD,
     sourceUrl: 'https://shopify.dev/docs/api/admin-rest/latest/resources/webhook',
+    payload: payloadOf(t.key ?? ''),
     event: {
       key: t.key,
       title: t.title,
