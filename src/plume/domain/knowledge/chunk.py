@@ -31,7 +31,9 @@ from plume.domain.shared.hashing import ContentHash, content_hash
 # 15: knowledge-export rules with endpointIds go into those endpoints; unit-links.json adds
 #     page/slug unit links (raw only).
 # 16: an empty page fragment ("#") is no anchor (endpoint docAnchor, export items and rules).
-CHUNKER_VERSION = "16"
+# 17: trigger events read payloadSchemaRef / sampleRef (payload fields or model in the text);
+#     events/*.payload.{schema,sample}.json are companions, not triggers.
+CHUNKER_VERSION = "17"
 DEFAULT_MAX_CHARS = 6000
 _HEADING = re.compile(r"^#{1,3} ", re.MULTILINE)
 

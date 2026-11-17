@@ -3141,6 +3141,31 @@
         "title": "ModelListItem",
         "type": "object"
       },
+      "ModelRef": {
+        "properties": {
+          "docId": {
+            "title": "Docid",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "docId",
+          "title"
+        ],
+        "title": "ModelRef",
+        "type": "object"
+      },
       "NotModeled": {
         "properties": {
           "count": {
@@ -4212,6 +4237,17 @@
             ],
             "title": "Key"
           },
+          "payload": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TriggerPayload"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "payloadSchemaRef / sampleRef read (null when the event states neither)."
+          },
           "resource": {
             "anyOf": [
               {
@@ -4335,6 +4371,80 @@
           "items"
         ],
         "title": "TriggerList",
+        "type": "object"
+      },
+      "TriggerPayload": {
+        "properties": {
+          "fields": {
+            "description": "The payload schema's fields as dotted paths, like a model's fields.",
+            "items": {
+              "$ref": "#/components/schemas/FieldOut"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The connector model the payload ref names (then `schema` is null and `fields` empty: read the model)."
+          },
+          "sample": {
+            "description": "The payload sample, verbatim (null when none).",
+            "title": "Sample"
+          },
+          "sampleRef": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The event's sampleRef, verbatim.",
+            "title": "Sampleref"
+          },
+          "schema": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The payload JSON schema, verbatim (null when unresolved or a model).",
+            "title": "Schema"
+          },
+          "schemaRef": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The event's payloadSchemaRef, verbatim.",
+            "title": "Schemaref"
+          }
+        },
+        "required": [
+          "schemaRef",
+          "sampleRef",
+          "model",
+          "schema",
+          "sample",
+          "fields"
+        ],
+        "title": "TriggerPayload",
         "type": "object"
       },
       "TriggerSummary": {

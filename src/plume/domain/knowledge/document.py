@@ -20,6 +20,8 @@ _DATE_VERSION = re.compile(r"^\d{4}-\d{2}(?:-\d{2})?$")
 _SEMVER_VERSION = re.compile(r"^v\d+(?:\.\d+)*$")
 _GENERIC_VERSIONS = frozenset({"latest", "unstable", "stable", "current"})
 VERSION_PLACEHOLDER = "{version}"
+# A trigger document's raw key for its resolved payload (beside the verbatim event JSON).
+TRIGGER_PAYLOAD_KEY = "_payload"
 HTTP_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"})
 
 
