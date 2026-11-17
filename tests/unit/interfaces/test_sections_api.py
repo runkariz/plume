@@ -256,3 +256,22 @@ def test_scopes_carry_their_endpoints_and_endpoints_their_scheme(client: TestCli
     for x in woo["schemes"]:
         detail = client.get(f"/v1/apis/woocommerce/auth/{x['id']}").json()
         assert all(s["endpoints"] == [] for s in detail["scopes"])
+
+
+def test_unit_documents_state_the_basis_of_each_endpoint_link(
+    packages: Path, tmp_path: Path
+) -> None:
+    from tests.unit.infrastructure.test_package_links import _woo_with_export_links  # noqa: PLC0415
+    from tests.unit.interfaces.conftest import http_deps  # noqa: PLC0415
+
+    s = FakeStack(embedder=WordEmbedder())
+    s.load(str(_woo_with_export_links(packages, tmp_path)))
+    c = TestClient(create_app(http_deps(s)))
+    doc = c.get("/v1/apis/woocommerce/documents/guide:authentication").json()
+    get, post = (f"endpoint:{m}~/wp-json/wc/{{version}}/coupons" for m in ("GET", "POST"))
+    assert doc["linkedEndpoints"] == [get, post]
+    assert doc["endpointLinks"] == [
+        {"endpointId": get, "linkBasis": "text"},
+        {"endpointId": post, "linkBasis": "page"},
+    ]
+    assert c.get(f"/v1/apis/woocommerce/documents/{post}").json()["endpointLinks"] == []

@@ -3,7 +3,9 @@
 Layout: ``index.json`` (pages, ``complete``), ``pages/*.md`` (YAML front matter: ``source`` URL
 and ``items`` [{id, kind, method, path, name, anchor}], then the cleaned page text),
 ``rules.json`` (rules {id, scope: <endpoint id> | "resource", type, text, quote, anchor,
-sourceUrl, confidence, resource}) and optionally ``gold-questions.json``.
+sourceUrl, confidence, resource, endpointIds}), optionally ``gold-questions.json`` and
+``unit-links.json`` (``plume.unit-links.v1``: links [{unitId, endpointIds, linkBasis}], the
+page/slug links of knowledge units; read even without ``index.json``).
 
 The reader enriches each endpoint document with the page section its anchor points at and
 with the rules scoped to it, and turns each page's remaining text (intro, property tables) plus
@@ -39,6 +41,7 @@ class Rule:
     anchor: str | None
     confidence: float | None
     resource: str | None
+    endpoint_ids: tuple[str, ...] = ()
 
     def line(self) -> str:
         conf = f", confidence {self.confidence:.2f}" if self.confidence is not None else ""
@@ -197,6 +200,7 @@ def load(root: Path) -> KnowledgeExport:
                     anchor=r.get("anchor"),
                     confidence=float(conf) if isinstance(conf, int | float) else None,
                     resource=r.get("resource"),
+                    endpoint_ids=_id_list(r.get("endpointIds")),
                 )
             )
     gold = root / "gold-questions.json"
@@ -206,3 +210,30 @@ def load(root: Path) -> KnowledgeExport:
         rules=rules,
         gold_path=gold if gold.is_file() else None,
     )
+
+
+def _id_list(value: Any) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        return ()
+    return tuple(dict.fromkeys(v.strip() for v in value if isinstance(v, str) and v.strip()))
+
+
+UNIT_LINKS = "unit-links.json"
+
+
+def load_unit_links(root: Path) -> dict[str, tuple[tuple[str, ...], str]]:
+    """``unit-links.json``: knowledge unit id -> (producer endpoint ids, linkBasis). Entries
+    without endpoints are left out (hub pages link nothing). Missing file: empty."""
+    path = root / UNIT_LINKS
+    if not path.is_file():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    out: dict[str, tuple[tuple[str, ...], str]] = {}
+    for entry in data.get("links", []) if isinstance(data, dict) else []:
+        if not isinstance(entry, dict) or not isinstance(entry.get("unitId"), str):
+            continue
+        ids = _id_list(entry.get("endpointIds"))
+        if ids:
+            basis = entry.get("linkBasis")
+            out[entry["unitId"]] = (ids, basis if isinstance(basis, str) and basis else "export")
+    return out

@@ -39,6 +39,21 @@ def linked_endpoints(doc: Document) -> list[str]:
     return _ids(_raw(doc).get("endpoints"))
 
 
+def endpoint_links(doc: Document) -> list[dict[str, str]]:
+    """A knowledge unit's endpoints with why they are linked: [{endpointId, linkBasis}], where
+    linkBasis is "text" (the unit names it), "page" or "slug" (knowledge-export/unit-links.json)."""
+    if not linked_endpoints(doc):
+        return []
+    value = _raw(doc).get("endpointLinks")
+    if not isinstance(value, list):  # loaded before link bases existed
+        return [{"endpointId": e, "linkBasis": "text"} for e in linked_endpoints(doc)]
+    return [
+        {"endpointId": e["endpoint"], "linkBasis": str(e.get("linkBasis") or "text")}
+        for e in value
+        if isinstance(e, dict) and isinstance(e.get("endpoint"), str)
+    ]
+
+
 def linked_guides(doc: Document) -> list[str]:
     """The knowledge units that name this endpoint."""
     if doc.kind is not DocumentKind.ENDPOINT:
