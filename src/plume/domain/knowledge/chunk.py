@@ -1,7 +1,9 @@
 """Chunks: the unit that is embedded and searched.
 
 Policy (``CHUNKER_VERSION``): an endpoint or model is one chunk unless it is longer than
-``max_chars``; guides are split at markdown headings, then by paragraphs to fit ``max_chars``.
+``max_chars``, and at most ``MAX_SCHEMA_CHUNKS`` (its head: title, path, description, then
+fields in order; the full text stays on the document for reading); guides are split at
+markdown headings, then by paragraphs to fit ``max_chars``.
 Chunk ids are ``<doc id>#<ordinal>``. Changing the policy means bumping ``CHUNKER_VERSION``,
 which tells the diff to treat everything as re-chunked.
 """
@@ -34,8 +36,13 @@ from plume.domain.shared.hashing import ContentHash, content_hash
 # 17: trigger events read payloadSchemaRef / sampleRef (payload fields or model in the text);
 #     events/*.payload.{schema,sample}.json are companions, not triggers.
 # 18: manifest.json warnings kept on the app document (raw only; text unchanged).
-CHUNKER_VERSION = "18"
+# 19: endpoint and model chunks capped at MAX_SCHEMA_CHUNKS; loader lists at most 2000 fields
+#     per schema (the deepest nesting level that fits).
+CHUNKER_VERSION = "19"
 DEFAULT_MAX_CHARS = 6000
+# Endpoint/model chunks embedded per document. The largest reference documents (Magento
+# order endpoints) take 23; Shopware's entity graph took up to 14,000 before the field bound.
+MAX_SCHEMA_CHUNKS = 24
 _HEADING = re.compile(r"^#{1,3} ", re.MULTILINE)
 
 
@@ -103,6 +110,8 @@ def chunk_document(document: Document, max_chars: int = DEFAULT_MAX_CHARS) -> li
     else:
         sections = [document.text.strip()]
     texts = [piece for section in sections for piece in _split_to_size(section, max_chars) if piece]
+    if document.kind in (DocumentKind.ENDPOINT, DocumentKind.MODEL):
+        texts = texts[:MAX_SCHEMA_CHUNKS]
     if not texts:
         texts = [document.title]
     return [

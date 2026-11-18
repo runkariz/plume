@@ -108,6 +108,8 @@ class Settings(BaseSettings):
     )
     embed_dims: Literal[768] = 768
     embed_batch_size: int | None = Field(default=None, ge=1, le=250)
+    # Parallel embedding requests (Vertex gemini-embedding-001 takes one text per request).
+    embed_concurrency: int = Field(default=8, ge=1, le=32)
     chunk_max_chars: int = Field(default=6000, ge=200)
     mcp_host: str = "127.0.0.1"
     mcp_public_url: str = Field(

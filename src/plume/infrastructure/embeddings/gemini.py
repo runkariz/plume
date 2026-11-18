@@ -15,6 +15,7 @@ embeddings are not normalised). 429 and 5xx are retried with exponential backoff
 import math
 import time
 from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Literal
 
 import httpx
@@ -86,6 +87,7 @@ class GeminiEmbedder:
         model: str = "gemini-embedding-001",
         dims: int = 768,
         batch_size: int | None = None,
+        concurrency: int = 1,
         max_retries: int = 5,
         timeout: float = 60.0,
         client: httpx.Client | None = None,
@@ -123,6 +125,7 @@ class GeminiEmbedder:
         # Vertex's gemini-embedding-001 takes one instance per request; -2 batches up to 250.
         default = 100 if self._content_api or backend != "vertex" else 1
         self._batch = min(batch_size or default, CONTENT_API_BATCH)
+        self._concurrency = max(1, concurrency)
         self._retries = max_retries
         self._client = client or httpx.Client(timeout=timeout)
         self._sleep = sleep
@@ -235,10 +238,15 @@ class GeminiEmbedder:
     def embed_documents(self, texts: Sequence[str]) -> list[Vector]:
         if self._prompt:
             texts = [gemini_document(t) for t in texts]
-        out: list[Vector] = []
-        for start in range(0, len(texts), self._batch):
-            out.extend(self._embed_batch(texts[start : start + self._batch], "RETRIEVAL_DOCUMENT"))
-        return out
+        batches = [texts[i : i + self._batch] for i in range(0, len(texts), self._batch)]
+        if self._concurrency == 1 or len(batches) == 1:
+            results = [self._embed_batch(b, "RETRIEVAL_DOCUMENT") for b in batches]
+        else:  # requests in parallel, results in order (httpx.Client is thread-safe)
+            with ThreadPoolExecutor(min(self._concurrency, len(batches))) as pool:
+                results = list(
+                    pool.map(lambda b: self._embed_batch(b, "RETRIEVAL_DOCUMENT"), batches)
+                )
+        return [v for batch in results for v in batch]
 
     def embed_query(self, text: str) -> Vector:
         return self._embed_batch([gemini_query(text) if self._prompt else text], "RETRIEVAL_QUERY")[

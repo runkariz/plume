@@ -151,6 +151,7 @@ class Container:
                 model=s.embed_model,
                 dims=s.embed_dims,
                 batch_size=s.embed_batch_size,
+                concurrency=s.embed_concurrency,
                 token_source=self.vertex_tokens,
                 project=s.vertex_project,
                 location=s.vertex_embed_location,
@@ -163,6 +164,7 @@ class Container:
                 model=s.embed_model,
                 dims=s.embed_dims,
                 batch_size=s.embed_batch_size,
+                concurrency=s.embed_concurrency,
                 project=s.vertex_project,  # set: the project path at the embedding location
                 location=s.vertex_embed_location,
             )
@@ -173,6 +175,7 @@ class Container:
             model=s.embed_model,
             dims=s.embed_dims,
             batch_size=s.embed_batch_size,
+            concurrency=s.embed_concurrency,
         )
 
     @cached_property

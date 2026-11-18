@@ -1,6 +1,6 @@
 import pytest
 
-from plume.domain.knowledge.chunk import chunk_document
+from plume.domain.knowledge.chunk import MAX_SCHEMA_CHUNKS, chunk_document
 from plume.domain.knowledge.document import Document, DocumentKind
 
 
@@ -47,3 +47,15 @@ def test_empty_text_gives_the_title() -> None:
 def test_tiny_max_chars_refused() -> None:
     with pytest.raises(ValueError, match="at least"):
         chunk_document(_doc(DocumentKind.GUIDE, "x"), max_chars=10)
+
+
+def test_endpoint_and_model_chunks_are_capped_guides_are_not() -> None:
+    text = "# Head\n\nsummary\n\n" + "\n\n".join(
+        f"- `f{i}` (string)" + "x" * 300 for i in range(200)
+    )
+    for kind in (DocumentKind.ENDPOINT, DocumentKind.MODEL):
+        chunks = chunk_document(_doc(kind, text), max_chars=400)
+        assert len(chunks) == MAX_SCHEMA_CHUNKS, kind
+        assert chunks[0].text.startswith("# Head\n\nsummary")  # the head is always embedded
+    guide = chunk_document(_doc(DocumentKind.GUIDE, text), max_chars=400)
+    assert len(guide) > MAX_SCHEMA_CHUNKS

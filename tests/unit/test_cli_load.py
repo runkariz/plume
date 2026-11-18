@@ -31,8 +31,10 @@ def test_load_apis_builds_tag(packages: Path) -> None:
     app = _app(stack)
     result = runner.invoke(app, ["load", str(packages / "test-catalog"), "--json"])
     assert result.exit_code == 0, result.output
-    summary = json.loads(result.output)
+    summary = json.loads(result.stdout)  # --json is stdout; progress goes to stderr
     assert summary["api"] == "test-catalog-api"
+    assert "  embed ..." in result.stderr
+    assert "  embed: " in result.stderr  # chunks embedded / total
     assert summary["tag"] == "latest"
 
     out = runner.invoke(app, ["apis"]).output
