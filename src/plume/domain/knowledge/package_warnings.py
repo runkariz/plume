@@ -36,6 +36,11 @@ KNOWN: dict[str, tuple[str, str]] = {
         ENVIRONMENTS,
         "The docs name no default; this one is first in the spec. Choose your region.",
     ),
+    "sandbox-host-not-in-sources": (
+        ENVIRONMENTS,
+        "The docs mention a sandbox, but no source gives its address, so only production is "
+        "listed.",
+    ),
     "auth-requires-signature": (AUTH, SIGNED),
     "auth-none-public-sources": (AUTH, SIGNED),
     "auth-signed-request": (AUTH, SIGNED),
