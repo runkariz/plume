@@ -39,7 +39,9 @@ from plume.domain.shared.hashing import ContentHash, content_hash
 # 19: endpoint and model chunks capped at MAX_SCHEMA_CHUNKS; loader lists at most 2000 fields
 #     per schema (the deepest nesting level that fits).
 # 20: bounded endpoint/model documents record the listed level in raw (find_fact: not listed).
-CHUNKER_VERSION = "20"
+# 21: knowledge-export rules find their page by a loose URL key (percent-decoded; without a
+#     query when only one page has the path).
+CHUNKER_VERSION = "21"
 DEFAULT_MAX_CHARS = 6000
 # Endpoint/model chunks embedded per document. The largest reference documents (Magento
 # order endpoints) take 23; Shopware's entity graph took up to 14,000 before the field bound.
