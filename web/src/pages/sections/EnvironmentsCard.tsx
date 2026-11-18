@@ -1,7 +1,9 @@
 import { useCallback } from 'react';
 import { useApiClient } from '@/api/context';
+import type { Environment } from '@/api/types';
 import { useAsync } from '@/api/useAsync';
 import { Card, Chip, Notices } from '@/components';
+import { serverRows } from '@/lib/servers';
 
 /**
  * Where the API lives (environments with their base URLs) and how it is versioned, from the package. It renders
@@ -31,7 +33,7 @@ export function EnvironmentsCard({ apiId }: { apiId: string }) {
             <div className="sec-main">
               <b>{e.name ?? e.key ?? 'environment'}</b> {e.kind ? <Chip>{e.kind}</Chip> : null}
               {e.isDefault ? <Chip tone="ok">default</Chip> : null}
-              {e.baseUrl ? <div className="mono small env-url">{e.baseUrl}</div> : null}
+              <EnvServers env={e} />
             </div>
           </li>
         ))}
@@ -53,5 +55,30 @@ export function EnvironmentsCard({ apiId }: { apiId: string }) {
         </p>
       ) : null}
     </Card>
+  );
+}
+
+/** The hosts of one environment by role (API, Auth, ...), the base URL first; a lone base URL is shown as before. */
+function EnvServers({ env }: { env: Environment }) {
+  const rows = serverRows(env);
+  const [only] = rows;
+  if (!only) return null;
+  if (rows.length === 1 && only.label === null)
+    return <div className="mono small env-url">{only.url}</div>;
+  return (
+    <div
+      role="group"
+      className="env-servers"
+      aria-label={`Servers of ${env.name ?? env.key ?? 'the environment'}`}
+    >
+      <dl>
+        {rows.map((r, i) => (
+          <div key={`${r.key ?? 'base'}-${i}`} className="env-server">
+            <dt className="muted small">{r.label ?? 'Base URL'}</dt>
+            <dd className="mono small env-url">{r.url}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }

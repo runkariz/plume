@@ -1831,6 +1831,38 @@ th {
   overflow-wrap: anywhere;
   margin-top: 4px;
 }
+.env-servers dl {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+}
+.env-server {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+}
+.env-server dt {
+  flex: 0 0 56px;
+}
+.env-server dd {
+  min-width: 0;
+}
+.env-server .env-url {
+  margin-top: 0;
+}
+.fact-url dd {
+  min-width: 0;
+}
+.resolved-urls {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 .section-tabs {
   margin-bottom: 14px;
 }

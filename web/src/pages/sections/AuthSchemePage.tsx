@@ -2,9 +2,10 @@ import { useCallback, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
-import { ApiError } from '@/api/types';
+import { ApiError, type Environment } from '@/api/types';
 import { Card, Chip, Crumbs, EndpointLinks, ErrorState, LoadingState, RawJson } from '@/components';
 import { apiTitle } from '@/lib/names';
+import { resolveServers, usesServers } from '@/lib/servers';
 
 /** Setup steps come verbatim from the package: {order, text} in Shopify; strings or other shapes elsewhere. */
 export function stepText(step: unknown): { order: number | null; text: string } {
@@ -27,6 +28,40 @@ export function primitiveEntries(o: Record<string, unknown>): [string, string][]
   );
 }
 
+/** The URLs of an OAuth scheme the package states (verbatim in the scheme JSON), with the label shown for each. */
+const URL_FIELDS: [string, string][] = [
+  ['authUrl', 'Authorize URL'],
+  ['accessTokenUrl', 'Token URL'],
+  ['refreshTokenUrl', 'Refresh URL'],
+];
+
+/** A URL template that names a server ("{{app_env.servers.auth}}/token"), put into each environment that has it. */
+function ResolvedUrls({
+  label,
+  template,
+  environments,
+}: {
+  label: string;
+  template: string;
+  environments: Environment[];
+}) {
+  if (!usesServers(template)) return null;
+  const rows = environments.flatMap((e) => {
+    const url = resolveServers(template, e.servers);
+    return url ? [{ name: e.name ?? e.key ?? 'environment', url }] : [];
+  });
+  if (rows.length === 0) return null;
+  return (
+    <ul className="resolved-urls" aria-label={`${label} per environment`}>
+      {rows.map((r, i) => (
+        <li key={`${r.name}-${i}`}>
+          <span className="muted">{r.name}:</span> <span className="mono">{r.url}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** One auth scheme: how it works, its scopes, the variables it needs, the setup steps, all from the package. */
 export function AuthSchemePage() {
   const { apiId = '', schemeId = '' } = useParams();
@@ -42,6 +77,13 @@ export function AuthSchemePage() {
   );
   const { state: apiState } = useAsync(loadApi);
   const apiName = apiState.status === 'ready' ? apiTitle(apiState.data) : apiId;
+  // the environments resolve the server placeholders of the token/authorize URLs; without them the templates stand alone
+  const loadEnv = useCallback(
+    (signal: AbortSignal) => client.getEnvironments(apiId, signal),
+    [client, apiId],
+  );
+  const { state: envState } = useAsync(loadEnv);
+  const environments = envState.status === 'ready' ? envState.data.environments : [];
   const [scopeQuery, setScopeQuery] = useState('');
 
   const data = state.status === 'ready' ? state.data : null;
@@ -92,6 +134,10 @@ export function AuthSchemePage() {
     ['Query parameter', d.queryParam],
     ['Test URL', d.testUrl],
   ];
+  const urlFacts = URL_FIELDS.flatMap(([key, label]) => {
+    const v = d.scheme?.[key];
+    return typeof v === 'string' && v ? [{ key, label, template: v }] : [];
+  });
   const withEndpoints = d.scopes.some((s) => (s.endpoints?.length ?? 0) > 0);
   const steps = (d.setupSteps ?? []).map(stepText);
   const lifetime = d.tokenLifetime ? primitiveEntries(d.tokenLifetime) : [];
@@ -124,6 +170,15 @@ export function AuthSchemePage() {
                 <dd className="mono">{v}</dd>
               </div>
             ))}
+          {urlFacts.map((u) => (
+            <div key={u.key} className="fact fact-url">
+              <dt className="muted">{u.label}</dt>
+              <dd>
+                <span className="mono">{u.template}</span>
+                <ResolvedUrls label={u.label} template={u.template} environments={environments} />
+              </dd>
+            </div>
+          ))}
           {lifetime.map(([k, v]) => (
             <div key={`tl-${k}`} className="fact">
               <dt className="muted">Token lifetime: {k}</dt>
