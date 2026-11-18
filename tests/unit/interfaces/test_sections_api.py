@@ -398,7 +398,8 @@ def test_package_warnings_and_notices_over_http(packages: Path, tmp_path: Path) 
     ]
     auth = http.get("/v1/apis/shopify/auth").json()
     assert [n["code"] for n in auth["notices"]] == ["auth-requires-signature"]
-    assert auth["notices"][0]["text"].startswith("Every request must be signed")
+    # shopify-mini has an OAuth scheme, so the signing notice says "also"
+    assert auth["notices"][0]["text"].startswith("Every request must also be signed")
     env = http.get("/v1/apis/shopify/environments").json()
     assert [n["code"] for n in env["notices"]] == ["default-environment-by-order"]
     woo = http.get("/v1/apis/woocommerce", headers={"Authorization": "Bearer maint-secret"})
