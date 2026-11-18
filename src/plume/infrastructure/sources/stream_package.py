@@ -1185,11 +1185,23 @@ def _apply_export(
             if page_of.get(i) == number and r.rule_id not in used_rules
         ]
         used_rules.update(r.rule_id for r in page_rules)
-        endpoints = [
-            out[i].doc_id
+        indexes = [
+            i
             for item_id, _ in page.items
             if (i := by_source.get(endpoint_key(item_id, versions))) is not None
         ]
+        endpoints = [out[i].doc_id for i in indexes]
+        if not page.split and page_rules and len(set(indexes)) == 1:
+            # A one-endpoint page that could not be cut: its rules-only guide would just
+            # duplicate the endpoint in search; the rules go into the endpoint instead.
+            doc = out[indexes[0]]
+            out[indexes[0]] = replace(
+                doc,
+                text=doc.text
+                + "\n\n## Rules (documentation page)\n"
+                + "\n".join(r.line() for r in page_rules),
+            )
+            continue
         guide = _page_guide(page, page_rules, endpoints)
         if guide is not None:
             out.append(guide)
