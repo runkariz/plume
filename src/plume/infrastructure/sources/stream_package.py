@@ -22,6 +22,7 @@ from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 from plume.application.errors import SourcePackageError
 from plume.application.ports.package_source import SourcePackage
@@ -1176,12 +1177,12 @@ def _apply_export(
             used_rules.update(r.rule_id for r in pending)
     linked_rules = _attach_linked_rules(out, export, by_source, versions, used_rules)
     _attach_resource_rules(out, export, by_source, versions, linked_rules)
-    for page in export.pages:
-        url = page.source_url.rstrip("/")
-        page_rules = [
+    page_of = _rule_pages(export, used_rules)
+    for number, page in enumerate(export.pages):
+        page_rules = [  # a repeated rule id is claimed once, by the first page (as before)
             r
-            for r in export.rules
-            if r.rule_id not in used_rules and (r.source_url or "").rstrip("/") == url
+            for i, r in enumerate(export.rules)
+            if page_of.get(i) == number and r.rule_id not in used_rules
         ]
         used_rules.update(r.rule_id for r in page_rules)
         endpoints = [
@@ -1194,7 +1195,48 @@ def _apply_export(
             out.append(guide)
     leftover = [r for r in export.rules if r.rule_id not in used_rules]
     if leftover:
-        warnings.append(f"knowledge-export: {len(leftover)} rule(s) matched no endpoint or page")
+        shown = "; ".join(f"{r.rule_id} {r.source_url or '(no sourceUrl)'}" for r in leftover[:3])
+        more = f"; +{len(leftover) - 3} more" if len(leftover) > 3 else ""
+        warnings.append(
+            f"knowledge-export: {len(leftover)} rule(s) matched no endpoint or page "
+            f"(e.g. {shown}{more})"
+        )
+    return out
+
+
+def url_key(url: str) -> str:
+    """A page URL compared loosely: percent-decoded (so encoded and decoded paths are equal),
+    no fragment, no trailing slash, scheme and host lower case; the query is kept."""
+    parts = urlsplit(unquote(url.strip()))
+    path = parts.path.rstrip("/")
+    return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), path, parts.query, ""))
+
+
+def _rule_pages(export: "knowledge_export.KnowledgeExport", used: set[str]) -> dict[int, int]:
+    """Each pending rule's page, as rule index -> page index (rule ids can repeat), by its
+    sourceUrl: the exact URL
+    first, then the loose key (``url_key``), then the URL without its query when exactly one
+    page has that path (a page whose query string the rule left out; where several pages
+    share a path, the query identifies the page and is required)."""
+    exact: dict[str, int] = {}
+    loose: dict[str, int] = {}
+    bare: dict[str, list[int]] = {}
+    for number, page in enumerate(export.pages):
+        exact.setdefault(page.source_url.rstrip("/"), number)
+        key = url_key(page.source_url)
+        loose.setdefault(key, number)
+        bare.setdefault(key.split("?", 1)[0], []).append(number)
+    out: dict[int, int] = {}
+    for index, rule in enumerate(export.rules):
+        if rule.rule_id in used or not rule.source_url:
+            continue
+        key = url_key(rule.source_url)
+        found = exact.get(rule.source_url.rstrip("/"), loose.get(key))
+        if found is None and "?" not in key:
+            only = bare.get(key, [])
+            found = only[0] if len(only) == 1 else None
+        if found is not None:
+            out[index] = found
     return out
 
 
