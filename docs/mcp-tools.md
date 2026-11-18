@@ -46,7 +46,9 @@ The same use cases back the HTTP API (`docs/openapi.json`); `POST /v1/apis/{api}
 returns the exact MCP payload as `claudePayload`.
 
 Absence rule: say "not documented in build X" only when `find_fact` returns `found:false` and
-`complete:true`; with `complete:false` absence is not proven.
+`complete:true`; with `complete:false` absence is not proven. A schema with more than 2000
+fields is listed only to a nesting level; a field not found where such a schema is in scope
+gives `complete:false` and the reason "not listed: <doc> schema truncated at nesting level N".
 
 ## MCP Apps
 

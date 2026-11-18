@@ -22,6 +22,9 @@ _GENERIC_VERSIONS = frozenset({"latest", "unstable", "stable", "current"})
 VERSION_PLACEHOLDER = "{version}"
 # A trigger document's raw key for its resolved payload (beside the verbatim event JSON).
 TRIGGER_PAYLOAD_KEY = "_payload"
+# An endpoint's/model's raw key: its field list stops at this nesting level (1 = top level)
+# because the schema has more fields than Plume lists; deeper fields are not proven absent.
+FIELDS_BOUNDED_KEY = "x-plume-fields-bounded"
 HTTP_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"})
 
 

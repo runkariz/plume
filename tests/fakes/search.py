@@ -5,7 +5,12 @@ from collections.abc import Sequence
 
 from plume.application.ports.embedder import Vector
 from plume.application.ports.search_index import ChunkHit, DocumentSummary
-from plume.domain.knowledge.document import Document, DocumentKind, FieldLocation
+from plume.domain.knowledge.document import (
+    FIELDS_BOUNDED_KEY,
+    Document,
+    DocumentKind,
+    FieldLocation,
+)
 from plume.domain.knowledge.fact import Fact, FactKind
 from plume.domain.shared.ids import BuildId
 from tests.fakes.knowledge import InMemoryDocumentRepo, InMemoryFactIndex
@@ -154,6 +159,21 @@ class InMemoryFactQuery:
             (f for f in self._facts.list_facts(build_id) if f.kind is FactKind.ENDPOINT),
             key=lambda f: f.name,
         )
+
+    def bounded_owners(
+        self, build_id: BuildId, *, owner_id: str | None = None, resource: str | None = None
+    ) -> dict[str, int]:
+        out: dict[str, int] = {}
+        for d in sorted(self._docs.list_documents(build_id), key=lambda d: d.doc_id):
+            level = (d.raw or {}).get(FIELDS_BOUNDED_KEY) if isinstance(d.raw, dict) else None
+            if (
+                isinstance(level, int)
+                and d.kind in (DocumentKind.ENDPOINT, DocumentKind.MODEL)
+                and (owner_id is None or d.doc_id == owner_id)
+                and (resource is None or (d.resource or "").lower() == resource.lower())
+            ):
+                out[d.doc_id] = level
+        return out
 
     def incomplete_owners(
         self, build_id: BuildId, *, owner_id: str | None = None, resource: str | None = None

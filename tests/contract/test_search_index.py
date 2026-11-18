@@ -5,7 +5,13 @@ import pytest
 from plume.domain.knowledge.api import ApiId, ApiInfo
 from plume.domain.knowledge.build import Build, BuildSpec
 from plume.domain.knowledge.chunk import chunk_document
-from plume.domain.knowledge.document import Document, DocumentKind, FieldLocation, FieldSpec
+from plume.domain.knowledge.document import (
+    FIELDS_BOUNDED_KEY,
+    Document,
+    DocumentKind,
+    FieldLocation,
+    FieldSpec,
+)
 from plume.domain.knowledge.fact import FactKind, facts_of
 from plume.domain.shared.ids import BuildId
 from tests.contract.conftest import Store
@@ -34,6 +40,7 @@ PRODUCT = Document(
     resource="Product",
     complete=False,
     fields=(FieldSpec("title", FieldLocation.MODEL, "string"),),
+    raw={"type": "object", FIELDS_BOUNDED_KEY: 2},  # its field list stops at level 2
 )
 GUIDE = Document(
     doc_id="guide:rate-limits",
@@ -141,6 +148,10 @@ def test_fact_owner_endpoints_incomplete(store: Store, build: BuildId) -> None:
     assert q.incomplete_owners(build) == ["model:product"]
     assert q.incomplete_owners(build, owner_id="endpoint:GET~/orders") == []
     assert q.incomplete_owners(build, resource="PRODUCT") == ["model:product"]
+    assert q.bounded_owners(build) == {"model:product": 2}
+    assert q.bounded_owners(build, owner_id="endpoint:GET~/orders") == {}
+    assert q.bounded_owners(build, resource="product") == {"model:product": 2}
+    assert q.bounded_owners(build, resource="Order") == {}
 
 
 def test_model_shapes_and_names(store: Store) -> None:

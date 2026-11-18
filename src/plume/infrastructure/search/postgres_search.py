@@ -7,7 +7,7 @@ from sqlalchemy import Engine, text
 
 from plume.application.ports.embedder import Vector
 from plume.application.ports.search_index import ChunkHit, DocumentSummary
-from plume.domain.knowledge.document import DocumentKind, FieldLocation
+from plume.domain.knowledge.document import FIELDS_BOUNDED_KEY, DocumentKind, FieldLocation
 from plume.domain.knowledge.fact import Fact, FactKind
 from plume.domain.shared.ids import BuildId
 from plume.infrastructure.db.repos._codec import vector_literal
@@ -259,6 +259,27 @@ class PostgresFactQuery:
                 {"b": build_id.value},
             ).all()
         return [fact_from_row(r) for r in rows]
+
+    def bounded_owners(
+        self, build_id: BuildId, *, owner_id: str | None = None, resource: str | None = None
+    ) -> dict[str, int]:
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT doc_id, raw->>:key FROM documents WHERE build_id = :b "
+                    "AND kind IN ('endpoint', 'model') AND raw->>:key IS NOT NULL "
+                    "AND (CAST(:owner AS text) IS NULL OR doc_id = :owner) "
+                    "AND (CAST(:res AS text) IS NULL OR lower(resource) = lower(:res)) "
+                    "ORDER BY doc_id"
+                ),
+                {
+                    "b": build_id.value,
+                    "owner": owner_id,
+                    "res": resource,
+                    "key": FIELDS_BOUNDED_KEY,
+                },
+            ).all()
+        return {str(doc): int(level) for doc, level in rows if str(level).isdigit()}
 
     def incomplete_owners(
         self, build_id: BuildId, *, owner_id: str | None = None, resource: str | None = None
