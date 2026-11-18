@@ -29,6 +29,7 @@ from plume.domain.knowledge import rate_limits
 from plume.domain.knowledge.api import ApiId, ApiInfo, Category
 from plume.domain.knowledge.asset import CONTENT_TYPES, ICON, MAX_ASSET_BYTES, Asset
 from plume.domain.knowledge.document import (
+    FIELDS_BOUNDED_KEY,
     TRIGGER_PAYLOAD_KEY,
     Document,
     DocumentKind,
@@ -711,7 +712,7 @@ class StreamPackageSource:
             scopes=scopes,
             source_id=_str(req.get("endpointId")),
             tags=_tags(req),
-            raw=req,
+            raw=req if not bounded else {**req, FIELDS_BOUNDED_KEY: min(bounded.values()) + 1},
             real_path=fixed,
             rate_limit=limit,
         )
@@ -763,7 +764,7 @@ class StreamPackageSource:
             fields=tuple(fields),
             source_id=title,
             shape=shape_hash(data),
-            raw=data,
+            raw=data if level is None else {**data, FIELDS_BOUNDED_KEY: level + 1},
         )
 
     @staticmethod

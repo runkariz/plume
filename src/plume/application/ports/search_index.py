@@ -97,3 +97,10 @@ class FactQuery(Protocol):
     ) -> list[str]:
         """Endpoint/model ids in scope whose source is flagged incomplete, sorted."""
         ...
+
+    def bounded_owners(
+        self, build_id: BuildId, *, owner_id: str | None = None, resource: str | None = None
+    ) -> dict[str, int]:
+        """Endpoint/model ids in scope whose field list stops at a nesting level (the schema
+        has more fields than Plume lists) -> that level, sorted by id."""
+        ...

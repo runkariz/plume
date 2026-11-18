@@ -446,6 +446,19 @@ def _general_guide(h: ChunkHit) -> bool:
     return h.kind is DocumentKind.GUIDE and not h.doc_id.startswith("guide:page-")
 
 
+BOUNDED_SHOWN = 3
+
+
+def _bounded_reason(bounded: dict[str, int]) -> str:
+    """ "not listed: <doc> schema truncated at nesting level N" (a few named, then a count)."""
+    shown = "; ".join(
+        f"{doc} schema truncated at nesting level {level}"
+        for doc, level in list(bounded.items())[:BOUNDED_SHOWN]
+    )
+    more = len(bounded) - BOUNDED_SHOWN
+    return f"not listed: {shown}" + (f"; +{more} more truncated schema(s)" if more > 0 else "")
+
+
 class FindFact:
     """Presence/absence of an endpoint, field or scope, with evidence and a completeness flag."""
 
@@ -556,6 +569,12 @@ class FindFact:
             FieldLocation.QUERY,
             FieldLocation.HEADER,
         )
+        if not found and field_like:
+            bounded = self._facts.bounded_owners(build_id, owner_id=owner, resource=resource)
+            if bounded:
+                # The field may sit deeper than Plume lists for these schemas: not proven.
+                complete = False
+                reasons.append(_bounded_reason(bounded))
         if not found and field_like and counts.get("model", 0) == 0:
             # Without model schemas, response/model fields are only known where an endpoint
             # documents its response; absence of a data field is not proven.
