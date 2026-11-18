@@ -27,8 +27,10 @@ SIGNED_WITH_AUTH = (
     "Every request must also be signed (see the setup text); Kariz can't sign requests yet, "
     "so calls will fail even with this auth."
 )
-# A code whose notice reads differently when the package has an auth scheme of its own.
-WITH_AUTH: dict[str, str] = {"auth-signed-request": SIGNED_WITH_AUTH}
+# Signing codes: when the package has an auth scheme of its own, any of them says the signing
+# comes on top of it (the rule is whether a scheme exists, not which code is present).
+SIGNING_CODES = ("auth-requires-signature", "auth-none-public-sources", "auth-signed-request")
+WITH_AUTH: dict[str, str] = dict.fromkeys(SIGNING_CODES, SIGNED_WITH_AUTH)
 KNOWN: dict[str, tuple[str, str]] = {
     "default-environment-by-order": (
         ENVIRONMENTS,

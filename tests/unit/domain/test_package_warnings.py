@@ -1,6 +1,13 @@
 """manifest.json warnings: code = text before the first ":"; known codes give notices."""
 
-from plume.domain.knowledge.package_warnings import AUTH, ENVIRONMENTS, notices, parse
+from plume.domain.knowledge.package_warnings import (
+    AUTH,
+    ENVIRONMENTS,
+    SIGNED,
+    SIGNED_WITH_AUTH,
+    notices,
+    parse,
+)
 
 RAW = [
     'auth-requires-signature: api-key-shop-client-key "All requests must contain ..."',
@@ -80,3 +87,13 @@ def test_auth_signed_request_reads_differently_with_an_auth_scheme() -> None:
     # with auth-requires-signature too: the same signing text without a scheme -> once
     both = parse(["auth-requires-signature: x", "auth-signed-request: y"])
     assert [n.code for n in notices(both, AUTH)] == ["auth-requires-signature"]
+
+
+def test_any_signing_code_says_also_signed_once_when_a_scheme_exists() -> None:
+    codes = ["auth-requires-signature: x", "auth-none-public-sources: y", "auth-signed-request: z"]
+    for one in codes:
+        found = notices(parse([one]), AUTH, has_auth=True)
+        assert [n.text for n in found] == [SIGNED_WITH_AUTH], one
+    together = notices(parse(codes), AUTH, has_auth=True)
+    assert [(n.code, n.text) for n in together] == [("auth-requires-signature", SIGNED_WITH_AUTH)]
+    assert [n.text for n in notices(parse(codes), AUTH)] == [SIGNED]  # no scheme: plain, once
