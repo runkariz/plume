@@ -97,3 +97,18 @@ def test_any_signing_code_says_also_signed_once_when_a_scheme_exists() -> None:
     together = notices(parse(codes), AUTH, has_auth=True)
     assert [(n.code, n.text) for n in together] == [("auth-requires-signature", SIGNED_WITH_AUTH)]
     assert [n.text for n in notices(parse(codes), AUTH)] == [SIGNED]  # no scheme: plain, once
+
+
+def test_sandbox_host_not_in_sources_is_an_environments_notice() -> None:
+    found = notices(
+        parse(
+            [
+                "sandbox-host-not-in-sources: sandbox named, no host",
+                "path-outside-common-base: /certificates without /api/v2",
+            ]
+        )
+    )
+    assert [(n.code, n.section) for n in found] == [("sandbox-host-not-in-sources", ENVIRONMENTS)]
+    assert found[0].text == (
+        "The docs mention a sandbox, but no source gives its address, so only production is listed."
+    )
