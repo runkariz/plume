@@ -41,7 +41,8 @@ from plume.domain.shared.hashing import ContentHash, content_hash
 # 20: bounded endpoint/model documents record the listed level in raw (find_fact: not listed).
 # 21: knowledge-export rules find their page by a loose URL key (percent-decoded; without a
 #     query when only one page has the path).
-CHUNKER_VERSION = "21"
+# 22: a one-endpoint page that could not be cut puts its rules into the endpoint (no guide).
+CHUNKER_VERSION = "22"
 DEFAULT_MAX_CHARS = 6000
 # Endpoint/model chunks embedded per document. The largest reference documents (Magento
 # order endpoints) take 23; Shopware's entity graph took up to 14,000 before the field bound.

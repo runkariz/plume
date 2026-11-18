@@ -66,3 +66,35 @@ def test_leftover_warning_lists_examples() -> None:
         "r0 https://nowhere.example/0; r1 https://nowhere.example/1; "
         "r2 https://nowhere.example/2; +2 more)"
     ]
+
+
+def _endpoint(source_id: str) -> Document:
+    return Document(
+        doc_id=f"endpoint:GET~/{source_id}",
+        kind=DocumentKind.ENDPOINT,
+        title=source_id,
+        text=f"# {source_id}",
+        method="GET",
+        path=f"/{source_id}",
+        source_id=source_id,
+    )
+
+
+def test_a_one_endpoint_page_folds_its_rules_into_the_endpoint() -> None:
+    one = ExportPage(
+        file="one.md", source_url="https://d.example/one", title="One", intro="x",
+        items=[("get-one", "GET one")],
+    )  # fmt: skip
+    two = ExportPage(
+        file="two.md", source_url="https://d.example/two", title="Two", intro="x",
+        items=[("get-a", "GET a"), ("get-b", "GET b")],
+    )  # fmt: skip
+    rules = [_rule("r1", "https://d.example/one"), _rule("r2", "https://d.example/two")]
+    export = KnowledgeExport(complete=True, pages=[one, two], rules=rules, gold_path=None)
+    docs = [_endpoint("get-one"), _endpoint("get-a"), _endpoint("get-b")]
+    out = {d.doc_id: d for d in _apply_export(docs, export, [])}
+    assert "## Rules (documentation page)\n- text r1" in out["endpoint:GET~/get-one"].text
+    guides = [d for d in out.values() if d.kind is DocumentKind.GUIDE]
+    assert len(guides) == 1  # no rules-only guide duplicating the one endpoint
+    assert "text r2" in guides[0].text  # a page with two endpoints keeps its guide
+    assert "text r2" not in out["endpoint:GET~/get-a"].text
