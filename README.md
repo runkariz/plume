@@ -173,7 +173,7 @@ embedder means loading the packages again.
 | Model documents (`model:<name>`) | `models/*.schema.json`; bundler titles like `A01_Response_200_X` get readable names | search, facts, canonical models |
 | Guides, auth, app | `knowledge/`, `auth/`, `app.json`, `knowledge-export/` | search |
 | Facts | every endpoint, field (path/query/header/body/response/model) and scope, with a JSON pointer | `find_fact`, model validation |
-| Chunks + vectors | documents split by size/headings | hybrid search |
+| Chunks + vectors | documents split by size/headings; an endpoint or model embeds at most 24 chunks (its head first) and lists at most 2000 schema fields (the deepest nesting level that fits) | hybrid search |
 | Eval | your gold set | the gate, the quality shown in the UI |
 
 Ids never contain the vendor's version, so the same endpoint keeps its id across vendor
@@ -222,6 +222,7 @@ Reader routes are public and rate limited; maintainer routes need `Authorization
 | `PLUME_VERTEX_EMBED_LOCATION` | `global` | the embedding model's location on the project path (whenever `PLUME_VERTEX_PROJECT` is set, key or ADC), e.g. `europe-west3` to keep query text in the EU; `eu` / `us` use the multi-region endpoints (`aiplatform.eu.rep.googleapis.com`) |
 | `PLUME_EMBED_PROMPT` | `none` | `gemini`: write the task into the text for `gemini-embedding-2` ([Google's format](https://ai.google.dev/gemini-api/docs/embeddings): documents `title: … \| text: …`, queries `task: search result \| query: …`); builds record `<model>+prompt`. Refused with any other model |
 | `PLUME_EMBED_MODEL` | `gemini-embedding-001` | `gemini-embedding-2` is served only at `eu` / `us` (multi-region), takes no API key (ADC: `PLUME_VERTEX_AUTH=adc` + project) and uses `:batchEmbedContents` (up to 250 texts per call). A model change gives new builds (the model is part of the build's identity); search and the eval gate refuse a build embedded with another model |
+| `PLUME_EMBED_CONCURRENCY` | `8` | parallel embedding requests (Vertex `gemini-embedding-001` takes one text per request); 429s are retried with backoff |
 | `PLUME_VERTEX_PROJECT` / `PLUME_VERTEX_LOCATION` | – / `global` | with a project, generation calls the model at that location (gemini-4-argon answers only at `global`); without one, the location-less express URL |
 | `PLUME_MODEL_LLM` / `PLUME_MODEL_MAX_ROUNDS` | `gemini-4-argon` / `3` | the generation model and its repair rounds |
 | `PLUME_MCP_APP_HTML` | the packaged file | the MCP App bundle (model view) served as `ui://plume/model-view`; see [docs/mcp-apps.md](docs/mcp-apps.md) |

@@ -2,8 +2,24 @@
 
 import typer
 
+from plume.application.ports.job_events import JobEvent, JobEvents
 from plume.bootstrap.container import Container
 from plume.interfaces.cli.main import CliDependencies, create_app
+
+
+class _Tee:
+    """Job events to the container's log and to the CLI's progress."""
+
+    def __init__(self, *sinks: JobEvents) -> None:
+        self._sinks = sinks
+
+    def emit(self, event: JobEvent) -> None:
+        for sink in self._sinks:
+            sink.emit(event)
+
+
+def _tee(log: JobEvents, extra: JobEvents | None) -> JobEvents:
+    return log if extra is None else _Tee(log, extra)
 
 
 def build_app(container: Container | None = None) -> typer.Typer:
@@ -39,7 +55,7 @@ def build_app(container: Container | None = None) -> typer.Typer:
     return create_app(
         CliDependencies(
             migrate_schema=lambda: c().migrate_schema(),
-            build_pipeline=lambda: c().build_pipeline(),
+            build_pipeline=lambda events: c().build_pipeline(_tee(c().events, events)),
             list_apis=lambda: c().list_apis(),
             list_builds=lambda: c().list_builds(),
             diff_builds=lambda: c().diff_builds(),

@@ -15,6 +15,7 @@ The reader depends only on the package's files, not on who produced it. Layout (
 """
 
 import hashlib
+import itertools
 import json
 import re
 from collections.abc import Iterator, Mapping
@@ -46,6 +47,7 @@ from plume.infrastructure.sources import knowledge_export
 
 JsonObj = dict[str, Any]
 MAX_FIELD_DEPTH = 6
+MAX_WALK_FIELDS = 2000  # per schema; the largest reference API (Magento orders) has 1422
 SUPPORTED_CONTRACT_MAJOR = "1"
 _TEMPLATE_VAR = re.compile(r"\{\{\s*(?:req_vars|vars)\.([A-Za-z0-9_]+)\s*\}\}")
 _TEMPLATE_ANY = re.compile(r"\{\{[^}]*\}\}")
@@ -138,11 +140,12 @@ def _walk_fields(
     prefix: str = "",
     depth: int = 0,
     scope: _RefScope | None = None,
+    max_depth: int = MAX_FIELD_DEPTH,
 ) -> Iterator[FieldSpec]:
     """Every field of a schema as dotted paths (`line_items[].sku`). `$ref`s to the same file or
     to sibling schema files are followed (bounded depth, cycle-safe); a field found through a
     reference keeps that file in its pointer (`orderlineitem.schema.json#/properties/sku`)."""
-    if depth > MAX_FIELD_DEPTH:
+    if depth > max_depth:
         return
     if scope is None:
         scope = _RefScope(schema, pointer.split("#", 1)[0])
@@ -151,7 +154,9 @@ def _walk_fields(
         resolved = _resolve_ref(ref, scope)
         if resolved is not None:
             target, target_pointer, inner = resolved
-            yield from _walk_fields(target, location, target_pointer, prefix, depth, inner)
+            yield from _walk_fields(
+                target, location, target_pointer, prefix, depth, inner, max_depth
+            )
         return
     props = schema.get("properties")
     raw_required = schema.get("required")
@@ -171,11 +176,11 @@ def _walk_fields(
                 pointer=sub_pointer,
                 constraints=constraints_of(sub),
             )
-            yield from _walk_fields(sub, location, sub_pointer, full, depth + 1, scope)
+            yield from _walk_fields(sub, location, sub_pointer, full, depth + 1, scope, max_depth)
     items = schema.get("items")
     if isinstance(items, dict):
         yield from _walk_fields(
-            items, location, f"{pointer}/items", f"{prefix}[]", depth + 1, scope
+            items, location, f"{pointer}/items", f"{prefix}[]", depth + 1, scope, max_depth
         )
 
 
@@ -190,6 +195,31 @@ def _ref_description(sub: Mapping[str, Any], scope: _RefScope) -> str | None:
         return None
     resolved = _resolve_ref(ref, scope)
     return _str(resolved[0].get("description")) if resolved else None
+
+
+def _bounded_fields(
+    schema: Mapping[str, Any], location: FieldLocation, pointer: str, scope: _RefScope
+) -> tuple[list[FieldSpec], int | None]:
+    """The schema's fields, at most ``MAX_WALK_FIELDS``: the deepest nesting level whose fields
+    fit (in the walk's order), and that level when it is not the full depth (else None).
+    Schemas whose references fan out (an entity graph: order -> customer -> orders[] -> ...)
+    would otherwise expand into hundreds of thousands of fields."""
+    found: list[FieldSpec] = []
+    for limit in range(MAX_FIELD_DEPTH, -1, -1):
+        walk = _walk_fields(schema, location, pointer, scope=scope, max_depth=limit)
+        found = list(itertools.islice(walk, MAX_WALK_FIELDS + 1))
+        if len(found) <= MAX_WALK_FIELDS:
+            return found, None if limit == MAX_FIELD_DEPTH else limit
+    return found[:MAX_WALK_FIELDS], 0
+
+
+def _bounded_note(level: int | None) -> str:
+    if level is None:
+        return ""
+    return (
+        f"Note: the schema has more than {MAX_WALK_FIELDS} fields; only fields up to nesting "
+        f"level {level + 1} are listed here (the full schema is in the package)."
+    )
 
 
 _SHAPE_IGNORED = frozenset({"title", "description", "examples", "example", "default"})
@@ -241,10 +271,12 @@ def display_name(name: str, texts: list[str]) -> str:
     return name[:1].upper() + name[1:]
 
 
-def _fields_section(title: str, fields: list[FieldSpec]) -> str:
+def _fields_section(title: str, fields: list[FieldSpec], level: int | None = None) -> str:
     if not fields:
         return ""
     lines = [f"## {title}"]
+    if level is not None:
+        lines.append(_bounded_note(level))
     for f in fields:
         bits = [f"`{f.name}`"]
         if f.type:
@@ -339,14 +371,19 @@ _REQUEST_SCHEMAS = (
 
 def _endpoint_fields(
     folder: Path, req: JsonObj
-) -> tuple[dict[str, list[FieldSpec]], list[FieldSpec]]:
+) -> tuple[dict[str, list[FieldSpec]], list[FieldSpec], dict[str, int]]:
+    """Request fields per section, 2xx response fields, and the sections whose fields were
+    bounded (title -> listed nesting level)."""
     sections: dict[str, list[FieldSpec]] = {}
+    bounded: dict[str, int] = {}
     for ref_key, location, title in _REQUEST_SCHEMAS:
         ref = _str(req.get(ref_key))
         data = _opt_json(folder / ref) if ref else None
         if data is not None and ref is not None:
             scope = _RefScope(data, ref, (folder / ref).parent)
-            sections[title] = list(_walk_fields(data, location, f"{ref}#", scope=scope))
+            sections[title], level = _bounded_fields(data, location, f"{ref}#", scope)
+            if level is not None:
+                bounded[title] = level
     response_fields: list[FieldSpec] = []
     for response in req.get("responses") or []:
         status = response.get("statusCode") if isinstance(response, dict) else None
@@ -355,10 +392,11 @@ def _endpoint_fields(
             data = _opt_json(folder / ref)
             if data is not None:
                 scope = _RefScope(data, ref, (folder / ref).parent)
-                response_fields.extend(
-                    _walk_fields(data, FieldLocation.RESPONSE, f"{ref}#", scope=scope)
-                )
-    return sections, response_fields
+                found, level = _bounded_fields(data, FieldLocation.RESPONSE, f"{ref}#", scope)
+                response_fields.extend(found)
+                if level is not None:
+                    bounded["Response fields"] = min(level, bounded.get("Response fields", level))
+    return sections, response_fields, bounded
 
 
 def _required_scopes(req: JsonObj) -> tuple[str, ...]:
@@ -381,7 +419,9 @@ def _endpoint_text(
     response_fields: list[FieldSpec],
     scopes: tuple[str, ...],
     deprecated: bool,
+    bounded: dict[str, int] | None = None,
 ) -> str:
+    bounded = bounded or {}
     meta = [f"`{signature}`"]
     for label, key in (("Resource", "resource"), ("Operation", "operationKind")):
         if _str(req.get(key)):
@@ -399,7 +439,7 @@ def _endpoint_text(
         parts.append(f"Permission: {req['permissionNote']}")
     parts.append(_bullets("Required scopes", [f"- `{s}`" for s in scopes]))
     for _, _, title in _REQUEST_SCHEMAS:
-        parts.append(_fields_section(title, sections.get(title, [])))
+        parts.append(_fields_section(title, sections.get(title, []), bounded.get(title)))
     responses = [r for r in req.get("responses") or [] if isinstance(r, dict)]
     parts.append(
         _bullets(
@@ -411,7 +451,9 @@ def _endpoint_text(
             ],
         )
     )
-    parts.append(_fields_section("Response fields", response_fields))
+    parts.append(
+        _fields_section("Response fields", response_fields, bounded.get("Response fields"))
+    )
     errors = [e for e in req.get("errors") or [] if isinstance(e, dict)]
     parts.append(
         _bullets("Errors", [f"- {e.get('status')}: {e.get('meaning', '')}" for e in errors])
@@ -636,7 +678,7 @@ class StreamPackageSource:
         path = normalize_endpoint_path(_url_path(url), versions)
         method = method.upper()
         name = _str(req.get("name")) or f"{method} {path}"
-        sections, response_fields = _endpoint_fields(folder, req)
+        sections, response_fields, bounded = _endpoint_fields(folder, req)
         scopes = _required_scopes(req)
         deprecated = bool(req.get("isDeprecated")) or bool(req.get("deprecation"))
         provenance = _obj(req.get("provenance"))
@@ -657,6 +699,7 @@ class StreamPackageSource:
                 response_fields,
                 scopes,
                 deprecated,
+                bounded,
             ),
             source_url=_str(provenance.get("sourceUrl")) or _str(req.get("docLink")),
             anchor=doc_anchor(provenance.get("docAnchor")),
@@ -697,13 +740,8 @@ class StreamPackageSource:
         data = _read_json(path)
         stem = path.name.removesuffix(".schema.json")
         title = _str(data.get("title")) or stem
-        fields = list(
-            _walk_fields(
-                data,
-                FieldLocation.MODEL,
-                f"{path.name}#",
-                scope=_RefScope(data, path.name, path.parent),
-            )
+        fields, level = _bounded_fields(
+            data, FieldLocation.MODEL, f"{path.name}#", _RefScope(data, path.name, path.parent)
         )
         complete = data.get("x-complete") is not False
         parts = [f"# {title} (model)"]
@@ -711,7 +749,7 @@ class StreamPackageSource:
             parts.append(str(data["description"]))
         if not complete:
             parts.append("Note: the source marks this model as incomplete.")
-        section = _fields_section("Fields", fields)
+        section = _fields_section("Fields", fields, level)
         if section:
             parts.append(section)
         return Document(
@@ -1012,13 +1050,11 @@ def _payload_of(
         if model is not None:
             schema = None  # link the model instead of repeating its fields
         elif schema is not None and path is not None:
-            fields = list(
-                _walk_fields(
-                    schema,
-                    FieldLocation.BODY,
-                    f"{path.name}#",
-                    scope=_RefScope(schema, path.name, path.parent),
-                )
+            fields, _ = _bounded_fields(
+                schema,
+                FieldLocation.BODY,
+                f"{path.name}#",
+                _RefScope(schema, path.name, path.parent),
             )
         else:
             missing.append(f"{doc.source_id}: payloadSchemaRef {schema_ref}")

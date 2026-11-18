@@ -2,6 +2,8 @@
 
 import json
 import math
+import threading
+import time
 from collections.abc import Callable
 
 import httpx
@@ -124,3 +126,42 @@ def test_transport_error_retried_then_reported() -> None:
 def test_key_required() -> None:
     with pytest.raises(EmbeddingError):
         GeminiEmbedder("")
+
+
+def test_vertex_requests_run_in_parallel_and_keep_order() -> None:
+    active = 0
+    peak = 0
+    lock = threading.Lock()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal active, peak
+        with lock:
+            active += 1
+            peak = max(peak, active)
+        time.sleep(0.02)
+        text = json.loads(request.content)["instances"][0]["content"]
+        with lock:
+            active -= 1
+        n = float(int(text))
+        return httpx.Response(
+            200, json={"predictions": [{"embeddings": {"values": [n + 1, 0.0, 0.0, 0.0]}}]}
+        )
+
+    emb = _embedder(handler, backend="vertex", concurrency=4)
+    texts = [str(i) for i in range(12)]
+    vectors = emb.embed_documents(texts)
+    assert vectors == [(1.0, 0.0, 0.0, 0.0)] * 12  # normalised, one per text, in order
+    assert peak > 1
+    assert peak <= 4
+
+
+def test_parallel_keeps_the_order_of_distinct_vectors() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        i = int(json.loads(request.content)["instances"][0]["content"])
+        values = [0.0, 0.0, 0.0, 0.0]
+        values[i % 4] = 1.0
+        return httpx.Response(200, json={"predictions": [{"embeddings": {"values": values}}]})
+
+    emb = _embedder(handler, backend="vertex", concurrency=3)
+    vectors = emb.embed_documents([str(i) for i in range(8)])
+    assert [v.index(1.0) for v in vectors] == [i % 4 for i in range(8)]

@@ -19,11 +19,13 @@ from plume.application.knowledge.release_notes import ReleaseNotes
 from plume.application.knowledge.remove_api import ApiInUseError, RemoveApi
 from plume.application.knowledge.tag_build import TagBuild
 from plume.application.ports.eval_repo import GoldSource
+from plume.application.ports.job_events import JobEvents
 from plume.application.reader.resolve import BuildResolver
 from plume.application.system.migrate_schema import MigrateSchema
 from plume.domain.knowledge.api import ApiId
 from plume.domain.shared.errors import DomainError
 from plume.domain.shared.ids import BuildId
+from plume.interfaces.cli.progress import LoadProgress
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,7 +33,8 @@ class CliDependencies:
     """Factories, so ``plume --help`` never builds a database engine."""
 
     migrate_schema: Callable[[], MigrateSchema]
-    build_pipeline: Callable[[], BuildPipeline] | None = None
+    # Called with the CLI's progress events (None: the container's own).
+    build_pipeline: Callable[[JobEvents | None], BuildPipeline] | None = None
     list_apis: Callable[[], ListApis] | None = None
     list_builds: Callable[[], ListBuilds] | None = None
     diff_builds: Callable[[], DiffBuilds] | None = None
@@ -107,7 +110,9 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         """Import a package: build -> chunk -> embed -> facts -> seal -> eval gate -> tag.
 
         Exit code 2 when the quality gate fails (the build is sealed but not tagged)."""
-        pipeline = _need(deps.build_pipeline, "load")
+        if deps.build_pipeline is None:
+            raise typer.BadParameter("load is not available in this build")
+        pipeline = deps.build_pipeline(LoadProgress(lambda line: typer.echo(line, err=True)))
         try:
             result = pipeline.execute(
                 deps.new_job_id(),
