@@ -440,3 +440,33 @@ async def test_mcp_tools_carry_the_notices(packages: Path, tmp_path: Path) -> No
         assert [n["code"] for n in auth["notices"]] == ["auth-requires-signature"]
         env = await call(client, "get_environments", api="shopify")
         assert [n["code"] for n in env["notices"]] == ["default-environment-by-order"]
+
+
+def test_signed_request_notice_says_also_when_the_package_has_auth(
+    packages: Path, tmp_path: Path
+) -> None:
+    stack = FakeStack(embedder=WordEmbedder())
+    stack.load(str(warned_package(packages, tmp_path, ["auth-signed-request: sign param"])))
+    http = TestClient(
+        create_app(
+            HttpDependencies(
+                overviews=stack.overviews,
+                browse=stack.browse,
+                search=stack.search,
+                get_document=stack.get_document,
+                find_fact=stack.find_fact,
+                check_call=stack.check_call,
+                list_builds=lambda: ListBuilds(stack.builds, stack.tags),
+                diff_builds=lambda: DiffBuilds(stack.builds),
+                resolver=stack.resolver,
+                sections=stack.sections,
+                rate_limit_per_minute=0,
+            )
+        )
+    )
+    auth = http.get("/v1/apis/shopify/auth").json()  # shopify-mini has an OAuth2 scheme
+    assert auth["present"] is True
+    assert [n["text"] for n in auth["notices"]] == [
+        "Every request must also be signed (see the setup text); Kariz can't sign requests "
+        "yet, so calls will fail even with this auth."
+    ]

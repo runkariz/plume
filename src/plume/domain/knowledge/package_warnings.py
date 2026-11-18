@@ -23,6 +23,12 @@ class Notice:
 
 
 SIGNED = "Every request must be signed (see the setup text); there is no ready auth option yet."
+SIGNED_WITH_AUTH = (
+    "Every request must also be signed (see the setup text); Kariz can't sign requests yet, "
+    "so calls will fail even with this auth."
+)
+# A code whose notice reads differently when the package has an auth scheme of its own.
+WITH_AUTH: dict[str, str] = {"auth-signed-request": SIGNED_WITH_AUTH}
 KNOWN: dict[str, tuple[str, str]] = {
     "default-environment-by-order": (
         ENVIRONMENTS,
@@ -30,6 +36,7 @@ KNOWN: dict[str, tuple[str, str]] = {
     ),
     "auth-requires-signature": (AUTH, SIGNED),
     "auth-none-public-sources": (AUTH, SIGNED),
+    "auth-signed-request": (AUTH, SIGNED),
     "auth-needs-core-change": (
         AUTH,
         "This API's auth uses a variant the connector can't express yet; calls won't "
@@ -52,17 +59,21 @@ def parse(raw: object) -> list[PackageWarning]:
     return out
 
 
-def notices(warnings: list[PackageWarning], section: str | None = None) -> list[Notice]:
+def notices(
+    warnings: list[PackageWarning], section: str | None = None, has_auth: bool = False
+) -> list[Notice]:
     """User-facing notices for the known codes, one per distinct text and section (in order),
-    only the given section's when one is named."""
+    only the given section's when one is named. ``has_auth``: the package has an auth scheme
+    (some codes then say the signing comes on top of it)."""
     out: list[Notice] = []
     seen: set[tuple[str, str]] = set()
     for w in warnings:
         known = KNOWN.get(w.code)
         if known is None or (section is not None and known[0] != section):
             continue
-        if (known[0], known[1]) in seen:
+        where, text = known[0], (WITH_AUTH.get(w.code) if has_auth else None) or known[1]
+        if (where, text) in seen:
             continue
-        seen.add((known[0], known[1]))
-        out.append(Notice(code=w.code, section=known[0], text=known[1]))
+        seen.add((where, text))
+        out.append(Notice(code=w.code, section=where, text=text))
     return out

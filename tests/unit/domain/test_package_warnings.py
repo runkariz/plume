@@ -61,3 +61,22 @@ def test_auth_needs_core_change_is_an_auth_notice_once() -> None:
     assert [n.code for n in found] == ["auth-needs-core-change", "auth-requires-signature"]
     assert found[0].text.startswith("This API's auth uses a variant the connector can't")
     assert found[0].text.endswith("until Kariz supports it (see the setup text).")
+
+
+def test_auth_signed_request_reads_differently_with_an_auth_scheme() -> None:
+    signed = parse(["auth-signed-request: query parameters app_key, sign, timestamp"])
+    alone = notices(signed, AUTH)
+    assert [(n.code, n.text) for n in alone] == [
+        (
+            "auth-signed-request",
+            "Every request must be signed (see the setup text); there is no ready auth option yet.",
+        )
+    ]
+    with_auth = notices(signed, AUTH, has_auth=True)
+    assert with_auth[0].text == (
+        "Every request must also be signed (see the setup text); Kariz can't sign requests "
+        "yet, so calls will fail even with this auth."
+    )
+    # with auth-requires-signature too: the same signing text without a scheme -> once
+    both = parse(["auth-requires-signature: x", "auth-signed-request: y"])
+    assert [n.code for n in notices(both, AUTH)] == ["auth-requires-signature"]

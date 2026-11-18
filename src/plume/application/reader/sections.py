@@ -93,7 +93,12 @@ class PackageSections:
         self, api: str, section: str | None = None, version: str | None = None
     ) -> list[dict[str, str]]:
         """User-facing notices for the package warnings Plume knows ({code, section, text})."""
-        found = package_warnings.notices(self.package_warnings(api, version), section)
+        r = self._resolver.resolve(api, version)
+        warnings = package_warnings.parse(self._app_raw(r).get("package_warnings"))
+        has_auth = any(w.code in package_warnings.WITH_AUTH for w in warnings) and bool(
+            self._index.browse(r.build.build_id, (DocumentKind.AUTH,), None, 1, 0)[0]
+        )
+        found = package_warnings.notices(warnings, section, has_auth=has_auth)
         return [{"code": n.code, "section": n.section, "text": n.text} for n in found]
 
     def webhooks(self, api: str, version: str | None = None) -> list[dict[str, Any]]:
