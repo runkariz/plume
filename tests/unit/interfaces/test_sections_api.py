@@ -513,6 +513,10 @@ async def test_documents_cite_every_page_of_a_merged_rule(packages: Path, tmp_pa
         "https://developer.woocommerce.com/docs/other-page",
     ]
     assert [r["urls"] for r in doc["ruleSources"]] == [expected]
+    [cited] = doc["ruleSources"]
+    assert cited["text"].startswith("If individual_use is enabled on a coupon")
+    assert cited["type"] == "effect"
+    assert cited["line"] in doc["text"].splitlines()
     server = create_reader_server(
         McpReaderDependencies(
             overviews=stack.overviews,
@@ -531,3 +535,4 @@ async def test_documents_cite_every_page_of_a_merged_rule(packages: Path, tmp_pa
         assert not result.is_error, result.content
         payload = dict(result.structured_content or {})
         assert [r["urls"] for r in payload["rule_sources"]] == [expected]
+        assert payload["rule_sources"][0]["type"] == "effect"

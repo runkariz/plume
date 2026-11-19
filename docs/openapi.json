@@ -3616,9 +3616,45 @@
       },
       "RuleSource": {
         "properties": {
+          "line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The rule's line exactly as in the document text.",
+            "title": "Line"
+          },
           "ruleId": {
             "title": "Ruleid",
             "type": "string"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The rule's own text.",
+            "title": "Text"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The rule's type (effect, rule, ...).",
+            "title": "Type"
           },
           "urls": {
             "description": "The rule's pages: sourceUrl, then sourceUrls.",

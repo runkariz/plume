@@ -1290,9 +1290,14 @@ def _rule_pages(export: "knowledge_export.KnowledgeExport", used: set[str]) -> d
     return out
 
 
-def _rule_sources(rules: "list[knowledge_export.Rule]") -> dict[str, list[str]]:
-    """The citations of rules stated on several pages: rule id -> its URLs, sourceUrl first."""
-    return {r.rule_id: list(r.urls) for r in rules if r.source_urls}
+def _rule_sources(rules: "list[knowledge_export.Rule]") -> dict[str, dict[str, Any]]:
+    """The citations of rules stated on several pages: rule id -> {urls (sourceUrl first), text,
+    type, line (the rule's line exactly as in the document text)}."""
+    return {
+        r.rule_id: {"urls": list(r.urls), "text": r.text, "type": r.type, "line": r.line()}
+        for r in rules
+        if r.source_urls
+    }
 
 
 def _with_rule_sources(doc: Document, rules: "list[knowledge_export.Rule]") -> Document:

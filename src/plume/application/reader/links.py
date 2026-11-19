@@ -73,12 +73,27 @@ def scope_endpoints(doc: Document) -> dict[str, list[str]]:
 
 def rule_sources(doc: Document) -> list[dict[str, Any]]:
     """Rules in the document's text that are stated on several pages, with every page as a
-    citation: [{ruleId, urls}] (sourceUrl first). Empty when its rules name one page each."""
+    citation: [{ruleId, text, type, line, urls}] (urls: sourceUrl first; line: the rule's line
+    exactly as in the text). Empty when its rules name one page each."""
     value = _raw(doc).get(RULE_SOURCES_KEY)
     if not isinstance(value, dict):
         return []
-    return [
-        {"ruleId": rule, "urls": _ids(urls)}
-        for rule, urls in value.items()
-        if isinstance(rule, str) and _ids(urls)
-    ]
+    out = []
+    for rule, entry in value.items():
+        info = entry if isinstance(entry, dict) else {"urls": entry}  # urls only (b43af2f)
+        urls = _ids(info.get("urls"))
+        if isinstance(rule, str) and urls:
+            out.append(
+                {
+                    "ruleId": rule,
+                    "text": _str(info.get("text")),
+                    "type": _str(info.get("type")),
+                    "line": _str(info.get("line")),
+                    "urls": urls,
+                }
+            )
+    return out
+
+
+def _str(value: Any) -> str | None:
+    return value if isinstance(value, str) and value else None
