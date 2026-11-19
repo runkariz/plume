@@ -31,6 +31,7 @@ from plume.domain.models.canonical_model import (
     ModelDraft,
 )
 from plume.domain.models.model_gold import GoldCell, GoldModel
+from plume.domain.models.release import GateFailure
 
 CORRECT = "correct"
 WRONG = "wrong"
@@ -299,13 +300,15 @@ class ModelGatePolicy:
 
     min_recall: float | None = None
 
-    def failures(self, result: ModelEval) -> list[str]:
+    def failures(self, result: ModelEval) -> list[GateFailure]:
         out = []
         if result.invented:
             rows = (*result.cells, *result.extra_invented)
             fields = sorted({r.field or r.model_field or "?" for r in rows if r.result == INVENTED})
-            out.append(f"{result.invented} invented mapping(s): {', '.join(fields)}")
+            out.append(
+                GateFailure(f"{result.invented} invented mapping(s): {', '.join(fields)}", False)
+            )
         recall = result.recall
         if self.min_recall is not None and recall is not None and recall < self.min_recall:
-            out.append(f"recall {recall} below {self.min_recall}")
+            out.append(GateFailure(f"recall {recall} below {self.min_recall}", True))
         return out

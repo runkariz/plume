@@ -51,6 +51,7 @@ def _snapshot(r: Any) -> ModelSnapshot:
         ),
         superseded_by=r.superseded_by,
         superseded_at=r.superseded_at,
+        release_override=_j(r.release_override) if r.release_override is not None else None,
     )
 
 
@@ -197,15 +198,25 @@ class PostgresModelRepo:
         return [_snapshot(r) for r in rows]
 
     def set_visibility(
-        self, snapshot_id: str, visibility: str, released_at: datetime | None
+        self,
+        snapshot_id: str,
+        visibility: str,
+        released_at: datetime | None,
+        release_override: dict[str, Any] | None = None,
     ) -> None:
         with self._engine.begin() as conn:
             conn.execute(
                 text(
-                    "UPDATE model_snapshots SET visibility = :v, released_at = :r "
+                    "UPDATE model_snapshots SET visibility = :v, released_at = :r, "
+                    "release_override = COALESCE(CAST(:o AS jsonb), release_override) "
                     "WHERE snapshot_id = :s"
                 ),
-                {"v": visibility, "r": released_at, "s": snapshot_id},
+                {
+                    "v": visibility,
+                    "r": released_at,
+                    "s": snapshot_id,
+                    "o": json.dumps(release_override) if release_override else None,
+                },
             )
 
     def supersede(self, snapshot_id: str, by: str, at: datetime) -> bool:

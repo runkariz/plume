@@ -30,6 +30,7 @@ from plume.application.ports.search_index import DocumentSummary, FactQuery, Sea
 from plume.application.reader.resolve import BuildResolver
 from plume.domain.knowledge.document import Document, DocumentKind, FieldLocation
 from plume.domain.models.canonical_model import DraftFormatError, ModelDraft, parse_draft
+from plume.domain.models.release import GateFailure
 from plume.domain.models.snapshot import (
     ModelSnapshot,
     Origin,
@@ -269,7 +270,7 @@ class ModelSessions:
         models: ModelRepo,
         clock: Clock,
         collections: Collections | None = None,
-        release_gate: Callable[[ModelSnapshot], list[str]] | None = None,
+        release_gate: Callable[[ModelSnapshot], list[GateFailure]] | None = None,
     ) -> None:
         self._collections = collections
         self._release_gate = release_gate
@@ -825,7 +826,9 @@ class ModelSessions:
             f'submit_model_draft(model_session, draft, based_on="{base.snapshot_id}").',
         }
 
-    def release(self, snapshot_id: str, supersedes: Sequence[str] = ()) -> ModelSnapshot:
+    def release(
+        self, snapshot_id: str, supersedes: Sequence[str] = (), override_reason: str | None = None
+    ) -> ModelSnapshot:
         """Make an unreleased model official. ``supersedes``: official models of the same concept
         (case-insensitive, any API set) the maintainer chose to replace: they become superseded
         (readable by id, not listed, superseded_by this one). Never automatic."""
@@ -833,21 +836,34 @@ class ModelSessions:
         if s.visibility != Visibility.UNRELEASED:
             raise ModelStateError(f"model {snapshot_id} is {s.visibility}, not unreleased")
         wanted = self._check_supersedes(s, supersedes)
-        self.check_release_gate(s)
+        override = self.check_release_gate(s, override_reason)
         now = self._clock.now()
-        self._models.set_visibility(snapshot_id, Visibility.OFFICIAL, now)
+        if override is not None:
+            override = {**override, "at": now.isoformat()}
+        self._models.set_visibility(snapshot_id, Visibility.OFFICIAL, now, override)
         for old in wanted:
             self._models.supersede(old, snapshot_id, now)
         return self.snapshot(snapshot_id)
 
-    def check_release_gate(self, snap: ModelSnapshot) -> None:
+    def check_release_gate(
+        self, snap: ModelSnapshot, override_reason: str | None = None
+    ) -> dict[str, Any] | None:
         """The model gold gate (no invented mapping; recall at least the threshold once set);
-        a model without gold for its concept passes."""
+        a model without gold for its concept passes. A maintainer's reason overrides the
+        overridable failures (never an invented mapping): returns {reason, failures} to keep
+        with the release, or None when nothing was overridden."""
         failures = self._release_gate(snap) if self._release_gate is not None else []
-        if failures:
+        if not failures:
+            return None
+        text = "; ".join(f.message for f in failures)
+        reason = (override_reason or "").strip()
+        hard = [f for f in failures if not f.overridable]
+        if hard or not reason:
+            hint = "" if hard else " (a maintainer may release over it with a reason)"
             raise ModelStateError(
-                f"model {snap.snapshot_id} fails the model gold gate: {'; '.join(failures)}"
+                f"model {snap.snapshot_id} fails the model gold gate: {text}{hint}"
             )
+        return {"reason": reason[:500], "failures": [f.message for f in failures]}
 
     def supersede(self, snapshot_id: str, supersedes: Sequence[str]) -> ModelSnapshot:
         """An already official model retires older official models of its concept (the same

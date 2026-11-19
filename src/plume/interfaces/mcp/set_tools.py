@@ -223,13 +223,15 @@ def register_set_tools(  # noqa: PLR0915
 
         @server.tool(annotations=WRITE, structured_output=True, meta=UI_WRITE_META)
         async def release_model_set(
-            ctx: Context, set_id: str
+            ctx: Context, set_id: str, override_reason: str | None = None
         ) -> Annotated[CallToolResult, dict[str, Any]]:
             """Make an unreleased set official, releasing its unreleased member models with it
-            (listed in released_members). Refused while a relation is undecided."""
+            (listed in released_members). Refused while a relation is undecided, or a member
+            fails the model gold gate. override_reason: ONLY when the maintainer gives one;
+            never overrides an invented mapping."""
 
             def go() -> dict[str, Any]:
-                r = sets().release(set_id)
+                r = sets().release(set_id, override_reason)
                 return {"set": set_json(r.snapshot), "released_members": list(r.released_members)}
 
             out = await run(go)

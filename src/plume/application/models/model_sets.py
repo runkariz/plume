@@ -710,7 +710,7 @@ class ModelSets:
             f'based_on="{set_id}").',
         }
 
-    def release(self, set_id: str) -> SetRelease:
+    def release(self, set_id: str, override_reason: str | None = None) -> SetRelease:
         """Make an unreleased set official and release its unreleased members with it (D3).
         Refused while a relation is undecided or a member can't be released."""
         s = self._sets.get_set(set_id)
@@ -730,14 +730,22 @@ class ModelSets:
         ]
         if blocked:
             raise ModelStateError(f"members that cannot be released: {', '.join(blocked)}")
-        for snap in members:
-            if snap is not None and snap.visibility == Visibility.UNRELEASED:
-                self._sessions.check_release_gate(snap)
+        overrides = {
+            snap.snapshot_id: self._sessions.check_release_gate(snap, override_reason)
+            for snap in members
+            if snap is not None and snap.visibility == Visibility.UNRELEASED
+        }
         now = self._clock.now()
         released = []
         for snap in members:
             if snap is not None and snap.visibility == Visibility.UNRELEASED:
-                self._models.set_visibility(snap.snapshot_id, Visibility.OFFICIAL, now)
+                over = overrides.get(snap.snapshot_id)
+                self._models.set_visibility(
+                    snap.snapshot_id,
+                    Visibility.OFFICIAL,
+                    now,
+                    {**over, "at": now.isoformat()} if over else None,
+                )
                 released.append(snap.snapshot_id)
         self._sets.set_visibility(set_id, Visibility.OFFICIAL, now)
         stored = self._sets.get_set(set_id)

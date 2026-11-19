@@ -340,13 +340,20 @@ def register_model_tools(  # noqa: PLR0915
 
         @server.tool(annotations=WRITE, structured_output=True, meta=UI_WRITE_META)
         async def release_model(
-            ctx: Context, snapshot_id: str, supersedes: list[str] | None = None
+            ctx: Context,
+            snapshot_id: str,
+            supersedes: list[str] | None = None,
+            override_reason: str | None = None,
         ) -> Annotated[CallToolResult, dict[str, Any]]:
             """Make an unreleased model official (listed publicly). supersedes: ids of official
             models of the same concept this one replaces (see list_supersedable_models; ASK
-            the maintainer, never decide): they stay readable by id but leave the lists."""
+            the maintainer, never decide): they stay readable by id but leave the lists.
+            Refused when the model gold gate fails; override_reason releases over a low recall
+            ONLY when the maintainer gives a reason (never over an invented mapping)."""
             wanted = list(dict.fromkeys(supersedes or []))
-            model = await run(lambda: model_json(models().release(snapshot_id, wanted)))
+            model = await run(
+                lambda: model_json(models().release(snapshot_id, wanted, override_reason))
+            )
             model["supersedes"] = wanted
             text = model_text(model)
             if wanted:

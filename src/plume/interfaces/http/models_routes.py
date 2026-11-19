@@ -534,9 +534,11 @@ def models_router(  # noqa: PLR0915
         """Make an unreleased model official (listed publicly). 409 unless it is unreleased.
         ``supersedes``: official models of the same concept (from /supersedable) that this one
         replaces: they stay readable by id with supersededBy, and leave the lists. 409 when an
-        id is not one of them."""
+        id is not one of them; also when the model gold gate fails, unless `overrideReason`
+        is given and nothing invented (the reason is kept as releaseOverride)."""
         wanted = body.supersedes if body else []
-        out = snapshot_json(models().release(snapshot_id, wanted), True)
+        reason = body.override_reason if body else None
+        out = snapshot_json(models().release(snapshot_id, wanted, reason), True)
         out["supersedes"] = list(dict.fromkeys(wanted))
         return out
 

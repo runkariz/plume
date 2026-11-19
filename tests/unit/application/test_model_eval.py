@@ -120,3 +120,34 @@ def test_invented_blocks_release(stack: FakeStack, tmp_path: Path) -> None:
     evaluation._oracle_for = without_number
     with pytest.raises(ModelStateError, match="2 invented mapping"):
         models.release(sid)
+
+
+def test_a_reason_releases_over_low_recall(stack: FakeStack, tmp_path: Path) -> None:
+    models, _, sid = _setup(stack, tmp_path, {"order.json": _gold(b=["currency"])}, 0.9)
+    with pytest.raises(ModelStateError, match="may release over it with a reason"):
+        models.release(sid)
+    with pytest.raises(ModelStateError):
+        models.release(sid, override_reason="   ")  # blank is no reason
+    released = models.release(sid, override_reason="Mirakl gold pending review")
+    assert released.visibility == "official"
+    override = released.release_override
+    assert override is not None
+    assert override["reason"] == "Mirakl gold pending review"
+    assert override["failures"] == ["order.json: recall 0.75 below 0.9"]
+    assert override["at"]
+
+
+def test_no_reason_overrides_an_invented_mapping(stack: FakeStack, tmp_path: Path) -> None:
+    models, evaluation, sid = _setup(stack, tmp_path, {"order.json": _gold()}, None)
+    original = evaluation._oracle_for
+
+    def without_id(inputs):  # type: ignore[no-untyped-def]
+        oracle = original(inputs)
+        exists = oracle.field_exists
+        return type(oracle)(oracle.doc_text, lambda a, p: p != "id" and exists(a, p),
+                            oracle.endpoint_exists, oracle.write_only)  # fmt: skip
+
+    evaluation._oracle_for = without_id
+    with pytest.raises(ModelStateError, match="invented mapping"):
+        models.release(sid, override_reason="ship it")
+    assert models.snapshot(sid).visibility == "unreleased"

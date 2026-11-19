@@ -353,6 +353,7 @@ def snapshot_payload(
         "generatedAt": m.created_at.isoformat(),
         "promptVersion": m.prompt_version,
         "generatorUsage": m.generator_usage,
+        "releaseOverride": m.release_override,  # released over a failing gold gate: why
         "warnings": [
             {"code": w.code, "field": w.field, "api": w.api, "message": w.message}
             for w in m.warnings

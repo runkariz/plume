@@ -117,6 +117,14 @@ def test_visibility_lineages_and_owners(repo: ModelRepo) -> None:
     got = repo.get_snapshot(m.snapshot_id)
     assert got is not None
     assert (got.visibility, got.released_at) == ("official", T)
+    assert got.release_override is None
+    override = {"reason": "gold pending", "failures": ["g.json: recall 0.7 below 0.8"], "at": "t"}
+    repo.save_snapshot(replace(_snap("s-2", T), snapshot_id="m-over", visibility="unreleased"))
+    repo.set_visibility("m-over", "official", T, override)
+    assert repo.get_snapshot("m-over").release_override == override  # type: ignore[union-attr]
+    repo.set_visibility("m-over", "official", T)  # a later change keeps it
+    assert repo.get_snapshot("m-over").release_override == override  # type: ignore[union-attr]
+    repo.set_visibility("m-over", "discarded", None)
     assert [s.snapshot_id for s in repo.list_snapshots()] == [m.snapshot_id]
     assert repo.replace_owner_key(m.snapshot_id, "hash-3") is False  # no owner: stays so
     warned = (Issue("WRITE_ONLY_SOURCE", "status", "shopify", "cites a write"),)
