@@ -6,6 +6,12 @@ Issue codes (stable; clients key on them):
 - ``MISSING_CITATION``: a mapping has no evidence.
 - ``DOC_NOT_FOUND``: evidence cites a document that is not in that API's pinned build.
 - ``QUOTE_NOT_FOUND``: the quoted text is not in the cited document.
+- ``PATH_NOT_IN_FETCH``: the mapping names a fetch endpoint, and the path is not a field of that
+  endpoint's response (a field of some model is not enough).
+- ``SCALAR_FROM_OBJECT``: a scalar canonical field (string, number, date, money, ...) maps a path
+  that is an object in the API; map one of its fields (the refusal lists them).
+- ``ARRAY_FOR_SINGLE``: a scalar canonical field maps a list, without a cardinality /
+  array-vs-single / split conversion.
 - ``QUOTE_NOT_ON_FIELD``: the quote is in the document but not about the mapped field: when the
   cited document lists the field, the quote must come from that field's own entry (its line or
   description); otherwise the quote must name the field.
@@ -28,7 +34,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from plume.domain.models.canonical_model import ModelDraft
+from plume.domain.models.canonical_model import CanonicalField, FieldSource, ModelDraft
 
 _WS = re.compile(r"\s+")
 
@@ -52,6 +58,10 @@ class Oracle:
     # (api, doc_id, path) -> the field's own text in that document (its line and description),
     # None when the document does not list the field. Unset: quotes are not tied to fields.
     field_texts: Callable[[str, str, str], tuple[str, ...] | None] | None = None
+    # (api, "METHOD /path") -> the response field names of that endpoint (None: unknown/none)
+    fetch_fields: Callable[[str, str], frozenset[str] | None] | None = None
+    # (api, path) -> (the types the API states for it, its direct sub-field names)
+    path_shape: Callable[[str, str], tuple[frozenset[str], tuple[str, ...]]] | None = None
 
 
 _TAG = re.compile(r"<[^>]{0,200}>")
@@ -90,6 +100,91 @@ def quote_in(quote: str, text: str) -> bool:
     return _norm(quote) in _norm(text)
 
 
+_PRIMITIVE = frozenset({"string", "integer", "number", "boolean", "null"})
+_CONTAINER_TYPES = ("object", "array", "list", "map", "dict")
+_PLURAL_OK = frozenset({"array-vs-single", "cardinality", "split"})
+
+
+def _scalar(canonical_type: str) -> bool:
+    t = canonical_type.strip().lower()
+    return bool(t) and not t.startswith(_CONTAINER_TYPES) and not t.endswith("[]")
+
+
+def _same_path(a: str, b: str) -> bool:
+    x, y = a.lower().replace("[]", ""), b.lower().replace("[]", "")
+    return x == y or x.endswith("." + y) or y.endswith("." + x)
+
+
+def _shape_issues(
+    path: str, f: CanonicalField, api: str, src: FieldSource, oracle: Oracle
+) -> list[Issue]:
+    """Scalars mapped from objects or lists; paths outside the named fetch's response."""
+    out: list[Issue] = []
+    if oracle.fetch_fields is not None and src.fetch:
+        known = oracle.fetch_fields(api, src.fetch)
+        for p in src.paths:
+            if known and not any(_same_path(p.path, k) for k in known):
+                out.append(Issue("PATH_NOT_IN_FETCH", path, api,
+                                 f"{p.path} is not in the response of {src.fetch}: cite a path "
+                                 "of that response, or drop fetch"))  # fmt: skip
+    if oracle.path_shape is None or f.fields or not _scalar(f.type):
+        return out
+    plural_ok = src.conversion is not None and src.conversion.kind in _PLURAL_OK
+    for p in src.paths:
+        types, subs = oracle.path_shape(api, p.path)
+        kinds = {t.lower() for t in types}
+        if not kinds or kinds & _PRIMITIVE - {"null"}:
+            continue  # the API states a scalar somewhere: fine
+        if kinds <= {"array", "null"}:
+            if not plural_ok and not p.path.endswith("[]"):
+                out.append(Issue("ARRAY_FOR_SINGLE", path, api,
+                                 f"{p.path} is a list in {api} and {path} is a single "
+                                 f"{f.type}: map one item's field, or state a conversion "
+                                 "(array-vs-single, cardinality or split)"))  # fmt: skip
+            continue
+        listed = ", ".join(subs[:12]) + (", …" if len(subs) > 12 else "")
+        out.append(Issue("SCALAR_FROM_OBJECT", path, api,
+                         f"{p.path} is an object in {api} ({', '.join(sorted(types))}); map one "
+                         f"of its fields" + (f": {listed}" if listed else "")))  # fmt: skip
+    return out
+
+
+def _evidence_issues(path: str, api: str, src: FieldSource, oracle: Oracle) -> list[Issue]:
+    """Each citation: in the build, its quote in the document, and about the mapped field."""
+    out: list[Issue] = []
+    if not src.evidence:
+        out.append(Issue("MISSING_CITATION", path, api, "the mapping cites no evidence"))
+    for e in src.evidence:
+        text = oracle.doc_text(api, e.doc_id)
+        if text is None:
+            out.append(Issue("DOC_NOT_FOUND", path, api, f"{e.doc_id} is not in the build"))
+        elif not quote_in(e.quote, text):
+            out.append(
+                Issue(
+                    "QUOTE_NOT_FOUND",
+                    path,
+                    api,
+                    f"the quote is not in {e.doc_id}: {e.quote[:80]!r}",
+                )
+            )
+        elif (
+            src.paths
+            and all(oracle.field_exists(api, p.path) for p in src.paths)
+            and not quote_on_field(e.quote, [p.path for p in src.paths], api, e.doc_id, oracle)
+        ):
+            out.append(
+                Issue(
+                    "QUOTE_NOT_ON_FIELD",
+                    path,
+                    api,
+                    f"the quote from {e.doc_id} is not about "
+                    f"{', '.join(p.path for p in src.paths)}: quote that field's own "
+                    f"description or line ({e.quote[:80]!r})",
+                )
+            )
+    return out
+
+
 def validate(draft: ModelDraft, apis: frozenset[str], oracle: Oracle) -> list[Issue]:
     issues: list[Issue] = []
     for path, f in draft.walk():
@@ -101,40 +196,7 @@ def validate(draft: ModelDraft, apis: frozenset[str], oracle: Oracle) -> list[Is
                     Issue("API_NOT_IN_SESSION", path, api, f"{api} is not in this session")
                 )
                 continue
-            if not src.evidence:
-                issues.append(Issue("MISSING_CITATION", path, api, "the mapping cites no evidence"))
-            for e in src.evidence:
-                text = oracle.doc_text(api, e.doc_id)
-                if text is None:
-                    issues.append(
-                        Issue("DOC_NOT_FOUND", path, api, f"{e.doc_id} is not in the build")
-                    )
-                elif not quote_in(e.quote, text):
-                    issues.append(
-                        Issue(
-                            "QUOTE_NOT_FOUND",
-                            path,
-                            api,
-                            f"the quote is not in {e.doc_id}: {e.quote[:80]!r}",
-                        )
-                    )
-                elif (
-                    src.paths
-                    and all(oracle.field_exists(api, p.path) for p in src.paths)
-                    and not quote_on_field(
-                        e.quote, [p.path for p in src.paths], api, e.doc_id, oracle
-                    )
-                ):
-                    issues.append(
-                        Issue(
-                            "QUOTE_NOT_ON_FIELD",
-                            path,
-                            api,
-                            f"the quote from {e.doc_id} is not about "
-                            f"{', '.join(p.path for p in src.paths)}: quote that field's own "
-                            f"description or line ({e.quote[:80]!r})",
-                        )
-                    )
+            issues.extend(_evidence_issues(path, api, src, oracle))
             for p in src.paths:
                 if not oracle.field_exists(api, p.path):
                     issues.append(
@@ -151,6 +213,8 @@ def validate(draft: ModelDraft, apis: frozenset[str], oracle: Oracle) -> list[Is
                         "ENDPOINT_NOT_FOUND", path, api, f"{src.fetch} is not documented in {api}"
                     )
                 )
+            elif all(oracle.field_exists(api, p.path) for p in src.paths):
+                issues.extend(_shape_issues(path, f, api, src, oracle))
     return issues
 
 
