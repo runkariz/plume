@@ -43,6 +43,7 @@ from plume.domain.shared.clock import Clock
 from plume.domain.shared.ids import BuildId
 
 MAX_DOCS_PER_API = 30
+MIN_OWN_DOCS = 5  # below this, full-text hits are added (a short relevant context wins)
 EVIDENCE_BUDGET_CHARS = 20_000
 MAX_DESCRIPTION = 300
 MAX_DRAFT_CHARS = 1_000_000
@@ -413,8 +414,8 @@ class ModelSessions:
         has_main = any(groups.get(k) for k in main) or any(
             d.kind is DocumentKind.ENDPOINT and d.path and _under(d.path, main) for d in summaries
         )
-        if not has_main and picked:  # only a sub-concept matched: the main concept first
-            own = self._ranked_docs(_PARENS_TEXT.sub(" ", concept).strip(), build, max_docs)
+        if not has_main and picked:  # only sub-concepts or children matched: the main first
+            own = self._fallback_docs(concept, main, groups, build, max_docs)
             rest = [d for d in picked.values() if d.doc_id not in {o.doc_id for o in own}]
             return [*own, *rest][:max_docs]
         docs = list(picked.values())
@@ -422,7 +423,7 @@ class ModelSessions:
             ranks = self._tiers(build, docs, main, children)
             docs = [d for d in docs if d.doc_id in ranks]
             docs.sort(key=lambda d: (*ranks[d.doc_id], *_evidence_rank(d, main[0])))
-            if len(docs) < max_docs:  # few of its own: documents that mention it fill up
+            if len(docs) < MIN_OWN_DOCS:  # few of its own: documents that mention it help
                 hits = self._index.text(
                     build, _PARENS_TEXT.sub(" ", concept), max_docs,
                     (DocumentKind.ENDPOINT, DocumentKind.MODEL),
@@ -433,6 +434,20 @@ class ModelSessions:
                 )
                 docs += list(extra.values())
             return docs[:max_docs]
+        return self._fallback_docs(concept, main, groups, build, max_docs)
+
+    def _fallback_docs(
+        self,
+        concept: str,
+        main: tuple[str, ...],
+        groups: dict[str, list[DocumentSummary]],
+        build: BuildId,
+        max_docs: int,
+    ) -> list[DocumentSummary]:
+        """No document carries the concept's name: the concept under a parent, its role under
+        another name, else documents whose text mentions it. Never calls back into the ranking
+        (each name is tried once)."""
+        text = _PARENS_TEXT.sub(" ", concept).strip() or concept
         key = main[0]
         names = (*main, *(r for m in main for r in ROLE_SYNONYMS.get(m, ()) if r not in main))
         groups_parent = sorted(  # the concept under a parent: productimage under Product,
@@ -450,7 +465,7 @@ class ModelSessions:
             docs.sort(key=lambda d: _evidence_rank(d, concept_key(last_literal(d.path or ""))))
         if not docs:  # derived: documents whose text mentions the concept
             hits = self._index.text(
-                build, concept, MAX_DOCS_PER_API, (DocumentKind.ENDPOINT, DocumentKind.MODEL)
+                build, text, MAX_DOCS_PER_API, (DocumentKind.ENDPOINT, DocumentKind.MODEL)
             )
             docs = list(self._index.summaries(build, [h.doc_id for h in hits]).values())
             docs.sort(key=lambda d: _evidence_rank(d, key))

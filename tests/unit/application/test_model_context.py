@@ -77,3 +77,28 @@ def test_no_resource_of_its_own_is_said(stack: FakeStack) -> None:
     ctx = _docs(stack, "Order", ["test-catalog-api", "shopify"])
     assert "note" not in ctx["test-catalog-api"]
     assert str(ctx["shopify"]["note"]).startswith("shopify has no Order resource of its own")
+
+
+def test_children_without_the_concept_itself_do_not_loop(stack: FakeStack) -> None:
+    """Only child keys match ("line" -> lineitem) and no endpoint names the concept: the
+    fallback runs once (a RecursionError on plume-l2 for Customer on ebay-sell + bol-retailer)."""
+    for concept in ("Line", "Line (with item)", "Line / Row"):
+        ctx = _docs(stack, concept, ["test-catalog-api", "shopify"])
+        assert "note" in ctx["shopify"]
+        assert len(ctx["shopify"]["documents"]) <= 30
+
+
+@pytest.mark.anyio
+async def test_mcp_tool_bugs_carry_a_short_message() -> None:
+    from mcp.server.mcpserver.exceptions import ToolError  # noqa: PLC0415
+
+    from plume.interfaces.mcp.reader_server import _run  # noqa: PLC0415
+
+    def broken() -> dict[str, object]:
+        raise RecursionError("maximum recursion depth exceeded in /secret/path")
+
+    with pytest.raises(
+        ToolError, match=r"internal error \(RecursionError\); .* as ref [0-9a-f]{8}"
+    ) as err:
+        await _run(broken)
+    assert "/secret/path" not in str(err.value)

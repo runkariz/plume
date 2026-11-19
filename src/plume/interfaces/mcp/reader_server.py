@@ -1,5 +1,7 @@
 """Reader MCP server: read-only tools over sealed builds. The same use cases as the HTTP API."""
 
+import logging
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -96,11 +98,20 @@ class McpReaderDependencies:
     mcp_app_html: str | None = None  # the model view bundle; None = the packaged file
 
 
+logger = logging.getLogger(__name__)
+
+
 async def _run(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
     try:
         return await anyio.to_thread.run_sync(fn)
     except (ApplicationError, DomainError) as exc:
         raise ToolError(f"{type(exc).__name__}: {exc}") from exc
+    except Exception as exc:  # a bug: say what kind, log the details (never the internals)
+        ref = uuid.uuid4().hex[:8]
+        logger.exception("MCP tool failed (ref %s)", ref)
+        raise ToolError(
+            f"internal error ({type(exc).__name__}); the server logged it as ref {ref}"
+        ) from exc
 
 
 def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
