@@ -1,5 +1,7 @@
 """Package sections over HTTP and MCP: auth, triggers, icon, tags, raw (fixtures, in memory)."""
 
+import json
+import shutil
 from pathlib import Path
 from typing import Any
 
@@ -471,3 +473,61 @@ def test_signed_request_notice_says_also_when_the_package_has_auth(
         "Every request must also be signed (see the setup text); Kariz can't sign requests "
         "yet, so calls will fail even with this auth."
     ]
+
+
+def _merged_rule_package(packages: Path, tmp_path: Path) -> Path:
+    dst = tmp_path / "woo-merged"
+    shutil.copytree(packages / "woo-mini", dst)
+    rules_file = dst / "knowledge-export" / "rules.json"
+    data = json.loads(rules_file.read_text())
+    data["rules"][0]["sourceUrls"] = ["https://developer.woocommerce.com/docs/other-page"]
+    rules_file.write_text(json.dumps(data))
+    return dst
+
+
+@pytest.mark.anyio
+async def test_documents_cite_every_page_of_a_merged_rule(packages: Path, tmp_path: Path) -> None:
+    stack = FakeStack(embedder=WordEmbedder())
+    stack.load(str(_merged_rule_package(packages, tmp_path)))
+    coupons = "endpoint:GET~/wp-json/wc/{version}/coupons"
+    http = TestClient(
+        create_app(
+            HttpDependencies(
+                overviews=stack.overviews,
+                browse=stack.browse,
+                search=stack.search,
+                get_document=stack.get_document,
+                find_fact=stack.find_fact,
+                check_call=stack.check_call,
+                list_builds=lambda: ListBuilds(stack.builds, stack.tags),
+                diff_builds=lambda: DiffBuilds(stack.builds),
+                resolver=stack.resolver,
+                sections=stack.sections,
+                rate_limit_per_minute=0,
+            )
+        )
+    )
+    doc = http.get(f"/v1/apis/woocommerce/documents/{coupons}").json()
+    expected = [
+        "https://developer.woocommerce.com/docs/apis/rest-api/v3/coupons/",
+        "https://developer.woocommerce.com/docs/other-page",
+    ]
+    assert [r["urls"] for r in doc["ruleSources"]] == [expected]
+    server = create_reader_server(
+        McpReaderDependencies(
+            overviews=stack.overviews,
+            search=stack.search,
+            get_document=stack.get_document,
+            find_fact=stack.find_fact,
+            check_call=stack.check_call,
+            list_builds=lambda: ListBuilds(stack.builds, stack.tags),
+            diff_builds=lambda: DiffBuilds(stack.builds),
+            resolver=stack.resolver,
+            sections=stack.sections,
+        )
+    )
+    async with Client(server) as client:
+        result = await client.call_tool("get_document", {"api": "woocommerce", "doc_id": coupons})
+        assert not result.is_error, result.content
+        payload = dict(result.structured_content or {})
+        assert [r["urls"] for r in payload["rule_sources"]] == [expected]

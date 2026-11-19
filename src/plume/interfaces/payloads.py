@@ -108,6 +108,7 @@ def document_payload(r: DocumentResult) -> Json:
         "guides": links.linked_guides(d),
         "linked_endpoints": links.linked_endpoints(d),
         "endpoint_links": links.endpoint_links(d),
+        "rule_sources": links.rule_sources(d),
         "text": d.text,
         "citation": citation_payload(r.citation),
     }

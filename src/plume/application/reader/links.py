@@ -4,7 +4,7 @@ unit's endpoints, an auth scheme's endpoints per scope. Missing links read as em
 
 from typing import Any
 
-from plume.domain.knowledge.document import Document, DocumentKind
+from plume.domain.knowledge.document import RULE_SOURCES_KEY, Document, DocumentKind
 
 
 def _raw(doc: Document) -> dict[str, Any]:
@@ -69,3 +69,16 @@ def scope_endpoints(doc: Document) -> dict[str, list[str]]:
     if not isinstance(value, dict):
         return {}
     return {k: _ids(v) for k, v in value.items() if isinstance(k, str)}
+
+
+def rule_sources(doc: Document) -> list[dict[str, Any]]:
+    """Rules in the document's text that are stated on several pages, with every page as a
+    citation: [{ruleId, urls}] (sourceUrl first). Empty when its rules name one page each."""
+    value = _raw(doc).get(RULE_SOURCES_KEY)
+    if not isinstance(value, dict):
+        return []
+    return [
+        {"ruleId": rule, "urls": _ids(urls)}
+        for rule, urls in value.items()
+        if isinstance(rule, str) and _ids(urls)
+    ]

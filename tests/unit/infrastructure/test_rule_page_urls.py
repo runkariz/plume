@@ -45,12 +45,15 @@ def test_rules_find_their_page() -> None:
         _rule("none", None),
     ]
     export = KnowledgeExport(complete=True, pages=PAGES, rules=rules, gold_path=None)
-    found = {rules[i].rule_id: PAGES[p].source_url for i, p in _rule_pages(export, set()).items()}
+    found = {
+        rules[i].rule_id: [PAGES[p].source_url for p in pages]
+        for i, pages in _rule_pages(export, set()).items()
+    }
     assert found == {
-        "exact": LAZADA_DOC,
-        "encoded": TR,
-        "slash": "https://Shop.Example.com/docs/a/",
-        "no-query": LAZADA_DOC,
+        "exact": [LAZADA_DOC],
+        "encoded": [TR],
+        "slash": ["https://Shop.Example.com/docs/a/"],
+        "no-query": [LAZADA_DOC],
     }
     assert _rule_pages(export, {"exact"}).keys() == {1, 2, 3}  # used rules are skipped
 

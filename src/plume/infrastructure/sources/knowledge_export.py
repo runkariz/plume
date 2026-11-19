@@ -42,6 +42,14 @@ class Rule:
     confidence: float | None
     resource: str | None
     endpoint_ids: tuple[str, ...] = ()
+    # A rule stated on several pages (stream merges repeats): the other pages' URLs.
+    source_urls: tuple[str, ...] = ()
+
+    @property
+    def urls(self) -> tuple[str, ...]:
+        """Every page the rule is stated on: sourceUrl first, then sourceUrls (no repeats)."""
+        first = (self.source_url,) if self.source_url else ()
+        return tuple(dict.fromkeys(u for u in (*first, *self.source_urls) if u))
 
     def line(self) -> str:
         conf = f", confidence {self.confidence:.2f}" if self.confidence is not None else ""
@@ -205,6 +213,7 @@ def load(root: Path) -> KnowledgeExport:
                     confidence=float(conf) if isinstance(conf, int | float) else None,
                     resource=r.get("resource"),
                     endpoint_ids=_id_list(r.get("endpointIds")),
+                    source_urls=_id_list(r.get("sourceUrls")),
                 )
             )
     gold = root / "gold-questions.json"

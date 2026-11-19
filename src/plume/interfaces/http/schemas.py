@@ -114,6 +114,11 @@ class SourceQuality(Schema):
     questions: int = Field(description="Search questions of this source.")
 
 
+class RuleSource(Schema):
+    rule_id: str
+    urls: list[str] = Field(description="The rule's pages: sourceUrl, then sourceUrls.")
+
+
 class EndpointLink(Schema):
     endpoint_id: str
     link_basis: str = Field(
@@ -445,6 +450,11 @@ class DocumentOut(Schema):
     endpoint_links: list[EndpointLink] = Field(
         default_factory=list,
         description="Knowledge unit: linkedEndpoints with the basis of each link.",
+    )
+    rule_sources: list[RuleSource] = Field(
+        default_factory=list,
+        description="Rules in this text stated on several documentation pages, each with every "
+        "page as a citation (sourceUrl first). Empty when each rule names one page.",
     )
     tags: list[str] = Field(default_factory=list)
     responses: list[dict[str, Any]] = Field(
