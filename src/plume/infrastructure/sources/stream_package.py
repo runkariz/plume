@@ -31,6 +31,7 @@ from plume.domain.knowledge.api import ApiId, ApiInfo, Category
 from plume.domain.knowledge.asset import CONTENT_TYPES, ICON, MAX_ASSET_BYTES, Asset
 from plume.domain.knowledge.document import (
     FIELDS_BOUNDED_KEY,
+    RULE_SOURCES_KEY,
     TRIGGER_PAYLOAD_KEY,
     Document,
     DocumentKind,
@@ -1161,50 +1162,29 @@ def _apply_export(
             if rules:
                 extra.append("## Rules\n" + "\n".join(r.line() for r in rules))
                 used_rules.update(r.rule_id for r in rules)
-            out[index] = replace(
-                doc,
-                text=doc.text + "\n\n" + "\n\n".join(extra),
-                anchor=doc.anchor or doc_anchor(anchor),
+            out[index] = _with_rule_sources(
+                replace(
+                    doc,
+                    text=doc.text + "\n\n" + "\n\n".join(extra),
+                    anchor=doc.anchor or doc_anchor(anchor),
+                ),
+                rules,
             )
     for scope, rules in rules_by_scope.items():  # endpoint rules whose page section was not found
         index = by_source.get(scope)
         pending = [r for r in rules if r.rule_id not in used_rules]
         if index is not None and pending:
             doc = out[index]
-            out[index] = replace(
-                doc, text=doc.text + "\n\n## Rules\n" + "\n".join(r.line() for r in pending)
+            out[index] = _with_rule_sources(
+                replace(
+                    doc, text=doc.text + "\n\n## Rules\n" + "\n".join(r.line() for r in pending)
+                ),
+                pending,
             )
             used_rules.update(r.rule_id for r in pending)
     linked_rules = _attach_linked_rules(out, export, by_source, versions, used_rules)
     _attach_resource_rules(out, export, by_source, versions, linked_rules)
-    page_of = _rule_pages(export, used_rules)
-    for number, page in enumerate(export.pages):
-        page_rules = [  # a repeated rule id is claimed once, by the first page (as before)
-            r
-            for i, r in enumerate(export.rules)
-            if page_of.get(i) == number and r.rule_id not in used_rules
-        ]
-        used_rules.update(r.rule_id for r in page_rules)
-        indexes = [
-            i
-            for item_id, _ in page.items
-            if (i := by_source.get(endpoint_key(item_id, versions))) is not None
-        ]
-        endpoints = [out[i].doc_id for i in indexes]
-        if not page.split and page_rules and len(set(indexes)) == 1:
-            # A one-endpoint page that could not be cut: its rules-only guide would just
-            # duplicate the endpoint in search; the rules go into the endpoint instead.
-            doc = out[indexes[0]]
-            out[indexes[0]] = replace(
-                doc,
-                text=doc.text
-                + "\n\n## Rules (documentation page)\n"
-                + "\n".join(r.line() for r in page_rules),
-            )
-            continue
-        guide = _page_guide(page, page_rules, endpoints)
-        if guide is not None:
-            out.append(guide)
+    _attach_page_rules(out, export, by_source, versions, used_rules)
     leftover = [r for r in export.rules if r.rule_id not in used_rules]
     if leftover:
         shown = "; ".join(f"{r.rule_id} {r.source_url or '(no sourceUrl)'}" for r in leftover[:3])
@@ -1216,6 +1196,48 @@ def _apply_export(
     return out
 
 
+def _attach_page_rules(
+    out: list[Document],
+    export: "knowledge_export.KnowledgeExport",
+    by_source: dict[str, int],
+    versions: tuple[str, ...],
+    used_rules: set[str],
+) -> None:
+    """Rules not placed yet go to the pages they are stated on: one guide per page (appended to
+    ``out``), or, for a one-endpoint page that could not be cut, into that endpoint."""
+    page_of = _rule_pages(export, used_rules)
+    owner: dict[str, int] = {}  # a repeated rule id belongs to the rule a page claims first
+    for number, page in enumerate(export.pages):
+        page_rules = []
+        for n, r in enumerate(export.rules):
+            if number in page_of.get(n, ()) and owner.setdefault(r.rule_id, n) == n:
+                page_rules.append(r)
+        indexes = [
+            i
+            for item_id, _ in page.items
+            if (i := by_source.get(endpoint_key(item_id, versions))) is not None
+        ]
+        endpoints = [out[i].doc_id for i in indexes]
+        if not page.split and page_rules and len(set(indexes)) == 1:
+            # A one-endpoint page that could not be cut: its rules-only guide would just
+            # duplicate the endpoint in search; the rules go into the endpoint instead.
+            doc = out[indexes[0]]
+            out[indexes[0]] = _with_rule_sources(
+                replace(
+                    doc,
+                    text=doc.text
+                    + "\n\n## Rules (documentation page)\n"
+                    + "\n".join(r.line() for r in page_rules),
+                ),
+                page_rules,
+            )
+            continue
+        guide = _page_guide(page, page_rules, endpoints)
+        if guide is not None:
+            out.append(_with_rule_sources(guide, page_rules))
+    used_rules.update(owner)
+
+
 def url_key(url: str) -> str:
     """A page URL compared loosely: percent-decoded (so encoded and decoded paths are equal),
     no fragment, no trailing slash, scheme and host lower case; the query is kept."""
@@ -1224,32 +1246,62 @@ def url_key(url: str) -> str:
     return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), path, parts.query, ""))
 
 
-def _rule_pages(export: "knowledge_export.KnowledgeExport", used: set[str]) -> dict[int, int]:
-    """Each pending rule's page, as rule index -> page index (rule ids can repeat), by its
-    sourceUrl: the exact URL
-    first, then the loose key (``url_key``), then the URL without its query when exactly one
-    page has that path (a page whose query string the rule left out; where several pages
-    share a path, the query identifies the page and is required)."""
-    exact: dict[str, int] = {}
-    loose: dict[str, int] = {}
-    bare: dict[str, list[int]] = {}
-    for number, page in enumerate(export.pages):
-        exact.setdefault(page.source_url.rstrip("/"), number)
-        key = url_key(page.source_url)
-        loose.setdefault(key, number)
-        bare.setdefault(key.split("?", 1)[0], []).append(number)
-    out: dict[int, int] = {}
-    for index, rule in enumerate(export.rules):
-        if rule.rule_id in used or not rule.source_url:
-            continue
-        key = url_key(rule.source_url)
-        found = exact.get(rule.source_url.rstrip("/"), loose.get(key))
+class _PageFinder:
+    """A page (index into ``export.pages``) by URL: the exact URL first, then the loose key
+    (``url_key``), then the URL without its query when exactly one page has that path (a page
+    whose query string the rule left out; where several pages share a path, the query
+    identifies the page and is required)."""
+
+    def __init__(self, pages: "list[knowledge_export.ExportPage]") -> None:
+        self._exact: dict[str, int] = {}
+        self._loose: dict[str, int] = {}
+        self._bare: dict[str, list[int]] = {}
+        for number, page in enumerate(pages):
+            self._exact.setdefault(page.source_url.rstrip("/"), number)
+            key = url_key(page.source_url)
+            self._loose.setdefault(key, number)
+            self._bare.setdefault(key.split("?", 1)[0], []).append(number)
+
+    def find(self, url: str) -> int | None:
+        key = url_key(url)
+        found = self._exact.get(url.rstrip("/"), self._loose.get(key))
         if found is None and "?" not in key:
-            only = bare.get(key, [])
+            only = self._bare.get(key, [])
             found = only[0] if len(only) == 1 else None
-        if found is not None:
-            out[index] = found
+        return found
+
+    def pages_of(self, rule: "knowledge_export.Rule") -> list[int]:
+        """The pages of every URL the rule names (sourceUrl first), without repeats."""
+        found = (self.find(u) for u in rule.urls)
+        return list(dict.fromkeys(n for n in found if n is not None))
+
+
+def _rule_pages(export: "knowledge_export.KnowledgeExport", used: set[str]) -> dict[int, list[int]]:
+    """Each pending rule's pages, as rule index -> page indexes (rule ids can repeat; a rule
+    with ``sourceUrls`` has several pages)."""
+    finder = _PageFinder(export.pages)
+    out: dict[int, list[int]] = {}
+    for index, rule in enumerate(export.rules):
+        if rule.rule_id in used:
+            continue
+        pages = finder.pages_of(rule)
+        if pages:
+            out[index] = pages
     return out
+
+
+def _rule_sources(rules: "list[knowledge_export.Rule]") -> dict[str, list[str]]:
+    """The citations of rules stated on several pages: rule id -> its URLs, sourceUrl first."""
+    return {r.rule_id: list(r.urls) for r in rules if r.source_urls}
+
+
+def _with_rule_sources(doc: Document, rules: "list[knowledge_export.Rule]") -> Document:
+    sources = _rule_sources(rules)
+    if not sources:
+        return doc
+    raw = dict(doc.raw) if isinstance(doc.raw, dict) else {}
+    merged = {**(raw.get(RULE_SOURCES_KEY) or {}), **sources}
+    return replace(doc, raw={**raw, RULE_SOURCES_KEY: merged})
 
 
 def _unit_endpoint_ids(meta: JsonObj) -> list[str]:
@@ -1391,7 +1443,7 @@ def _attach_linked_rules(
     """A rule's ``endpointIds`` put it into those endpoints (before the resource fallback). An
     endpoint-scoped rule is then used; a resource rule stays in its page guide too. Returns the
     ids of the rules placed this way."""
-    lines: dict[int, list[str]] = {}
+    linked: dict[int, list[knowledge_export.Rule]] = {}
     placed: set[str] = set()
     for rule in export.rules:
         if rule.rule_id in used_rules or not rule.endpoint_ids:
@@ -1399,12 +1451,12 @@ def _attach_linked_rules(
         for item in rule.endpoint_ids:
             index = by_source.get(endpoint_key(item, versions))
             if index is not None:
-                lines.setdefault(index, []).append(rule.line())
+                linked.setdefault(index, []).append(rule)
                 placed.add(rule.rule_id)
-    for index, rule_lines in lines.items():
+    for index, rules in linked.items():
         doc = out[index]
-        text = "## Rules\n" + "\n".join(dict.fromkeys(rule_lines))
-        out[index] = replace(doc, text=doc.text + "\n\n" + text)
+        text = "## Rules\n" + "\n".join(dict.fromkeys(r.line() for r in rules))
+        out[index] = _with_rule_sources(replace(doc, text=doc.text + "\n\n" + text), rules)
     used_rules.update(
         r.rule_id for r in export.rules if r.rule_id in placed and r.scope != "resource"
     )
@@ -1425,26 +1477,24 @@ def _attach_resource_rules(
     """A resource-scoped rule ("the Logistic Centers API requires the .../read scope") also goes
     into the text of the endpoints its page lists for that resource. The page guide keeps it too:
     the rule is about the endpoint, and a question about it should find the endpoint."""
-    pages = {p.source_url.split("#")[0].rstrip("/"): p for p in export.pages}
-    lines: dict[int, list[str]] = {}
+    finder = _PageFinder(export.pages)
+    placed: dict[int, list[knowledge_export.Rule]] = {}
     for rule in export.rules:
-        if rule.scope != "resource" or not rule.resource or not rule.source_url:
+        if rule.scope != "resource" or not rule.resource or not rule.urls:
             continue
         if skip and rule.rule_id in skip:  # placed by its endpointIds
             continue
-        page = pages.get(rule.source_url.split("#")[0].rstrip("/"))
-        if page is None:
-            continue
-        for item_id, _ in page.items:
-            index = by_source.get(endpoint_key(item_id, versions))
-            if index is None:
-                continue
-            if _resource_key(out[index].resource) == _resource_key(rule.resource):
-                lines.setdefault(index, []).append(rule.line())
-    for index, rule_lines in lines.items():
+        for number in finder.pages_of(rule):  # every page the rule is stated on
+            for item_id, _ in export.pages[number].items:
+                index = by_source.get(endpoint_key(item_id, versions))
+                if index is None:
+                    continue
+                if _resource_key(out[index].resource) == _resource_key(rule.resource):
+                    placed.setdefault(index, []).append(rule)
+    for index, rules in placed.items():
         doc = out[index]
-        text = "## Rules for this resource\n" + "\n".join(dict.fromkeys(rule_lines))
-        out[index] = replace(doc, text=doc.text + "\n\n" + text)
+        text = "## Rules for this resource\n" + "\n".join(dict.fromkeys(r.line() for r in rules))
+        out[index] = _with_rule_sources(replace(doc, text=doc.text + "\n\n" + text), rules)
 
 
 def _page_guide(

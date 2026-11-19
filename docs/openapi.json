@@ -1776,6 +1776,14 @@
             "title": "Responses",
             "type": "array"
           },
+          "ruleSources": {
+            "description": "Rules in this text stated on several documentation pages, each with every page as a citation (sourceUrl first). Empty when each rule names one page.",
+            "items": {
+              "$ref": "#/components/schemas/RuleSource"
+            },
+            "title": "Rulesources",
+            "type": "array"
+          },
           "scopes": {
             "items": {
               "type": "string"
@@ -3604,6 +3612,28 @@
           "reason"
         ],
         "title": "RollbackRequest",
+        "type": "object"
+      },
+      "RuleSource": {
+        "properties": {
+          "ruleId": {
+            "title": "Ruleid",
+            "type": "string"
+          },
+          "urls": {
+            "description": "The rule's pages: sourceUrl, then sourceUrls.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Urls",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ruleId",
+          "urls"
+        ],
+        "title": "RuleSource",
         "type": "object"
       },
       "SearchHit": {

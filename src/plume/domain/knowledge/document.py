@@ -25,6 +25,9 @@ TRIGGER_PAYLOAD_KEY = "_payload"
 # An endpoint's/model's raw key: its field list stops at this nesting level (1 = top level)
 # because the schema has more fields than Plume lists; deeper fields are not proven absent.
 FIELDS_BOUNDED_KEY = "x-plume-fields-bounded"
+# A document's raw key: rules in its text that are stated on several pages -> their URLs
+# (sourceUrl first), the rules' citations.
+RULE_SOURCES_KEY = "x-plume-rule-sources"
 HTTP_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"})
 
 
