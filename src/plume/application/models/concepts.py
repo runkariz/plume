@@ -66,6 +66,25 @@ def concept_key(name: str) -> str:
     return _singular(re.sub(r"[^a-z0-9]", "", name.lower()))
 
 
+# The same resource role under another name: tried when no document carries the concept's
+# own name (Shopware calls a shipment an order delivery), and to match a set member to each
+# API's own concept (an order line is Shopify's line item).
+ROLE_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "shipment": ("fulfillment", "delivery", "parcel", "consignment"),  # not "shipping"
+    "fulfillment": ("delivery", "shipment"),
+    "inventory": ("stock",),
+    "stock": ("inventory",),
+    "orderline": ("lineitem", "orderitem", "orderlineitem"),
+    "lineitem": ("orderline", "orderitem"),
+}
+
+
+def role_keys(concept: str) -> tuple[str, ...]:
+    """The concept's main keys and their role synonyms."""
+    main, _ = concept_parts(concept)
+    return tuple(dict.fromkeys((*main, *(r for m in main for r in ROLE_SYNONYMS.get(m, ())))))
+
+
 _PARENS = re.compile(r"\(([^)]*)\)")
 _SPLIT = re.compile(r"\s*(?:/|\+|,|&|\bor\b|\band\b)\s*", re.I)
 _FILLER = re.compile(r"^\s*(?:with|incl(?:uding|\.)?|plus)\s+", re.I)

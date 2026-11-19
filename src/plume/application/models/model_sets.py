@@ -15,8 +15,8 @@ from plume.application.models.collections import (
     Collections,
     owner_key_hash,
 )
-from plume.application.models.concepts import ModelInputError, concept_key, resolve_apis
-from plume.application.models.relations import SuggestRelated
+from plume.application.models.concepts import ModelInputError, concept_key, resolve_apis, role_keys
+from plume.application.models.relations import RelationCandidate, SuggestRelated
 from plume.application.models.sessions import (
     MAX_DRAFT_CHARS,
     MAX_OWNER_KEYS,
@@ -128,6 +128,27 @@ class SetSubmitResult:
 class SetRelease:
     snapshot: ModelSetSnapshot
     released_members: tuple[str, ...]  # member model ids released with the set (design D3)
+
+
+def _as_members(
+    candidates: Sequence[RelationCandidate], concepts: Sequence[str]
+) -> list[RelationCandidate]:
+    """Candidates between the set's members, under the members' keys: an API's own concept
+    counts for a member when it is the member's name or its role's other name (Shopify's line
+    item for "Order line"); candidates landing on the same pair merge their sources."""
+    member_of: dict[str, str] = {}
+    for concept in concepts:
+        for k in (concept_key(concept), *role_keys(concept)):
+            member_of.setdefault(k, concept_key(concept))
+    merged: dict[tuple[str, str], RelationCandidate] = {}
+    for c in candidates:
+        parent, child = member_of.get(c.parent), member_of.get(c.child)
+        if parent is None or child is None or parent == child:
+            continue
+        into = merged.setdefault((parent, child), RelationCandidate(parent, child))
+        for api, evidence in c.sources.items():
+            into.sources.setdefault(api, []).extend(evidence)
+    return [merged[k] for k in sorted(merged)]
 
 
 class ModelSets:
@@ -249,7 +270,7 @@ class ModelSets:
             for api, name in names
         }
         candidates, aliases, labels = self._related.candidates(self._pinned(s.inputs), renames)
-        relevant = [c for c in candidates if c.parent in keys and c.child in keys]
+        relevant = _as_members(candidates, s.concepts)
         alias_list = [a for a in aliases if a.parent in keys]
         return {
             "set_session": s.session_id,
