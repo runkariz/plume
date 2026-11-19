@@ -284,8 +284,16 @@ def score(
         if not exists(api, p.path)
     ]
     counts: dict[str, int] = {}
+    no_quote = {
+        (path, api)
+        for path, f in draft.walk()
+        for api, src in f.sources
+        if any(e.no_quote for e in src.evidence)
+    }
     for r in cells:
         counts[r.result] = counts.get(r.result, 0) + 1
+        if (r.model_field, r.api) in no_quote:  # cited without a quote (noQuote)
+            counts["no_quote"] = counts.get("no_quote", 0) + 1
         if r.conversion in (CONVERSION_MISSING, CONVERSION_WRONG):
             counts[r.conversion] = counts.get(r.conversion, 0) + 1
     return ModelEval(

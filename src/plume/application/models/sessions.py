@@ -102,7 +102,10 @@ returns their fields page by page (follow next_cursor). Rules (refused otherwise
   `paths[].path` exactly as listed (dotted names, [] for arrays).
 - Every mapping needs evidence: `doc_id` from the evidence and a `quote` copied verbatim from
   that document's text, about the mapped field: when the document lists the field, quote that
-  field's own description or line; otherwise the quote must name the field. Quotes are checked.
+  field's own description or line; otherwise the quote must name the field. Quotes are checked
+  and must carry information (4+ words or 20+ letters, or the field's whole description). When
+  the field's own description has no usable sentence (markup, a label), cite it with
+  {"doc_id": ..., "noQuote": "why"} instead of a junk quote.
 - `fetch` (optional) must be a documented endpoint, written "METHOD /path" as listed.
 - Leave an API out of a field's sources when it has no such data; never invent fields.
 - Use `transform` / `join` to describe derived values (e.g. "sum of line_items[].price").
@@ -127,7 +130,8 @@ returns their fields page by page (follow next_cursor). Rules (refused otherwise
 - With `fetch`, the paths must be fields of that endpoint's response.
 Refusals come back with codes (MISSING_CITATION, QUOTE_NOT_FOUND, QUOTE_NOT_ON_FIELD,
 FIELD_NOT_FOUND, ENDPOINT_NOT_FOUND, DOC_NOT_FOUND, API_NOT_IN_SESSION, PATH_NOT_IN_FETCH,
-SCALAR_FROM_OBJECT, ARRAY_FOR_SINGLE); fix those mappings and submit again.
+SCALAR_FROM_OBJECT, ARRAY_FOR_SINGLE, QUOTE_TOO_SHORT, NO_QUOTE_NOT_ALLOWED); fix those mappings
+and submit again.
 """
 
 

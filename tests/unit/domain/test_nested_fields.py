@@ -9,7 +9,7 @@ from plume.domain.models.canonical_model import DraftFormatError, parse_draft
 from plume.domain.models.snapshot import ModelSnapshot, PinnedInput, draft_json
 from plume.domain.models.validation import Oracle, validate
 
-EV = [{"doc_id": "d", "quote": "documented"}]
+EV = [{"doc_id": "d", "quote": "documented field of the order"}]
 
 
 def _leaf(name: str, path: str | None = None, api: str = "a") -> dict[str, Any]:
@@ -96,7 +96,7 @@ def test_invalid_nesting_is_refused(raw: dict[str, Any], message: str) -> None:
 def test_validation_reports_canonical_paths() -> None:
     documented = {"id", "lines[].sku"}
     oracle = Oracle(
-        doc_text=lambda api, doc: "this is documented",
+        doc_text=lambda api, doc: "this is a documented field of the order",
         field_exists=lambda api, path: path in documented,
         endpoint_exists=lambda api, call: False,
     )

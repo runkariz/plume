@@ -28,6 +28,9 @@ class Evidence:
     doc_id: str
     quote: str
     anchor: str | None = None
+    # The field is cited without a quote because its own description has no usable sentence
+    # (markup junk, a label): why. Then ``quote`` is empty.
+    no_quote: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,14 +206,16 @@ def _source(raw: Any, where: str) -> FieldSource:
     for i, e in enumerate(_list(raw, "evidence", where)):
         if not isinstance(e, dict):
             raise DraftFormatError(f"{where}.evidence[{i}] must be an object")
-        quote = _str(e, "quote", f"{where}.evidence[{i}]") or ""
+        no_quote = _str(e, "noQuote", f"{where}.evidence[{i}]", required=False)
+        quote = _str(e, "quote", f"{where}.evidence[{i}]", required=not no_quote) or ""
         if len(quote) > MAX_QUOTE:
             raise DraftFormatError(f"{where}.evidence[{i}].quote is too long")
         evidence.append(
             Evidence(
                 doc_id=_str(e, "doc_id", f"{where}.evidence[{i}]") or "",
-                quote=quote,
+                quote="" if no_quote else quote,
                 anchor=_str(e, "anchor", where, required=False),
+                no_quote=no_quote.strip()[:300] if no_quote else None,
             )
         )
     fetch = raw.get("fetch")

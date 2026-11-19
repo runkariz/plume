@@ -17,7 +17,7 @@ FETCH = {"GET /orders/{id}": frozenset({"order.id", "order.status", "order.tags"
 
 def _oracle() -> Oracle:
     return Oracle(
-        doc_text=lambda _a, _d: "anything",
+        doc_text=lambda _a, _d: "anything documented about this field here",
         field_exists=lambda _a, p: p in SHAPES or p in {"variations[].sku"},
         endpoint_exists=lambda _a, call: call in FETCH or call == "GET /products",
         fetch_fields=lambda _a, call: FETCH.get(call),
@@ -26,7 +26,8 @@ def _oracle() -> Oracle:
 
 
 def _codes(name: str, ftype: str, path: str, **src: Any) -> list[tuple[str, str]]:
-    source = {"paths": [path], "evidence": [{"doc_id": "m", "quote": "anything"}], **src}
+    quote = "anything documented about this field"
+    source = {"paths": [path], "evidence": [{"doc_id": "m", "quote": quote}], **src}
     field = {"name": name, "type": ftype, "description": "d", "sources": {"a": source}}
     draft = parse_draft({"name": "Order", "description": "d", "fields": [field]})
     return [(i.code, i.message) for i in validate(draft, frozenset({"a"}), _oracle())]

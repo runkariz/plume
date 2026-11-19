@@ -324,6 +324,7 @@ def snapshot_payload(
                 "join": list(src.join),
                 "evidence": [
                     {"quote": e.quote, "anchor": e.anchor or "", "docId": e.doc_id}
+                    | ({"noQuote": e.no_quote} if e.no_quote else {})
                     for e in src.evidence
                 ],
             }

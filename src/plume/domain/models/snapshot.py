@@ -5,7 +5,12 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from plume.domain.models.canonical_model import CanonicalField, ModelDraft, conversion_json
+from plume.domain.models.canonical_model import (
+    CanonicalField,
+    Evidence,
+    ModelDraft,
+    conversion_json,
+)
 from plume.domain.models.validation import Issue
 from plume.domain.shared.hashing import content_hash
 
@@ -96,6 +101,13 @@ class ModelSnapshot:
         return out
 
 
+def _evidence_json(e: Evidence) -> dict[str, Any]:
+    out: dict[str, Any] = {"doc_id": e.doc_id, "quote": e.quote, "anchor": e.anchor}
+    if e.no_quote:  # only when present, so models without it keep their hash
+        out["noQuote"] = e.no_quote
+    return out
+
+
 def _field_json(f: CanonicalField) -> dict[str, Any]:
     out: dict[str, Any] = {
         "name": f.name,
@@ -108,9 +120,7 @@ def _field_json(f: CanonicalField) -> dict[str, Any]:
                 "fetch": s.fetch,
                 "join": list(s.join),
                 "transform": s.transform,
-                "evidence": [
-                    {"doc_id": e.doc_id, "quote": e.quote, "anchor": e.anchor} for e in s.evidence
-                ],
+                "evidence": [_evidence_json(e) for e in s.evidence],
             }
             for api, s in f.sources
         },
