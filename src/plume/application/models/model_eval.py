@@ -75,7 +75,8 @@ class ModelEvaluation:
 
     def _score(self, snap: ModelSnapshot, gold: GoldModel) -> ModelEval:
         oracle = self._oracle_for(snap.inputs)
-        return score(snap.draft, gold, tuple(i.api for i in snap.inputs), oracle.field_exists)
+        apis = tuple(i.api for i in snap.inputs)
+        return score(snap.draft, gold, apis, oracle.field_exists, oracle.endpoint_exists)
 
     def _members(self, target: str) -> list[ModelSnapshot]:
         snap = self._models.get_snapshot(target)

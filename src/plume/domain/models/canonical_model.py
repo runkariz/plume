@@ -158,12 +158,39 @@ class OpenQuestion:
     options: tuple[str, ...] = ()
 
 
+OPERATION_KINDS = ("read", "create", "update", "set", "adjust", "delete", "other")
+MAX_OPERATIONS = 20
+
+
+@dataclass(frozen=True, slots=True)
+class OperationSource:
+    """How one API performs an operation."""
+
+    endpoint: str  # "POST /admin/api/{version}/inventory_levels/set.json"
+    fields: tuple[str, ...]  # the request/response fields it uses (available, quantity)
+    semantics: str | None  # "absolute; omitted means 0", "delta", "per-call limit 100"
+    evidence: tuple[Evidence, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class Operation:
+    """What a client does with the concept (read / set / adjust ...), per API."""
+
+    name: str  # "set absolute stock"
+    kind: str
+    sources: tuple[tuple[str, OperationSource], ...]  # (api, source), sorted by api
+
+    def source(self, api: str) -> OperationSource | None:
+        return dict(self.sources).get(api)
+
+
 @dataclass(frozen=True, slots=True)
 class ModelDraft:
     name: str
     description: str
     fields: tuple[CanonicalField, ...]
     open_questions: tuple[OpenQuestion, ...] = ()
+    operations: tuple[Operation, ...] = ()
 
     def walk(self) -> list[tuple[str, CanonicalField]]:
         """Every field with its canonical path (``variants[].sku``), parents before children."""
@@ -311,4 +338,42 @@ def parse_draft(raw: Any) -> ModelDraft:
             )
         else:
             raise DraftFormatError(f"open_questions[{i}] must be a string or an object")
-    return ModelDraft(name.strip(), description.strip(), tuple(fields), tuple(questions))
+    operations = _operations(_list(raw, "operations", "model"))
+    return ModelDraft(
+        name.strip(), description.strip(), tuple(fields), tuple(questions), operations
+    )
+
+
+def _operations(raw: list[Any]) -> tuple[Operation, ...]:
+    if len(raw) > MAX_OPERATIONS:
+        raise DraftFormatError(f"model.operations has more than {MAX_OPERATIONS} entries")
+    out = []
+    for i, op in enumerate(raw):
+        where = f"operations[{i}]"
+        if not isinstance(op, dict):
+            raise DraftFormatError(f"{where} must be an object")
+        kind = (_str(op, "kind", where) or "").strip().lower()
+        if kind not in OPERATION_KINDS:
+            raise DraftFormatError(f"{where}.kind must be one of {', '.join(OPERATION_KINDS)}")
+        sources_raw = op.get("sources", {})
+        if not isinstance(sources_raw, dict):
+            raise DraftFormatError(f"{where}.sources must be an object keyed by api id")
+        sources = []
+        for api, src in sorted(sources_raw.items()):
+            here = f"{where}.sources.{api}"
+            if not isinstance(src, dict):
+                raise DraftFormatError(f"{here} must be an object")
+            parsed = _source({"paths": [], **src}, here)  # evidence parsing as for fields
+            sources.append(
+                (
+                    str(api),
+                    OperationSource(
+                        endpoint=_str(src, "endpoint", here) or "",
+                        fields=tuple(str(f) for f in _list(src, "fields", here)),
+                        semantics=_str(src, "semantics", here, required=False),
+                        evidence=parsed.evidence,
+                    ),
+                )
+            )
+        out.append(Operation((_str(op, "name", where) or "").strip(), kind, tuple(sources)))
+    return tuple(out)

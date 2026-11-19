@@ -134,7 +134,7 @@ def _field_json(f: CanonicalField) -> dict[str, Any]:
 
 
 def draft_json(draft: ModelDraft) -> dict[str, Any]:
-    return {
+    out: dict[str, Any] = {
         "name": draft.name,
         "description": draft.description,
         "fields": [_field_json(f) for f in draft.fields],
@@ -143,6 +143,24 @@ def draft_json(draft: ModelDraft) -> dict[str, Any]:
             for q in draft.open_questions
         ],
     }
+    if draft.operations:  # only when present, so models without them keep their hash
+        out["operations"] = [
+            {
+                "name": op.name,
+                "kind": op.kind,
+                "sources": {
+                    api: {
+                        "endpoint": src.endpoint,
+                        "fields": list(src.fields),
+                        "semantics": src.semantics,
+                        "evidence": [_evidence_json(e) for e in src.evidence],
+                    }
+                    for api, src in op.sources
+                },
+            }
+            for op in draft.operations
+        ]
+    return out
 
 
 def snapshot_id_for(inputs: tuple[PinnedInput, ...], concept: str, draft: ModelDraft) -> str:
