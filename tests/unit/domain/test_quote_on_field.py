@@ -1,6 +1,8 @@
 """A citation's quote must be about the mapped field (M7), and quotes match across HTML markup
 (M10)."""
 
+from typing import Any
+
 from plume.domain.models.canonical_model import parse_draft
 from plume.domain.models.validation import Oracle, quote_in, validate
 
@@ -90,3 +92,43 @@ def test_no_quote_only_where_the_field_has_nothing_to_quote() -> None:
     assert _evidence("total", has_text) == ["NO_QUOTE_NOT_ALLOWED"]
     elsewhere = {"doc_id": "guide:orders", "noQuote": "not listed there"}
     assert _evidence("status", elsewhere) == ["NO_QUOTE_NOT_ALLOWED"]
+
+
+ONE_WORD = {
+    ("model:order", "quantity"): ("quantity", "- `lineItems[].quantity` (integer): quantity",
+                                  "- `offer.quantity` (integer): Units of the offer in stock."),
+}  # fmt: skip
+
+
+def _one_word_oracle() -> Oracle:
+    return Oracle(
+        doc_text=lambda _api, _doc: "- `lineItems[].quantity` (integer): quantity",
+        field_exists=lambda _api, path: path == "quantity",
+        endpoint_exists=lambda _api, _call: True,
+        field_texts=lambda _api, doc, path: ONE_WORD.get((doc, path)),
+    )
+
+
+def test_a_one_word_description_can_be_cited_with_no_quote() -> None:
+    """set-g3: "quantity" was too short to quote AND refused as noQuote: a dead end."""
+
+    def codes(evidence: dict[str, Any]) -> list[str]:
+        source = {"paths": ["quantity"], "evidence": [evidence]}
+        field = {"name": "qty", "type": "integer", "description": "d", "sources": {"woo": source}}
+        draft = parse_draft({"name": "Line", "description": "d", "fields": [field]})
+        return [i.code for i in validate(draft, frozenset({"woo"}), _one_word_oracle())]
+
+    assert codes({"doc_id": "model:order", "quote": "quantity"}) == ["QUOTE_TOO_SHORT"]
+    assert codes({"doc_id": "model:order", "noQuote": "the description is one word"}) == []
+
+
+def test_no_quote_must_be_a_reason() -> None:
+    import pytest  # noqa: PLC0415
+
+    from plume.domain.models.canonical_model import DraftFormatError  # noqa: PLC0415
+
+    source = {"paths": ["quantity"], "evidence": [{"doc_id": "m", "noQuote": True}]}
+    field = {"name": "q", "type": "integer", "description": "d", "sources": {"woo": source}}
+    draft = {"name": "L", "description": "d", "fields": [field]}
+    with pytest.raises(DraftFormatError, match="noQuote must be a string"):
+        parse_draft(draft)

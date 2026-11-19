@@ -162,7 +162,9 @@ def _as_members(
             continue
         into = merged.setdefault((parent, child), RelationCandidate(parent, child))
         for api, evidence in c.sources.items():
-            into.sources.setdefault(api, []).extend(evidence)
+            bucket = into.sources.setdefault(api, [])
+            have = {(e.kind, e.doc_id, tuple(e.paths)) for e in bucket}
+            bucket.extend(e for e in evidence if (e.kind, e.doc_id, tuple(e.paths)) not in have)
     return [merged[k] for k in sorted(merged)]
 
 

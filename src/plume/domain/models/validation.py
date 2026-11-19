@@ -150,10 +150,13 @@ def _shape_issues(
         and not plural_ok
     ):
         for p in src.paths:
-            kinds = {t.lower() for t in oracle.path_shape(api, p.path)[0]}
-            if kinds and kinds <= _PRIMITIVE and not p.path.endswith("[]"):
+            types = oracle.path_shape(api, p.path)[0]
+            kinds = {t.lower() for t in types}
+            # any type but a list is one value: a scalar, an object, a $ref'd model (bol
+            # salutation: Salutation | string)
+            if kinds and "array" not in kinds and not p.path.endswith("[]"):
                 out.append(Issue("SINGLE_FOR_ARRAY", path, api,
-                                 f"{p.path} is a single {'/'.join(sorted(kinds))} in {api} and "
+                                 f"{p.path} is a single {'/'.join(sorted(types))} in {api} and "
                                  f"{path} is a list: map a list, or state a conversion "
                                  "(cardinality or array-vs-single)"))  # fmt: skip
     if oracle.path_shape is None or f.fields or not _scalar(f.type):
@@ -191,13 +194,6 @@ def substantive(quote: str) -> bool:
     )
 
 
-def _description_part(text: str) -> str:
-    """A field line "- `name` (type) required: description" -> its description."""
-    if text.lstrip().startswith("- `") and ":" in text:
-        return text.split(":", 1)[1]
-    return text
-
-
 def _own_texts(api: str, doc_id: str, paths: list[str], oracle: Oracle) -> list[str] | None:
     """The mapped fields' own texts in the document (None: it lists none of them)."""
     if oracle.field_texts is None:
@@ -220,7 +216,8 @@ def _quote_issue(
             listed = ", ".join(paths) or "the field"
             return Issue("NO_QUOTE_NOT_ALLOWED", path, api,
                          f"noQuote needs {e.doc_id} to list {listed}")  # fmt: skip
-        if any(substantive(_description_part(t)) for t in own):
+        descriptions = [t for t in own if not t.lstrip().startswith("- `")]  # not the lines
+        if any(substantive(t) for t in descriptions):
             return Issue("NO_QUOTE_NOT_ALLOWED", path, api,
                          "the field's own description has a usable sentence: quote it")  # fmt: skip
         return None
@@ -231,7 +228,8 @@ def _quote_issue(
         return None
     return Issue("QUOTE_TOO_SHORT", path, api,
                  f"the quote carries no information ({e.quote[:40]!r}): quote a sentence of "
-                 "at least 4 words, or cite the field with noQuote when it has none")  # fmt: skip
+                 "at least 4 words, or, when the field's own description has none, cite it as "
+                 '{"doc_id": "...", "noQuote": "<why>"}')  # fmt: skip
 
 
 def _evidence_issues(path: str, api: str, src: FieldSource, oracle: Oracle) -> list[Issue]:

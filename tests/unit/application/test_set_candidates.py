@@ -51,3 +51,13 @@ def test_a_member_reached_only_through_a_role_name_has_a_label(packages, monkeyp
     [cand] = ctx["relation_candidates"]
     assert (cand["from"], cand["to"]) == ("Order", "Order line")
     assert cand["options"]
+
+
+def test_the_same_evidence_is_listed_once() -> None:
+    """plume-da: products[].variants[].product_id appeared twice on one candidate."""
+    found = [
+        _cand("order", "orderline", "shopify", "line_items[]"),
+        _cand("order", "lineitem", "shopify", "line_items[]"),  # same evidence, other name
+    ]
+    [merged] = _as_members(found, ["Order", "Order line"])
+    assert len(merged.sources["shopify"]) == 1

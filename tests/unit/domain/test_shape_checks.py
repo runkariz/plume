@@ -12,6 +12,8 @@ SHAPES = {
     "status": (frozenset({"string"}), ()),
     "amount": (frozenset({"object", "string"}), ("value",)),  # scalar somewhere: fine
     "customer_id": (frozenset({"integer"}), ()),
+    "salutation": (frozenset({"Salutation", "string"}), ()),  # a $ref'd enum model
+    "billing": (frozenset({"object"}), ("city",)),
     "line_items": (frozenset({"array"}), ("sku",)),
 }
 ENUMS = {"status": ("pending", "processing", "completed", "cancelled")}
@@ -73,6 +75,8 @@ def test_a_list_field_needs_a_list() -> None:
     assert "customer_id is a single integer" in message
     assert _codes("lines", "array", "line_items") == []
     assert _codes("lines", "array", "customer_id", conversion={"kind": "cardinality"}) == []
+    assert [c for c, _ in _codes("addresses", "array", "salutation")] == ["SINGLE_FOR_ARRAY"]
+    assert [c for c, _ in _codes("addresses", "array", "billing")] == ["SINGLE_FOR_ARRAY"]
 
 
 def test_enum_maps_cover_the_api_enum() -> None:

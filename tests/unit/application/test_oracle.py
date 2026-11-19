@@ -54,3 +54,24 @@ def test_shape_lookups_stay_fast_on_a_large_build() -> None:
         assert len(subs) == 100
     assert time.perf_counter() - start < 5  # index building included
     assert calls["find"] == 0
+
+
+def test_enum_of_the_path_itself_not_a_same_named_field() -> None:
+    """Allegro: checkoutform.status [BOUGHT, ...] and fulfillment.status [NEW, ...] differ."""
+    from plume.domain.knowledge.document import FieldSpec as Spec  # noqa: PLC0415
+
+    doc = Document(
+        doc_id="model:checkoutform", kind=DocumentKind.MODEL, title="t", text="t",
+        fields=(
+            Spec("status", FieldLocation.MODEL, "string",
+                 constraints='{"enum": ["BOUGHT", "FILLED_IN", "CANCELLED"]}'),
+            Spec("fulfillment.status", FieldLocation.MODEL, "string",
+                 constraints='{"enum": ["NEW", "PROCESSING", "SENT"]}'),
+        ),
+    )  # fmt: skip
+    facts = SimpleNamespace(endpoints=lambda _b: [])
+    documents = SimpleNamespace(get_document=lambda _b, _d: doc)
+    lookups = PinnedLookups({"a": BuildId("b-" + "0" * 32)}, facts, documents)
+    cited = ("model:checkoutform",)
+    assert lookups.path_enum("a", "fulfillment.status", cited) == ("NEW", "PROCESSING", "SENT")
+    assert lookups.path_enum("a", "status", cited) == ("BOUGHT", "FILLED_IN", "CANCELLED")

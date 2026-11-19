@@ -136,15 +136,22 @@ class PinnedLookups:
         return types, tuple(subs)
 
     def path_enum(self, api: str, path: str, doc_ids: tuple[str, ...]) -> tuple[str, ...] | None:
-        """The enum values the cited documents state for the field (None: none states one)."""
-        values: dict[str, None] = {}
+        """The enum values the cited documents state for the field itself: a field whose name
+        IS the path, or ends with it (checkoutForm.fulfillment.status for fulfillment.status),
+        never a shorter one (status is another field than fulfillment.status). None: none
+        states one."""
+        wanted = path.lower().replace("[]", "")
+        exact: dict[str, None] = {}
+        longer: dict[str, None] = {}
         for doc_id in doc_ids:
             d = self.doc(api, doc_id)
             for spec in d.fields if d is not None else ():
-                if same_field(spec.name, path):
+                name = spec.name.lower().replace("[]", "")
+                into = exact if name == wanted else longer if name.endswith("." + wanted) else None
+                if into is not None:
                     for v in spec.constraint_dict.get("enum") or ():
-                        values[str(v)] = None
-        return tuple(values) or None
+                        into[str(v)] = None
+        return tuple(exact or longer) or None  # the path itself first
 
     def _endpoint_rows(self, api: str) -> list[tuple[str, str, str]]:
         if api not in self._endpoints:
