@@ -171,13 +171,18 @@ def test_not_available_and_conversion_ok() -> None:
 def test_gate() -> None:
     [gold] = parse_gold(GOLD)
     result = score(DRAFT, gold, ("shop", "woo"), exists)
-    assert ModelGatePolicy().failures(result) == ["2 invented mapping(s): notes, order_number"]
+    [invented] = ModelGatePolicy().failures(result)
+    assert (invented.message, invented.overridable) == (
+        "2 invented mapping(s): notes, order_number",
+        False,
+    )
     clean = parse_draft({"name": "Order", "description": "d", "fields": [
         {"name": "total", "type": "money", "description": "d", "sources": {
             "shop": _src("total_price"), "woo": _src("total")}}]})  # fmt: skip
     ok = score(clean, gold, ("shop", "woo"), exists)
     assert ModelGatePolicy().failures(ok) == []  # no threshold yet: invented = 0 is enough
-    assert ModelGatePolicy(min_recall=0.5).failures(ok) == [f"recall {ok.recall} below 0.5"]
+    [low] = ModelGatePolicy(min_recall=0.5).failures(ok)
+    assert (low.message, low.overridable) == (f"recall {ok.recall} below 0.5", True)
 
 
 def test_held_out_and_sets() -> None:

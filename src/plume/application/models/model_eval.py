@@ -12,6 +12,7 @@ from plume.application.ports.model_repo import ModelRepo
 from plume.application.ports.model_set_repo import ModelSetRepo
 from plume.domain.models.model_eval import ModelEval, ModelGatePolicy, score
 from plume.domain.models.model_gold import GoldModel
+from plume.domain.models.release import GateFailure
 from plume.domain.models.snapshot import ModelSnapshot, PinnedInput
 from plume.domain.models.validation import Oracle
 
@@ -105,11 +106,14 @@ class ModelEvaluation:
             raise NotFoundError(f"{gold_ref} has no gold for {target} (it covers: {concepts})")
         return EvalReport(target, tuple(results))
 
-    def gate(self, snap: ModelSnapshot) -> list[str]:
+    def gate(self, snap: ModelSnapshot) -> list[GateFailure]:
         """Why ``snap`` may not be released (empty: it may). Without gold for its concept it may
         (not evaluated)."""
-        out: list[str] = []
+        out: list[GateFailure] = []
         for g in self._gold.all():
             if _covers(g, snap):
-                out.extend(f"{g.source}: {f}" for f in self._policy.failures(self._score(snap, g)))
+                out.extend(
+                    GateFailure(f"{g.source}: {f.message}", f.overridable)
+                    for f in self._policy.failures(self._score(snap, g))
+                )
         return out

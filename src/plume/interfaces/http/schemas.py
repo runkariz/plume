@@ -312,6 +312,20 @@ class ReleaseRequest(Schema):
         description="Official models of the same concept this release replaces (ids from "
         "GET /v1/models/{id}/supersedable).",
     )
+    override_reason: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Release over a failing model gold gate (recall below the threshold): why. "
+        "Kept with the release (releaseOverride). Never overrides an invented mapping.",
+    )
+
+
+class SetReleaseRequest(Schema):
+    override_reason: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Release members over a failing model gold gate (never invented): why.",
+    )
 
 
 class CheckCallRequest(Schema):

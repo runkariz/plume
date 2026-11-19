@@ -249,10 +249,11 @@ def model_sets_router(  # noqa: PLR0915 - one route per operation
         )
 
     @router.post("/v1/model-sets/{set_id}/release", dependencies=[Depends(auth)], responses=errors)
-    def release(set_id: str) -> dict[str, Any]:
+    def release(set_id: str, body: s.SetReleaseRequest | None = None) -> dict[str, Any]:
         """Make an unreleased set official AND release its unreleased members (listed in
-        `releasedMembers`). 409 while a relation is undecided."""
-        r = sets().release(set_id)
+        `releasedMembers`). 409 while a relation is undecided, or a member fails the model gold
+        gate (unless `overrideReason` is given and nothing is invented)."""
+        r = sets().release(set_id, body.override_reason if body else None)
         return {"set": set_json(r.snapshot, True), "releasedMembers": list(r.released_members)}
 
     @router.post("/v1/model-sets/{set_id}/discard", dependencies=[Depends(auth)], responses=errors)

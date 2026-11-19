@@ -78,10 +78,19 @@ class InMemoryModelRepo:
         )
 
     def set_visibility(
-        self, snapshot_id: str, visibility: str, released_at: datetime | None
+        self,
+        snapshot_id: str,
+        visibility: str,
+        released_at: datetime | None,
+        release_override: dict[str, Any] | None = None,
     ) -> None:
         s = self.snapshots[snapshot_id]
-        self.snapshots[snapshot_id] = replace(s, visibility=visibility, released_at=released_at)
+        self.snapshots[snapshot_id] = replace(
+            s,
+            visibility=visibility,
+            released_at=released_at,
+            release_override=release_override or s.release_override,
+        )
 
     def lineages_for_owner(self, key_hashes: Sequence[str]) -> list[str]:
         wanted = set(key_hashes)

@@ -3492,6 +3492,19 @@
       },
       "ReleaseRequest": {
         "properties": {
+          "overrideReason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Release over a failing model gold gate (recall below the threshold): why. Kept with the release (releaseOverride). Never overrides an invented mapping.",
+            "title": "Overridereason"
+          },
           "supersedes": {
             "description": "Official models of the same concept this release replaces (ids from GET /v1/models/{id}/supersedable).",
             "items": {
@@ -3999,6 +4012,25 @@
           "names"
         ],
         "title": "SetAlias",
+        "type": "object"
+      },
+      "SetReleaseRequest": {
+        "properties": {
+          "overrideReason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Release members over a failing model gold gate (never invented): why.",
+            "title": "Overridereason"
+          }
+        },
+        "title": "SetReleaseRequest",
         "type": "object"
       },
       "SetSessionRequest": {
@@ -9906,7 +9938,7 @@
     },
     "/v1/model-sets/{set_id}/release": {
       "post": {
-        "description": "Make an unreleased set official AND release its unreleased members (listed in\n`releasedMembers`). 409 while a relation is undecided.",
+        "description": "Make an unreleased set official AND release its unreleased members (listed in\n`releasedMembers`). 409 while a relation is undecided, or a member fails the model gold\ngate (unless `overrideReason` is given and nothing is invented).",
         "operationId": "release_v1_model_sets__set_id__release_post",
         "parameters": [
           {
@@ -9935,6 +9967,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SetReleaseRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
@@ -11693,7 +11742,7 @@
     },
     "/v1/models/{snapshot_id}/release": {
       "post": {
-        "description": "Make an unreleased model official (listed publicly). 409 unless it is unreleased.\n``supersedes``: official models of the same concept (from /supersedable) that this one\nreplaces: they stay readable by id with supersededBy, and leave the lists. 409 when an\nid is not one of them.",
+        "description": "Make an unreleased model official (listed publicly). 409 unless it is unreleased.\n``supersedes``: official models of the same concept (from /supersedable) that this one\nreplaces: they stay readable by id with supersededBy, and leave the lists. 409 when an\nid is not one of them; also when the model gold gate fails, unless `overrideReason`\nis given and nothing invented (the reason is kept as releaseOverride).",
         "operationId": "release_v1_models__snapshot_id__release_post",
         "parameters": [
           {

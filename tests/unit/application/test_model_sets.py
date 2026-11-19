@@ -264,6 +264,7 @@ def test_accepted_aliases_are_validated_stored_and_passed_to_members(stack: Fake
 
 def test_set_release_runs_the_model_gold_gate_on_its_members(stack: FakeStack) -> None:
     from plume.application.models.sessions import ModelSessions  # noqa: PLC0415
+    from plume.domain.models.release import GateFailure  # noqa: PLC0415
 
     session, pins, ids = _setup(stack, maintainer=True)
     decided = (
@@ -275,7 +276,9 @@ def test_set_release_runs_the_model_gold_gate_on_its_members(stack: FakeStack) -
 
     def gated() -> ModelSessions:
         s = plain()
-        s._release_gate = lambda snap: [f"gold.json: 1 invented mapping(s): {snap.concept}"]
+        s._release_gate = lambda snap: [
+            GateFailure(f"gold.json: 1 invented mapping(s): {snap.concept}", False)
+        ]
         return s
 
     stack.models = gated  # type: ignore[method-assign]

@@ -4,7 +4,7 @@ generation jobs."""
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Protocol
+from typing import Any, Protocol
 
 from plume.domain.models.snapshot import ModelSnapshot, PinnedInput, Visibility
 
@@ -64,8 +64,14 @@ class ModelRepo(Protocol):
         ...
 
     def set_visibility(
-        self, snapshot_id: str, visibility: str, released_at: datetime | None
-    ) -> None: ...
+        self,
+        snapshot_id: str,
+        visibility: str,
+        released_at: datetime | None,
+        release_override: dict[str, Any] | None = None,
+    ) -> None:
+        """``release_override``: kept when the release overrides a failing gold gate."""
+        ...
 
     def lineages_for_owner(self, key_hashes: Sequence[str]) -> list[str]:
         """Lineage ids whose owner key hash is one of ``key_hashes``."""

@@ -61,6 +61,8 @@ class ModelSnapshot:
     warnings: tuple[Issue, ...] = ()  # validation warnings (WRITE_ONLY_SOURCE, ...)
     superseded_by: str | None = None  # the official model that replaced it at its release
     superseded_at: datetime | None = None
+    # released over a failing model gold gate: {reason, failures, at}
+    release_override: dict[str, Any] | None = None
 
     @property
     def lineage(self) -> str:
