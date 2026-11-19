@@ -79,6 +79,48 @@ def _cell(text: str) -> dict[str, Any] | None:
     return {"paths": paths}
 
 
+_OPS = re.compile(r"^##\s+Operations", re.I | re.M)
+_ENDPOINT = re.compile(r"\b(GET|POST|PUT|PATCH|DELETE)\s+(/[^\s`(),;]+)")
+_KINDS = (("adjust", "adjust"), ("set", "set"), ("read", "read"), ("get", "read"),
+          ("list", "read"), ("create", "create"), ("add", "create"), ("update", "update"),
+          ("delete", "delete"), ("remove", "delete"))  # fmt: skip
+
+
+def _operations(text: str, apis: list[str]) -> list[dict[str, Any]]:
+    """The "## Operations" table: per operation and API its endpoints, or "not available"."""
+    start = _OPS.search(text)
+    if start is None:
+        return []
+    lines = []
+    for ln in text[start.end() :].splitlines()[1:]:
+        if ln.startswith("## "):
+            break
+        if ln.strip().startswith("|"):
+            lines.append(ln)
+    if len(lines) < 2:
+        return []
+    header = [_clean(h).lower() for h in _cells(lines[0])]
+    cols = {api: header.index(api.lower()) for api in apis if api.lower() in header}
+    out = []
+    for line in lines[1:]:
+        row = _cells(line)
+        if set("".join(row)) <= set("-: ") or not _clean(row[0]):
+            continue
+        name = _clean(row[0])
+        words = re.findall(r"[a-z]+", name.lower())
+        kind = next((k for w, k in _KINDS if w in words), "other")
+        cells: dict[str, Any] = {}
+        for api, col in cols.items():
+            cell = _clean(row[col]) if col < len(row) else ""
+            found = [f"{m.group(1)} {m.group(2)}" for m in _ENDPOINT.finditer(cell)]
+            if found:
+                cells[api] = {"endpoints": list(dict.fromkeys(found))}
+            elif cell.lower() in _NOT_AVAILABLE:
+                cells[api] = {"notAvailable": True}
+        out.append({"name": name, "kind": kind, "apis": cells})
+    return out
+
+
 def _insert(fields: list[dict[str, Any]], path: list[str], field: dict[str, Any]) -> None:
     head, *rest = path
     node = next((f for f in fields if f["name"] == head), None)
@@ -139,6 +181,9 @@ def import_markdown(text: str, group: str | None = None, held_out: bool = False)
         "heldOut": held_out,
         "fields": fields,
     }
+    operations = _operations(text, apis)
+    if operations:
+        gold["operations"] = operations
     if group is not None:
         gold["group"] = group
     parse_gold(gold, "import")  # the result must be a valid gold file

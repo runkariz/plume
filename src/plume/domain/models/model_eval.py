@@ -43,6 +43,7 @@ CONVERSION_MISSING = "conversion_missing"
 CONVERSION_WRONG = "conversion_wrong"
 
 FieldExists = Callable[[str, str], bool]  # (api, path) -> a documented field of its build?
+EndpointExists = Callable[[str, str], bool]  # (api, "METHOD /path") -> documented?
 
 _MINOR = re.compile(r"minor|cents?\b|smallest unit|[/÷x*]\s*100\b|\b100\s*[/÷]", re.I)
 _PAIR = re.compile(r"['\"]?([\w.-]+)['\"]?\s*(?:->|→|=>|:|=)\s*['\"]?([\w.-]+)['\"]?")
@@ -78,6 +79,13 @@ class ModelEval:
     cells: tuple[CellResult, ...]
     extra_invented: tuple[CellResult, ...] = ()  # invented paths of fields gold does not cover
     counts: dict[str, int] = field(default_factory=dict)
+    operations: tuple[CellResult, ...] = ()  # per (gold operation, API): field = its name
+
+    def operation_counts(self) -> dict[str, int]:
+        out: dict[str, int] = {}
+        for r in self.operations:
+            out[r.result] = out.get(r.result, 0) + 1
+        return out
 
     @property
     def invented(self) -> int:
@@ -132,7 +140,63 @@ class ModelEval:
             "conversionWrongRate": self.conversion_wrong_rate,
             "cells": [row(r) for r in self.cells],
             "extraInvented": [row(r) for r in self.extra_invented],
+            "operations": {
+                "counts": self.operation_counts(),
+                "precision": _ratio(self.operations, (CORRECT,), (CORRECT, WRONG, INVENTED)),
+                "recall": _ratio(self.operations, (CORRECT,), None),
+                "cells": [row(r) for r in self.operations],
+            },
         }
+
+
+def _ratio(
+    rows: tuple[CellResult, ...], top: tuple[str, ...], bottom: tuple[str, ...] | None
+) -> float | None:
+    """Share of ``top`` results among ``bottom`` ones (None: the cells that expect a value)."""
+    num = sum(1 for r in rows if r.result in top)
+    den = sum(1 for r in rows if (r.result in bottom if bottom else bool(r.expected)))
+    return round(num / den, 4) if den else None
+
+
+def same_call(produced: str, expected: str) -> bool:
+    """Same method, and the same path up to parameter names ({id} = {order_id})."""
+    pm, _, pp = produced.strip().partition(" ")
+    em, _, ep = expected.strip().partition(" ")
+    return pm.upper() == em.upper() and _call_path(pp) == _call_path(ep)
+
+
+def _call_path(path: str) -> str:
+    return re.sub(r"\{[^}]*\}", "{}", path.strip().rstrip("/"))
+
+
+def _score_operations(
+    draft: ModelDraft, gold: GoldModel, apis: tuple[str, ...], endpoint_exists: EndpointExists
+) -> tuple[CellResult, ...]:
+    """Each gold operation against the draft's operation of that name (else of that kind)."""
+    by_name = {_key(o.name): o for o in draft.operations}
+    out: list[CellResult] = []
+    for gop in gold.operations:
+        op = by_name.get(_key(gop.name)) or next(
+            (o for o in draft.operations if o.kind == gop.kind and gop.kind != "other"), None
+        )
+        for api in apis:
+            cell = gop.cell(api)
+            if cell is None:
+                continue
+            src = op.source(api) if op else None
+            produced = (src.endpoint,) if src else ()
+            if not produced:
+                result = NOT_AVAILABLE_CORRECT if cell.not_available else MISSED
+            elif not endpoint_exists(api, produced[0]):
+                result = INVENTED
+            elif cell.not_available or not any(same_call(produced[0], e) for e in cell.paths):
+                result = WRONG
+            else:
+                result = CORRECT
+            detail = src.semantics if src else None
+            out.append(CellResult(gop.name, api, result, cell.paths, produced, None,
+                                  op.name if op else None, detail))  # fmt: skip
+    return tuple(out)
 
 
 def _align(draft: ModelDraft, gold: GoldModel) -> dict[str, tuple[str, CanonicalField]]:
@@ -253,7 +317,11 @@ def _score_cell(
 
 
 def score(
-    draft: ModelDraft, gold: GoldModel, model_apis: tuple[str, ...], exists: FieldExists
+    draft: ModelDraft,
+    gold: GoldModel,
+    model_apis: tuple[str, ...],
+    exists: FieldExists,
+    endpoint_exists: EndpointExists = lambda _api, _call: True,
 ) -> ModelEval:
     """Score ``draft`` (a model over ``model_apis``) against ``gold`` on the APIs both have."""
     apis = tuple(a for a in gold.apis if a in set(model_apis))
@@ -297,7 +365,14 @@ def score(
         if r.conversion in (CONVERSION_MISSING, CONVERSION_WRONG):
             counts[r.conversion] = counts.get(r.conversion, 0) + 1
     return ModelEval(
-        gold.concept, gold.source, gold.held_out, apis, tuple(cells), tuple(extra), counts
+        gold.concept,
+        gold.source,
+        gold.held_out,
+        apis,
+        tuple(cells),
+        tuple(extra),
+        counts,
+        _score_operations(draft, gold, apis, endpoint_exists),
     )
 
 

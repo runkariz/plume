@@ -60,6 +60,18 @@ class GoldField:
 
 
 @dataclass(frozen=True, slots=True)
+class GoldOperation:
+    """An operation (read / set / adjust ...): per API the endpoints that do it, or none."""
+
+    name: str
+    kind: str
+    cells: tuple[tuple[str, GoldCell], ...]  # paths = "METHOD /path" endpoints
+
+    def cell(self, api: str) -> GoldCell | None:
+        return dict(self.cells).get(api)
+
+
+@dataclass(frozen=True, slots=True)
 class GoldModel:
     concept: str
     apis: tuple[str, ...]
@@ -67,6 +79,7 @@ class GoldModel:
     group: str | None = None
     held_out: bool = False
     source: str = ""  # the file it came from
+    operations: tuple[GoldOperation, ...] = ()
 
     def walk(self) -> list[tuple[str, GoldField, str | None]]:
         """Every field with its gold path and its parent's path, parents before children."""
@@ -145,9 +158,32 @@ def _model(raw: Any, where: str, source: str, held_out: bool) -> GoldModel:
     if not apis:
         raise GoldFormatError(f"{where}.apis is empty")
     fields = raw.get("fields")
-    if not isinstance(fields, list) or not fields:
+    if not isinstance(fields, list) or not (fields or raw.get("operations")):
         raise GoldFormatError(f"{where}.fields must be a non-empty list")
     group = raw.get("group")
+    ops = []
+    for i, op in enumerate(raw.get("operations") or []):
+        here = f"{where}.operations[{i}]"
+        if not isinstance(op, dict) or not isinstance(op.get("name"), str):
+            raise GoldFormatError(f"{here} must be an object with a name")
+        cells_raw = op.get("apis") or {}
+        if not isinstance(cells_raw, dict):
+            raise GoldFormatError(f"{here}.apis must be an object")
+        cells = []
+        for api, c in sorted(cells_raw.items()):
+            if api not in apis:
+                raise GoldFormatError(f"{here}.apis names an API not in the gold's apis: {api}")
+            endpoints = c.get("endpoints") if isinstance(c, dict) else None
+            fixed = {**c, "paths": endpoints} if isinstance(c, dict) and endpoints else c
+            if isinstance(fixed, dict):
+                fixed = {k: v for k, v in fixed.items() if k != "endpoints"}
+            cells.append((api, _cell(fixed, f"{here}.apis.{api}")))
+        kind = op.get("kind")
+        ops.append(
+            GoldOperation(
+                op["name"].strip(), kind if isinstance(kind, str) else "other", tuple(cells)
+            )
+        )
     return GoldModel(
         concept=raw["concept"].strip(),
         apis=apis,
@@ -155,6 +191,7 @@ def _model(raw: Any, where: str, source: str, held_out: bool) -> GoldModel:
         group=str(group) if group is not None else None,
         held_out=raw.get("heldOut") is True or held_out,
         source=source,
+        operations=tuple(ops),
     )
 
 

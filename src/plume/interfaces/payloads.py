@@ -355,6 +355,25 @@ def snapshot_payload(
         "promptVersion": m.prompt_version,
         "generatorUsage": m.generator_usage,
         "releaseOverride": m.release_override,  # released over a failing gold gate: why
+        "operations": [
+            {
+                "name": op.name,
+                "kind": op.kind,
+                "sources": {
+                    api: {
+                        "endpoint": src.endpoint,
+                        "fields": list(src.fields),
+                        "semantics": src.semantics,
+                        "evidence": [
+                            {"quote": e.quote, "anchor": e.anchor or "", "docId": e.doc_id}
+                            for e in src.evidence
+                        ],
+                    }
+                    for api, src in op.sources
+                },
+            }
+            for op in m.draft.operations
+        ],
         "warnings": [
             {"code": w.code, "field": w.field, "api": w.api, "message": w.message}
             for w in m.warnings

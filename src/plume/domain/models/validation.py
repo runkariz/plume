@@ -17,6 +17,7 @@ Issue codes (stable; clients key on them):
 - ``ENUM_KEY_UNKNOWN``: an enum conversion maps a value the cited documents' enum does not have.
 - ``ENUM_MAP_INCOMPLETE``: an enum conversion leaves values of that enum neither mapped nor
   listed in ``unmapped``.
+- ``OPERATION_FIELD_NOT_FOUND``: an operation names a field its endpoint does not document.
 - ``QUOTE_TOO_SHORT``: the quote carries no information (fewer than 4 words and 20 letters),
   unless it is the field's whole own description of 2+ words.
 - ``NO_QUOTE_NOT_ALLOWED``: ``noQuote`` cites a field whose document does not list it, or whose
@@ -73,6 +74,8 @@ class Oracle:
     path_shape: Callable[[str, str], tuple[frozenset[str], tuple[str, ...]]] | None = None
     # (api, path, cited doc ids) -> the enum values those documents state for it (None: none)
     path_enum: Callable[[str, str, tuple[str, ...]], tuple[str, ...] | None] | None = None
+    # (api, "METHOD /path") -> every field name of that endpoint (request and response)
+    call_fields: Callable[[str, str], frozenset[str] | None] | None = None
 
 
 _TAG = re.compile(r"<[^>]{0,200}>")
@@ -288,8 +291,48 @@ def _enum_issues(path: str, api: str, src: FieldSource, oracle: Oracle) -> list[
     return out
 
 
+def _cited(where: str, api: str, evidence: tuple[Evidence, ...], oracle: Oracle) -> list[Issue]:
+    """Citations not tied to one field: in the build, quoted verbatim, substantive."""
+    if not evidence:
+        return [Issue("MISSING_CITATION", where, api, "it cites nothing")]
+    out: list[Issue] = []
+    for e in evidence:
+        text = oracle.doc_text(api, e.doc_id)
+        if text is None:
+            out.append(Issue("DOC_NOT_FOUND", where, api, f"{e.doc_id} is not in the build"))
+        elif not quote_in(e.quote, text):
+            message = f"the quote is not in {e.doc_id}: {e.quote[:80]!r}"
+            out.append(Issue("QUOTE_NOT_FOUND", where, api, message))
+        elif not substantive(e.quote):
+            message = f"the quote carries no information ({e.quote[:40]!r})"
+            out.append(Issue("QUOTE_TOO_SHORT", where, api, message))
+    return out
+
+
+def _operation_issues(draft: ModelDraft, apis: frozenset[str], oracle: Oracle) -> list[Issue]:
+    """Operations: a documented endpoint per API, its fields on that endpoint, cited."""
+    out: list[Issue] = []
+    for op in draft.operations:
+        where = f"operation:{op.name}"
+        for api, src in op.sources:
+            if api not in apis:
+                out.append(Issue("API_NOT_IN_SESSION", where, api, f"{api} is not in this session"))
+                continue
+            if not oracle.endpoint_exists(api, src.endpoint):
+                out.append(Issue("ENDPOINT_NOT_FOUND", where, api,
+                                 f"{src.endpoint} is not documented in {api}"))  # fmt: skip
+                continue
+            known = oracle.call_fields(api, src.endpoint) if oracle.call_fields else None
+            for name in src.fields:
+                if known is not None and not any(_same_path(name, k) for k in known):
+                    out.append(Issue("OPERATION_FIELD_NOT_FOUND", where, api,
+                                     f"{name} is not a field of {src.endpoint}"))  # fmt: skip
+            out.extend(_cited(where, api, src.evidence, oracle))
+    return out
+
+
 def validate(draft: ModelDraft, apis: frozenset[str], oracle: Oracle) -> list[Issue]:
-    issues: list[Issue] = []
+    issues: list[Issue] = _operation_issues(draft, apis, oracle)
     for path, f in draft.walk():
         if not f.sources and not f.fields:  # a container may be mapped through its sub-fields
             issues.append(Issue("NO_SOURCES", path, None, "the field maps no API"))

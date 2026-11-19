@@ -50,3 +50,36 @@ def test_held_out_flag_and_errors() -> None:
         import_markdown("no title")
     with pytest.raises(GoldImportError, match="Expected mapping"):
         import_markdown("# Order across shopify, tested x\n")
+
+
+_SET_ROW = " | ".join(
+    [
+        "| set absolute stock",
+        "POST /admin/api/{version}/inventory_levels/set.json (`available`)",
+        "PUT /wp-json/wc/{version}/products/{id} (`stock_quantity`)",
+        "POST /api/offers or POST /api/offers/stock/imports |",
+    ]
+)
+OPS_REPORT = (
+    REPORT
+    + "\n## Operations (not scored as fields, for the coordinator)\n"
+    + "| operation | shopify | woocommerce | mirakl |\n|---|---|---|---|\n"
+    + _SET_ROW
+    + "\n| adjust by a delta | POST /admin/api/{version}/inventory_levels/adjust.json"
+    + " | not available | — |\n\n## Open questions\n- none\n"
+)
+
+
+def test_the_operations_table_becomes_gold_operations() -> None:
+    gold = import_markdown(OPS_REPORT)
+    assert gold["operations"] == [
+        {"name": "set absolute stock", "kind": "set", "apis": {
+            "shopify": {"endpoints": ["POST /admin/api/{version}/inventory_levels/set.json"]},
+            "woocommerce": {"endpoints": ["PUT /wp-json/wc/{version}/products/{id}"]},
+            "mirakl": {"endpoints": ["POST /api/offers", "POST /api/offers/stock/imports"]}}},
+        {"name": "adjust by a delta", "kind": "adjust", "apis": {
+            "shopify": {"endpoints": ["POST /admin/api/{version}/inventory_levels/adjust.json"]},
+            "woocommerce": {"notAvailable": True}}},
+    ]  # fmt: skip
+    [model] = parse_gold(gold)
+    assert [o.kind for o in model.operations] == ["set", "adjust"]

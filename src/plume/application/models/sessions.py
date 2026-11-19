@@ -78,6 +78,20 @@ DRAFT_FORMAT: dict[str, Any] = {
         }
     ],
     "open_questions": [{"question": "Is total before or after tax?", "options": ["gross", "net"]}],
+    "operations": [
+        {
+            "name": "set absolute stock",
+            "kind": "set",
+            "sources": {
+                "<api id>": {
+                    "endpoint": "POST /api/{version}/inventory/set",
+                    "fields": ["available"],
+                    "semantics": "absolute; omitted means 0; at most 250 items per call",
+                    "evidence": [{"doc_id": "endpoint:...", "quote": "exact text"}],
+                }
+            },
+        }
+    ],
     "_nested_field_example": {
         "name": "line_items",
         "type": "array",
@@ -130,10 +144,15 @@ returns their fields page by page (follow next_cursor). Rules (refused otherwise
   an object (an address region, a country, a money object), map one of its fields (region.name,
   country.iso, amount.value); a list needs a conversion (array-vs-single, cardinality, split).
 - With `fetch`, the paths must be fields of that endpoint's response.
+- `operations` (optional): what a client does with the concept, per API: read, set
+  (absolute), adjust (by a delta), create, update, delete. Name the endpoint, the fields it
+  takes or returns, and its semantics as documented (absolute vs delta, "omitted means 0",
+  per-call limits). Leave an API out when it cannot do it.
 Refusals come back with codes (MISSING_CITATION, QUOTE_NOT_FOUND, QUOTE_NOT_ON_FIELD,
 FIELD_NOT_FOUND, ENDPOINT_NOT_FOUND, DOC_NOT_FOUND, API_NOT_IN_SESSION, PATH_NOT_IN_FETCH,
 SCALAR_FROM_OBJECT, ARRAY_FOR_SINGLE, SINGLE_FOR_ARRAY, ENUM_KEY_UNKNOWN, ENUM_MAP_INCOMPLETE,
-QUOTE_TOO_SHORT, NO_QUOTE_NOT_ALLOWED); fix those mappings and submit again.
+QUOTE_TOO_SHORT, NO_QUOTE_NOT_ALLOWED, OPERATION_FIELD_NOT_FOUND); fix those mappings and
+submit again.
 """
 
 

@@ -343,7 +343,13 @@ def create_app(deps: CliDependencies) -> typer.Typer:
                 f"(rate {r.conversion_missing_rate}), wrong {c.get('conversion_wrong', 0)} "
                 f"(rate {r.conversion_wrong_rate})"
             )
-            for cell in (*r.cells, *r.extra_invented):
+            if r.operations:
+                ops = r.as_dict()["operations"]
+                typer.echo(
+                    f"  operations: precision {ops['precision']}, recall {ops['recall']}; "  # type: ignore[index]
+                    + ", ".join(f"{k} {v}" for k, v in sorted(r.operation_counts().items()))
+                )
+            for cell in (*r.cells, *r.extra_invented, *r.operations):
                 bad = cell.result not in {"correct", "not_available_correct"}
                 if bad or cell.conversion in ("conversion_missing", "conversion_wrong"):
                     label = cell.conversion if not bad else cell.result

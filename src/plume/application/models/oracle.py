@@ -39,6 +39,7 @@ class PinnedLookups:
             self.fetch_fields,
             self.path_shape,
             self.path_enum,
+            self.call_fields,
         )
 
     def doc(self, api: str, doc_id: str) -> Document | None:
@@ -138,6 +139,16 @@ class PinnedLookups:
 
     def endpoint_exists(self, api: str, call: str) -> bool:
         return bool(self._owners(api, call))
+
+    def call_fields(self, api: str, call: str) -> frozenset[str] | None:
+        """Every field name of the endpoint ``call`` names (request and response)."""
+        names = {
+            spec.name
+            for owner in self._owners(api, call)
+            if (d := self.doc(api, owner)) is not None
+            for spec in d.fields
+        }
+        return frozenset(names) or None
 
     def fetch_fields(self, api: str, call: str) -> frozenset[str] | None:
         """The response field names of the endpoint ``call`` names (None: none listed)."""
