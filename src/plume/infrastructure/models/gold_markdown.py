@@ -97,7 +97,7 @@ def import_markdown(text: str, group: str | None = None, held_out: bool = False)
     title = _TITLE.search(text)
     if title is None:
         raise GoldImportError("no '# <Concept> across <apis>' title")
-    concept = title.group(1).strip()
+    concept = re.sub(r"\s*\(.*?\)\s*", " ", title.group(1)).strip()  # "Order (+ order line)"
     start = _SECTION.search(text)
     if start is None:
         raise GoldImportError("no '## Expected mapping (gold)' section")

@@ -6,6 +6,9 @@ Issue codes (stable; clients key on them):
 - ``MISSING_CITATION``: a mapping has no evidence.
 - ``DOC_NOT_FOUND``: evidence cites a document that is not in that API's pinned build.
 - ``QUOTE_NOT_FOUND``: the quoted text is not in the cited document.
+- ``QUOTE_NOT_ON_FIELD``: the quote is in the document but not about the mapped field: when the
+  cited document lists the field, the quote must come from that field's own entry (its line or
+  description); otherwise the quote must name the field.
 - ``FIELD_NOT_FOUND``: a source path is not a documented field of that API.
 - ``ENDPOINT_NOT_FOUND``: the fetch endpoint is not documented in that API.
 - ``NO_SOURCES``: a canonical field maps no API at all.
@@ -20,6 +23,7 @@ Warning codes (stored with the model, never a refusal):
   Claude or pasted draft is stored with the warning.
 """
 
+import html
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -45,10 +49,40 @@ class Oracle:
     field_exists: Callable[[str, str], bool]  # (api, path) -> documented?
     endpoint_exists: Callable[[str, str], bool]  # (api, "GET /path") -> documented?
     write_only: Callable[[str, str], bool] = lambda _api, _doc: False  # (api, doc_id) -> a write?
+    # (api, doc_id, path) -> the field's own text in that document (its line and description),
+    # None when the document does not list the field. Unset: quotes are not tied to fields.
+    field_texts: Callable[[str, str, str], tuple[str, ...] | None] | None = None
+
+
+_TAG = re.compile(r"<[^>]{0,200}>")
 
 
 def _norm(text: str) -> str:
-    return _WS.sub(" ", text.replace("`", "")).strip().lower()
+    """Markup-free, case-, whitespace- and backtick-insensitive: HTML tags become spaces and
+    entities are decoded on both sides (descriptions with <br>, <ul>, &amp;)."""
+    plain = html.unescape(_TAG.sub(" ", text)).replace("`", "")
+    return _WS.sub(" ", plain).strip().lower()
+
+
+def _names(path: str) -> set[str]:
+    leaf = path.replace("[]", "").split(".")[-1].lower()
+    return {leaf, leaf.replace("_", " ")} if leaf else set()
+
+
+def quote_on_field(quote: str, paths: list[str], api: str, doc_id: str, oracle: Oracle) -> bool:
+    """The quote is about one of the mapped fields: from its own entry when the cited document
+    lists it, else naming it."""
+    lookup = oracle.field_texts
+    if lookup is None:
+        return True
+    found = [lookup(api, doc_id, p) for p in paths]
+    texts = [t for f in found for t in (f or ())]
+    listed = any(f is not None for f in found)
+    if listed:
+        return any(quote_in(quote, t) for t in texts)
+    said = _norm(quote)
+    return any(re.search(rf"(?<![a-z0-9_]){re.escape(n)}(?![a-z0-9_])", said)
+               for p in paths for n in _names(p))  # fmt: skip
 
 
 def quote_in(quote: str, text: str) -> bool:
@@ -82,6 +116,23 @@ def validate(draft: ModelDraft, apis: frozenset[str], oracle: Oracle) -> list[Is
                             path,
                             api,
                             f"the quote is not in {e.doc_id}: {e.quote[:80]!r}",
+                        )
+                    )
+                elif (
+                    src.paths
+                    and all(oracle.field_exists(api, p.path) for p in src.paths)
+                    and not quote_on_field(
+                        e.quote, [p.path for p in src.paths], api, e.doc_id, oracle
+                    )
+                ):
+                    issues.append(
+                        Issue(
+                            "QUOTE_NOT_ON_FIELD",
+                            path,
+                            api,
+                            f"the quote from {e.doc_id} is not about "
+                            f"{', '.join(p.path for p in src.paths)}: quote that field's own "
+                            f"description or line ({e.quote[:80]!r})",
                         )
                     )
             for p in src.paths:
