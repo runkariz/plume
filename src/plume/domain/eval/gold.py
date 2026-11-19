@@ -1,14 +1,25 @@
 """Gold questions: what a good build must answer."""
 
+import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 
 from plume.domain.shared.errors import InvalidIdentifierError
 
-# Where a question was written from: the vendor's docs pages or its spec (OpenAPI etc.).
+# Where a question was written from: the vendor's docs pages, its spec (OpenAPI etc.), or a
+# tester's real-developer questions; any other lowercase label is accepted and reported apart.
 DOCS = "docs"
 SPEC = "spec"
-GOLD_SOURCES = (DOCS, SPEC)
+TESTER = "tester"
+GOLD_SOURCES = (DOCS, SPEC, TESTER)  # the known labels, in report order
+_SOURCE = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
+
+
+def source_order(names: Iterable[str]) -> list[str]:
+    """Known sources first (docs, spec, tester), then the others alphabetically."""
+    unique = set(names)
+    return [s for s in GOLD_SOURCES if s in unique] + sorted(unique - set(GOLD_SOURCES))
 
 
 class GoldKind(StrEnum):
@@ -27,8 +38,11 @@ class GoldQuestion:
     source: str = DOCS
 
     def __post_init__(self) -> None:
-        if self.source not in GOLD_SOURCES:
-            raise ValueError(f"{self.qid}: source must be one of {', '.join(GOLD_SOURCES)}")
+        if not _SOURCE.match(self.source):
+            raise ValueError(
+                f"{self.qid}: source {self.source!r} must be a lowercase label "
+                f"(e.g. {', '.join(GOLD_SOURCES)})"
+            )
         if not self.qid.strip():
             raise InvalidIdentifierError("gold question id is empty")
         if self.kind is GoldKind.SEARCH and not self.expect_docs:

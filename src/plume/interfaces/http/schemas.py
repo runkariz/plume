@@ -107,7 +107,7 @@ TOP1 = "Top-1 hit rate: the share of questions whose answer ranks first."
 
 
 class SourceQuality(Schema):
-    source: str = Field(description="docs | spec")
+    source: str = Field(description="docs | spec | tester, or another label of the gold set")
     recall_at5: float
     mrr: float
     top1_rate: float = Field(description=TOP1)
