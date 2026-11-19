@@ -4086,7 +4086,7 @@
             "type": "number"
           },
           "source": {
-            "description": "docs | spec",
+            "description": "docs | spec | tester, or another label of the gold set",
             "title": "Source",
             "type": "string"
           },

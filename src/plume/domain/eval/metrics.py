@@ -4,11 +4,11 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from plume.domain.eval.gold import GOLD_SOURCES, GoldKind, GoldQuestion
+from plume.domain.eval.gold import GOLD_SOURCES, GoldKind, GoldQuestion, source_order
 
 K = 5
 COMBINED = "combined"
-GATE_SOURCES = (COMBINED, *GOLD_SOURCES)
+GATE_SOURCES = (COMBINED, *GOLD_SOURCES[:2])  # the gate reads combined, docs or spec
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,7 +159,7 @@ def score(
     combined = _search_metrics(search, by_id, k)
     by_source = tuple(
         (name, _search_metrics(subset, by_id, k))
-        for name in GOLD_SOURCES
+        for name in source_order(q.source for q in search)
         if (subset := [q for q in search if q.source == name])
     )
     correct = 0

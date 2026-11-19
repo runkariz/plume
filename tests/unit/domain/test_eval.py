@@ -146,9 +146,11 @@ def test_gate_reads_the_chosen_source_and_checks_each_for_regression() -> None:
         GatePolicy(source="both")
 
 
-def test_gold_source_must_be_known() -> None:
-    with pytest.raises(ValueError, match="source must be"):
-        GoldQuestion("x", GoldKind.SEARCH, "q", ("d",), source="sdk")
+def test_gold_source_must_be_a_lowercase_label() -> None:
+    assert GoldQuestion("x", GoldKind.SEARCH, "q", ("d",), source="sdk").source == "sdk"
+    for bad in ("SDK", "", "two words", "-x"):
+        with pytest.raises(ValueError, match="must be a lowercase label"):
+            GoldQuestion("x", GoldKind.SEARCH, "q", ("d",), source=bad)
 
 
 def test_top1_rate_reads_the_old_stored_name() -> None:
@@ -183,3 +185,28 @@ def test_top1_rate_reads_the_old_stored_name() -> None:
 def test_few_questions_note() -> None:
     assert few_questions_note(9) == "Too few questions to measure; a sanity check only."
     assert few_questions_note(10) is None
+
+
+def test_any_lowercase_source_label_is_reported_apart() -> None:
+    from plume.domain.eval.gold import source_order  # noqa: PLC0415
+
+    qs = [
+        GoldQuestion("t1", GoldKind.SEARCH, "q", ("d1",), source="tester"),
+        GoldQuestion("r1", GoldKind.SEARCH, "q", ("d2",), source="real-queries"),
+        GoldQuestion("d1", GoldKind.SEARCH, "q", ("d1",)),
+    ]
+    m = score(
+        qs,
+        [
+            QuestionOutcome("t1", GoldKind.SEARCH, ranked=("d1",)),
+            QuestionOutcome("r1", GoldKind.SEARCH, ranked=("x",)),
+            QuestionOutcome("d1", GoldKind.SEARCH, ranked=("d1",)),
+        ],
+    )
+    assert [name for name, _ in m.by_source] == ["docs", "tester", "real-queries"]
+    assert dict(m.by_source)["tester"].recall_at_k == 1.0
+    assert dict(m.by_source)["real-queries"].recall_at_k == 0.0
+    assert EvalMetrics.from_dict(m.as_dict()) == m
+    assert source_order(["zz", "spec", "tester", "docs"]) == ["docs", "spec", "tester", "zz"]
+    with pytest.raises(ValueError, match="lowercase label"):
+        GoldQuestion("x", GoldKind.SEARCH, "q", ("d",), source="Tester Set")

@@ -5,7 +5,7 @@ from collections import Counter
 from pathlib import Path
 
 from plume.application.errors import SourcePackageError
-from plume.domain.eval.gold import GOLD_SOURCES
+from plume.domain.eval.gold import source_order
 from plume.domain.knowledge.document import DocumentKind
 from plume.infrastructure.sources.gold_file import convert_stream_gold
 from plume.infrastructure.sources.stream_package import (
@@ -44,7 +44,7 @@ def import_gold(package: str, out: str) -> GoldImport:
     )
     Path(out).write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     written = Counter(str(q["source"]) for q in data["questions"])  # type: ignore[attr-defined]
-    counts = {s: written[s] for s in GOLD_SOURCES if written[s]}
+    counts = {s: written[s] for s in source_order(written) if written[s]}
     return counts, skipped, _declared_counts(root / "knowledge-export" / "index.json")
 
 
