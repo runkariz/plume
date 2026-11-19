@@ -335,9 +335,13 @@ def set_content_key(inputs: tuple[PinnedInput, ...], draft: SetDraft) -> str:
 
 
 def _field_type(draft: ModelDraft, path: str) -> str | None:
-    """The type of a canonical field of a member model (by name or canonical path)."""
+    """The type of a canonical field of a member model, by name or by canonical path; a
+    nested field is named by its path inside the member (``lines[].order_line_id``; the
+    ``[]`` may be left out). So a relation can start or end inside a member: Shipment's
+    lines[].order_line_id -> Order line.id."""
+    wanted = path.replace("[]", "")
     for p, f in draft.walk():
-        if path in (p, f.name):
+        if path in (p, f.name) or (wanted and wanted == p.replace("[]", "")):
             return f.type
     return None
 

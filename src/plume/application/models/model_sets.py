@@ -55,8 +55,11 @@ A model set is several canonical models (members) with relations between them. S
    -> Product.id; and the cardinality). Never decide a design silently. Put a relation the user
    has not decided in open_questions, or submit it with "confirmed": false.
 3. A relation's fields must exist in the member models (embed.field on `from`; ref.field on
-   `from`, ref.key on `to`): add them to the member model first if needed. Cite, per API, how the
-   API documents it (sources.<api>: {as, paths, fetch, evidence}), from the candidate's evidence.
+   `from`, ref.key on `to`): add them to the member model first if needed. A field may be a
+   nested one, named by its path inside the member: a Shipment's lines reference Order lines
+   with ref.field "lines[].order_line_id" -> ref.key "id" (cardinality n:m). Cite, per API, how
+   the API documents it (sources.<api>: {as, paths, fetch, evidence}), from the candidate's
+   evidence.
 4. Aliases (different names at the same documented position, e.g. Shopify variant / WooCommerce
    variation) are offers: include one under "aliases" only if the user accepts it.
 5. submit_model_set(set_session, draft). Refusals come back with codes; fix and resubmit.
@@ -105,6 +108,18 @@ SET_DRAFT_FORMAT: dict[str, Any] = {
     ],
     "aliases": [{"names": {"<api>": "variant", "<other api>": "variation"}, "concept": "Variant"}],
     "open_questions": [{"question": "Embed variants or reference them?"}],
+    "_nested_relation_example": {
+        "id": "shipment-lines-order-lines",
+        "from": "Shipment",
+        "to": "Order line",
+        "kind": "reference",
+        "cardinality": "n:m",
+        "ref": {"field": "lines[].order_line_id", "key": "id"},
+        "confirmed": False,
+        "sources": {
+            "<api id>": {"as": "nested", "paths": ["fulfillments[].line_items[]"], "evidence": []}
+        },
+    },
 }
 
 
