@@ -260,3 +260,25 @@ def test_accepted_aliases_are_validated_stored_and_passed_to_members(stack: Fake
     ):
         with pytest.raises(ModelInputError):
             sets.start(APIS, ["Order", "Product"], aliases=bad)
+
+
+def test_set_release_runs_the_model_gold_gate_on_its_members(stack: FakeStack) -> None:
+    from plume.application.models.sessions import ModelSessions  # noqa: PLC0415
+
+    session, pins, ids = _setup(stack, maintainer=True)
+    decided = (
+        stack.model_sets()
+        .submit(session.session_id, _set(ids, _relation(stack, pins)), maintainer=True)
+        .snapshot
+    )
+    plain = stack.models
+
+    def gated() -> ModelSessions:
+        s = plain()
+        s._release_gate = lambda snap: [f"gold.json: 1 invented mapping(s): {snap.concept}"]
+        return s
+
+    stack.models = gated  # type: ignore[method-assign]
+    with pytest.raises(ModelStateError, match=r"fails the model gold gate: gold\.json"):
+        stack.model_sets().release(decided.set_id)
+    assert all(plain().snapshot(i).visibility == "unreleased" for i in ids.values())

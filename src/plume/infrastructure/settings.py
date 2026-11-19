@@ -127,6 +127,18 @@ class Settings(BaseSettings):
         default=(), description="Directories of gold sets (<api>.json) for the eval gate."
     )
     gate_min_recall: float = Field(default=0.6, ge=0, le=1)
+    model_gold_dirs: Annotated[tuple[Path, ...], NoDecode] = Field(
+        default=(),
+        description="Directories of model gold files (plume.model-gold.v1) for model-eval and "
+        "the release gate of official models.",
+    )
+    model_gate_min_recall: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description="Recall a model needs against its gold to be released (unset: only "
+        "invented = 0 is required).",
+    )
     gate_max_drop: float = Field(default=0.05, ge=0, le=1)
     search_rrf_k: int | None = Field(
         default=None,
@@ -173,6 +185,7 @@ class Settings(BaseSettings):
     @field_validator(
         "mcp_allowed_hosts",
         "gold_dirs",
+        "model_gold_dirs",
         "maintainer_tokens",
         "mcp_cors_origins",
         "cors_origins",

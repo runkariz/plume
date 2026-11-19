@@ -1,5 +1,7 @@
 """Entry point for the ``plume`` console script."""
 
+from typing import Any
+
 import typer
 
 from plume.application.ports.job_events import JobEvent, JobEvents
@@ -47,6 +49,11 @@ def build_app(container: Container | None = None) -> typer.Typer:
 
         return run(package, out)
 
+    def import_model_gold(text: str, group: str | None, held_out: bool) -> dict[str, Any]:
+        from plume.infrastructure.models.gold_markdown import import_markdown  # noqa: PLC0415
+
+        return import_markdown(text, group, held_out)
+
     def openapi() -> str:
         from plume.bootstrap.servers import openapi_document  # noqa: PLC0415
 
@@ -72,6 +79,8 @@ def build_app(container: Container | None = None) -> typer.Typer:
             release_notes=lambda: c().release_notes(),
             remove_api=lambda: c().remove_api(),
             import_gold=import_gold,
+            model_evaluation=lambda: c().model_evaluation(),
+            import_model_gold=import_model_gold,
         )
     )
 

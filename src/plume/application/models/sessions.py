@@ -3,7 +3,7 @@
 import json
 import secrets
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -199,8 +199,10 @@ class ModelSessions:
         models: ModelRepo,
         clock: Clock,
         collections: Collections | None = None,
+        release_gate: Callable[[ModelSnapshot], list[str]] | None = None,
     ) -> None:
         self._collections = collections
+        self._release_gate = release_gate
         self._resolver = resolver
         self._index = index
         self._facts = facts
@@ -699,11 +701,21 @@ class ModelSessions:
         if s.visibility != Visibility.UNRELEASED:
             raise ModelStateError(f"model {snapshot_id} is {s.visibility}, not unreleased")
         wanted = self._check_supersedes(s, supersedes)
+        self.check_release_gate(s)
         now = self._clock.now()
         self._models.set_visibility(snapshot_id, Visibility.OFFICIAL, now)
         for old in wanted:
             self._models.supersede(old, snapshot_id, now)
         return self.snapshot(snapshot_id)
+
+    def check_release_gate(self, snap: ModelSnapshot) -> None:
+        """The model gold gate (no invented mapping; recall at least the threshold once set);
+        a model without gold for its concept passes."""
+        failures = self._release_gate(snap) if self._release_gate is not None else []
+        if failures:
+            raise ModelStateError(
+                f"model {snap.snapshot_id} fails the model gold gate: {'; '.join(failures)}"
+            )
 
     def supersede(self, snapshot_id: str, supersedes: Sequence[str]) -> ModelSnapshot:
         """An already official model retires older official models of its concept (the same

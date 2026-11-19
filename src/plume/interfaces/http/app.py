@@ -27,6 +27,7 @@ from plume.application.models.collections import Collections
 from plume.application.models.concepts import ModelInputError, SuggestConcepts
 from plume.application.models.generate import GenerateModels
 from plume.application.models.impact import ModelImpact
+from plume.application.models.model_eval import ModelEvaluation
 from plume.application.models.model_sets import ModelSets
 from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import ModelSessions
@@ -100,6 +101,7 @@ class HttpDependencies:
     api_display: Callable[[], ApiDisplayName] | None = None
     remove_api: Callable[[], RemoveApi] | None = None
     model_impact: Callable[[], ModelImpact] | None = None
+    model_evaluation: Callable[[], ModelEvaluation] | None = None
 
 
 MAX_RAW_BYTES = 256 * 1024
@@ -669,6 +671,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 deps.model_sets,
                 deps.collections,
                 deps.model_impact,
+                deps.model_evaluation,
             )
         )
     if deps.model_sets is not None:

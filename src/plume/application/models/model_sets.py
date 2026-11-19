@@ -730,6 +730,9 @@ class ModelSets:
         ]
         if blocked:
             raise ModelStateError(f"members that cannot be released: {', '.join(blocked)}")
+        for snap in members:
+            if snap is not None and snap.visibility == Visibility.UNRELEASED:
+                self._sessions.check_release_gate(snap)
         now = self._clock.now()
         released = []
         for snap in members:

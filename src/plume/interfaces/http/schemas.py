@@ -656,6 +656,11 @@ class ModelJobOut(Schema):
     usage: dict[str, int] | None = Field(
         default=None, description="LLM tokens so far: {prompt, response, thoughts?, total}."
     )
+    eval: dict[str, Any] | None = Field(
+        default=None,
+        description="A succeeded job's model scored against its model gold (as POST "
+        "/v1/models/{id}/eval); null when no gold covers its concept.",
+    )
 
 
 class SessionStatus(Schema):

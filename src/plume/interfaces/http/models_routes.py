@@ -20,6 +20,7 @@ from plume.application.models.concepts import SuggestFilter
 from plume.application.models.generate import ENDED, GenerateModels
 from plume.application.models.impact import ModelImpact, members_of
 from plume.application.models.impact import summary as impact_summary
+from plume.application.models.model_eval import ModelEvaluation
 from plume.application.models.model_sets import ModelSets
 from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import (
@@ -65,8 +66,13 @@ def make_optional_auth(tokens: tuple[str, ...]) -> Callable[..., bool]:
     return maintainer_or_anonymous
 
 
-def job_out(job: ModelJob) -> s.ModelJobOut:
+def job_out(job: ModelJob, evaluation: "ModelEvaluation | None" = None) -> s.ModelJobOut:
+    report = None
+    if evaluation is not None and job.status == "succeeded" and job.snapshot_id:
+        found = evaluation.evaluate(job.snapshot_id)
+        report = found.as_dict() if found.results else None
     return s.ModelJobOut(
+        eval=report,
         job_id=job.job_id,
         status=job.status,
         apis=list(job.apis),
@@ -105,6 +111,7 @@ def models_router(  # noqa: PLR0915
     sets: Callable[[], ModelSets] | None = None,
     collections: Callable[[], Collections] | None = None,
     impact: Callable[[], ModelImpact] | None = None,
+    evaluation: Callable[[], ModelEvaluation] | None = None,
 ) -> APIRouter:
     router = APIRouter(tags=["models"])
     auth = make_auth(tokens)
@@ -254,8 +261,31 @@ def models_router(  # noqa: PLR0915
         responses=token_errors,
     )
     def get_job(job_id: str) -> s.ModelJobOut:
-        """A server-side generation job (maintainer)."""
-        return job_out(generator().get(job_id))
+        """A server-side generation job (maintainer). A succeeded job carries `eval`: its model
+        scored against the model gold of its concept (null without gold)."""
+        return job_out(generator().get(job_id), evaluation() if evaluation else None)
+
+    @router.post(
+        "/v1/models/{model_id}/eval",
+        dependencies=[Depends(auth)],
+        responses={**token_errors, 404: {"model": s.ErrorBody}},
+    )
+    def evaluate(
+        model_id: str,
+        gold: Annotated[
+            str | None,
+            Query(
+                pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*\.json$",
+                description="A gold file name in PLUME_MODEL_GOLD_DIRS (default: all of them)",
+            ),
+        ] = None,
+    ) -> dict[str, Any]:
+        """Score a model, or each model of a set, against its model gold (maintainer): per
+        field and API correct / wrong / invented / missed / not available, conversions, and
+        precision / recall / invented, held-out gold reported apart."""
+        if evaluation is None:
+            raise HTTPException(503, "model evaluation is not configured")
+        return evaluation().evaluate(model_id, gold).as_dict()
 
     @router.get(
         "/v1/models/jobs/{job_id}/events",
