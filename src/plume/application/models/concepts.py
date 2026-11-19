@@ -76,6 +76,15 @@ ROLE_SYNONYMS: dict[str, tuple[str, ...]] = {
     "stock": ("inventory",),
     "orderline": ("lineitem", "orderitem", "orderlineitem"),
     "lineitem": ("orderline", "orderitem"),
+    # the nested address objects APIs use (Woo billing / shipping, Shopify default_address)
+    "address": (
+        "billing",
+        "shipping",
+        "billingaddress",
+        "shippingaddress",
+        "defaultaddress",
+        "customeraddress",
+    ),
 }
 
 

@@ -16,6 +16,7 @@ def test_role_keys() -> None:
     assert role_keys("Order line") == ("orderline", "lineitem", "orderitem", "orderlineitem")
     assert "fulfillment" in role_keys("Shipment")
     assert "shipping" not in role_keys("Shipment")  # a shipping address is no shipment
+    assert {"billing", "shipping", "billingaddress", "defaultaddress"} <= set(role_keys("Address"))
 
 
 def test_candidates_merge_under_member_names() -> None:
