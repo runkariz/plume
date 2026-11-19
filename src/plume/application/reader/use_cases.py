@@ -688,13 +688,28 @@ class FindFact:
         )
 
 
+PAGING_TERM_SCORE = 3  # used as a parameter in the guide (quoted, or next to "parameter")
+_VERSION_SEGMENT = re.compile(r"^(?:v\d+(?:\.\d+)*|\d{4}-\d{2}(?:-\d{2})?)$", re.I)
+
+
+def _is_version(segment: str) -> bool:
+    return bool(_VERSION_SEGMENT.match(segment))
+
+
 class CheckCall:
     """Is ``METHOD /path`` with these params documented? Matches templates like ``{id}``."""
 
-    def __init__(self, resolver: BuildResolver, facts: FactQuery, index: SearchIndex) -> None:
+    def __init__(
+        self,
+        resolver: BuildResolver,
+        facts: FactQuery,
+        index: SearchIndex,
+        documents: DocumentRepo | None = None,
+    ) -> None:
         self._resolver = resolver
         self._facts = facts
         self._index = index
+        self._documents = documents
 
     def execute(
         self,
@@ -703,7 +718,13 @@ class CheckCall:
         path: str,
         params: Sequence[str] = (),
         version: str | None = None,
+        query: Sequence[str] = (),
+        body: Sequence[str] = (),
     ) -> CheckCallResult:
+        """``params``: names in any request location; ``query`` / ``body``: names checked in
+        that location only. A parameter the schema does not list is documented by pagination
+        when the endpoint's pagination contract or the API's pagination guide names it. A call
+        whose version segment differs from the endpoint's fixed version is not documented."""
         method = method.upper().strip()
         if method not in HTTP_METHODS:
             raise ReaderInputError(f"unknown HTTP method {method!r}")
@@ -720,6 +741,15 @@ class CheckCall:
                 candidates.append((specificity(f_path), f, f_path))
         counts = self._index.counts(build_id)
         checked = {"endpoints": counts.get("endpoint", 0), "models": counts.get("model", 0)}
+        names = [(p, None) for p in params] + [(q, FieldLocation.QUERY) for q in query]
+        names += [(b, FieldLocation.BODY) for b in body]
+        version_note: str | None = None
+        if candidates:
+            fitting = [c for c in candidates if self._same_version(build_id, c[1].owner_id, path)]
+            if not fitting:
+                fixed = self._real_path(build_id, candidates[0][1].owner_id)
+                version_note = f"the documented operation is {method} {fixed}"
+            candidates = fitting
         if not candidates:
             return CheckCallResult(
                 _ref(r),
@@ -730,9 +760,10 @@ class CheckCall:
                 None,
                 None,
                 None,
-                tuple(ParamCheck(p, False, None) for p in params),
+                tuple(ParamCheck(p, False, None) for p, _ in names),
                 checked,
                 None,
+                note=version_note,
             )
         candidates.sort(key=lambda c: (-c[0], c[2], c[1].owner_id))
         best = candidates[0]
@@ -741,7 +772,7 @@ class CheckCall:
         tied = [c for c in candidates if c[2] == best[2]]
         scored = []
         for _, f, f_path in tied:
-            checks = self._param_checks(build_id, f.owner_id, params)
+            checks = self._param_checks(build_id, f.owner_id, names)
             scored.append((-sum(c.found for c in checks), f.owner_id, f, f_path, checks))
         scored.sort(key=lambda x: (x[0], x[1]))
         _, _, endpoint, matched_path, checks = scored[0]
@@ -768,19 +799,64 @@ class CheckCall:
         summary = self._index.summaries(build_id, [doc_id]).get(doc_id)
         return summary.real_path if summary else None
 
+    def _same_version(self, build_id: BuildId, owner_id: str, call_path: str) -> bool:
+        """The call's version segment equals the endpoint's fixed version (real path), when
+        the package fixes one; a variable version accepts any."""
+        fixed = self._real_path(build_id, owner_id)
+        if not fixed:
+            return True
+        call = call_path.split("?", 1)[0].strip("/").split("/")
+        real = fixed.strip("/").split("/")
+        offset = len(call) - len(real)  # a host prefix in the call shifts the segments
+        return not any(
+            0 <= i + offset < len(call)
+            and _is_version(seg)
+            and _is_version(call[i + offset])
+            and seg.lower() != call[i + offset].lower()
+            for i, seg in enumerate(real)
+        )
+
+    def _pagination(self, build_id: BuildId, owner_id: str) -> tuple[set[str], list[str]]:
+        """The names the endpoint's pagination contract gives, and the API's pagination guide
+        texts (Shopify page_info, Mirakl max / offset live there)."""
+        names: set[str] = set()
+        doc = self._documents.get_document(build_id, owner_id) if self._documents else None
+        contract = doc.raw.get("pagination") if doc and isinstance(doc.raw, dict) else None
+        if isinstance(contract, dict):
+            names |= {v.lower() for v in contract.values() if isinstance(v, str) and v.strip()}
+        hits = self._index.text(build_id, "pagination paging page", 10, (DocumentKind.GUIDE,))
+        return names, [h.text for h in hits]
+
     def _param_checks(
-        self, build_id: BuildId, owner_id: str, params: Sequence[str]
+        self,
+        build_id: BuildId,
+        owner_id: str,
+        names: Sequence[tuple[str, FieldLocation | None]],
     ) -> list[ParamCheck]:
         owned = self._facts.for_owner(build_id, owner_id)
+        paging: tuple[set[str], list[str]] | None = None
         checks = []
-        for p in params:
+        for p, location in names:
             hits = [
                 f
                 for f in owned
                 if f.kind is FactKind.FIELD
                 and (f.name.lower() == p.lower() or f.name.lower().endswith("." + p.lower()))
                 and f.location is not FieldLocation.RESPONSE
+                and (location is None or f.location is location)
             ]
-            where = hits[0].location.value if hits and hits[0].location else None
-            checks.append(ParamCheck(p, bool(hits), where))
+            if hits:
+                where = hits[0].location.value if hits[0].location else None
+                checks.append(ParamCheck(p, True, where))
+                continue
+            if location is not FieldLocation.BODY:
+                if paging is None:
+                    paging = self._pagination(build_id, owner_id)
+                named, guides = paging
+                if p.lower() in named or any(
+                    _term_use(text, p)[0] >= PAGING_TERM_SCORE for text in guides
+                ):
+                    checks.append(ParamCheck(p, True, "pagination"))
+                    continue
+            checks.append(ParamCheck(p, False, None))
         return checks

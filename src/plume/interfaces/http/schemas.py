@@ -329,9 +329,19 @@ class SetReleaseRequest(Schema):
 
 
 class CheckCallRequest(Schema):
+    model_config = ConfigDict(
+        alias_generator=to_camel, populate_by_name=True, frozen=True, extra="forbid"
+    )
+
     method: HttpMethod
     path: str = Field(min_length=1, max_length=1000)
     params: list[str] = Field(default_factory=list, max_length=100)
+    query: list[str] = Field(
+        default_factory=list, max_length=100, description="Query parameter names."
+    )
+    body: list[str] = Field(
+        default_factory=list, max_length=100, description="Request body field names."
+    )
     version: str | None = None
 
 
@@ -372,6 +382,10 @@ class CheckCallResponse(Schema):
     alternatives: list[str] = Field(
         default_factory=list,
         description="Other operations documented at the same METHOD + path (their ids).",
+    )
+    note: str | None = Field(
+        default=None,
+        description="Why a path matching a template is not documented (e.g. another version).",
     )
 
 

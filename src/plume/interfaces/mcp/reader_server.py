@@ -10,6 +10,7 @@ import anyio
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
+from pydantic import BaseModel
 
 from plume import __version__
 from plume.application.errors import ApplicationError
@@ -114,6 +115,20 @@ async def _run(fn: Callable[[], dict[str, Any]]) -> dict[str, Any]:
         ) from exc
 
 
+def _forbid_unknown_arguments(server: MCPServer, name: str) -> None:
+    """Make a tool refuse arguments it does not take (the MCP library ignores them, so a
+    caller never learns they were dropped). No-op if the library's internals differ."""
+    tool = getattr(getattr(server, "_tool_manager", None), "get_tool", lambda _n: None)(name)
+    meta = getattr(tool, "fn_metadata", None)
+    base = getattr(meta, "arg_model", None)
+    if meta is None or not isinstance(base, type) or not issubclass(base, BaseModel):
+        return
+    strict = type(
+        base.__name__, (base,), {"model_config": {**base.model_config, "extra": "forbid"}}
+    )
+    meta.arg_model = strict
+
+
 def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
     server = MCPServer(
         name="plume",
@@ -198,14 +213,23 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
         path: str,
         params: list[str] | None = None,
         version: str | None = None,
+        query: list[str] | None = None,
+        body: list[str] | None = None,
     ) -> dict[str, Any]:
         """Check a concrete call (e.g. GET /admin/api/2026-10/products/42.json with params
-        ["fields"]) against the documented endpoints and their parameters."""
+        ["fields"]) against the documented endpoints and their parameters. params: names in
+        any request location; query / body: names (not values) checked in that location. A
+        parameter named by the API's pagination contract or guide counts (where:
+        "pagination"); a version segment other than the endpoint's fixed one does not."""
         return await _run(
             lambda: payloads.check_call_payload(
-                deps.check_call().execute(api, method, path, params or [], version)
+                deps.check_call().execute(
+                    api, method, path, params or [], version, query or [], body or []
+                )
             )
         )
+
+    _forbid_unknown_arguments(server, "check_call")  # `body` / `query` used to vanish silently
 
     @server.tool(annotations=READ_ONLY, structured_output=True)
     async def list_builds(api: str) -> dict[str, Any]:

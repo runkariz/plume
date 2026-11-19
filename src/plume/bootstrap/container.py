@@ -458,7 +458,7 @@ class Container:
         return FindFact(self.resolver(), self.fact_query, self.search_index)
 
     def check_call(self) -> CheckCall:
-        return CheckCall(self.resolver(), self.fact_query, self.search_index)
+        return CheckCall(self.resolver(), self.fact_query, self.search_index, self.documents)
 
     @staticmethod
     def new_job_id() -> str:

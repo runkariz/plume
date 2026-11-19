@@ -520,7 +520,9 @@ def create_app(deps: HttpDependencies) -> FastAPI:
         responses=responses,
     )
     def check_call(api: ApiPath, body: s.CheckCallRequest) -> s.CheckCallResponse:
-        r = deps.check_call().execute(api, body.method, body.path, body.params, body.version)
+        r = deps.check_call().execute(
+            api, body.method, body.path, body.params, body.version, body.query, body.body
+        )
         p = payloads.check_call_payload(r)
         return s.CheckCallResponse(
             api=r.ref.api,
@@ -543,6 +545,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
             checked=s.Checked(**r.checked),
             evidence=_citation(p["evidence"]) if p["evidence"] else None,
             alternatives=list(r.alternatives),
+            note=r.note,
         )
 
     @app.post(
