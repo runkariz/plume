@@ -154,6 +154,16 @@ class InMemoryFactQuery:
             {f.name for f in self._facts.list_facts(build_id) if f.kind is FactKind.FIELD}
         )
 
+    def field_types(self, build_id: BuildId) -> list[tuple[str, str | None]]:
+        return sorted(
+            {
+                (f.name, f.type)
+                for f in self._facts.list_facts(build_id)
+                if f.kind is FactKind.FIELD
+            },
+            key=lambda x: (x[0], x[1] or ""),
+        )
+
     def endpoints(self, build_id: BuildId) -> list[Fact]:
         return sorted(
             (f for f in self._facts.list_facts(build_id) if f.kind is FactKind.ENDPOINT),

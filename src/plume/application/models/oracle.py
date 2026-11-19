@@ -6,7 +6,6 @@ from plume.application.ports.document_repo import DocumentRepo
 from plume.application.ports.search_index import FactQuery
 from plume.domain.knowledge.call_check import path_matches, specificity
 from plume.domain.knowledge.document import Document, DocumentKind, FieldLocation
-from plume.domain.knowledge.fact import FactKind
 from plume.domain.models.validation import Oracle
 from plume.domain.shared.ids import BuildId
 
@@ -28,6 +27,8 @@ class PinnedLookups:
         self._known: dict[str, set[str]] = {}
         self._names: dict[str, list[str]] = {}
         self._endpoints: dict[str, list[tuple[str, str, str]]] = {}  # (method, path, owner)
+        self._children: dict[str, dict[str, list[str]]] = {}  # api -> field -> direct subs
+        self._types: dict[str, dict[str, list[tuple[str, str | None]]]] = {}
 
     def oracle(self) -> Oracle:
         return Oracle(
@@ -89,19 +90,49 @@ class PinnedLookups:
                 names.update(".".join(parts[i:]) for i in range(len(parts)))
         return path.lower() in self._known[api]
 
+    def _child_index(self, api: str) -> dict[str, list[str]]:
+        """field name -> its direct sub-field names (``line_items[]`` and ``line_items`` both
+        key the items' fields), built once per API in one pass over the field names: a large
+        build (Shopware, ~560k field facts) must not be scanned per citation."""
+        if api not in self._children:
+            self.field_exists(api, "")
+            index: dict[str, dict[str, None]] = {}
+            for name in self._names[api]:
+                parent, dot, leaf = name.rpartition(".")
+                if dot and leaf:
+                    index.setdefault(parent, {})[leaf] = None
+                    if parent.endswith("[]"):
+                        index.setdefault(parent[:-2], {})[leaf] = None
+            self._children[api] = {k: list(v) for k, v in index.items()}
+        return self._children[api]
+
+    def _type_index(self, api: str) -> dict[str, list[tuple[str, str | None]]]:
+        """last name segment (lower case) -> [(field name, type)], one query per API."""
+        if api not in self._types:
+            index: dict[str, list[tuple[str, str | None]]] = {}
+            for name, ftype in self._facts.field_types(self._builds[api]):
+                leaf = name.rsplit(".", 1)[-1].replace("[]", "").lower()
+                index.setdefault(leaf, []).append((name, ftype))
+            self._types[api] = index
+        return self._types[api]
+
     def path_shape(self, api: str, path: str) -> tuple[frozenset[str], tuple[str, ...]]:
-        """The types the API states for the field, and its direct sub-fields (from every listed
-        field, not the paged evidence)."""
-        self.field_exists(api, path)
-        facts = self._facts.find(self._builds[api], path, kind=FactKind.FIELD)
-        types = frozenset(f.type for f in facts if f.type)
+        """The types the API states for the field (the same name rule as FactQuery.find: the
+        name or a dotted suffix of it), and its direct sub-fields (from every listed field,
+        not the paged evidence). In memory, per API: no query per citation."""
+        children = self._child_index(api)
+        wanted = path.lower()
+        leaf = wanted.rsplit(".", 1)[-1].replace("[]", "")
+        matches = [
+            (name, ftype)
+            for name, ftype in self._type_index(api).get(leaf, ())
+            if name.lower() == wanted or name.lower().endswith("." + wanted)
+        ]
+        types = frozenset(t for _, t in matches if t)
         subs: dict[str, None] = {}
-        for full in {f.name for f in facts}:
-            for prefix in (f"{full}.", f"{full}[]."):
-                for name in self._names[api]:
-                    rest = name[len(prefix) :] if name.startswith(prefix) else ""
-                    if rest and "." not in rest.replace("[]", ""):
-                        subs[rest] = None
+        for full in {name for name, _ in matches}:
+            for sub in children.get(full, ()):
+                subs[sub] = None
         return types, tuple(subs)
 
     def path_enum(self, api: str, path: str, doc_ids: tuple[str, ...]) -> tuple[str, ...] | None:

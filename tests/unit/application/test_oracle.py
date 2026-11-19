@@ -27,3 +27,30 @@ def test_the_most_specific_endpoint_answers() -> None:
     lookups = PinnedLookups({"a": BuildId("b-" + "0" * 32)}, facts, documents)
     assert lookups.fetch_fields("a", "GET /orders/count.json") == frozenset({"count"})
     assert lookups.fetch_fields("a", "GET /orders/42.json") == frozenset({"order.id"})
+
+
+def test_shape_lookups_stay_fast_on_a_large_build() -> None:
+    """Shopware-sized builds (~560k field facts): sub-fields and types come from per-API
+    indexes built once, never a scan or a query per citation (plume-l2 took 312 s for 2)."""
+    import time  # noqa: PLC0415
+
+    names = [f"entity{e}.field{f}" for e in range(2000) for f in range(100)]  # 200k fields
+    names += [f"entity{e}" for e in range(2000)]
+    types = [(n, "object" if "." not in n else "string") for n in names]
+    calls = {"find": 0}
+
+    def find(*_a: object, **_k: object) -> list[object]:
+        calls["find"] += 1
+        return []
+
+    facts = SimpleNamespace(field_names=lambda _b: names, field_types=lambda _b: types,
+                            find=find, endpoints=lambda _b: [])  # fmt: skip
+    documents = SimpleNamespace(get_document=lambda _b, _d: None)
+    lookups = PinnedLookups({"a": BuildId("b-" + "0" * 32)}, facts, documents)
+    start = time.perf_counter()
+    for e in range(50):
+        types_found, subs = lookups.path_shape("a", f"entity{e}")
+        assert types_found == frozenset({"object"})
+        assert len(subs) == 100
+    assert time.perf_counter() - start < 5  # index building included
+    assert calls["find"] == 0

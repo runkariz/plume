@@ -92,6 +92,10 @@ class FactQuery(Protocol):
         """Every distinct field fact name of the build (one query, for bulk existence checks)."""
         ...
 
+    def field_types(self, build_id: BuildId) -> list[tuple[str, str | None]]:
+        """Every distinct (field name, type) of the build (one query, for bulk shape checks)."""
+        ...
+
     def incomplete_owners(
         self, build_id: BuildId, *, owner_id: str | None = None, resource: str | None = None
     ) -> list[str]:

@@ -20,6 +20,7 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
+from functools import lru_cache
 from typing import Any
 
 from plume.application.models.concepts import (
@@ -152,15 +153,28 @@ class _Api:
 _WRAPPERS = frozenset({"previous", "next", "self", "links", "link", "embedded", "meta"})
 
 
-def _referenced_concept(fields: Any, path: str, concepts: set[str]) -> str | None:
+def child_stems(fields: Any) -> dict[str, set[str]]:
+    """container path -> the schema files its DIRECT children come from, in one pass over the
+    fields (``line_items`` and ``line_items[]`` both key the items' fields)."""
+    out: dict[str, set[str]] = {}
+    for f in fields:
+        if not f.pointer:
+            continue
+        parent, dot, _ = f.name.rpartition(".")
+        if not dot:
+            continue
+        stem = f.pointer.split("#", 1)[0].rsplit("/", 1)[-1].removesuffix(".schema.json")
+        out.setdefault(parent.removesuffix("[]"), set()).add(stem)
+    return out
+
+
+def _referenced_concept(
+    stems_by_path: dict[str, set[str]], path: str, concepts: set[str]
+) -> str | None:
     """A container whose fields come from another schema file (`line_items` ->
-    orderlineitem.schema.json) stands for that model's concept, when it is one."""
-    prefixes = (f"{path}[].", f"{path}.")
-    stems = {
-        (f.pointer or "").split("#", 1)[0].rsplit("/", 1)[-1].removesuffix(".schema.json")
-        for f in fields
-        if f.pointer and any(f.name.startswith(x) and "." not in f.name[len(x) :] for x in prefixes)
-    }  # direct children only (deeper ones belong to nested item models)
+    orderlineitem.schema.json) stands for that model's concept, when it is one. Direct
+    children only (deeper ones belong to nested item models)."""
+    stems = stems_by_path.get(path.removesuffix("[]"), set())
     keys = {concept_key(st) for st in stems if st}
     found = sorted(k for k in keys if k in concepts)
     return found[0] if len(found) == 1 else None
@@ -232,12 +246,25 @@ def _segment_key(seg: str) -> str:
     return concept_key(seg.replace("[]", "").split(".", 1)[0])
 
 
-def _names_concept(text: str, key: str, label: str) -> bool:
+@lru_cache(maxsize=4096)
+def _concept_pattern(key: str, label: str) -> re.Pattern[str]:
+    """One compiled pattern per concept (the text is searched for every field description)."""
     words = {label.lower(), key, key + "s", label.lower() + "s"}
     if key.endswith("y"):
         words.add(key[:-1] + "ies")
-    low = text.lower()
-    return any(re.search(rf"\b{re.escape(w)}\b", low) for w in words if w)
+    alternatives = "|".join(sorted((re.escape(w) for w in words if w), key=len, reverse=True))
+    return re.compile(rf"\b(?:{alternatives})\b")
+
+
+def _names_concept(text: str, key: str, label: str) -> bool:
+    return bool(_concept_pattern(key, label).search(text.lower()))
+
+
+CANDIDATE_CACHE = 32
+_CANDIDATES: dict[
+    tuple[tuple[str, ...], frozenset[tuple[tuple[str, str], str]]],
+    tuple[list["RelationCandidate"], list["AliasCandidate"], dict[str, str]],
+] = {}
 
 
 class SuggestRelated:
@@ -285,7 +312,26 @@ class SuggestRelated:
     ) -> tuple[list[RelationCandidate], list[AliasCandidate], dict[str, str]]:
         """Every candidate between concepts of these APIs, with the concept labels.
         `renames` {(api, concept key in that API): concept key}: accepted aliases (D2), so
-        WooCommerce "variation" evidence counts for "variant"."""
+        WooCommerce "variation" evidence counts for "variant". Sealed builds never change, so
+        the result is cached per builds + renames (a large build takes seconds to scan)."""
+        key = (
+            tuple(sorted(r.build.build_id.value for r in resolved)),
+            frozenset((renames or {}).items()),
+        )
+        cached = _CANDIDATES.get(key)
+        if cached is None:
+            cached = self._candidates(resolved, renames)
+            if len(_CANDIDATES) >= CANDIDATE_CACHE:
+                _CANDIDATES.pop(next(iter(_CANDIDATES)))
+            _CANDIDATES[key] = cached
+        found, aliases, labels = cached
+        return list(found), list(aliases), dict(labels)
+
+    def _candidates(
+        self,
+        resolved: tuple[ResolvedBuild, ...],
+        renames: dict[tuple[str, str], str] | None = None,
+    ) -> tuple[list[RelationCandidate], list[AliasCandidate], dict[str, str]]:
         found: dict[tuple[str, str], RelationCandidate] = {}
         labels: dict[str, str] = {}
         structural: dict[str, dict[str, dict[str, CandidateEvidence]]] = defaultdict(dict)
@@ -438,7 +484,8 @@ class SuggestRelated:
                     continue
                 if key != inner:
                     inner = key
-                    scan.names.setdefault(key, concept_label(seg.replace("[]", "")))
+                    if key not in scan.names:
+                        scan.names[key] = concept_label(seg.replace("[]", ""))
                 if key in concepts and key != current and not (sub and current == owner):
                     path = ".".join(segs[: depth + 1])
                     wanted[f.owner_id].append(
@@ -487,15 +534,14 @@ class SuggestRelated:
             if doc is None:
                 continue
             specs = {s.name: s for s in doc.fields}
+            stems = child_stems(doc.fields)  # once per document, not per field
             for kind, holder, target, path, many, fname in items:
                 spec = specs.get(fname)
                 desc = (spec.description or "").strip() if spec else ""
                 if kind == "id_field":
                     # line_items[].product_id: the item model line_items references holds it.
                     container = fname.rsplit(".", 1)[0].removesuffix("[]") if "." in fname else ""
-                    item = (
-                        _referenced_concept(doc.fields, container, concepts) if container else None
-                    )
+                    item = _referenced_concept(stems, container, concepts) if container else None
                     if item and container:
                         _record_merge(scan, scan.owner.get(doc_id), container, item)
                     owner_of = item or holder  # the item model holds the id
@@ -526,7 +572,7 @@ class SuggestRelated:
                         )
                     continue
                 child = target
-                item = _referenced_concept(doc.fields, path, concepts)
+                item = _referenced_concept(stems, path, concepts)
                 if item:
                     _record_merge(scan, scan.owner.get(doc_id), path, item)
                 if child == holder:

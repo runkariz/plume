@@ -31,3 +31,23 @@ def test_candidates_merge_under_member_names() -> None:
         ("order", "orderline", ["mirakl", "shopify"]),
         ("order", "shipment", ["shopify"]),
     ]
+
+
+def test_a_member_reached_only_through_a_role_name_has_a_label(packages, monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """bol "orderitem" / eBay "lineitem" for "Order line": the context's options need a label
+    for the member key (KeyError 'orderline' on plume-l2)."""
+    from tests.fakes.knowledge import WordEmbedder  # noqa: PLC0415
+    from tests.fakes.stack import FakeStack  # noqa: PLC0415
+
+    stack = FakeStack(embedder=WordEmbedder())
+    for p in ("shopify-mini", "test-catalog"):
+        stack.load(str(packages / p))
+    found = [_cand("order", "lineitem", "shopify", "line_items[]")]
+    labels = {"order": "Order", "lineitem": "Line Item"}  # the APIs never say "Order line"
+    sets = stack.model_sets()
+    monkeypatch.setattr(sets._related, "candidates", lambda *_a, **_k: (found, [], labels))
+    session = sets.start(["shopify", "test-catalog-api"], ["Order", "Order line"])
+    ctx = sets.context(session.session_id, maintainer=True)
+    [cand] = ctx["relation_candidates"]
+    assert (cand["from"], cand["to"]) == ("Order", "Order line")
+    assert cand["options"]
