@@ -4,7 +4,8 @@ import json
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Annotated
+from pathlib import Path
+from typing import Annotated, Any
 
 import typer
 
@@ -18,6 +19,7 @@ from plume.application.knowledge.list_builds import ListApis, ListBuilds
 from plume.application.knowledge.release_notes import ReleaseNotes
 from plume.application.knowledge.remove_api import ApiInUseError, RemoveApi
 from plume.application.knowledge.tag_build import TagBuild
+from plume.application.models.model_eval import ModelEvaluation
 from plume.application.ports.eval_repo import GoldSource
 from plume.application.ports.job_events import JobEvents
 from plume.application.reader.resolve import BuildResolver
@@ -54,6 +56,19 @@ class CliDependencies:
     ) = None
     release_notes: Callable[[], ReleaseNotes] | None = None
     remove_api: Callable[[], RemoveApi] | None = None
+    model_evaluation: Callable[[], ModelEvaluation] | None = None
+    # (tester markdown text, group, held out) -> a plume.model-gold.v1 document
+    import_model_gold: Callable[[str, str | None, bool], dict[str, Any]] | None = None
+
+
+def _gold_cells(fields: list[dict[str, Any]]) -> dict[str, int]:
+    out = {"paths": 0, "na": 0}
+    for f in fields:
+        for cell in (f.get("apis") or {}).values():
+            out["na" if cell.get("notAvailable") else "paths"] += 1
+        sub = _gold_cells(f.get("fields") or [])
+        out = {k: out[k] + sub[k] for k in out}
+    return out
 
 
 def _need[T](factory: Callable[[], T] | None, name: str) -> T:
@@ -291,6 +306,79 @@ def create_app(deps: CliDependencies) -> typer.Typer:
             typer.echo(
                 "  package goldCounts: " + ", ".join(f"{n} {s}" for s, n in declared.items())
             )
+
+    @app.command("model-eval")
+    def model_eval(
+        target: Annotated[str, typer.Argument(help="Model id or model set id")],
+        gold: Annotated[
+            str | None,
+            typer.Option(help="Model gold file (default: every file of PLUME_MODEL_GOLD_DIRS)"),
+        ] = None,
+        as_json: Annotated[bool, typer.Option("--json", help="Machine-readable output")] = False,
+    ) -> None:
+        """Score a canonical model (or each model of a set) against its model gold: per field
+        and API correct / wrong / invented / missed / not available, and the conversions."""
+        try:
+            report = _need(deps.model_evaluation, "model-eval").evaluate(target, gold)
+        except (ApplicationError, DomainError) as exc:
+            raise fail(exc) from exc
+        if as_json:
+            typer.echo(json.dumps(report.as_dict(), indent=2))
+            return
+        if not report.results:
+            typer.echo(f"{target}: no model gold covers it (not evaluated)")
+            return
+        for model_id, r in report.results:
+            held = " (held out)" if r.held_out else ""
+            typer.echo(f"{model_id} {r.concept} vs {r.gold}{held} on {', '.join(r.apis)}")
+            c = r.counts
+            typer.echo(
+                f"  precision {r.precision}, recall {r.recall}, invented {r.invented}; "
+                f"correct {c.get('correct', 0)}, wrong {c.get('wrong', 0)}, "
+                f"missed {c.get('missed', 0)}, not available ok "
+                f"{c.get('not_available_correct', 0)}"
+            )
+            typer.echo(
+                f"  conversions: missing {c.get('conversion_missing', 0)} "
+                f"(rate {r.conversion_missing_rate}), wrong {c.get('conversion_wrong', 0)} "
+                f"(rate {r.conversion_wrong_rate})"
+            )
+            for cell in (*r.cells, *r.extra_invented):
+                bad = cell.result not in {"correct", "not_available_correct"}
+                if bad or cell.conversion in ("conversion_missing", "conversion_wrong"):
+                    label = cell.conversion if not bad else cell.result
+                    typer.echo(
+                        f"    {label}: {cell.field or cell.model_field} on {cell.api}: "
+                        f"expected {', '.join(cell.expected) or '-'}, produced "
+                        f"{', '.join(cell.produced) or '-'}"
+                        + (f" ({cell.detail})" if cell.detail else "")
+                    )
+
+    @app.command("model-gold-import")
+    def model_gold_import(
+        report: Annotated[str, typer.Argument(help="The eval tester's markdown report")],
+        out: Annotated[str, typer.Option(help="Model gold file to write (JSON)")],
+        group: Annotated[str | None, typer.Option(help="API group id")] = None,
+        held_out: Annotated[
+            bool, typer.Option("--held-out", help="Score separately (never for tuning)")
+        ] = False,
+    ) -> None:
+        """Convert the tester's "Expected mapping (gold)" table into a plume.model-gold.v1 file."""
+        if deps.import_model_gold is None:
+            raise typer.BadParameter("model-gold-import is not available in this build")
+        try:
+            text = Path(report).read_text(encoding="utf-8")
+            gold = deps.import_model_gold(text, group, held_out)
+        except (OSError, ValueError) as exc:
+            raise fail(exc) from exc
+        Path(out).write_text(
+            json.dumps(gold, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+        cells = _gold_cells(gold["fields"])
+        typer.echo(
+            f"wrote {out}: {gold['concept']} on {', '.join(gold['apis'])}; "
+            f"{cells['paths']} expected mapping(s), {cells['na']} not available"
+        )
 
     @app.command("export")
     def export_cmd(

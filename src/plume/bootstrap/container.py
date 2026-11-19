@@ -26,6 +26,7 @@ from plume.application.models.collections import Collections
 from plume.application.models.concepts import SuggestConcepts
 from plume.application.models.generate import GenerateModels
 from plume.application.models.impact import ModelImpact
+from plume.application.models.model_eval import ModelEvaluation
 from plume.application.models.model_sets import ModelSets
 from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import ModelSessions
@@ -43,6 +44,7 @@ from plume.application.reader.use_cases import (
 )
 from plume.application.system.migrate_schema import MigrateSchema
 from plume.domain.eval.gate import GatePolicy
+from plume.domain.models.model_eval import ModelGatePolicy
 from plume.infrastructure.clock import SystemClock
 from plume.infrastructure.db.alembic_migrator import AlembicMigrator
 from plume.infrastructure.db.archive import PostgresBuildImporter
@@ -66,6 +68,7 @@ from plume.infrastructure.jobs.package_storage import LocalPackageStorage
 from plume.infrastructure.jobs.postgres_jobs import PostgresJobEventLog, PostgresJobRepo
 from plume.infrastructure.jobs.thread_runner import ThreadJobRunner
 from plume.infrastructure.llm.vertex_gemini import VertexGeminiWriter
+from plume.infrastructure.models.gold_files import JsonModelGold
 from plume.infrastructure.search.pgvector_index import PgVectorIndex
 from plume.infrastructure.search.postgres_fact_index import PostgresFactIndex
 from plume.infrastructure.search.postgres_search import PostgresFactQuery, PostgresSearchIndex
@@ -239,6 +242,28 @@ class Container:
             self.models_repo,
             self.clock,
             self.collections(),
+            release_gate=lambda snap: self.model_evaluation().gate(snap),
+        )
+
+    @cached_property
+    def model_gold(self) -> JsonModelGold:
+        return JsonModelGold(self.settings.model_gold_dirs)
+
+    def model_evaluation(self) -> ModelEvaluation:
+        sessions = ModelSessions(  # no release gate: only its citation oracle is used
+            self.resolver(),
+            self.search_index,
+            self.fact_query,
+            self.documents,
+            self.models_repo,
+            self.clock,
+        )
+        return ModelEvaluation(
+            self.models_repo,
+            self.model_sets_repo,
+            sessions.oracle_for,
+            self.model_gold,
+            ModelGatePolicy(self.settings.model_gate_min_recall),
         )
 
     @cached_property

@@ -66,6 +66,7 @@ def http_app(c: Container) -> FastAPI:
             remove_api=c.remove_api,
             public_changes=c.public_changes,
             model_impact=c.model_impact,
+            model_evaluation=c.model_evaluation,
         )
     )
 

@@ -2954,6 +2954,19 @@
             ],
             "title": "Error"
           },
+          "eval": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A succeeded job's model scored against its model gold (as POST /v1/models/{id}/eval); null when no gold covers its concept.",
+            "title": "Eval"
+          },
           "eventsUrl": {
             "title": "Eventsurl",
             "type": "string"
@@ -10415,7 +10428,7 @@
     },
     "/v1/models/jobs/{job_id}": {
       "get": {
-        "description": "A server-side generation job (maintainer).",
+        "description": "A server-side generation job (maintainer). A succeeded job carries `eval`: its model\nscored against the model gold of its concept (null without gold).",
         "operationId": "get_job_v1_models_jobs__job_id__get",
         "parameters": [
           {
@@ -11240,6 +11253,126 @@
           }
         },
         "summary": "Suggest Related Concepts",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/v1/models/{model_id}/eval": {
+      "post": {
+        "description": "Score a model, or each model of a set, against its model gold (maintainer): per\nfield and API correct / wrong / invented / missed / not available, conversions, and\nprecision / recall / invented, held-out gold reported apart.",
+        "operationId": "evaluate_v1_models__model_id__eval_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A gold file name in PLUME_MODEL_GOLD_DIRS (default: all of them)",
+            "in": "query",
+            "name": "gold",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*\\.json$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A gold file name in PLUME_MODEL_GOLD_DIRS (default: all of them)",
+              "title": "Gold"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Evaluate V1 Models  Model Id  Eval Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Evaluate",
         "tags": [
           "models"
         ]
