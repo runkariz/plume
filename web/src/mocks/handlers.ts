@@ -220,6 +220,27 @@ function linksOf(docId: string, kind: string, method: string | null) {
         { endpointId: 'endpoint:GET~/products.json', linkBasis: 'page' },
         { endpointId: 'endpoint:GET~/customers/{customer_id}.json', linkBasis: 'slug' },
       ],
+      // rules the package states on several pages (the last one names a single page: nothing is shown for it)
+      ruleSources: [
+        {
+          ruleId: 'rule-cursor-limit',
+          urls: [
+            'https://shopify.dev/docs/api/usage/pagination-rest',
+            'https://shopify.dev/docs/api/admin-rest/latest/resources/product',
+            'https://shopify.dev/docs/api/admin-rest/latest/resources/order',
+            'https://shopify.dev/docs/api/admin-rest/latest/resources/customer',
+            'https://shopify.dev/docs/api/usage/rate-limits#rest-admin-api-rate-limits',
+          ],
+        },
+        {
+          ruleId: 'rule-page-info',
+          urls: [
+            'https://shopify.dev/docs/api/usage/pagination-rest',
+            'https://shopify.dev/docs/api/admin-rest/latest/resources/product',
+          ],
+        },
+        { ruleId: 'rule-single', urls: ['https://shopify.dev/docs/api/usage/pagination-rest'] },
+      ],
     };
   return {};
 }
