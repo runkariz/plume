@@ -1,6 +1,7 @@
 """Model sessions: pin builds, hand Claude the evidence pack, validate and store its draft."""
 
 import json
+import re
 import secrets
 import uuid
 from collections.abc import Callable, Sequence
@@ -18,6 +19,7 @@ from plume.application.models.concepts import (
     ModelInputError,
     concept_docs,
     concept_key,
+    concept_parts,
     last_literal,
     resolve_apis,
 )
@@ -40,7 +42,7 @@ from plume.domain.models.validation import Issue, Oracle, validate, warnings
 from plume.domain.shared.clock import Clock
 from plume.domain.shared.ids import BuildId
 
-MAX_DOCS_PER_API = 20
+MAX_DOCS_PER_API = 30
 EVIDENCE_BUDGET_CHARS = 20_000
 MAX_DESCRIPTION = 300
 MAX_DRAFT_CHARS = 1_000_000
@@ -134,6 +136,58 @@ def _evidence_rank(d: DocumentSummary, key: str) -> tuple[bool, bool, bool, int,
     own = d.path is not None and concept_key(_last_literal_of(d.path)) == key
     depth = len((d.path or "").strip("/").split("/"))
     return (d.kind is not DocumentKind.MODEL, d.method != "GET", not own, depth, d.doc_id)
+
+
+_PARENS_TEXT = re.compile(r"\([^)]*\)")
+# The same resource role under another name, tried only when no document carries the
+# concept's own name (Shopware calls a shipment an order delivery).
+ROLE_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "shipment": ("delivery", "shipping", "parcel", "consignment"),
+    "fulfillment": ("delivery", "shipment", "shipping"),
+    "inventory": ("stock",),
+    "stock": ("inventory",),
+}
+
+
+_ERROR_MODEL = re.compile(
+    r"(?:^|[-_ ])(?:[45]\d\d|errors?|problem(?:detail)?s?|fault|exception)(?:[-_ ]|$)", re.I
+)
+
+
+def _error_model(d: DocumentSummary) -> bool:
+    """A 4xx/5xx or error / problem-detail response model: never a concept's data."""
+    name = d.doc_id.removeprefix("model:").lower()
+    return d.kind is DocumentKind.MODEL and bool(
+        _ERROR_MODEL.search(name)
+        or _ERROR_MODEL.search(d.title or "")
+        or name.endswith(("error", "errors", "problemdetail", "problemdetails"))
+    )
+
+
+def _parent_of(key: str, names: tuple[str, ...]) -> str:
+    return next((key[: -len(n)] for n in names if key != n and key.endswith(n)), "")
+
+
+def _under(path: str, main: tuple[str, ...]) -> bool:
+    """A literal segment of the path names a main concept (/customers/search.json)."""
+    return any(
+        seg and "{" not in seg and concept_key(seg.split(".", 1)[0]) in main
+        for seg in path.strip("/").split("/")
+    )
+
+
+def _child_of(key: str, main: tuple[str, ...], children: set[str]) -> bool:
+    """``variation`` under Product is the child ``productvariation``."""
+    return any(f"{m}{key}" in children for m in main)
+
+
+def _returned_ids(doc: Document | None) -> set[str]:
+    ops = (
+        doc.raw.get("x-plume-returned-by")
+        if doc is not None and isinstance(doc.raw, dict)
+        else None
+    )
+    return {str(o) for o in ops} if isinstance(ops, list) else set()
 
 
 def _last_literal_of(path: str) -> str:
@@ -325,37 +379,129 @@ class ModelSessions:
     def _concept_docs(
         self, concept: str, build: BuildId, max_docs: int = MAX_DOCS_PER_API
     ) -> list[DocumentSummary]:
-        key = concept_key(concept)
+        """The concept's documents (see ``_ranked_docs``), never error-response models."""
+        docs = self._ranked_docs(concept, build, max_docs + 20)
+        return [d for d in docs if not _error_model(d)][:max_docs]
+
+    def _ranked_docs(
+        self, concept: str, build: BuildId, max_docs: int = MAX_DOCS_PER_API
+    ) -> list[DocumentSummary]:
+        """The documents a model of ``concept`` is built from, best first: the concept's own
+        list/get endpoints and the models they return, then its child resources and the
+        sub-concepts named in parentheses ("Order (with order line)"), then other reads under
+        it, then writes and request models."""
+        main, subs = concept_parts(concept)
         summaries, _ = self._index.browse(build, (), None, 100_000, 0)
-        docs = list(concept_docs(summaries).get(key, []))
-        # Endpoints whose collection is the concept under another resource
-        # (GET /products/{product_id}/images.json for Image, grouped under Product).
-        have = {d.doc_id for d in docs}
-        docs += [
-            d
-            for d in summaries
-            if d.kind is DocumentKind.ENDPOINT
-            and d.path
-            and d.doc_id not in have
-            and concept_key(last_literal(d.path)) == key
-        ]
-        parent_scoped = False
-        if not docs:  # the concept under a parent: productimage (Product's images) for Image
-            groups = concept_docs(summaries)
-            parents = sorted(  # the busiest parent first: Product before Order Line Item
-                (k for k in groups if k != key and k.endswith(key) and k[: -len(key)] in groups),
-                key=lambda k: (-len(groups[k[: -len(key)]]), k),
-            )
-            docs = [d for k in parents for d in groups[k]]
-            parent_scoped = bool(docs)
+        groups = concept_docs(summaries)
+        children = {k for k in groups for m in main if k != m and k.startswith(m)} | set(subs)
+        picked: dict[str, DocumentSummary] = {}
+        for k in (*main, *sorted(children)):
+            for d in groups.get(k, []):
+                picked.setdefault(d.doc_id, d)
+        for d in summaries:  # endpoints under the concept's path (/customers/search.json)
+            if d.kind is DocumentKind.ENDPOINT and d.path and _under(d.path, main):
+                picked.setdefault(d.doc_id, d)
+        has_main = any(groups.get(k) for k in main) or any(
+            d.kind is DocumentKind.ENDPOINT and d.path and _under(d.path, main) for d in summaries
+        )
+        if not has_main and picked:  # only a sub-concept matched: the main concept first
+            own = self._ranked_docs(_PARENS_TEXT.sub(" ", concept).strip(), build, max_docs)
+            rest = [d for d in picked.values() if d.doc_id not in {o.doc_id for o in own}]
+            return [*own, *rest][:max_docs]
+        docs = list(picked.values())
+        if docs:
+            ranks = self._tiers(build, docs, main, children)
+            docs = [d for d in docs if d.doc_id in ranks]
+            docs.sort(key=lambda d: (*ranks[d.doc_id], *_evidence_rank(d, main[0])))
+            if len(docs) < max_docs:  # few of its own: documents that mention it fill up
+                hits = self._index.text(
+                    build, _PARENS_TEXT.sub(" ", concept), max_docs,
+                    (DocumentKind.ENDPOINT, DocumentKind.MODEL),
+                )  # fmt: skip
+                have = {d.doc_id for d in docs}
+                extra = self._index.summaries(
+                    build, [h.doc_id for h in hits if h.doc_id not in have]
+                )
+                docs += list(extra.values())
+            return docs[:max_docs]
+        key = main[0]
+        names = (*main, *(r for m in main for r in ROLE_SYNONYMS.get(m, ()) if r not in main))
+        groups_parent = sorted(  # the concept under a parent: productimage under Product,
+            (  # or its role under another name: orderdelivery for Shipment
+                k
+                for k in groups
+                for n in names
+                if k == n or (k != n and k.endswith(n) and k[: -len(n)] in groups)
+            ),
+            key=lambda k: (k not in names, -len(groups.get(_parent_of(k, names), [])), k),
+        )
+        docs = list({d.doc_id: d for k in groups_parent for d in groups[k]}.values())
+        synonyms = [n for n in names if n not in main]
+        if any(k.endswith(n) for k in groups_parent for n in synonyms):  # another name: reads first
+            docs.sort(key=lambda d: _evidence_rank(d, concept_key(last_literal(d.path or ""))))
         if not docs:  # derived: documents whose text mentions the concept
             hits = self._index.text(
                 build, concept, MAX_DOCS_PER_API, (DocumentKind.ENDPOINT, DocumentKind.MODEL)
             )
             docs = list(self._index.summaries(build, [h.doc_id for h in hits]).values())
-        if not parent_scoped:  # those keep the busiest-parent order
             docs.sort(key=lambda d: _evidence_rank(d, key))
         return docs[:max_docs]
+
+    def _own_resource(self, concept: str, build: BuildId) -> bool:
+        """An endpoint path names the concept or its role (/customers, /order-delivery): the
+        API has the resource. A model alone (an order's ``customer`` object) is not one."""
+        main, _ = concept_parts(concept)
+        roles = tuple(r for m in main for r in ROLE_SYNONYMS.get(m, ()) if r not in main)
+        summaries, _ = self._index.browse(build, (DocumentKind.ENDPOINT,), None, 100_000, 0)
+        keys = {
+            concept_key(seg.split(".", 1)[0])
+            for d in summaries
+            for seg in (d.path or "").strip("/").split("/")
+            if seg and "{" not in seg
+        }
+        return any(k in main or any(k == r or k.endswith(r) for r in roles) for k in keys)
+
+    def _tiers(
+        self,
+        build: BuildId,
+        docs: list[DocumentSummary],
+        main: tuple[str, ...],
+        children: set[str],
+    ) -> dict[str, tuple[int, int]]:
+        """(tier, -data fields for child and other models) per document. Tier 0: own list/get
+        endpoints and the models they return (or named as the concept); 1: child resources
+        and sub-concepts; 2: other reads and models under the concept; 3: writes and request
+        models. Child and other models without data fields are left out."""
+        own = {
+            d.doc_id
+            for d in docs
+            if d.kind is DocumentKind.ENDPOINT
+            and d.method == "GET"
+            and concept_key(last_literal(d.path or "")) in main
+        }
+        out: dict[str, tuple[int, int]] = {}
+        for d in docs:
+            if d.kind is DocumentKind.ENDPOINT:
+                key = concept_key(last_literal(d.path or ""))
+                if d.method != "GET":
+                    out[d.doc_id] = (3, 0)
+                elif d.doc_id in own:
+                    out[d.doc_id] = (0, 0)
+                else:
+                    child = key in children or _child_of(key, main, children)
+                    out[d.doc_id] = (1 if child else 2, 0)
+                continue
+            full = self._documents.get_document(build, d.doc_id)
+            returned = _returned_ids(full)
+            key = concept_key(d.title.split(" / ")[-1])
+            fields = sum(1 for f in full.fields if f.location in _DATA_LOCATIONS) if full else 0
+            if "request" in d.doc_id.lower() and not returned:
+                out[d.doc_id] = (3, 0)
+            elif returned & own or (key in main and not returned):
+                out[d.doc_id] = (0, 0)  # returned by its own reads, or the concept's model
+            elif fields:
+                out[d.doc_id] = (1 if key in children else 2, -fields)
+        return out
 
     def _pin(self, session: ModelSession, api: str) -> BuildId:
         for p in session.inputs:
@@ -386,6 +532,12 @@ class ModelSessions:
                     }
                 )
             entry: dict[str, Any] = {"api": pin.api, "build": pin.build, "documents": items}
+            if not self._own_resource(session.name_in(pin.api), build):
+                entry["note"] = (
+                    f"{pin.api} has no {session.name_in(pin.api)} resource of its own: the "
+                    "documents below only mention it. Its data may be embedded in another "
+                    "resource (map those paths and say so in a transform), or not available."
+                )
             if session.name_in(pin.api) != session.concept:
                 entry["searched_as"] = session.name_in(pin.api)  # an accepted alias
             per_api.append(entry)

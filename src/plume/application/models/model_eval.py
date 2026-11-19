@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from plume.application.errors import NotFoundError
-from plume.application.models.concepts import concept_key
+from plume.application.models.concepts import concept_parts
 from plume.application.ports.model_gold import ModelGoldSource
 from plume.application.ports.model_repo import ModelRepo
 from plume.application.ports.model_set_repo import ModelSetRepo
@@ -50,8 +50,11 @@ class EvalReport:
 
 
 def _covers(gold: GoldModel, snap: ModelSnapshot) -> bool:
+    """Gold covers a model when their main concepts meet ("Product / Offer" covers Product) and
+    they share an API."""
     apis = {i.api for i in snap.inputs}
-    return concept_key(gold.concept) == concept_key(snap.concept) and bool(apis & set(gold.apis))
+    same = set(concept_parts(gold.concept)[0]) & set(concept_parts(snap.concept)[0])
+    return bool(same) and bool(apis & set(gold.apis))
 
 
 class ModelEvaluation:
