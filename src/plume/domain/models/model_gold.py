@@ -20,33 +20,18 @@ prompts and examples are never built from it.
 from dataclasses import dataclass
 from typing import Any
 
+from plume.domain.models.canonical_model import (
+    Conversion,
+    DraftFormatError,
+    parse_conversion,
+)
 from plume.domain.shared.errors import DomainError
 
 SCHEMA = "plume.model-gold.v1"
-CONVERSION_KINDS = frozenset(
-    {
-        "money-minor",
-        "money-decimal",
-        "money-decimal-string",
-        "currency-separate",
-        "enum",
-        "datetime",
-        "id-type",
-        "array-vs-single",
-        "other",
-    }
-)
 
 
 class GoldFormatError(DomainError, ValueError):
     """The model gold JSON does not have the expected shape."""
-
-
-@dataclass(frozen=True, slots=True)
-class Conversion:
-    kind: str
-    note: str | None = None
-    enum_map: tuple[tuple[str, str], ...] = ()  # (API value, canonical value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,24 +91,10 @@ def _strs(value: Any, where: str) -> tuple[str, ...]:
 
 
 def _conversion(raw: Any, where: str) -> Conversion | None:
-    if raw is None:
-        return None
-    if not isinstance(raw, dict) or not isinstance(raw.get("kind"), str):
-        raise GoldFormatError(f"{where}.conversion must be an object with a kind")
-    kind = raw["kind"].strip().lower()
-    if kind not in CONVERSION_KINDS:
-        raise GoldFormatError(
-            f"{where}.conversion.kind {kind!r} is not one of {', '.join(sorted(CONVERSION_KINDS))}"
-        )
-    mapping = raw.get("map") or {}
-    if not isinstance(mapping, dict):
-        raise GoldFormatError(f"{where}.conversion.map must be an object")
-    note = raw.get("note")
-    return Conversion(
-        kind,
-        note if isinstance(note, str) and note.strip() else None,
-        tuple((str(k), str(v)) for k, v in mapping.items()),
-    )
+    try:
+        return parse_conversion(raw, where)
+    except DraftFormatError as exc:
+        raise GoldFormatError(str(exc)) from exc
 
 
 def _cell(raw: Any, where: str) -> GoldCell:

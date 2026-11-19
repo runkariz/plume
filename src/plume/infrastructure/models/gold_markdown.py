@@ -16,7 +16,8 @@ A nested field (``lines[].sku``, ``address.city``) becomes a sub-field of its pa
 import re
 from typing import Any
 
-from plume.domain.models.model_gold import CONVERSION_KINDS, SCHEMA, parse_gold
+from plume.domain.models.canonical_model import CONVERSION_KINDS
+from plume.domain.models.model_gold import SCHEMA, parse_gold
 
 _TITLE = re.compile(r"^#\s+(.+?)\s+across\s+(.+?)(?:,\s*tested.*)?$", re.I | re.M)
 _SECTION = re.compile(r"^##\s+Expected mapping", re.I | re.M)

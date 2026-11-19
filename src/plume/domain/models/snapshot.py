@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-from plume.domain.models.canonical_model import CanonicalField, ModelDraft
+from plume.domain.models.canonical_model import CanonicalField, ModelDraft, conversion_json
 from plume.domain.models.validation import Issue
 from plume.domain.shared.hashing import content_hash
 
@@ -113,6 +113,9 @@ def _field_json(f: CanonicalField) -> dict[str, Any]:
             for api, s in f.sources
         },
     }
+    for api, src in f.sources:  # only when present, so models without it keep their hash
+        if src.conversion is not None:
+            out["sources"][api]["conversion"] = conversion_json(src.conversion)
     if f.fields:  # only when present, so models without nesting keep their content hash
         out["fields"] = [_field_json(c) for c in f.fields]
     return out

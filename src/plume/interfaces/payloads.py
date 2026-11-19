@@ -24,7 +24,7 @@ from plume.application.reader.dto import (
 from plume.domain.eval.metrics import few_questions_note
 from plume.domain.knowledge import rate_limits
 from plume.domain.knowledge.citation import Citation
-from plume.domain.models.canonical_model import CanonicalField
+from plume.domain.models.canonical_model import CanonicalField, conversion_json
 from plume.domain.models.model_set import ModelSetSnapshot
 from plume.domain.models.snapshot import ModelSnapshot, Visibility
 from plume.domain.models.validation import Issue
@@ -319,6 +319,7 @@ def snapshot_payload(
             sources[api] = {
                 "paths": [{"path": p.path, "type": p.type or ""} for p in src.paths],
                 "transform": src.transform,
+                "conversion": conversion_json(src.conversion) if src.conversion else None,
                 "fetch": {"endpoint": src.fetch} if src.fetch else None,
                 "join": list(src.join),
                 "evidence": [
