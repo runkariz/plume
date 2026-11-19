@@ -570,7 +570,11 @@ export const inventorySnapshot: ModelSnapshot = {
       required: true,
       support: { shopify: 'supported', woocommerce: 'supported', mirakl: 'supported' },
       sources: {
-        shopify: { paths: [{ path: 'variants[].sku', type: 'string' }] },
+        shopify: {
+          paths: [{ path: 'variants[].sku', type: 'string' }],
+          // a kind with nothing more to say: a plain chip, nothing to open
+          conversion: { kind: 'array-vs-single' },
+        },
         woocommerce: { paths: [{ path: 'sku', type: 'string' }] },
         mirakl: { paths: [{ path: 'shop_sku', type: 'string' }] },
       },
@@ -592,6 +596,10 @@ export const inventorySnapshot: ModelSnapshot = {
       sources: {
         shopify: {
           paths: [{ path: 'inventory_levels[].available', type: 'integer' }],
+          conversion: {
+            kind: 'split',
+            note: 'One level per location; the canonical quantity is the sum over the locations the shop stocks.',
+          },
           transform: 'join: inventory_item_id',
           fetch: {
             endpoint: 'GET /admin/api/2026-10/locations/{location_id}/inventory_levels.json',
@@ -605,7 +613,10 @@ export const inventorySnapshot: ModelSnapshot = {
           ],
         },
         woocommerce: { paths: [{ path: 'stock_quantity', type: 'integer' }] },
-        mirakl: { paths: [{ path: 'quantity', type: 'integer' }] },
+        mirakl: {
+          paths: [{ path: 'quantity', type: 'integer' }],
+          conversion: { kind: 'datetime', format: 'ISO 8601, UTC (2026-11-14T14:20:00Z)' },
+        },
       },
     },
     {
@@ -635,10 +646,16 @@ export const inventorySnapshot: ModelSnapshot = {
       sources: {
         shopify: {
           paths: [{ path: 'variants[].inventory_policy', type: 'string' }],
+          conversion: {
+            kind: 'enum',
+            map: { continue: 'true', deny: 'false' },
+            note: 'Shopify names the policy; the canonical field is a flag.',
+          },
           transform: 'continue = true',
         },
         woocommerce: {
           paths: [{ path: 'backorders', type: 'string' }],
+          conversion: { kind: 'enum', map: { no: 'false', notify: 'true', yes: 'true' } },
           transform: 'no = false; notify, yes = true',
         },
       },

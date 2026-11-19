@@ -106,6 +106,60 @@ for (const theme of THEMES) {
       }
     });
 
+    test('a mapping with a conversion shows its kind, enum map and note in the detail (sandboxed frame)', async ({
+      page,
+    }) => {
+      const withConversion = {
+        ...small,
+        fields: (small.fields as { sources: Record<string, Record<string, unknown>> }[]).map(
+          (f) => ({
+            ...f,
+            sources: Object.fromEntries(
+              Object.entries(f.sources).map(([api, src]) => [
+                api,
+                {
+                  ...src,
+                  conversion: {
+                    kind: 'enum',
+                    map: { open: 'OPEN', closed: 'CLOSED', 'on hold': 'PAUSED' },
+                    note: 'The vendor names the state; the model uses upper case.',
+                  },
+                },
+              ]),
+            ),
+          }),
+        ),
+      };
+      const { frame, problems } = await open(page, theme, asResult(withConversion), {
+        openLinks: true,
+        width: 900,
+      });
+      const detail = frame.getByRole('region', { name: 'Mapping detail' });
+      await expect(detail).toBeVisible();
+      await expect(detail.getByText('Conversion')).toBeVisible();
+      await expect(detail.getByText('enum map')).toBeVisible();
+      await expect(detail.getByText('on hold').locator('xpath=ancestor::li')).toContainText(
+        'PAUSED',
+      );
+      await expect(
+        detail.getByText('The vendor names the state; the model uses upper case.'),
+      ).toBeVisible();
+      expect(problems).toEqual([]);
+      const { violations } = await new AxeBuilder({ page }).analyze();
+      expect(
+        violations
+          .filter((v) => v.impact === 'serious' || v.impact === 'critical')
+          .map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`),
+      ).toEqual([]);
+      if (SHOTS) {
+        mkdirSync(SHOTS, { recursive: true });
+        await page.screenshot({
+          path: join(SHOTS, `w37-widget-conversion-${theme}.png`),
+          fullPage: true,
+        });
+      }
+    });
+
     test('a save without a token: "Your models" link with Copy, in the sandboxed frame; nothing is stored or requested', async ({
       page,
     }) => {

@@ -423,8 +423,19 @@ export interface GenerateRequest {
 
 export type FieldSupport = 'supported' | 'derived' | 'unsupported';
 
+/** What a mapping does to the value, structured (kind: money-minor, enum, datetime, ... ; absent or null when not stated). */
+export interface FieldConversion {
+  kind: string;
+  /** enum: the API value -> the canonical value. */
+  map?: Record<string, string> | null;
+  /** datetime: the format; meta-entry: the key. */
+  format?: string | null;
+  note?: string | null;
+}
+
 export interface FieldSource {
   paths: { path: string; type: string }[];
+  conversion?: FieldConversion | null;
   /** Edge label for derived mappings, e.g. "not null = true" or "join: inventory_item_id". */
   transform?: string | null;
   fetch?: { endpoint: string } | null;
