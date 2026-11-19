@@ -66,6 +66,25 @@ def concept_key(name: str) -> str:
     return _singular(re.sub(r"[^a-z0-9]", "", name.lower()))
 
 
+_PARENS = re.compile(r"\(([^)]*)\)")
+_SPLIT = re.compile(r"\s*(?:/|\+|,|&|\bor\b|\band\b)\s*", re.I)
+_FILLER = re.compile(r"^\s*(?:with|incl(?:uding|\.)?|plus)\s+", re.I)
+
+
+def concept_parts(name: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """A concept name a person typed, as concept keys: the main concepts (outside parentheses:
+    "Product / Offer" -> product, offer) and the sub-concepts in parentheses ("(+ variant / SKU)",
+    "(with order line)" -> variant, sku / orderline). A plain name is one main key."""
+    subs = [part for inner in _PARENS.findall(name) for part in _SPLIT.split(inner)]
+    main = _SPLIT.split(_PARENS.sub(" ", name))
+
+    def keys(parts: list[str]) -> tuple[str, ...]:
+        return tuple(dict.fromkeys(k for p in parts if (k := concept_key(_FILLER.sub("", p)))))
+
+    main_keys = keys(main) or (concept_key(name),)
+    return main_keys, tuple(k for k in keys(subs) if k not in main_keys)
+
+
 def concept_label(name: str) -> str:
     """``line_items`` / ``LineItems`` -> ``Line Item`` (the last word made singular); a word
     repeated in a row is said once (``customer_customer_address`` -> ``Customer Address``)."""
