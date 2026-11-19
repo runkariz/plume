@@ -563,6 +563,62 @@ export const inventorySnapshot: ModelSnapshot = {
     ...(REFS[id] as ApiRef),
     build: apiBuild[id],
   })),
+  operations: [
+    {
+      name: 'set absolute stock',
+      kind: 'set',
+      sources: {
+        shopify: {
+          endpoint: 'POST /admin/api/{version}/inventory_levels/set.json',
+          fields: ['location_id', 'inventory_item_id', 'available'],
+          semantics: 'absolute; omitted means 0',
+          evidence: [
+            {
+              quote: 'Sets the inventory level for an inventory item at a location.',
+              anchor: '',
+              docId: 'endpoint:POST~/admin/api/{version}/inventory_levels/set.json',
+            },
+          ],
+        },
+        woocommerce: {
+          endpoint: 'PUT /wp-json/wc/v3/products/{id}',
+          fields: ['stock_quantity', 'manage_stock'],
+          semantics: 'absolute',
+          evidence: [],
+        },
+      },
+    },
+    {
+      name: 'adjust stock by a delta',
+      kind: 'adjust',
+      sources: {
+        shopify: {
+          endpoint: 'POST /admin/api/{version}/inventory_levels/adjust.json',
+          fields: ['available_adjustment'],
+          semantics: 'delta',
+          evidence: [],
+        },
+      },
+    },
+    {
+      name: 'read stock',
+      kind: 'read',
+      sources: {
+        shopify: {
+          endpoint: 'GET /admin/api/{version}/inventory_levels.json',
+          fields: ['available'],
+          semantics: null,
+          evidence: [],
+        },
+        mirakl: {
+          endpoint: 'GET /api/offers',
+          fields: ['quantity'],
+          semantics: null,
+          evidence: [],
+        },
+      },
+    },
+  ],
   fields: [
     {
       name: 'sku',
@@ -635,7 +691,17 @@ export const inventorySnapshot: ModelSnapshot = {
             },
           ],
         },
-        woocommerce: { paths: [{ path: 'manage_stock', type: 'boolean' }] },
+        woocommerce: {
+          paths: [{ path: 'manage_stock', type: 'boolean' }],
+          evidence: [
+            {
+              quote: '',
+              anchor: 'manage_stock, build 2026-11-14',
+              docId: 'endpoint:GET~/wp-json/wc/v3/products',
+              noQuote: "the field's own description is only a label (Stock management)",
+            },
+          ],
+        },
       },
     },
     {
@@ -655,7 +721,11 @@ export const inventorySnapshot: ModelSnapshot = {
         },
         woocommerce: {
           paths: [{ path: 'backorders', type: 'string' }],
-          conversion: { kind: 'enum', map: { no: 'false', notify: 'true', yes: 'true' } },
+          conversion: {
+            kind: 'enum',
+            map: { no: 'false', notify: 'true', yes: 'true' },
+            unmapped: ['preorder', 'on_request'],
+          },
           transform: 'no = false; notify, yes = true',
         },
       },

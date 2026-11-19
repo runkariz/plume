@@ -1597,6 +1597,28 @@ th {
   margin-top: 6px;
   overflow-wrap: anywhere;
 }
+.op-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  margin: 4px 0;
+}
+.op-fields code {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+.op-semantics {
+  margin: 2px 0;
+  overflow-wrap: anywhere;
+}
+.op-endpoint a {
+  color: var(--accent-ink);
+}
+.widget-ops table {
+  margin-top: 8px;
+}
 .conv {
   margin: 4px 0;
 }

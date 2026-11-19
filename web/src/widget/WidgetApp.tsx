@@ -4,6 +4,7 @@ import { FixedThemeProvider, type Theme } from '@/app/theme';
 import { ApiAvatar, Banner, Button, Chip, Segmented } from '@/components';
 import { countLeaves } from '@/pages/models/fields';
 import { ModelWorkbench } from '@/pages/models/ModelWorkbench';
+import { modelOperations, OperationsTable } from '@/pages/models/Operations';
 import { defaultSelection, type Selection } from '@/pages/models/graph';
 import { toggleApi } from '@/pages/models/modelView';
 import { groupWarnings } from '@/pages/models/warnings';
@@ -332,6 +333,12 @@ function Summary({ model }: { model: ModelSnapshot }) {
           {g.summary}: <span className="mono">{g.items.map((w) => w.field ?? '?').join(', ')}</span>
         </p>
       ))}
+      {modelOperations(model).length > 0 ? (
+        <details className="widget-questions widget-ops">
+          <summary>Operations ({modelOperations(model).length})</summary>
+          <OperationsTable snap={model} />
+        </details>
+      ) : null}
       {model.openQuestions.length > 0 ? (
         <details className="widget-questions">
           <summary>Open questions ({model.openQuestions.length})</summary>

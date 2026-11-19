@@ -44,7 +44,8 @@ for (const theme of THEMES) {
       await variant.getByText(/Evidence in the docs/).click();
       const quote = variant.locator('blockquote').first();
       await expect(quote).not.toBeEmpty();
-      await expect(variant.getByText('products[].variants[].product_id')).toBeVisible();
+      // the path may be named twice (a relation end and its evidence): one of them is enough
+      await expect(variant.getByText('products[].variants[].product_id').first()).toBeVisible();
       await settle(page);
       await expectNoSeriousA11y(page);
       await shot(page, 'w17-real-related', theme);

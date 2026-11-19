@@ -76,8 +76,14 @@ export function MappingDetail({
             </div>
           ) : null}
           {src.evidence?.map((e) => (
-            <blockquote key={e.quote} className="evidence">
-              <p>“{e.quote}”</p>
+            <blockquote key={`${e.docId ?? ''}-${e.anchor}-${e.quote}`} className="evidence">
+              <p>
+                {e.noQuote && !e.quote ? (
+                  <span className="faint">cited without quote: {e.noQuote}</span>
+                ) : (
+                  <>“{e.quote}”</>
+                )}
+              </p>
               <cite className="faint small">
                 {e.docId ? (
                   renderDocLink ? (

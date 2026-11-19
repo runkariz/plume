@@ -32,7 +32,16 @@ export function mapEntries(c: FieldConversion): [string, string][] {
 
 /** Whether there is more to say than the kind: a map, a format or a note. */
 const hasMore = (c: FieldConversion) =>
-  mapEntries(c).length > 0 || Boolean(c.format?.trim()) || Boolean(c.note?.trim());
+  mapEntries(c).length > 0 ||
+  unmappedValues(c).length > 0 ||
+  Boolean(c.format?.trim()) ||
+  Boolean(c.note?.trim());
+
+/** The API values an enum conversion leaves without a target (text only). */
+export const unmappedValues = (c: FieldConversion): string[] =>
+  (Array.isArray(c.unmapped) ? c.unmapped : []).flatMap((u) =>
+    typeof u === 'string' || typeof u === 'number' ? [String(u)] : [],
+  );
 
 function Body({ c, label }: { c: FieldConversion; label: string }) {
   const entries = mapEntries(c);
@@ -53,6 +62,12 @@ function Body({ c, label }: { c: FieldConversion; label: string }) {
             </li>
           ))}
         </ul>
+      ) : null}
+      {unmappedValues(c).length ? (
+        <p className="small">
+          <span className="faint">not mapped:</span>{' '}
+          <span className="mono">{unmappedValues(c).join(', ')}</span>
+        </p>
       ) : null}
       {c.note ? <p className="small muted">{c.note}</p> : null}
     </div>

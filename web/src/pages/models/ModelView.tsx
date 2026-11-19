@@ -15,6 +15,7 @@ import {
   Segmented,
 } from '@/components';
 import { shortBuild } from '@/lib/format';
+import { Operations } from './Operations';
 import { apiLabel } from '@/lib/names';
 import { richText } from '@/lib/richText';
 import { docHref } from '@/lib/docHref';
@@ -316,6 +317,10 @@ export function ModelView() {
           renderDocLink={(apiId, docId) => <Link to={docHref(apiId, docId)}>{docId}</Link>}
         />
       )}
+      <Operations
+        snap={snap}
+        endpointLink={(apiId, docId, label) => <Link to={docHref(apiId, docId)}>{label}</Link>}
+      />
       <div className={`model-cols${view === 'table' ? ' two-up' : ''}`}>
         <ShareCard snap={snap} />
         <ReviseCard snap={snap} />

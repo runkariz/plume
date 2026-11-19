@@ -296,7 +296,10 @@ describe('Model view', () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByText('direct', { selector: '.chip' })).toBeInTheDocument();
-    expect(screen.queryByText(/GET \/admin/)).not.toBeInTheDocument();
+    // (the Operations section below lists endpoints too: look in the detail only)
+    expect(
+      within(screen.getByRole('region', { name: 'Mapping detail' })).queryByText(/GET \/admin/),
+    ).not.toBeInTheDocument();
   });
 
   it('filters the mapping list by field name or source path', async () => {
