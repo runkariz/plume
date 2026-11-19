@@ -173,11 +173,23 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
         )
 
     @server.tool(annotations=READ_ONLY, structured_output=True)
-    async def get_document(api: str, doc_id: str, version: str | None = None) -> dict[str, Any]:
-        """Full text of one document (endpoint, model, guide) with its source URL and anchor."""
-        return await _run(
-            lambda: payloads.document_payload(deps.get_document().execute(api, doc_id, version))
-        )
+    async def get_document(
+        api: str, doc_id: str, version: str | None = None, full: bool = False, cursor: int = 0
+    ) -> dict[str, Any]:
+        """One document (endpoint, model, guide) with its source URL and anchor. Compact by
+        default: plain text without the field lists (text_truncated when capped) and the fields
+        as a list, 150 per page (pass next_cursor as cursor for more). full=true returns the
+        whole text as stored."""
+
+        def run() -> dict[str, Any]:
+            r = deps.get_document().execute(api, doc_id, version)
+            return (
+                payloads.document_payload(r)
+                if full
+                else payloads.compact_document_payload(r, cursor)
+            )
+
+        return await _run(run)
 
     @server.tool(annotations=READ_ONLY, structured_output=True)
     async def find_fact(

@@ -2,6 +2,8 @@
 the same JSON as ``claudePayload`` so the web can display what Claude receives."""
 
 import hashlib
+import html
+import re
 from typing import Any
 
 from plume.application.models.concepts import Suggestions
@@ -112,6 +114,50 @@ def document_payload(r: DocumentResult) -> Json:
         "text": d.text,
         "citation": citation_payload(r.citation),
     }
+
+
+COMPACT_TEXT = 8_000  # characters of text in a compact document
+COMPACT_FIELDS = 150  # fields per page
+COMPACT_DESCRIPTION = 200
+_FIELD_SECTIONS = re.compile(
+    r"^## (?:Path parameters|Query parameters|Headers|Request body|Response fields|Fields|"
+    r"Payload fields)\n(?:(?!^## ).*\n?)*",
+    re.M,
+)
+_TAG = re.compile(r"<[^>]{0,200}>")
+
+
+def _plain(text: str) -> str:
+    """HTML markup out, entities decoded, runs of blank lines collapsed."""
+    return re.sub(r"\n{3,}", "\n\n", html.unescape(_TAG.sub(" ", text))).strip()
+
+
+def compact_document_payload(r: DocumentResult, cursor: int = 0) -> Json:
+    """The document without flooding a context: plain text without the field lists (capped),
+    and the fields as a list, paged (next_cursor); `full` gives the whole document."""
+    out = document_payload(r)
+    d = r.document
+    text = _plain(_FIELD_SECTIONS.sub("", d.text))
+    out["text"] = text[:COMPACT_TEXT]
+    out["text_truncated"] = len(text) > COMPACT_TEXT
+    start = max(0, cursor)
+    page = d.fields[start : start + COMPACT_FIELDS]
+    out["fields"] = [
+        {
+            "name": f.name,
+            "location": f.location.value,
+            "type": f.type,
+            "required": f.required,
+            "description": (desc := _plain(f.description or ""))[:COMPACT_DESCRIPTION]
+            + ("…" if len(desc) > COMPACT_DESCRIPTION else ""),
+        }
+        for f in page
+    ]
+    end = start + len(page)
+    out["fields_total"] = len(d.fields)
+    out["next_cursor"] = end if end < len(d.fields) else None
+    out["compact"] = True
+    return out
 
 
 def find_fact_payload(r: FindFactResult) -> Json:

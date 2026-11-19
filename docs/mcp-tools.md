@@ -8,7 +8,7 @@ DNS-rebinding protection (allowed hosts from `PLUME_MCP_ALLOWED_HOSTS`). Every r
 |---|---|---|
 | `list_apis` | – | APIs with latest build, tags, counts and `notices` [{code, section, text}] for package warnings Plume knows (signed requests, no default environment) |
 | `search_docs` | `api, query, kind?, top_k?, version?` | hybrid (vector + full-text, weighted RRF: with a real embedding model k 10 and the vector ranking weighted 5:1, see `PLUME_SEARCH_RRF_K`/`PLUME_SEARCH_DENSE_WEIGHT`) hits, one per document; a knowledge-export page in the top results keeps one of its endpoints right after it (pages are never demoted); at least two endpoints of the pool stay in the top results |
-| `get_document` | `api, doc_id, version?` | full text, fields, source URL, anchor, citation |
+| `get_document` | `api, doc_id, version?, full?, cursor?` | compact by default: plain text without the field lists (capped at 8,000 characters, `text_truncated`) and `fields` as a list, 150 per page (`next_cursor`); `full: true` returns the stored text |
 | `find_fact` | `api, name, kind?, owner?, resource?, location?, version?` | exact matches with evidence, or `found:false` with `checked`, `complete`, `text_mentions` and the wording to use |
 | `check_call` | `api, method, path, params?, query?, body?, version?` | `documented` / `not_documented`, matched endpoint, per-param location (`pagination` when the API's pagination contract or guide names it); a version segment other than the endpoint's fixed one is not documented (`note`); unknown arguments are refused |
 | `list_builds` | `api` | builds (newest first) with tags |
