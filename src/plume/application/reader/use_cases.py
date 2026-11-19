@@ -459,6 +459,38 @@ def _bounded_reason(bounded: dict[str, int]) -> str:
     return f"not listed: {shown}" + (f"; +{more} more truncated schema(s)" if more > 0 else "")
 
 
+def _fact_wording(
+    build: str,
+    found: int,
+    complete: bool,
+    checked: dict[str, int],
+    reasons: list[str],
+    mentioned: bool,
+) -> str:
+    if found:
+        return f"Documented in build {build} ({found} match(es)); cite the evidence."
+    if complete:
+        wording = (
+            f"Not documented in build {build}: checked {checked['endpoints']} endpoints and "
+            f"{checked['models']} models with complete schemas. Say 'not documented', never "
+            "'does not exist'."
+        )
+    else:
+        wording = (
+            f"Not found in build {build}, but absence is NOT proven ({'; '.join(reasons)}). "
+            "Say it is not documented here and may exist."
+        )
+    if mentioned:
+        wording += " The name appears in prose; read text_mentions before concluding."
+    return wording
+
+
+_ENDPOINT_FORM = re.compile(
+    r"^(?:(?P<method>GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+)?(?P<path>(?:[a-z]+://\S+?)?/\S*)$",
+    re.I,
+)
+
+
 class FindFact:
     """Presence/absence of an endpoint, field or scope, with evidence and a completeness flag."""
 
@@ -522,6 +554,31 @@ class FindFact:
                 )
         return owner  # unknown: reported as not in the build below
 
+    def _endpoint_forms(
+        self, build_id: BuildId, name: str, kind: FactKind | None
+    ) -> tuple[list[Fact], list[str]]:
+        """An endpoint asked as "/path" (any method) or "METHOD /path", path parameters matched
+        by position ({id} = {order_id}), a full URL's host and query ignored. Returns the
+        matches, and reasons why absence is NOT proven (only the method differs, or the query
+        is not an endpoint form while endpoints were asked for)."""
+        m = _ENDPOINT_FORM.match(name.strip())
+        if m is None:
+            if kind is FactKind.ENDPOINT:
+                return [], [f'{name!r} is not an endpoint form; ask "METHOD /path" or "/path"']
+            return [], []
+        method = (m.group("method") or "").upper()
+        path = re.sub(r"^[a-z]+://[^/]+", "", m.group("path"), flags=re.I).split("?", 1)[0]
+        on_path = [
+            f
+            for f in self._facts.endpoints(build_id)
+            if (p := f.name.partition(" ")[2]) == path or path_matches(p, path)
+        ]
+        hits = [f for f in on_path if not method or f.name.partition(" ")[0] == method]
+        if hits or not on_path:
+            return hits, []
+        others = sorted({f.name.partition(" ")[0] for f in on_path})
+        return [], [f"{path} is documented for {', '.join(others)}, not {method}"]
+
     def execute(
         self,
         api: str,
@@ -547,6 +604,9 @@ class FindFact:
         found = self._facts.find(
             build_id, name, kind=fact_kind, owner_id=owner, resource=resource, location=loc
         )
+        endpoint_reasons: list[str] = []
+        if not found and fact_kind in (None, FactKind.ENDPOINT):
+            found, endpoint_reasons = self._endpoint_forms(build_id, name, fact_kind)
         titles = {
             k: s.title
             for k, s in self._index.summaries(build_id, [f.owner_id for f in found]).items()
@@ -562,8 +622,9 @@ class FindFact:
         incomplete = tuple(
             self._facts.incomplete_owners(build_id, owner_id=owner, resource=resource)
         )
-        complete = not incomplete
+        complete = not incomplete and not endpoint_reasons
         reasons: list[str] = [f"{o} is flagged incomplete by its source" for o in incomplete]
+        reasons += endpoint_reasons
         field_like = fact_kind in (None, FactKind.FIELD) and loc not in (
             FieldLocation.PATH,
             FieldLocation.QUERY,
@@ -610,22 +671,9 @@ class FindFact:
                 )
                 for i, h in enumerate(hits)
             )
-        build = r.build.build_id.value
-        if found:
-            wording = f"Documented in build {build} ({len(found)} match(es)); cite the evidence."
-        elif complete:
-            wording = (
-                f"Not documented in build {build}: checked {checked['endpoints']} endpoints and "
-                f"{checked['models']} models with complete schemas. Say 'not documented', never "
-                "'does not exist'."
-            )
-        else:
-            wording = (
-                f"Not found in build {build}, but absence is NOT proven ({'; '.join(reasons)}). "
-                "Say it is not documented here and may exist."
-            )
-        if not found and mentions:
-            wording += " The name appears in prose; read text_mentions before concluding."
+        wording = _fact_wording(
+            r.build.build_id.value, len(found), complete, checked, reasons, bool(mentions)
+        )
         return FindFactResult(
             ref=_ref(r),
             name=name,
