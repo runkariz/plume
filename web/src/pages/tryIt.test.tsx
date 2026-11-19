@@ -129,6 +129,42 @@ describe('Try it', () => {
     expect(screen.getByText('missing')).toBeInTheDocument();
   });
 
+  it('Check call sends only the keys the server accepts, and shows its note', async () => {
+    let sent: Record<string, unknown> = {};
+    server.use(
+      http.post(`${TEST_API_BASE}/v1/apis/:id/check-call`, async ({ request }) => {
+        sent = (await request.json()) as Record<string, unknown>;
+        return HttpResponse.json({
+          api: 'shopify',
+          build: '2026-11-14',
+          verdict: 'not_documented',
+          complete: true,
+          matched: null,
+          paramChecks: [],
+          checked: { endpoints: 1, models: 1 },
+          note: 'the documented operation is GET /v4/orders',
+        });
+      }),
+    );
+    renderApp('/apis/shopify/try');
+    await userEvent.click(screen.getByRole('radio', { name: 'Check call' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Check' }));
+    const note = await screen.findByRole('note');
+    expect(note).toHaveTextContent('the documented operation is GET /v4/orders');
+    // the server answers 422 to any other key
+    const allowed = ['method', 'path', 'params', 'query', 'body', 'version'];
+    expect(Object.keys(sent).filter((k) => !allowed.includes(k))).toEqual([]);
+    expect(Object.keys(sent)).toEqual(expect.arrayContaining(['method', 'path', 'params']));
+  });
+
+  it('Check call shows no note when the server sends none', async () => {
+    renderApp('/apis/shopify/try');
+    await userEvent.click(screen.getByRole('radio', { name: 'Check call' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Check' }));
+    await screen.findByText('Documented');
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+
   it('uses the public breadcrumb when signed out and the maintainer one when signed in', async () => {
     const { unmount } = renderApp('/apis/shopify/try');
     await screen.findByText('Build 2026-11-14 · live');

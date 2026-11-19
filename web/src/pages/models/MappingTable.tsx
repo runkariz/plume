@@ -5,6 +5,7 @@ import type { FieldSupport, ModelField, ModelSnapshot } from '@/api/types';
 import { countLeaves, flatten, hasOwnSources, type FlatField } from './fields';
 import { Chip } from '@/components';
 import { ConversionChip } from './Conversion';
+import { EvidenceLine } from './Operations';
 
 const SUPPORT_LABEL: Record<FieldSupport, string> = {
   supported: 'direct',
@@ -184,7 +185,7 @@ export function MappingTable({ snapshot }: { snapshot: ModelSnapshot }) {
                               <ul>
                                 {src.evidence.map((e, i) => (
                                   <li key={`${e.docId ?? ''}-${i}`}>
-                                    <q>{e.quote}</q>
+                                    <EvidenceLine e={e} />
                                     {e.docId ? (
                                       <>
                                         {' '}

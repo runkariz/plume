@@ -157,7 +157,9 @@ describe('a small model keeps the mockup: graph first', () => {
     expect(await screen.findByRole('radio', { name: 'Graph' })).toBeChecked();
     expect(screen.queryByRole('radio', { name: 'Selected field' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('radio', { name: 'Table' }));
-    expect(await screen.findByRole('table')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('table', { name: /How each API fills each field/ }),
+    ).toBeInTheDocument();
   });
 });
 

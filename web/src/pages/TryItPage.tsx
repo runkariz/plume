@@ -407,6 +407,11 @@ function CheckTool({ apiId }: { apiId: string }) {
                     . The check matched the one shown above.
                   </p>
                 ) : null}
+                {d.note ? (
+                  <p className="cite warn" role="note" style={{ marginBottom: 10 }}>
+                    {d.note}
+                  </p>
+                ) : null}
                 <ul className="checks">
                   {d.paramChecks.map((p) => (
                     <li key={p.name}>

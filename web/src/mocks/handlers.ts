@@ -1878,6 +1878,15 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
     http.post(`${base}/v1/apis/:id/check-call`, async ({ params, request }) => {
       if (!detailFor(String(params.id))) return notFound();
       const body = (await request.json()) as CheckCallRequest;
+      // like the server: a key it does not know is refused (422), never ignored
+      const unknown = Object.keys(body).filter(
+        (k) => !['method', 'path', 'params', 'query', 'body', 'version'].includes(k),
+      );
+      if (unknown.length)
+        return HttpResponse.json(
+          { detail: `Extra inputs are not permitted: ${unknown.join(', ')}` },
+          { status: 422 },
+        );
       return HttpResponse.json(sampleCheck(body.method, body.path, body.params));
     }),
   ];

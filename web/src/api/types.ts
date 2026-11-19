@@ -218,10 +218,14 @@ export interface AskResponse {
   totalMs: number;
 }
 
+/** The server refuses any other key (422), so the web sends only these. `query` and `body` are names checked in that place. */
 export interface CheckCallRequest {
   method: HttpMethod;
   path: string;
   params: string[];
+  query?: string[];
+  body?: string[];
+  version?: string | null;
 }
 
 export interface CheckCallResponse {
@@ -241,6 +245,8 @@ export interface CheckCallResponse {
   checked: { endpoints: number; models: number };
   /** The other operation ids at the same METHOD + path (e.g. a package with three GET /{file_path} downloads). */
   alternatives?: string[];
+  /** Why a path matching a template is not documented, e.g. "the documented operation is GET /v4/orders". */
+  note?: string | null;
 }
 
 // ---- maintainer: packages, jobs, build events (W3) ----
@@ -428,6 +434,8 @@ export interface FieldConversion {
   kind: string;
   /** enum: the API value -> the canonical value. */
   map?: Record<string, string> | null;
+  /** enum: API values deliberately left without a target. */
+  unmapped?: string[] | null;
   /** datetime: the format; meta-entry: the key. */
   format?: string | null;
   note?: string | null;
@@ -440,8 +448,29 @@ export interface FieldSource {
   transform?: string | null;
   fetch?: { endpoint: string } | null;
   join?: string[];
-  /** `anchor` is "" when there is none; `docId` names the cited document. */
-  evidence?: { quote: string; anchor: string; docId?: string }[];
+  /** `anchor` is "" when there is none; `docId` names the cited document; `noQuote` (then `quote` is empty) says why. */
+  evidence?: { quote: string; anchor: string; docId?: string; noQuote?: string | null }[];
+}
+
+/** The citation of an operation or a field: a quote (or why there is none), the anchor and the cited document. */
+export type Evidence = NonNullable<FieldSource['evidence']>[number];
+
+/** How one API performs an operation of a model. */
+export interface OperationSource {
+  /** "POST /admin/api/{version}/inventory_levels/set.json" */
+  endpoint: string;
+  /** The request/response fields it uses. */
+  fields: string[];
+  /** "absolute; omitted means 0", "delta", "per-call limit 100"; null when none. */
+  semantics?: string | null;
+  evidence?: Evidence[];
+}
+
+/** What a client does with the concept, per API: read, create, update, set, adjust, delete or other. */
+export interface ModelOperation {
+  name: string;
+  kind: string;
+  sources: Record<string, OperationSource>;
 }
 
 export interface ModelField {
@@ -537,6 +566,8 @@ export interface ModelSnapshot {
   promptVersion: string;
   inputs: (ApiRef & { build: string })[];
   fields: ModelField[];
+  /** The operations of the model, per API; absent or empty when the model states none. */
+  operations?: ModelOperation[];
   /** Question text may contain **bold** spans. */
   openQuestions: { question: string; detail?: string | null; options?: string[] }[];
   coverage: Record<string, { mapped: number; total: number }>;

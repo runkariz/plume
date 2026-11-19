@@ -475,5 +475,9 @@ export function sampleCheck(method: string, path: string, params: string[]): Che
       where: found && known.has(name) ? 'query' : null,
     })),
     checked: { endpoints: 137, models: 31 },
+    // why a path that matches a template is not documented (another version of the same operation)
+    ...(!found && /\/orders/.test(path)
+      ? { note: 'The documented operation is GET /admin/api/latest/orders.json.' }
+      : {}),
   };
 }

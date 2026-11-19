@@ -111,6 +111,26 @@ for (const theme of THEMES) {
     }) => {
       const withConversion = {
         ...small,
+        operations: [
+          {
+            name: 'set absolute stock',
+            kind: 'set',
+            sources: {
+              shopify: {
+                endpoint: 'POST /orders/{id}/set',
+                fields: ['available'],
+                semantics: 'absolute; omitted means 0',
+                evidence: [],
+              },
+              woocommerce: {
+                endpoint: 'PUT /orders/{id}',
+                fields: ['stock_quantity'],
+                semantics: 'delta',
+                evidence: [],
+              },
+            },
+          },
+        ],
         fields: (small.fields as { sources: Record<string, Record<string, unknown>> }[]).map(
           (f) => ({
             ...f,
@@ -122,6 +142,7 @@ for (const theme of THEMES) {
                   conversion: {
                     kind: 'enum',
                     map: { open: 'OPEN', closed: 'CLOSED', 'on hold': 'PAUSED' },
+                    unmapped: ['archived'],
                     note: 'The vendor names the state; the model uses upper case.',
                   },
                 },
@@ -144,6 +165,13 @@ for (const theme of THEMES) {
       await expect(
         detail.getByText('The vendor names the state; the model uses upper case.'),
       ).toBeVisible();
+      await expect(detail.getByText('not mapped:')).toBeVisible();
+      // the operations: a section of its own, plain text (the frame has no pages to link to)
+      await frame.getByText('Operations (1)').click();
+      const ops = frame.locator('.widget-ops');
+      await expect(ops.getByText('POST /orders/{id}/set')).toBeVisible();
+      await expect(ops.getByText('absolute; omitted means 0')).toBeVisible();
+      await expect(ops.getByRole('link')).toHaveCount(0);
       expect(problems).toEqual([]);
       const { violations } = await new AxeBuilder({ page }).analyze();
       expect(
@@ -154,7 +182,7 @@ for (const theme of THEMES) {
       if (SHOTS) {
         mkdirSync(SHOTS, { recursive: true });
         await page.screenshot({
-          path: join(SHOTS, `w37-widget-conversion-${theme}.png`),
+          path: join(SHOTS, `w38-widget-operations-${theme}.png`),
           fullPage: true,
         });
       }
