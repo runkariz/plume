@@ -14,7 +14,7 @@ for (const theme of THEMES) {
       await page.goto(`/apis/shopify/documents/${GUIDE}`);
       const card = page.getByRole('region', { name: 'Rule sources' });
       await expect(card).toContainText('Stated on 5 pages');
-      const list = card.getByRole('list', { name: 'Pages of rule rule-cursor-limit' });
+      const list = card.getByRole('list', { name: /^Pages of List endpoints return/ });
       await expect(list.getByRole('link')).toHaveCount(3);
       await settle(page);
       await expectNoSeriousA11y(page);

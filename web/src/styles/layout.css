@@ -2836,12 +2836,17 @@ ul.plain {
   gap: 14px;
   margin-top: 10px;
 }
-.rule-count {
+.rule-text {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 10px;
+  gap: 4px 8px;
   align-items: baseline;
+  margin: 0 0 2px;
+  overflow-wrap: anywhere;
+}
+.rule-count {
   margin: 0 0 4px;
+  font-size: 13px;
 }
 .rule-sources .show-all {
   text-align: left;

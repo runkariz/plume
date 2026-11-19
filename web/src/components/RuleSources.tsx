@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { RuleSource } from '@/api/types';
 import { safeHref } from '@/pages/maintainer/release/notes';
 import { Card } from './Card';
+import { Chip } from './Chip';
 
 /** How many pages of a rule are listed before "Show all". */
 const SHOWN = 3;
@@ -17,6 +18,18 @@ export function pageLabel(url: string): string {
   }
 }
 
+/** How long a rule's text is before it is cut (the whole rule is in the document's text). */
+const TEXT_AT_MOST = 120;
+
+/** The rule's text on one line, cut with an ellipsis after about 120 characters (at a word when it can). */
+export function shortRule(text: string): string {
+  const t = text.replace(/\s+/g, ' ').trim();
+  if (t.length <= TEXT_AT_MOST) return t;
+  const cut = t.slice(0, TEXT_AT_MOST);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > TEXT_AT_MOST * 0.6 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
 /** The pages of a rule, without repeats and without empty entries. */
 export function rulePages(r: RuleSource): string[] {
   return Array.from(
@@ -24,15 +37,28 @@ export function rulePages(r: RuleSource): string[] {
   );
 }
 
-function RulePages({ rule, pages }: { rule: string; pages: string[] }) {
+interface Rule {
+  id: string;
+  text: string | null;
+  type: string | null;
+}
+
+function RulePages({ rule, pages }: { rule: Rule; pages: string[] }) {
   const [all, setAll] = useState(false);
   const shown = all ? pages : pages.slice(0, SHOWN);
   return (
     <div>
-      <p className="rule-count">
-        <span className="mono faint small">{rule}</span> <b>Stated on {pages.length} pages</b>
+      <p className="rule-text" title={rule.id}>
+        {rule.text ? shortRule(rule.text) : <span className="mono small">{rule.id}</span>}
+        {rule.type ? <Chip>{rule.type}</Chip> : null}
       </p>
-      <ul className="linked-list" aria-label={`Pages of rule ${rule}`}>
+      <p className="rule-count">
+        <b>Stated on {pages.length} pages</b>
+      </p>
+      <ul
+        className="linked-list"
+        aria-label={`Pages of ${rule.text ? shortRule(rule.text) : `rule ${rule.id}`}`}
+      >
         {shown.map((u) => {
           const href = safeHref(u);
           return (
@@ -66,7 +92,9 @@ function RulePages({ rule, pages }: { rule: string; pages: string[] }) {
 export function RuleSources({ sources }: { sources: RuleSource[] | undefined }) {
   const rules = (sources ?? []).flatMap((r) => {
     const pages = rulePages(r);
-    return pages.length > 1 ? [{ id: r.ruleId, pages }] : [];
+    return pages.length > 1
+      ? [{ rule: { id: r.ruleId, text: r.text?.trim() || null, type: r.type || null }, pages }]
+      : [];
   });
   if (rules.length === 0) return null;
   return (
@@ -77,7 +105,7 @@ export function RuleSources({ sources }: { sources: RuleSource[] | undefined }) 
       </p>
       <div className="rule-list">
         {rules.map((r) => (
-          <RulePages key={r.id} rule={r.id} pages={r.pages} />
+          <RulePages key={r.rule.id} rule={r.rule} pages={r.pages} />
         ))}
       </div>
     </Card>

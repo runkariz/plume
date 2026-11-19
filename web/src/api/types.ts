@@ -794,6 +794,12 @@ export interface DocumentOut {
 /** A rule stated on several documentation pages: its id and the pages (untrusted addresses). */
 export interface RuleSource {
   ruleId: string;
+  /** The rule's own text, to show the reader; null on an older stored entry. */
+  text?: string | null;
+  /** effect, rule, precondition ...; null when unknown. */
+  type?: string | null;
+  /** The exact line of the document text that carries the rule; null on an older entry. */
+  line?: string | null;
   urls: string[];
 }
 
