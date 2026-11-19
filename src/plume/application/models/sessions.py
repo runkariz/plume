@@ -23,11 +23,11 @@ from plume.application.models.concepts import (
     last_literal,
     resolve_apis,
 )
+from plume.application.models.oracle import PinnedLookups
 from plume.application.ports.document_repo import DocumentRepo
 from plume.application.ports.model_repo import ModelRepo, ModelSession
 from plume.application.ports.search_index import DocumentSummary, FactQuery, SearchIndex
 from plume.application.reader.resolve import BuildResolver
-from plume.domain.knowledge.call_check import path_matches
 from plume.domain.knowledge.document import Document, DocumentKind, FieldLocation
 from plume.domain.models.canonical_model import DraftFormatError, ModelDraft, parse_draft
 from plume.domain.models.snapshot import (
@@ -120,17 +120,14 @@ returns their fields page by page (follow next_cursor). Rules (refused otherwise
   levels). Map and cite every sub-field like a top-level one; its source paths are the API's
   full paths (e.g. "variants[].sku"). A container needs sources only when it is mapped as a
   whole; coverage counts the sub-fields.
+- A scalar field (string, number, date, money, ...) maps a scalar path: when the API's field is
+  an object (an address region, a country, a money object), map one of its fields (region.name,
+  country.iso, amount.value); a list needs a conversion (array-vs-single, cardinality, split).
+- With `fetch`, the paths must be fields of that endpoint's response.
 Refusals come back with codes (MISSING_CITATION, QUOTE_NOT_FOUND, QUOTE_NOT_ON_FIELD,
-FIELD_NOT_FOUND, ENDPOINT_NOT_FOUND, DOC_NOT_FOUND, API_NOT_IN_SESSION); fix those mappings and
-submit again.
+FIELD_NOT_FOUND, ENDPOINT_NOT_FOUND, DOC_NOT_FOUND, API_NOT_IN_SESSION, PATH_NOT_IN_FETCH,
+SCALAR_FROM_OBJECT, ARRAY_FOR_SINGLE); fix those mappings and submit again.
 """
-
-
-def _same_field(name: str, path: str) -> bool:
-    """A documented field name and a mapped path name the same field: equal, or one is a dotted
-    suffix of the other (case-insensitive; ``[]`` ignored)."""
-    a, b = name.lower().replace("[]", ""), path.lower().replace("[]", "")
-    return a == b or a.endswith("." + b) or b.endswith("." + a)
 
 
 def normalize_concept(concept: str) -> str:
@@ -654,82 +651,9 @@ class ModelSessions:
     # -- drafts ----------------------------------------------------------------------------------
 
     def _oracle(self, session: ModelSession) -> Oracle:
-        """Lookups into the pinned builds, cached for one validation: a large draft cites the
-        same documents, paths and endpoints many times (each was a database round trip)."""
+        """Lookups into the pinned builds, cached for one validation."""
         builds = {p.api: BuildId(p.build) for p in session.inputs}
-        texts: dict[tuple[str, str], str | None] = {}
-        writes: dict[tuple[str, str], bool] = {}
-        endpoints: dict[str, list[tuple[str, str]]] = {}
-        docs: dict[tuple[str, str], Document | None] = {}
-
-        def doc(api: str, doc_id: str) -> Document | None:
-            if (api, doc_id) not in docs:
-                docs[(api, doc_id)] = self._documents.get_document(builds[api], doc_id)
-            return docs[(api, doc_id)]
-
-        def field_texts(api: str, doc_id: str, path: str) -> tuple[str, ...] | None:
-            """The field's description and its line(s) in the document text; None when the
-            document does not list the field."""
-            d = doc(api, doc_id)
-            if d is None:
-                return None
-            specs = [f for f in d.fields if _same_field(f.name, path)]
-            if not specs:
-                return None
-            lines = [
-                ln
-                for f in specs
-                for ln in d.text.splitlines()
-                if f"`{f.name}`" in ln or f"`{f.name.split('.')[-1]}`" in ln
-            ]
-            return tuple(t for t in (*(f.description or "" for f in specs), *lines) if t)
-
-        def doc_text(api: str, doc_id: str) -> str | None:
-            if (api, doc_id) not in texts:
-                d = doc(api, doc_id)
-                writes[(api, doc_id)] = (
-                    d is not None
-                    and d.kind is DocumentKind.ENDPOINT
-                    and (d.method or "GET").upper() != "GET"
-                )
-                texts[(api, doc_id)] = (
-                    None
-                    if d is None
-                    else f"{d.title}\n{d.text}\n{' '.join(f.description or '' for f in d.fields)}"
-                )
-            return texts[(api, doc_id)]
-
-        known: dict[str, set[str]] = {}
-
-        def field_exists(api: str, path: str) -> bool:
-            # Same rule as FactQuery.find (exact name or a ".name" suffix, case-insensitive),
-            # from one query per API instead of one scan per path.
-            if api not in known:
-                names = known[api] = set()
-                for name in self._facts.field_names(builds[api]):
-                    parts = name.lower().split(".")
-                    names.update(".".join(parts[i:]) for i in range(len(parts)))
-            return path.lower() in known[api]
-
-        def endpoint_exists(api: str, call: str) -> bool:
-            if api not in endpoints:
-                endpoints[api] = [
-                    (m, p)
-                    for m, _, p in (
-                        f.name.partition(" ") for f in self._facts.endpoints(builds[api])
-                    )
-                ]
-            method, _, path = call.strip().partition(" ")
-            return any(
-                m == method.upper() and (p == path.strip() or path_matches(p, path.strip()))
-                for m, p in endpoints[api]
-            )
-
-        def write_only(api: str, doc_id: str) -> bool:
-            doc_text(api, doc_id)
-            return writes.get((api, doc_id), False)
-
-        return Oracle(doc_text, field_exists, endpoint_exists, write_only, field_texts)
+        return PinnedLookups(builds, self._facts, self._documents).oracle()
 
     def _validated(self, session: ModelSession, raw: Any) -> tuple[ModelDraft, list[Issue]]:
         """Parse and validate (refusals raise); returns the draft and its warnings."""
