@@ -111,7 +111,8 @@ returns their fields page by page (follow next_cursor). Rules (refused otherwise
 - Use `transform` / `join` to describe derived values (e.g. "sum of line_items[].price").
 - State every conversion the value needs in `conversion` {kind, map?, format?, note?}. Kinds:
   money-minor (integer cents), money-decimal, money-decimal-string, currency-separate, enum
-  (map: {API value: canonical value}), datetime (format: e.g. "ISO 8601 UTC", "local, no tz"),
+  (map: {API value: canonical value} covering every value of the API's enum, or list the ones
+  without a target in "unmapped"), datetime (format: e.g. "ISO 8601 UTC", "local, no tz"),
   id-type (string vs number), array-vs-single, cardinality (e.g. one variant synthesized from
   product fields), embedded (only inside another resource), derived (from a field's name or
   position, e.g. billing_ prefix), meta-entry (an entry of a key/value list; format: the key),
@@ -130,8 +131,8 @@ returns their fields page by page (follow next_cursor). Rules (refused otherwise
 - With `fetch`, the paths must be fields of that endpoint's response.
 Refusals come back with codes (MISSING_CITATION, QUOTE_NOT_FOUND, QUOTE_NOT_ON_FIELD,
 FIELD_NOT_FOUND, ENDPOINT_NOT_FOUND, DOC_NOT_FOUND, API_NOT_IN_SESSION, PATH_NOT_IN_FETCH,
-SCALAR_FROM_OBJECT, ARRAY_FOR_SINGLE, QUOTE_TOO_SHORT, NO_QUOTE_NOT_ALLOWED); fix those mappings
-and submit again.
+SCALAR_FROM_OBJECT, ARRAY_FOR_SINGLE, SINGLE_FOR_ARRAY, ENUM_KEY_UNKNOWN, ENUM_MAP_INCOMPLETE,
+QUOTE_TOO_SHORT, NO_QUOTE_NOT_ALLOWED); fix those mappings and submit again.
 """
 
 

@@ -4,7 +4,7 @@ times, and each lookup would be a database round trip."""
 
 from plume.application.ports.document_repo import DocumentRepo
 from plume.application.ports.search_index import FactQuery
-from plume.domain.knowledge.call_check import path_matches
+from plume.domain.knowledge.call_check import path_matches, specificity
 from plume.domain.knowledge.document import Document, DocumentKind, FieldLocation
 from plume.domain.knowledge.fact import FactKind
 from plume.domain.models.validation import Oracle
@@ -38,6 +38,7 @@ class PinnedLookups:
             self.field_texts,
             self.fetch_fields,
             self.path_shape,
+            self.path_enum,
         )
 
     def doc(self, api: str, doc_id: str) -> Document | None:
@@ -102,6 +103,17 @@ class PinnedLookups:
                         subs[rest] = None
         return types, tuple(subs)
 
+    def path_enum(self, api: str, path: str, doc_ids: tuple[str, ...]) -> tuple[str, ...] | None:
+        """The enum values the cited documents state for the field (None: none states one)."""
+        values: dict[str, None] = {}
+        for doc_id in doc_ids:
+            d = self.doc(api, doc_id)
+            for spec in d.fields if d is not None else ():
+                if same_field(spec.name, path):
+                    for v in spec.constraint_dict.get("enum") or ():
+                        values[str(v)] = None
+        return tuple(values) or None
+
     def _endpoint_rows(self, api: str) -> list[tuple[str, str, str]]:
         if api not in self._endpoints:
             self._endpoints[api] = [
@@ -112,13 +124,17 @@ class PinnedLookups:
         return self._endpoints[api]
 
     def _owners(self, api: str, call: str) -> list[str]:
+        """The endpoint(s) a call names: the exact template, else the most specific templates
+        that match (orders/count.json is not orders/{order_id}.json)."""
         method, _, path = call.strip().partition(" ")
         path = path.strip()
-        return [
-            owner
-            for m, p, owner in self._endpoint_rows(api)
-            if m == method.upper() and (p == path or path_matches(p, path))
-        ]
+        rows = [(p, owner) for m, p, owner in self._endpoint_rows(api) if m == method.upper()]
+        exact = [owner for p, owner in rows if p == path]
+        if exact:
+            return exact
+        matching = [(p, owner) for p, owner in rows if path_matches(p, path)]
+        best = max((specificity(p) for p, _ in matching), default=0)
+        return [owner for p, owner in matching if specificity(p) == best]
 
     def endpoint_exists(self, api: str, call: str) -> bool:
         return bool(self._owners(api, call))

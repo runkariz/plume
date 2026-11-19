@@ -66,6 +66,7 @@ class Conversion:
     note: str | None = None
     enum_map: tuple[tuple[str, str], ...] = ()  # (API value, canonical value)
     format: str | None = None  # datetime format / time zone, meta key, ...
+    unmapped: tuple[str, ...] = ()  # enum: API values deliberately left without a target
 
 
 def parse_conversion(raw: Any, where: str) -> Conversion | None:
@@ -87,8 +88,15 @@ def parse_conversion(raw: Any, where: str) -> Conversion | None:
         value = raw.get(key)
         return value.strip() if isinstance(value, str) and value.strip() else None
 
+    unmapped = raw.get("unmapped") or []
+    if not isinstance(unmapped, list):
+        raise DraftFormatError(f"{where}.conversion.unmapped must be a list")
     return Conversion(
-        kind, text("note"), tuple((str(k), str(v)) for k, v in mapping.items()), text("format")
+        kind,
+        text("note"),
+        tuple((str(k), str(v)) for k, v in mapping.items()),
+        text("format"),
+        tuple(str(u) for u in unmapped),
     )
 
 
@@ -98,6 +106,8 @@ def conversion_json(c: Conversion) -> dict[str, Any]:
         out["map"] = dict(c.enum_map)
     if c.format:
         out["format"] = c.format
+    if c.unmapped:
+        out["unmapped"] = list(c.unmapped)
     if c.note:
         out["note"] = c.note
     return out
