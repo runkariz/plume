@@ -12,6 +12,10 @@ Issue codes (stable; clients key on them):
   that is an object in the API; map one of its fields (the refusal lists them).
 - ``ARRAY_FOR_SINGLE``: a scalar canonical field maps a list, without a cardinality /
   array-vs-single / split conversion.
+- ``QUOTE_TOO_SHORT``: the quote carries no information (fewer than 4 words and 20 letters),
+  unless it is the field's whole own description of 2+ words.
+- ``NO_QUOTE_NOT_ALLOWED``: ``noQuote`` cites a field whose document does not list it, or whose
+  own description has a usable sentence to quote.
 - ``QUOTE_NOT_ON_FIELD``: the quote is in the document but not about the mapped field: when the
   cited document lists the field, the quote must come from that field's own entry (its line or
   description); otherwise the quote must name the field.
@@ -34,7 +38,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from plume.domain.models.canonical_model import CanonicalField, FieldSource, ModelDraft
+from plume.domain.models.canonical_model import CanonicalField, Evidence, FieldSource, ModelDraft
 
 _WS = re.compile(r"\s+")
 
@@ -149,8 +153,66 @@ def _shape_issues(
     return out
 
 
+_WORD = re.compile(r"[^\W\d_]{2,}")
+MIN_QUOTE_WORDS = 4
+MIN_QUOTE_LETTERS = 20
+
+
+def substantive(quote: str) -> bool:
+    """A quote that carries information: at least 4 words or 20 letters (not "Important!")."""
+    plain = _norm(quote)
+    return (
+        len(_WORD.findall(plain)) >= MIN_QUOTE_WORDS
+        or sum(c.isalpha() for c in plain) >= MIN_QUOTE_LETTERS
+    )
+
+
+def _description_part(text: str) -> str:
+    """A field line "- `name` (type) required: description" -> its description."""
+    if text.lstrip().startswith("- `") and ":" in text:
+        return text.split(":", 1)[1]
+    return text
+
+
+def _own_texts(api: str, doc_id: str, paths: list[str], oracle: Oracle) -> list[str] | None:
+    """The mapped fields' own texts in the document (None: it lists none of them)."""
+    if oracle.field_texts is None:
+        return None
+    found = [oracle.field_texts(api, doc_id, p) for p in paths]
+    if all(f is None for f in found):
+        return None
+    return [t for f in found for t in (f or ())]
+
+
+def _quote_issue(
+    e: Evidence, path: str, api: str, src: FieldSource, oracle: Oracle
+) -> Issue | None:
+    """Substance: a short quote passes only as a field's whole own description (2+ words);
+    noQuote only when the field's own texts have nothing substantive to quote."""
+    paths = [p.path for p in src.paths]
+    own = _own_texts(api, e.doc_id, paths, oracle) if paths else None
+    if e.no_quote:
+        if own is None:
+            listed = ", ".join(paths) or "the field"
+            return Issue("NO_QUOTE_NOT_ALLOWED", path, api,
+                         f"noQuote needs {e.doc_id} to list {listed}")  # fmt: skip
+        if any(substantive(_description_part(t)) for t in own):
+            return Issue("NO_QUOTE_NOT_ALLOWED", path, api,
+                         "the field's own description has a usable sentence: quote it")  # fmt: skip
+        return None
+    whole = own is not None and any(
+        _norm(t) == _norm(e.quote) and len(_WORD.findall(_norm(t))) >= 2 for t in own
+    )
+    if substantive(e.quote) or whole:
+        return None
+    return Issue("QUOTE_TOO_SHORT", path, api,
+                 f"the quote carries no information ({e.quote[:40]!r}): quote a sentence of "
+                 "at least 4 words, or cite the field with noQuote when it has none")  # fmt: skip
+
+
 def _evidence_issues(path: str, api: str, src: FieldSource, oracle: Oracle) -> list[Issue]:
-    """Each citation: in the build, its quote in the document, and about the mapped field."""
+    """Each citation: in the build, its quote in the document, substantive, and about the
+    mapped field."""
     out: list[Issue] = []
     if not src.evidence:
         out.append(Issue("MISSING_CITATION", path, api, "the mapping cites no evidence"))
@@ -158,30 +220,23 @@ def _evidence_issues(path: str, api: str, src: FieldSource, oracle: Oracle) -> l
         text = oracle.doc_text(api, e.doc_id)
         if text is None:
             out.append(Issue("DOC_NOT_FOUND", path, api, f"{e.doc_id} is not in the build"))
+            continue
+        exists = bool(src.paths) and all(oracle.field_exists(api, p.path) for p in src.paths)
+        if e.no_quote:
+            issue = _quote_issue(e, path, api, src, oracle) if exists else None
+            out.extend([issue] if issue else [])
         elif not quote_in(e.quote, text):
-            out.append(
-                Issue(
-                    "QUOTE_NOT_FOUND",
-                    path,
-                    api,
-                    f"the quote is not in {e.doc_id}: {e.quote[:80]!r}",
-                )
-            )
-        elif (
-            src.paths
-            and all(oracle.field_exists(api, p.path) for p in src.paths)
-            and not quote_on_field(e.quote, [p.path for p in src.paths], api, e.doc_id, oracle)
+            out.append(Issue("QUOTE_NOT_FOUND", path, api,
+                             f"the quote is not in {e.doc_id}: {e.quote[:80]!r}"))  # fmt: skip
+        elif exists and not quote_on_field(
+            e.quote, [p.path for p in src.paths], api, e.doc_id, oracle
         ):
-            out.append(
-                Issue(
-                    "QUOTE_NOT_ON_FIELD",
-                    path,
-                    api,
-                    f"the quote from {e.doc_id} is not about "
-                    f"{', '.join(p.path for p in src.paths)}: quote that field's own "
-                    f"description or line ({e.quote[:80]!r})",
-                )
-            )
+            out.append(Issue("QUOTE_NOT_ON_FIELD", path, api,
+                             f"the quote from {e.doc_id} is not about "
+                             f"{', '.join(p.path for p in src.paths)}: quote that field's own "
+                             f"description or line ({e.quote[:80]!r})"))  # fmt: skip
+        elif exists and (issue := _quote_issue(e, path, api, src, oracle)) is not None:
+            out.append(issue)
     return out
 
 

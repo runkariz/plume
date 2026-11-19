@@ -270,3 +270,16 @@ def test_draft_conversion_parse_and_hash_stability() -> None:
         "kind": "meta-entry",
         "format": "_tracking_number",
     }
+
+
+def test_no_quote_cells_are_counted() -> None:
+    [gold] = parse_gold(GOLD)
+    src = {"paths": ["total_price"], "evidence": [{"doc_id": "m", "noQuote": "markup only"}]}
+    field = {"name": "total", "type": "money", "description": "d", "sources": {"shop": src}}
+    draft = parse_draft({"name": "Order", "description": "d", "fields": [field]})
+    result = score(draft, gold, ("shop",), exists)
+    assert result.counts["no_quote"] == 1
+    from plume.domain.models.snapshot import draft_json  # noqa: PLC0415
+
+    ev = draft_json(draft)["fields"][0]["sources"]["shop"]["evidence"][0]
+    assert ev == {"doc_id": "m", "quote": "", "anchor": None, "noQuote": "markup only"}

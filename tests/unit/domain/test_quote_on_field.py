@@ -53,3 +53,40 @@ def test_quotes_match_across_html() -> None:
     assert quote_in(
         "Order state.<br>One of: <ul><li>SHIPPING</li>", "Order state. One of: SHIPPING"
     )
+
+
+JUNK = {("model:order", "status"): ("Important!", "- `status` (string): Important!")}
+
+
+def _junk_oracle() -> Oracle:
+    texts = {**FIELDS, **JUNK}
+    return Oracle(
+        doc_text=lambda _api, doc: DOCS.get(doc, "") + "\n- `status` (string): Important!",
+        field_exists=lambda _api, path: path in {"id", "total", "status"},
+        endpoint_exists=lambda _api, _call: True,
+        field_texts=lambda _api, doc, path: texts.get((doc, path)),
+    )
+
+
+def _evidence(path: str, evidence: dict[str, str]) -> list[str]:
+    field = {"name": "x", "type": "string", "description": "d",
+             "sources": {"woo": {"paths": [path], "evidence": [evidence]}}}  # fmt: skip
+    draft = parse_draft({"name": "Order", "description": "d", "fields": [field]})
+    return [i.code for i in validate(draft, frozenset({"woo"}), _junk_oracle())]
+
+
+def test_a_quote_must_carry_information() -> None:
+    assert _evidence("status", {"doc_id": "model:order", "quote": "Important!"}) == [
+        "QUOTE_TOO_SHORT"
+    ]
+    assert _evidence("total", {"doc_id": "model:order", "quote": "Grand total of the order."}) == []
+    assert _evidence("id", {"doc_id": "model:order", "quote": "Unique identifier."}) == []  # whole
+
+
+def test_no_quote_only_where_the_field_has_nothing_to_quote() -> None:
+    junk = {"doc_id": "model:order", "noQuote": "the description is only 'Important!'"}
+    assert _evidence("status", junk) == []
+    has_text = {"doc_id": "model:order", "noQuote": "lazy"}
+    assert _evidence("total", has_text) == ["NO_QUOTE_NOT_ALLOWED"]
+    elsewhere = {"doc_id": "guide:orders", "noQuote": "not listed there"}
+    assert _evidence("status", elsewhere) == ["NO_QUOTE_NOT_ALLOWED"]
