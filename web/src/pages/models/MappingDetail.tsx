@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { ModelSnapshot } from '@/api/types';
 import { Chip } from '@/components';
+import { ConversionDetail } from './Conversion';
 import { findField } from './fields';
 import type { Selection } from './graph';
 import { warningSummary, warningsFor } from './warnings';
@@ -57,6 +58,7 @@ export function MappingDetail({
             <div className="dl-k">Source</div>
             <div className="mono">{src.paths.map((p) => p.path).join(', ')}</div>
           </div>
+          <ConversionDetail conversion={src.conversion} />
           {src.transform ? (
             <div className="dl">
               <div className="dl-k">Transform</div>

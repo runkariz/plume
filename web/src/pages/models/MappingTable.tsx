@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import type { FieldSupport, ModelField, ModelSnapshot } from '@/api/types';
 import { countLeaves, flatten, hasOwnSources, type FlatField } from './fields';
 import { Chip } from '@/components';
+import { ConversionChip } from './Conversion';
 
 const SUPPORT_LABEL: Record<FieldSupport, string> = {
   supported: 'direct',
@@ -161,6 +162,7 @@ export function MappingTable({ snapshot }: { snapshot: ModelSnapshot }) {
                           <div className="mono mtable-path">
                             {src.paths.map((p) => p.path).join(', ')}
                           </div>
+                          <ConversionChip conversion={src.conversion} />
                           {src.transform ? (
                             <div className="small muted">
                               <span className="faint">transform:</span> {src.transform}
