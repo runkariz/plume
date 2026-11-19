@@ -430,7 +430,10 @@ def _source_issues(r: Relation, apis: frozenset[str], oracle: Oracle) -> list[Is
                     )
                 )
         for p in src.paths:
-            if src.as_ != "sub_resource" and not oracle.field_exists(api, p.path):
+            if src.as_ != "sub_resource" and not oracle.field_exists(
+                api,
+                p.path.removesuffix("[]"),  # order_lines[] names the list order_lines
+            ):
                 issues.append(
                     Issue(
                         "FIELD_NOT_FOUND",

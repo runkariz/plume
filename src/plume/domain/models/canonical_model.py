@@ -243,6 +243,11 @@ def _source(raw: Any, where: str) -> FieldSource:
     for i, e in enumerate(_list(raw, "evidence", where)):
         if not isinstance(e, dict):
             raise DraftFormatError(f"{where}.evidence[{i}] must be an object")
+        if "noQuote" in e and not isinstance(e["noQuote"], str):
+            raise DraftFormatError(
+                f"{where}.evidence[{i}].noQuote must be a string: why the field cannot be "
+                'quoted, e.g. {"doc_id": "model:x", "noQuote": "the description is one word"}'
+            )
         no_quote = _str(e, "noQuote", f"{where}.evidence[{i}]", required=False)
         quote = _str(e, "quote", f"{where}.evidence[{i}]", required=not no_quote) or ""
         if len(quote) > MAX_QUOTE:

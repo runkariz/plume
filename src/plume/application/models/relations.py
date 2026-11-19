@@ -214,8 +214,13 @@ def _ranked(bucket: list[CandidateEvidence]) -> list[CandidateEvidence]:
     if any(e.read for e in bucket):
         bucket = [e for e in bucket if e.read]
     out: list[CandidateEvidence] = []
+    seen: set[tuple[str, str, tuple[str, ...]]] = set()  # the same evidence once
     for e in bucket:
+        key = (e.kind, e.doc_id, tuple(e.paths))
+        if key in seen:
+            continue
         if sum(x.kind == e.kind for x in out) < MAX_EVIDENCE_PER_KIND:
+            seen.add(key)
             out.append(e)
     return out
 

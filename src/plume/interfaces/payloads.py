@@ -413,6 +413,7 @@ def snapshot_payload(
                         "semantics": src.semantics,
                         "evidence": [
                             {"quote": e.quote, "anchor": e.anchor or "", "docId": e.doc_id}
+                            | ({"noQuote": e.no_quote} if e.no_quote else {})
                             for e in src.evidence
                         ],
                     }
