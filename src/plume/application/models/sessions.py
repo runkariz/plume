@@ -96,7 +96,8 @@ returns their fields page by page (follow next_cursor). Rules (refused otherwise
 - Map an API under fields[].sources only with fields that appear in that API's evidence: copy
   `paths[].path` exactly as listed (dotted names, [] for arrays).
 - Every mapping needs evidence: `doc_id` from the evidence and a `quote` copied verbatim from
-  that document's text (a field description is fine). Quotes are checked.
+  that document's text, about the mapped field: when the document lists the field, quote that
+  field's own description or line; otherwise the quote must name the field. Quotes are checked.
 - `fetch` (optional) must be a documented endpoint, written "METHOD /path" as listed.
 - Leave an API out of a field's sources when it has no such data; never invent fields.
 - Use `transform` / `join` to describe derived values (e.g. "sum of line_items[].price").
@@ -107,9 +108,17 @@ returns their fields page by page (follow next_cursor). Rules (refused otherwise
   levels). Map and cite every sub-field like a top-level one; its source paths are the API's
   full paths (e.g. "variants[].sku"). A container needs sources only when it is mapped as a
   whole; coverage counts the sub-fields.
-Refusals come back with codes (MISSING_CITATION, QUOTE_NOT_FOUND, FIELD_NOT_FOUND,
-ENDPOINT_NOT_FOUND, DOC_NOT_FOUND, API_NOT_IN_SESSION); fix those mappings and submit again.
+Refusals come back with codes (MISSING_CITATION, QUOTE_NOT_FOUND, QUOTE_NOT_ON_FIELD,
+FIELD_NOT_FOUND, ENDPOINT_NOT_FOUND, DOC_NOT_FOUND, API_NOT_IN_SESSION); fix those mappings and
+submit again.
 """
+
+
+def _same_field(name: str, path: str) -> bool:
+    """A documented field name and a mapped path name the same field: equal, or one is a dotted
+    suffix of the other (case-insensitive; ``[]`` ignored)."""
+    a, b = name.lower().replace("[]", ""), path.lower().replace("[]", "")
+    return a == b or a.endswith("." + b) or b.endswith("." + a)
 
 
 def normalize_concept(concept: str) -> str:
@@ -475,10 +484,33 @@ class ModelSessions:
         texts: dict[tuple[str, str], str | None] = {}
         writes: dict[tuple[str, str], bool] = {}
         endpoints: dict[str, list[tuple[str, str]]] = {}
+        docs: dict[tuple[str, str], Document | None] = {}
+
+        def doc(api: str, doc_id: str) -> Document | None:
+            if (api, doc_id) not in docs:
+                docs[(api, doc_id)] = self._documents.get_document(builds[api], doc_id)
+            return docs[(api, doc_id)]
+
+        def field_texts(api: str, doc_id: str, path: str) -> tuple[str, ...] | None:
+            """The field's description and its line(s) in the document text; None when the
+            document does not list the field."""
+            d = doc(api, doc_id)
+            if d is None:
+                return None
+            specs = [f for f in d.fields if _same_field(f.name, path)]
+            if not specs:
+                return None
+            lines = [
+                ln
+                for f in specs
+                for ln in d.text.splitlines()
+                if f"`{f.name}`" in ln or f"`{f.name.split('.')[-1]}`" in ln
+            ]
+            return tuple(t for t in (*(f.description or "" for f in specs), *lines) if t)
 
         def doc_text(api: str, doc_id: str) -> str | None:
             if (api, doc_id) not in texts:
-                d = self._documents.get_document(builds[api], doc_id)
+                d = doc(api, doc_id)
                 writes[(api, doc_id)] = (
                     d is not None
                     and d.kind is DocumentKind.ENDPOINT
@@ -521,7 +553,7 @@ class ModelSessions:
             doc_text(api, doc_id)
             return writes.get((api, doc_id), False)
 
-        return Oracle(doc_text, field_exists, endpoint_exists, write_only)
+        return Oracle(doc_text, field_exists, endpoint_exists, write_only, field_texts)
 
     def _validated(self, session: ModelSession, raw: Any) -> tuple[ModelDraft, list[Issue]]:
         """Parse and validate (refusals raise); returns the draft and its warnings."""

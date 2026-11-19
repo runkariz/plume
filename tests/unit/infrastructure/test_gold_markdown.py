@@ -5,7 +5,7 @@ import pytest
 from plume.domain.models.model_gold import parse_gold
 from plume.infrastructure.models.gold_markdown import GoldImportError, import_markdown
 
-REPORT = """# Order across shopify, woocommerce, mirakl, tested 2026-11-20, builds b-1, b-2, b-3
+REPORT = """# Order (+ order line) across shopify, woocommerce, mirakl, tested 2026-11-20
 ## Summary
 fields 4; correct 3
 ## Expected mapping (gold)
