@@ -12,6 +12,11 @@ Issue codes (stable; clients key on them):
   that is an object in the API; map one of its fields (the refusal lists them).
 - ``ARRAY_FOR_SINGLE``: a scalar canonical field maps a list, without a cardinality /
   array-vs-single / split conversion.
+- ``SINGLE_FOR_ARRAY``: a list canonical field maps a scalar API field, without a cardinality /
+  array-vs-single conversion.
+- ``ENUM_KEY_UNKNOWN``: an enum conversion maps a value the cited documents' enum does not have.
+- ``ENUM_MAP_INCOMPLETE``: an enum conversion leaves values of that enum neither mapped nor
+  listed in ``unmapped``.
 - ``QUOTE_TOO_SHORT``: the quote carries no information (fewer than 4 words and 20 letters),
   unless it is the field's whole own description of 2+ words.
 - ``NO_QUOTE_NOT_ALLOWED``: ``noQuote`` cites a field whose document does not list it, or whose
@@ -66,6 +71,8 @@ class Oracle:
     fetch_fields: Callable[[str, str], frozenset[str] | None] | None = None
     # (api, path) -> (the types the API states for it, its direct sub-field names)
     path_shape: Callable[[str, str], tuple[frozenset[str], tuple[str, ...]]] | None = None
+    # (api, path, cited doc ids) -> the enum values those documents state for it (None: none)
+    path_enum: Callable[[str, str, tuple[str, ...]], tuple[str, ...] | None] | None = None
 
 
 _TAG = re.compile(r"<[^>]{0,200}>")
@@ -131,9 +138,23 @@ def _shape_issues(
                 out.append(Issue("PATH_NOT_IN_FETCH", path, api,
                                  f"{p.path} is not in the response of {src.fetch}: cite a path "
                                  "of that response, or drop fetch"))  # fmt: skip
+    out.extend(_enum_issues(path, api, src, oracle))
+    plural_ok = src.conversion is not None and src.conversion.kind in _PLURAL_OK
+    if (
+        oracle.path_shape is not None
+        and not _scalar(f.type)
+        and f.type.lower().startswith(("array", "list"))
+        and not plural_ok
+    ):
+        for p in src.paths:
+            kinds = {t.lower() for t in oracle.path_shape(api, p.path)[0]}
+            if kinds and kinds <= _PRIMITIVE and not p.path.endswith("[]"):
+                out.append(Issue("SINGLE_FOR_ARRAY", path, api,
+                                 f"{p.path} is a single {'/'.join(sorted(kinds))} in {api} and "
+                                 f"{path} is a list: map a list, or state a conversion "
+                                 "(cardinality or array-vs-single)"))  # fmt: skip
     if oracle.path_shape is None or f.fields or not _scalar(f.type):
         return out
-    plural_ok = src.conversion is not None and src.conversion.kind in _PLURAL_OK
     for p in src.paths:
         types, subs = oracle.path_shape(api, p.path)
         kinds = {t.lower() for t in types}
@@ -237,6 +258,33 @@ def _evidence_issues(path: str, api: str, src: FieldSource, oracle: Oracle) -> l
                              f"description or line ({e.quote[:80]!r})"))  # fmt: skip
         elif exists and (issue := _quote_issue(e, path, api, src, oracle)) is not None:
             out.append(issue)
+    return out
+
+
+def _enum_issues(path: str, api: str, src: FieldSource, oracle: Oracle) -> list[Issue]:
+    """An enum conversion against the enum the cited documents state for the path."""
+    conv = src.conversion
+    if conv is None or conv.kind != "enum" or oracle.path_enum is None:
+        return []
+    cited = tuple(dict.fromkeys(e.doc_id for e in src.evidence))
+    out: list[Issue] = []
+    for p in src.paths:
+        values = oracle.path_enum(api, p.path, cited)
+        if not values:
+            continue
+        known = {v.lower() for v in values}
+        keys = {k.lower(): k for k, _ in conv.enum_map}
+        unknown = [k for low, k in keys.items() if low not in known]
+        if unknown:
+            out.append(Issue("ENUM_KEY_UNKNOWN", path, api,
+                             f"{p.path} has no value {', '.join(unknown)} in {api} (its values: "
+                             f"{', '.join(values)})"))  # fmt: skip
+        covered = set(keys) | {u.lower() for u in conv.unmapped}
+        missing = [v for v in values if v.lower() not in covered]
+        if missing:
+            out.append(Issue("ENUM_MAP_INCOMPLETE", path, api,
+                             f"the enum map leaves {', '.join(missing)} of {p.path} unmapped: "
+                             "map them, or list them in conversion.unmapped"))  # fmt: skip
     return out
 
 

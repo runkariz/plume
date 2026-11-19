@@ -11,7 +11,10 @@ SHAPES = {
     "tags": (frozenset({"array"}), ()),
     "status": (frozenset({"string"}), ()),
     "amount": (frozenset({"object", "string"}), ("value",)),  # scalar somewhere: fine
+    "customer_id": (frozenset({"integer"}), ()),
+    "line_items": (frozenset({"array"}), ("sku",)),
 }
+ENUMS = {"status": ("pending", "processing", "completed", "cancelled")}
 FETCH = {"GET /orders/{id}": frozenset({"order.id", "order.status", "order.tags"})}
 
 
@@ -22,6 +25,7 @@ def _oracle() -> Oracle:
         endpoint_exists=lambda _a, call: call in FETCH or call == "GET /products",
         fetch_fields=lambda _a, call: FETCH.get(call),
         path_shape=lambda _a, p: SHAPES.get(p, (frozenset(), ())),
+        path_enum=lambda _a, p, docs: ENUMS.get(p) if "m" in docs else None,
     )
 
 
@@ -61,3 +65,26 @@ def test_fetch_must_return_the_path() -> None:
     assert code == "PATH_NOT_IN_FETCH"
     assert "not in the response of GET /orders/{id}" in message
     assert _codes("sku", "string", "variations[].sku", fetch="GET /products") == []  # unknown
+
+
+def test_a_list_field_needs_a_list() -> None:
+    [(code, message)] = _codes("lines", "array", "customer_id")
+    assert code == "SINGLE_FOR_ARRAY"
+    assert "customer_id is a single integer" in message
+    assert _codes("lines", "array", "line_items") == []
+    assert _codes("lines", "array", "customer_id", conversion={"kind": "cardinality"}) == []
+
+
+def test_enum_maps_cover_the_api_enum() -> None:
+    full = {"pending": "OPEN", "processing": "OPEN", "completed": "DONE", "cancelled": "VOID"}
+    assert _codes("state", "string", "status", conversion={"kind": "enum", "map": full}) == []
+    part = {"kind": "enum", "map": {"pending": "OPEN", "completed": "DONE"}}
+    [(code, message)] = _codes("state", "string", "status", conversion=part)
+    assert code == "ENUM_MAP_INCOMPLETE"
+    assert "leaves processing, cancelled" in message
+    marked = {**part, "unmapped": ["processing", "cancelled"]}
+    assert _codes("state", "string", "status", conversion=marked) == []
+    wrong = {"kind": "enum", "map": {**full, "shipped": "DONE"}}
+    [(code, message)] = _codes("state", "string", "status", conversion=wrong)
+    assert code == "ENUM_KEY_UNKNOWN"
+    assert "no value shipped" in message
