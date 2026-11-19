@@ -313,6 +313,10 @@ class SuggestRelated:
             ]
             for k, v in scan.names.items():
                 labels.setdefault(k, v)
+            # An id field is evidence both ways: order.customer_id is "a customer has orders"
+            # and "an order references its customer" (set-g1: Woo's customer_id was only under
+            # customer>order).
+            evidence += [(c, p, ev) for p, c, ev in evidence if ev.kind == "id_field"]
             for parent, child, ev in evidence:
                 cand = found.setdefault((parent, child), RelationCandidate(parent, child))
                 cand.sources.setdefault(api, []).append(ev)  # ranked and capped below

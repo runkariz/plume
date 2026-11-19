@@ -16,6 +16,7 @@ from plume.application.models.collections import (
     owner_key_hash,
 )
 from plume.application.models.concepts import (
+    ROLE_SYNONYMS,
     ModelInputError,
     concept_docs,
     concept_key,
@@ -152,14 +153,6 @@ def _evidence_rank(d: DocumentSummary, key: str) -> tuple[bool, bool, bool, int,
 
 
 _PARENS_TEXT = re.compile(r"\([^)]*\)")
-# The same resource role under another name, tried only when no document carries the
-# concept's own name (Shopware calls a shipment an order delivery).
-ROLE_SYNONYMS: dict[str, tuple[str, ...]] = {
-    "shipment": ("delivery", "shipping", "parcel", "consignment"),
-    "fulfillment": ("delivery", "shipment", "shipping"),
-    "inventory": ("stock",),
-    "stock": ("inventory",),
-}
 
 
 _ERROR_MODEL = re.compile(
