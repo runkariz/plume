@@ -444,7 +444,14 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 for e in links.endpoint_links(d)
             ],
             rule_sources=[
-                s.RuleSource(rule_id=r["ruleId"], urls=r["urls"]) for r in links.rule_sources(d)
+                s.RuleSource(
+                    rule_id=r["ruleId"],
+                    text=r["text"],
+                    type=r["type"],
+                    line=r["line"],
+                    urls=r["urls"],
+                )
+                for r in links.rule_sources(d)
             ],
             tags=list(d.tags),
             responses=_list_of_dicts(d.raw, "responses") if d.kind.value == "endpoint" else [],

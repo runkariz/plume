@@ -116,6 +116,11 @@ class SourceQuality(Schema):
 
 class RuleSource(Schema):
     rule_id: str
+    text: str | None = Field(default=None, description="The rule's own text.")
+    type: str | None = Field(default=None, description="The rule's type (effect, rule, ...).")
+    line: str | None = Field(
+        default=None, description="The rule's line exactly as in the document text."
+    )
     urls: list[str] = Field(description="The rule's pages: sourceUrl, then sourceUrls.")
 
 

@@ -68,7 +68,15 @@ def test_a_merged_rule_goes_to_every_page_it_names() -> None:
     assert set(guides) == {A, B, "https://d.example/docs/ürün"}
     for guide in guides.values():
         assert "text merged" in guide.text
-        assert links.rule_sources(guide) == [{"ruleId": "merged", "urls": [A, B, C]}]
+        [cited] = links.rule_sources(guide)
+        assert cited == {
+            "ruleId": "merged",
+            "text": "text merged",
+            "type": "rule",
+            "line": '- text merged (rule; source: "quote")',
+            "urls": [A, B, C],
+        }
+        assert cited["line"] in guide.text.splitlines()  # the web pairs them by exact line
 
 
 def test_the_resource_fallback_covers_all_its_pages() -> None:
@@ -80,8 +88,9 @@ def test_the_resource_fallback_covers_all_its_pages() -> None:
         "endpoint:GET~/get-b2",
         "endpoint:GET~/get-c1",
     ]
-    cited = links.rule_sources(out["endpoint:GET~/get-b2"])
-    assert cited == [{"ruleId": "res", "urls": [A, B, C]}]
+    [cited] = links.rule_sources(out["endpoint:GET~/get-b2"])
+    assert (cited["ruleId"], cited["text"], cited["urls"]) == ("res", "text res", [A, B, C])
+    assert cited["line"] in out["endpoint:GET~/get-b2"].text.splitlines()
 
 
 def test_rules_on_one_page_carry_no_extra_citation() -> None:
@@ -101,3 +110,13 @@ def test_source_urls_are_read_from_rules_json(packages: Path, tmp_path: Path) ->
     assert first.source_urls == (B,)
     assert first.urls == (first.source_url, B)
     assert rules[1].source_urls == ()
+
+
+def test_citations_stored_as_bare_url_lists_still_read() -> None:
+    doc = Document(
+        doc_id="guide:x", kind=DocumentKind.GUIDE, title="x", text="x",
+        raw={RULE_SOURCES_KEY: {"r1": [A, B]}},
+    )  # fmt: skip
+    assert links.rule_sources(doc) == [
+        {"ruleId": "r1", "text": None, "type": None, "line": None, "urls": [A, B]}
+    ]
