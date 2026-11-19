@@ -223,7 +223,10 @@ function linksOf(docId: string, kind: string, method: string | null) {
       // rules the package states on several pages (the last one names a single page: nothing is shown for it)
       ruleSources: [
         {
-          ruleId: 'rule-cursor-limit',
+          ruleId: 'r-5469614fb3',
+          text: 'List endpoints return at most 250 records per page; to read more, follow the cursor in the Link response header instead of passing page numbers, and stop when no rel="next" link is returned.',
+          type: 'rule',
+          line: null,
           urls: [
             'https://shopify.dev/docs/api/usage/pagination-rest',
             'https://shopify.dev/docs/api/admin-rest/latest/resources/product',
@@ -233,13 +236,22 @@ function linksOf(docId: string, kind: string, method: string | null) {
           ],
         },
         {
-          ruleId: 'rule-page-info',
+          ruleId: 'r-0b1c2d3e4f',
+          text: 'The page_info parameter cannot be combined with other filters.',
+          type: 'precondition',
+          line: null,
           urls: [
             'https://shopify.dev/docs/api/usage/pagination-rest',
             'https://shopify.dev/docs/api/admin-rest/latest/resources/product',
           ],
         },
-        { ruleId: 'rule-single', urls: ['https://shopify.dev/docs/api/usage/pagination-rest'] },
+        {
+          ruleId: 'r-single',
+          text: 'A rule on one page.',
+          type: 'rule',
+          line: null,
+          urls: ['https://shopify.dev/docs/api/usage/pagination-rest'],
+        },
       ],
     };
   return {};
