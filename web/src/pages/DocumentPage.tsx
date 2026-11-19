@@ -15,6 +15,7 @@ import {
   LoadingState,
   MethodBadge,
   RawJson,
+  RuleSources,
 } from '@/components';
 import { breakable } from '@/lib/breakable';
 import { operationOf, schemeIdOf, shownPath } from '@/lib/docHref';
@@ -276,6 +277,8 @@ export function DocumentPage() {
           <p className="muted">The package documents no fields for this {d.kind}.</p>
         </Card>
       ) : null}
+
+      <RuleSources sources={d.ruleSources} />
 
       <Card className="pad doc-text-card">
         {hasStructure && !isGuide ? (

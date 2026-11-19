@@ -2830,6 +2830,22 @@ ul.plain {
 .scheme-scopes a:hover {
   text-decoration-color: currentColor;
 }
+.rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 10px;
+}
+.rule-count {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+  margin: 0 0 4px;
+}
+.rule-sources .show-all {
+  text-align: left;
+}
 .scope-endpoints .show-all {
   text-align: left;
   padding: 6px 0 0;

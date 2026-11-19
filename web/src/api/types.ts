@@ -787,6 +787,14 @@ export interface DocumentOut {
   linkedEndpoints?: string[];
   /** Guide: the same endpoints with why each is linked (text | page | slug); absent on older servers. */
   endpointLinks?: EndpointLinkOut[];
+  /** Rules in the text that the package states on several pages, each with every page (sourceUrl first); [] or absent when none. */
+  ruleSources?: RuleSource[];
+}
+
+/** A rule stated on several documentation pages: its id and the pages (untrusted addresses). */
+export interface RuleSource {
+  ruleId: string;
+  urls: string[];
 }
 
 /** One endpoint a guide is linked to, and the basis of the link. */
