@@ -36,6 +36,70 @@ class SourcePath:
     type: str | None = None
 
 
+# How a value must be converted between the API and the canonical model (also used by gold).
+CONVERSION_KINDS = frozenset(
+    {
+        "money-minor",  # integer minor units (cents)
+        "money-decimal",
+        "money-decimal-string",
+        "currency-separate",  # the currency is another field
+        "enum",  # value map: {API value: canonical value}
+        "datetime",  # format / time zone in `format`
+        "id-type",  # string vs number ids
+        "array-vs-single",
+        "cardinality",  # e.g. synthesize one variant from product-level fields
+        "embedded",  # the entity exists only inside another resource
+        "derived",  # taken from the field's name or position (billing_ -> billing address)
+        "meta-entry",  # an entry of a key/value list (meta_data[key=_tracking_number])
+        "split",  # one value spread over several fields, or a sum of several
+        "other",
+    }
+)
+
+
+@dataclass(frozen=True, slots=True)
+class Conversion:
+    kind: str
+    note: str | None = None
+    enum_map: tuple[tuple[str, str], ...] = ()  # (API value, canonical value)
+    format: str | None = None  # datetime format / time zone, meta key, ...
+
+
+def parse_conversion(raw: Any, where: str) -> Conversion | None:
+    """``{"kind": ..., "map": {...}, "format": ..., "note": ...}`` or None."""
+    if raw is None:
+        return None
+    if not isinstance(raw, dict) or not isinstance(raw.get("kind"), str):
+        raise DraftFormatError(f"{where}.conversion must be an object with a kind")
+    kind = raw["kind"].strip().lower()
+    if kind not in CONVERSION_KINDS:
+        raise DraftFormatError(
+            f"{where}.conversion.kind {kind!r} is not one of {', '.join(sorted(CONVERSION_KINDS))}"
+        )
+    mapping = raw.get("map") or {}
+    if not isinstance(mapping, dict):
+        raise DraftFormatError(f"{where}.conversion.map must be an object")
+
+    def text(key: str) -> str | None:
+        value = raw.get(key)
+        return value.strip() if isinstance(value, str) and value.strip() else None
+
+    return Conversion(
+        kind, text("note"), tuple((str(k), str(v)) for k, v in mapping.items()), text("format")
+    )
+
+
+def conversion_json(c: Conversion) -> dict[str, Any]:
+    out: dict[str, Any] = {"kind": c.kind}
+    if c.enum_map:
+        out["map"] = dict(c.enum_map)
+    if c.format:
+        out["format"] = c.format
+    if c.note:
+        out["note"] = c.note
+    return out
+
+
 @dataclass(frozen=True, slots=True)
 class FieldSource:
     """How one API provides a canonical field."""
@@ -45,6 +109,7 @@ class FieldSource:
     fetch: str | None = None  # "GET /admin/api/{version}/products.json"
     join: tuple[str, ...] = ()
     transform: str | None = None
+    conversion: Conversion | None = None  # structured: what the transform does to the value
 
     @property
     def derived(self) -> bool:
@@ -155,7 +220,8 @@ def _source(raw: Any, where: str) -> FieldSource:
         raise DraftFormatError(f"{where}.fetch must be a string like 'GET /path'")
     join = tuple(str(j) for j in _list(raw, "join", where))
     transform = _str(raw, "transform", where, required=False)
-    return FieldSource(tuple(paths), tuple(evidence), fetch, join, transform)
+    conversion = parse_conversion(raw.get("conversion"), where)
+    return FieldSource(tuple(paths), tuple(evidence), fetch, join, transform, conversion)
 
 
 def _fields(raw: list[Any], where: str, depth: int, count: list[int]) -> tuple[CanonicalField, ...]:

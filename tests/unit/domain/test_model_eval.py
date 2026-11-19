@@ -210,3 +210,58 @@ def test_held_out_and_sets() -> None:
 def test_bad_gold_is_refused(raw: dict[str, object], message: str) -> None:
     with pytest.raises(GoldFormatError, match=message):
         parse_gold(raw)
+
+
+def _stated(conversion: dict[str, object] | None) -> object:
+    src = _src("total_price")
+    if conversion is not None:
+        src["conversion"] = conversion
+    return parse_draft({"name": "Order", "description": "d", "fields": [
+        {"name": "total", "type": "money", "description": "d", "sources": {"shop": src}},
+        {"name": "status", "type": "string", "description": "d", "sources": {
+            "shop": {**_src("financial_status"), "conversion": conversion}
+            if conversion and conversion.get("kind") == "enum" else _src("financial_status")}},
+    ]})  # fmt: skip
+
+
+@pytest.mark.parametrize(
+    ("conversion", "total", "status"),
+    [
+        ({"kind": "money-decimal"}, CONVERSION_OK, CONVERSION_MISSING),  # decimal ~ decimal-string
+        ({"kind": "money-minor"}, CONVERSION_WRONG, CONVERSION_MISSING),
+        ({"kind": "datetime", "format": "UTC"}, CONVERSION_WRONG, CONVERSION_MISSING),
+        ({"kind": "enum", "map": {"paid": "PAID", "pending": "OPEN"}}, CONVERSION_WRONG,
+         CONVERSION_WRONG),
+        ({"kind": "enum", "map": {"paid": "PAID"}}, CONVERSION_WRONG, CONVERSION_OK),
+    ],
+)  # fmt: skip
+def test_a_stated_conversion_is_checked_against_gold(
+    conversion: dict[str, object], total: str, status: str
+) -> None:
+    [gold] = parse_gold(GOLD)
+    cells = _cells(score(_stated(conversion), gold, ("shop",), exists))  # type: ignore[arg-type]
+    assert cells[("total", "shop")] == (CORRECT, total)
+    assert cells[("status", "shop")] == (CORRECT, status)
+
+
+def test_gold_other_accepts_any_stated_kind() -> None:
+    cell = {"paths": ["total_price"], "conversion": {"kind": "other", "note": "see docs"}}
+    gold = {**GOLD, "fields": [{"name": "total", "apis": {"shop": cell}}]}
+    [model] = parse_gold(gold)
+    cells = _cells(score(_stated({"kind": "split"}), model, ("shop",), exists))  # type: ignore[arg-type]
+    assert cells[("total", "shop")] == (CORRECT, CONVERSION_OK)
+
+
+def test_draft_conversion_parse_and_hash_stability() -> None:
+    from plume.domain.models.canonical_model import DraftFormatError  # noqa: PLC0415
+    from plume.domain.models.snapshot import draft_json  # noqa: PLC0415
+
+    with pytest.raises(DraftFormatError, match="is not one of"):
+        _stated({"kind": "magic"})
+    plain = draft_json(_stated(None))  # type: ignore[arg-type]
+    assert "conversion" not in plain["fields"][0]["sources"]["shop"]  # old models keep their ids
+    stated = draft_json(_stated({"kind": "meta-entry", "format": "_tracking_number"}))  # type: ignore[arg-type]
+    assert stated["fields"][0]["sources"]["shop"]["conversion"] == {
+        "kind": "meta-entry",
+        "format": "_tracking_number",
+    }

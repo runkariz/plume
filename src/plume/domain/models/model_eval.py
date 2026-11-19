@@ -3,7 +3,8 @@
 Classes (stable; reports and the release gate key on them):
 
 - ``correct``: a produced path is one of the expected paths (a dotted suffix counts:
-  ``order.total_price`` = ``total_price``). Conversion, judged only for correct mappings:
+  ``order.total_price`` = ``total_price``). Conversion, judged only for correct mappings (a
+  structured ``conversion`` first, else the free-text ``transform``):
   ``conversion_missing`` (gold states a conversion, the mapping has no transform),
   ``conversion_wrong`` (the transform contradicts it: minor units where gold says decimal or the
   reverse, an enum value mapped to another target than gold's), else ok.
@@ -23,8 +24,13 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
-from plume.domain.models.canonical_model import CanonicalField, FieldSource, ModelDraft
-from plume.domain.models.model_gold import Conversion, GoldCell, GoldModel
+from plume.domain.models.canonical_model import (
+    CanonicalField,
+    Conversion,
+    FieldSource,
+    ModelDraft,
+)
+from plume.domain.models.model_gold import GoldCell, GoldModel
 
 CORRECT = "correct"
 WRONG = "wrong"
@@ -155,7 +161,33 @@ def _produced(src: FieldSource | None) -> tuple[str, ...]:
     return tuple(p.path for p in src.paths) if src is not None else ()
 
 
-def _conversion(conv: Conversion, transform: str | None) -> tuple[str, str | None]:
+_MONEY = ("money-minor", "money-decimal", "money-decimal-string")
+
+
+def _stated(conv: Conversion, said: Conversion) -> tuple[str, str | None]:
+    """A structured conversion against gold's: minor vs decimal money, enum targets, kind."""
+    if conv.kind in _MONEY and said.kind in _MONEY:
+        if (conv.kind == "money-minor") != (said.kind == "money-minor"):
+            return CONVERSION_WRONG, f"gold: {conv.kind}; the model states {said.kind}"
+        return CONVERSION_OK, None
+    if conv.kind == "enum" and conv.enum_map and said.enum_map:
+        stated = {a.lower(): b for a, b in said.enum_map}
+        bad = [
+            f"{k} -> {stated[k.lower()]} (gold {v})"
+            for k, v in conv.enum_map
+            if k.lower() in stated and stated[k.lower()].lower() != v.lower()
+        ]
+        return (CONVERSION_WRONG, "; ".join(bad)) if bad else (CONVERSION_OK, None)
+    if conv.kind not in ("other", said.kind) and said.kind != "other":
+        return CONVERSION_WRONG, f"gold: {conv.kind}; the model states {said.kind}"
+    return CONVERSION_OK, None
+
+
+def _conversion(
+    conv: Conversion, transform: str | None, said: Conversion | None = None
+) -> tuple[str, str | None]:
+    if said is not None:
+        return _stated(conv, said)
     if not transform:
         return CONVERSION_MISSING, f"gold: {conv.kind}" + (f" ({conv.note})" if conv.note else "")
     if conv.kind in ("money-minor", "money-decimal", "money-decimal-string"):
@@ -165,11 +197,11 @@ def _conversion(conv: Conversion, transform: str | None) -> tuple[str, str | Non
         if conv.kind != "money-minor" and minor:
             return CONVERSION_WRONG, "gold: a decimal amount; the transform converts minor units"
     if conv.kind == "enum" and conv.enum_map:
-        said = {a.lower(): b for a, b in _PAIR.findall(transform)}
+        pairs = {a.lower(): b for a, b in _PAIR.findall(transform)}
         bad = [
-            f"{k} -> {said[k.lower()]} (gold {v})"
+            f"{k} -> {pairs[k.lower()]} (gold {v})"
             for k, v in conv.enum_map
-            if k.lower() in said and said[k.lower()].lower() != v.lower()
+            if k.lower() in pairs and pairs[k.lower()].lower() != v.lower()
         ]
         if bad:
             return CONVERSION_WRONG, "; ".join(bad)
@@ -210,7 +242,9 @@ def _score_cell(
     if not any(same_path(p, e) for p in produced for e in cell.paths):
         return CellResult(gold_path, api, WRONG, cell.paths, produced, model_field=model_path)
     conversion, detail = (
-        _conversion(cell.conversion, src.transform if src else None)
+        _conversion(
+            cell.conversion, src.transform if src else None, src.conversion if src else None
+        )
         if cell.conversion
         else (None, None)
     )

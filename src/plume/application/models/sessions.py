@@ -65,7 +65,8 @@ DRAFT_FORMAT: dict[str, Any] = {
                     "paths": [{"path": "orders[].total", "type": "string"}],
                     "fetch": "GET /api/{version}/orders",
                     "join": [],
-                    "transform": None,
+                    "transform": "parse the decimal string",
+                    "conversion": {"kind": "money-decimal-string", "note": "currency in currency"},
                     "evidence": [
                         {"doc_id": "model:order", "quote": "exact text copied from the document"}
                     ],
@@ -103,6 +104,14 @@ returns their fields page by page (follow next_cursor). Rules (refused otherwise
 - `fetch` (optional) must be a documented endpoint, written "METHOD /path" as listed.
 - Leave an API out of a field's sources when it has no such data; never invent fields.
 - Use `transform` / `join` to describe derived values (e.g. "sum of line_items[].price").
+- State every conversion the value needs in `conversion` {kind, map?, format?, note?}. Kinds:
+  money-minor (integer cents), money-decimal, money-decimal-string, currency-separate, enum
+  (map: {API value: canonical value}), datetime (format: e.g. "ISO 8601 UTC", "local, no tz"),
+  id-type (string vs number), array-vs-single, cardinality (e.g. one variant synthesized from
+  product fields), embedded (only inside another resource), derived (from a field's name or
+  position, e.g. billing_ prefix), meta-entry (an entry of a key/value list; format: the key),
+  split (one value over several fields, or a sum), other. Money, status enums and dates
+  break integrations when unstated.
 - Prefer fields from a model or a response for what the API returns; cite a request body only
   for what a client sends (e.g. the order's status as read, not as written).
 - Put semantic choices you cannot settle from the evidence in open_questions; do not decide them.
