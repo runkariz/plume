@@ -8,6 +8,7 @@ A concept is a normalised resource or model name (``Order``, ``DraftOrder`` -> `
 import re
 from collections import defaultdict
 from dataclasses import dataclass
+from functools import lru_cache
 
 from plume.application.errors import ApplicationError
 from plume.application.ports.fact_index import FactIndex
@@ -62,6 +63,7 @@ def _singular(word: str) -> str:
     return word
 
 
+@lru_cache(maxsize=65536)
 def concept_key(name: str) -> str:
     return _singular(re.sub(r"[^a-z0-9]", "", name.lower()))
 
@@ -113,6 +115,7 @@ def concept_parts(name: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
     return main_keys, tuple(k for k in keys(subs) if k not in main_keys)
 
 
+@lru_cache(maxsize=65536)
 def concept_label(name: str) -> str:
     """``line_items`` / ``LineItems`` -> ``Line Item`` (the last word made singular); a word
     repeated in a row is said once (``customer_customer_address`` -> ``Customer Address``)."""

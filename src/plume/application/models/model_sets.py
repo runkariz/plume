@@ -286,6 +286,9 @@ class ModelSets:
         }
         candidates, aliases, labels = self._related.candidates(self._pinned(s.inputs), renames)
         relevant = _as_members(candidates, s.concepts)
+        # a member key reached through a role name (bol orderitem -> orderline) has no label
+        # from the APIs: the set's own name is it
+        labels = {**labels, **{concept_key(c): c for c in s.concepts}}
         alias_list = [a for a in aliases if a.parent in keys]
         return {
             "set_session": s.session_id,
