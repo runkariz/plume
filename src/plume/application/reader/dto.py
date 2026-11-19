@@ -122,3 +122,4 @@ class CheckCallResult:
     alternatives: tuple[str, ...] = ()
     """Other operations documented at the same METHOD + path (distinct ids)."""
     matched_real_path: str | None = None  # the package's own path (fixed version), if any
+    note: str | None = None  # why a path that matches a template is still not documented

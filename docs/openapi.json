@@ -1161,7 +1161,17 @@
         "type": "object"
       },
       "CheckCallRequest": {
+        "additionalProperties": false,
         "properties": {
+          "body": {
+            "description": "Request body field names.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Body",
+            "type": "array"
+          },
           "method": {
             "enum": [
               "GET",
@@ -1188,6 +1198,15 @@
             "minLength": 1,
             "title": "Path",
             "type": "string"
+          },
+          "query": {
+            "description": "Query parameter names.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Query",
+            "type": "array"
           },
           "version": {
             "anyOf": [
@@ -1252,6 +1271,18 @@
                 "type": "null"
               }
             ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why a path matching a template is not documented (e.g. another version).",
+            "title": "Note"
           },
           "paramChecks": {
             "items": {

@@ -242,7 +242,7 @@ class FakeStack:
         return FindFact(self.resolver(), self.fact_query, self.search_index)
 
     def check_call(self) -> CheckCall:
-        return CheckCall(self.resolver(), self.fact_query, self.search_index)
+        return CheckCall(self.resolver(), self.fact_query, self.search_index, self.documents)
 
     def load(self, path: str, tag: str | None = "latest") -> str:
         """Run the pipeline on a package; returns the build id."""
