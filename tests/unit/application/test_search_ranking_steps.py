@@ -147,3 +147,40 @@ def test_a_scope_question_leads_with_the_auth_scheme() -> None:
     assert auth_first(ranked, 5, "which scope do I need to read orders", own)[0] == (
         "auth:oauth2-authorization-code"
     )
+
+
+def test_an_endpoint_goes_before_its_resources_model() -> None:
+    """Amazon "register an SQS destination": model:destination above POST /destinations."""
+    from plume.application.reader.ranking import endpoint_before_its_model  # noqa: PLC0415
+
+    post = "endpoint:POST~/notifications/{version}/destinations"
+    ranked = ["model:destination", post, "model:sqsresource"]
+    assert endpoint_before_its_model(ranked, 5) == [post, "model:destination", "model:sqsresource"]
+    get = "endpoint:GET~/orders/{version}/orders/{orderId}"
+    assert endpoint_before_its_model(["model:order", get], 5) == [get, "model:order"]
+    other = ["model:order", "endpoint:GET~/customers"]
+    assert endpoint_before_its_model(other, 5) == other
+
+
+def test_trendyol_live_cases() -> None:
+    """Live Trendyol: a Turkish webhook guide ("bildirim") led API auth questions; the webhook
+    auth question wants the webhook guide; the test PUT's production twin has another path."""
+    from plume.application.reader.ranking import auth_first, production_before_test  # noqa: PLC0415
+
+    turkish = (
+        "guide:workflow-6-nas-c4-b1l-bildirim-olu-c5-9fturabilirim-api-authentication-configuration"
+    )
+    webhook = "guide:validation-webhook-model-webhook-authentication-configuration"
+    ranked = [turkish, "guide:resource-rules-integration-15", webhook, "auth:basic-authorization"]
+    assert auth_first(ranked, 5, "how do I authenticate with the Trendyol API")[0] == (
+        "auth:basic-authorization"
+    )
+    assert auth_first(ranked, 5, "how does Trendyol authenticate its webhook calls to me")[0] == (
+        webhook
+    )
+    test = "endpoint:PUT~/integration/test/order/sellers/{sellerId}/shipment-packages/{id}/status"
+    prod = "endpoint:PUT~/integration/order/sellers/{sellerId}/shipment-packages/{id}"
+    assert (
+        production_before_test([test, "trigger:shipped", prod], "mark a package as shipped")[0]
+        == prod
+    )

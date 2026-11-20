@@ -202,6 +202,9 @@ _SIGN_QUERY = re.compile(r"\bsign(s|ed|ing|ature)?\b", re.IGNORECASE)
 _AUTH_DOC = re.compile(r"auth|sign|token|credential|oauth|hmac", re.IGNORECASE)
 
 
+# incoming calls (webhook / callback / notification; Turkish "bildirim")
+_WEBHOOK_DOC = re.compile(r"webhook|callback|notification|bildirim", re.IGNORECASE)
+_WEBHOOK_QUERY = re.compile(r"\b(webhooks?|callbacks?|notifications?)\b", re.IGNORECASE)
 _AUTH_OPERATION = re.compile(r"token|oauth|auth", re.IGNORECASE)  # not "sign": namesakes
 
 
@@ -210,11 +213,18 @@ def _auth_doc(doc_id: str) -> bool:
     issues or explains tokens (Magento POST /integration/admin/token, Shopify's OAuth page)."""
     if doc_id.startswith(("auth:", "app:")):  # the app document carries the setup / signing text
         return True
-    if "webhook" in doc_id.lower():  # verifying incoming calls, not calling the API (Trendyol)
+    if _WEBHOOK_DOC.search(doc_id):  # verifying incoming calls, not calling the API (Trendyol)
         return False
     if doc_id.startswith((PAGE_PREFIX, "endpoint:")):
         return bool(_AUTH_OPERATION.search(doc_id.split(":", 1)[1]))
     return doc_id.startswith("guide:") and bool(_AUTH_DOC.search(doc_id.removeprefix("guide:")))
+
+
+def _webhook_auth_doc(window: Sequence[str]) -> str | None:
+    """A guide about authenticating webhook calls, one that says "webhook" first."""
+    docs = [d for d in window if d.startswith("guide:") and _WEBHOOK_DOC.search(d)
+            and _AUTH_DOC.search(d)]  # fmt: skip
+    return next((d for d in docs if "webhook" in d.lower()), None) or next(iter(docs), None)
 
 
 def auth_first(
@@ -239,8 +249,13 @@ def auth_first(
     if not _AUTH_QUERY.search(query):
         return list(ranked)
     window = list(ranked[: 2 * k])
-    best = next((d for d in window if _auth_doc(d)), None)
-    if best is None:  # none ranked: the API's own auth schemes / app (setup) document
+    if _WEBHOOK_QUERY.search(query):  # how incoming calls are authenticated: webhook docs only
+        best = _webhook_auth_doc(window)
+    else:  # the API's own scheme first, then any other auth document
+        best = next((d for d in window if d.startswith("auth:")), None) or next(
+            (d for d in window if _auth_doc(d)), None
+        )
+    if best is None and not _WEBHOOK_QUERY.search(query):  # the API's own schemes / app doc
         options = list(own())
         if _SIGN_QUERY.search(query):  # signing is set up in the app text, not a scheme
             options.sort(key=lambda d: not d.startswith("app:"))
@@ -345,17 +360,22 @@ _ASKS_FOR_TEST = re.compile(r"\b(test(ing)?|sandbox|staging|simulat\w*|demo)\b",
 
 
 def production_before_test(ranked: Sequence[str], query: str) -> list[str]:
-    """A test / sandbox / simulation endpoint gives way to its production twin when both are
-    ranked (Trendyol PUT /integration/test/order/... above the production PUT), unless the
-    question asks for the test environment."""
+    """A test / sandbox / simulation endpoint gives way to the first production endpoint of
+    the same method ranked below it (Trendyol PUT /integration/test/order/.../status above the
+    production shipment-package PUTs), unless the question asks for the test environment."""
     if _ASKS_FOR_TEST.search(query):
         return list(ranked)
     order = list(ranked)
     for doc in [d for d in order if d.startswith("endpoint:") and _TEST_SEGMENT.search(d)]:
-        twin = _TEST_SEGMENT.sub("", doc, count=1)
-        if twin in order and order.index(twin) > order.index(doc):
-            order.remove(twin)
-            order.insert(order.index(doc), twin)
+        method = doc.split("~", 1)[0]
+        at = order.index(doc)
+        prod = next(
+            (i for i, d in enumerate(order) if i > at and d.split("~", 1)[0] == method
+             and not _TEST_SEGMENT.search(d)),
+            None,
+        )  # fmt: skip
+        if prod is not None:
+            order.insert(at, order.pop(prod))
     return order
 
 
@@ -402,3 +422,40 @@ def rate_limit_guide_first(ranked: Sequence[str], k: int, query: str) -> list[st
     if best is None:
         return list(ranked)
     return [best] + [d for d in ranked if d != best]
+
+
+def _singular(word: str) -> str:
+    word = word.lower()
+    for suffix, repl in (("ies", "y"), ("sses", "ss"), ("s", "")):
+        if word.endswith(suffix) and len(word) > len(suffix) + 2:
+            return word[: -len(suffix)] + repl
+    return word
+
+
+def _endpoint_key(doc_id: str) -> str:
+    """The last literal path segment, singular and without separators (orders -> order)."""
+    path = doc_id.split("~", 1)[-1].split("@", 1)[0]
+    literals = [x.split(".", 1)[0] for x in path.strip("/").split("/") if x and "{" not in x]
+    return _singular(re.sub(r"[^a-z0-9]", "", literals[-1].lower())) if literals else ""
+
+
+def _model_key(doc_id: str) -> str:
+    return _singular(re.sub(r"[^a-z0-9]", "", doc_id.removeprefix("model:").lower()))
+
+
+def endpoint_before_its_model(ranked: Sequence[str], k: int) -> list[str]:
+    """A model ranked just above the endpoint of the same resource gives way to it (Amazon
+    model:destination above POST /notifications/destinations; model:order above GET
+    /orders/{orderId}): the endpoint is the operation asked about, the model its shape."""
+    order = list(ranked)
+    for model in [d for d in order[:k] if d.startswith("model:")]:
+        key = _model_key(model)
+        at = order.index(model)
+        twin = next(
+            (i for i, d in enumerate(order[:k]) if i > at and d.startswith("endpoint:")
+             and _endpoint_key(d) == key),
+            None,
+        )  # fmt: skip
+        if twin is not None:
+            order.insert(at, order.pop(twin))
+    return order
