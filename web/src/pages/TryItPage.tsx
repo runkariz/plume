@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
-import { operationOf, shownPath } from '@/lib/docHref';
+import { picksFromNote, withPick, type CheckPick } from '@/lib/checkPicks';
+import { docHref, endpointOfId, operationOf, shownPath } from '@/lib/docHref';
 import { formatMs } from '@/lib/format';
 import {
   ApiError,
@@ -306,6 +307,59 @@ function AskTool({ apiId }: { apiId: string }) {
   );
 }
 
+/**
+ * What to do with an "ambiguous" answer: the examples the server named as buttons that fill the parameter and check
+ * again, and some of the operations at that path as links to their pages.
+ */
+function AmbiguousPicks({
+  apiId,
+  picks,
+  alternatives,
+  onPick,
+}: {
+  apiId: string;
+  picks: CheckPick[];
+  alternatives: string[];
+  onPick: (p: CheckPick) => void;
+}) {
+  if (picks.length === 0 && alternatives.length === 0) return null;
+  return (
+    <div className="check-picks" style={{ marginBottom: 10 }}>
+      {picks.length ? (
+        <>
+          <p className="small muted">Pick one to fill the parameter and check again:</p>
+          <div className="row check-pick-row" role="group" aria-label="Examples to pick">
+            {picks.map((p) => (
+              <button
+                key={`${p.key}=${p.value}`}
+                type="button"
+                className="btn sm mono check-pick"
+                onClick={() => onPick(p)}
+              >
+                {p.key}={p.value}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+      {alternatives.length ? (
+        <details className="check-alternatives">
+          <summary className="small">Some of the operations at this path</summary>
+          <ul className="linked-list" aria-label="Operations at this path">
+            {alternatives.map((id) => (
+              <li key={id}>
+                <Link to={docHref(apiId, id)} className="mono small" title={id}>
+                  {endpointOfId(id)?.operation ?? id}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
 function CheckTool({ apiId }: { apiId: string }) {
   const client = useApiClient();
   const [method, setMethod] = useState<HttpMethod>('GET');
@@ -313,8 +367,7 @@ function CheckTool({ apiId }: { apiId: string }) {
   const [params, setParams] = useState('limit, page_info');
   const { run, start } = useRun<CheckCallResponse>();
 
-  function submit(e: FormEvent) {
-    e.preventDefault();
+  function check(paramsText: string) {
     if (!path.trim()) return;
     start((signal) =>
       client.checkCall(
@@ -322,7 +375,7 @@ function CheckTool({ apiId }: { apiId: string }) {
         {
           method,
           path: path.trim(),
-          params: params
+          params: paramsText
             .split(',')
             .map((s) => s.trim())
             .filter(Boolean),
@@ -330,6 +383,18 @@ function CheckTool({ apiId }: { apiId: string }) {
         signal,
       ),
     );
+  }
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    check(params);
+  }
+
+  /** An example the server gave for an ambiguous call: it goes into the parameters and the check runs again. */
+  function pick(p: CheckPick) {
+    const next = withPick(params, p);
+    setParams(next);
+    check(next);
   }
 
   return (
@@ -380,7 +445,9 @@ function CheckTool({ apiId }: { apiId: string }) {
                   <Chip tone={d.verdict === 'documented' ? 'ok' : 'warn'} dot>
                     {d.verdict === 'documented'
                       ? 'Documented'
-                      : `Not documented in build ${d.build}`}
+                      : d.verdict === 'ambiguous'
+                        ? 'Several operations share this method and path'
+                        : `Not documented in build ${d.build}`}
                   </Chip>
                   {!d.complete ? <Chip tone="warn">Schema partial: absence not proven</Chip> : null}
                 </div>
@@ -395,7 +462,7 @@ function CheckTool({ apiId }: { apiId: string }) {
                     ) : null}
                   </div>
                 ) : null}
-                {d.alternatives && d.alternatives.length > 0 ? (
+                {d.verdict !== 'ambiguous' && d.alternatives && d.alternatives.length > 0 ? (
                   <p className="small muted" style={{ marginBottom: 10 }}>
                     Other operations at the same method and path:{' '}
                     {d.alternatives.map((a, i) => (
@@ -412,6 +479,14 @@ function CheckTool({ apiId }: { apiId: string }) {
                     {d.note}
                   </p>
                 ) : null}
+                {d.verdict === 'ambiguous' ? (
+                  <AmbiguousPicks
+                    apiId={apiId}
+                    picks={picksFromNote(d.note)}
+                    alternatives={d.alternatives ?? []}
+                    onPick={pick}
+                  />
+                ) : null}
                 <ul className="checks">
                   {d.paramChecks.map((p) => (
                     <li key={p.name}>
@@ -422,8 +497,10 @@ function CheckTool({ apiId }: { apiId: string }) {
                   ))}
                 </ul>
                 <p className="faint small" style={{ marginTop: 12 }}>
-                  Checked {d.checked.endpoints} endpoints and {d.checked.models} models. Wording
-                  rule: "not documented in build {d.build}", never "does not exist".
+                  Checked {d.checked.endpoints} endpoints and {d.checked.models} models.
+                  {d.verdict === 'ambiguous'
+                    ? ' Nothing was decided: say which operation, then check again.'
+                    : ` Wording rule: "not documented in build ${d.build}", never "does not exist".`}
                 </p>
               </Card>
             )}

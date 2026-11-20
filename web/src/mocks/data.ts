@@ -455,7 +455,52 @@ export function sampleAsk(question: string): AskResponse {
   };
 }
 
+/** Operations that share POST /sync in the mock (RPC by name, like AliExpress): the `method` value picks one. */
+const SYNC_OPERATIONS = [
+  'aliexpress.affiliate.category.get',
+  'aliexpress.affiliate.product.query',
+  'ae.merchant.plan.list',
+];
+
 export function sampleCheck(method: string, path: string, params: string[]): CheckCallResponse {
+  if (method === 'POST' && path === '/sync') {
+    const given = params.find((p) => p.startsWith('method='))?.slice('method='.length);
+    const base = {
+      api: 'shopify',
+      build: '2026-11-14',
+      complete: true,
+      checked: { endpoints: 137, models: 31 },
+    };
+    if (given && SYNC_OPERATIONS.includes(given))
+      return {
+        ...base,
+        verdict: 'documented',
+        matched: {
+          id: `endpoint:POST~/sync@post-${given.replace(/\./g, '-')}`,
+          method: 'POST',
+          path: '/sync',
+        },
+        paramChecks: params
+          .filter((p) => !p.startsWith('method='))
+          .map((name) => ({ name, found: false, where: null })),
+      };
+    if (given)
+      return {
+        ...base,
+        verdict: 'not_documented',
+        matched: null,
+        paramChecks: [],
+        note: `no operation at POST /sync has method=${given}`,
+      };
+    return {
+      ...base,
+      verdict: 'ambiguous',
+      matched: null,
+      paramChecks: params.map((name) => ({ name, found: false, where: null })),
+      alternatives: SYNC_OPERATIONS.map((o) => `endpoint:POST~/sync@post-${o.replace(/\./g, '-')}`),
+      note: `ambiguous: 156 operations share POST /sync; pass method=<name> in params or query (e.g. ${SYNC_OPERATIONS.map((o) => `method=${o}`).join(', ')})`,
+    };
+  }
   const found = shopifyItems.find(
     (i) => i.kind === 'endpoint' && i.method === method && i.path === path,
   );
