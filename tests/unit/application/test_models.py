@@ -248,9 +248,10 @@ def test_bundled_models_suggest_by_leaf_name(packages: Path) -> None:
     assert keys["customer"].coverage["mirakl"] == "direct"
     assert not any("response" in k for k in keys)  # bundle roots are not concepts
     counts = s.overviews().one("mirakl").counts
-    assert (counts["model"], counts["model_shapes"]) == (12, 11)
-    # billing info, boolean, date, link, address, customer, orders (the 2 roots are no names)
-    assert counts["model_names"] == 7
+    assert (counts["model"], counts["model_shapes"]) == (13, 11)  # billing address: known shape
+    # billing info, boolean, date, link, address, billing address, customer, orders (the 2
+    # roots are no names)
+    assert counts["model_names"] == 8
 
 
 def test_snapshots_go_stale_when_a_pinned_build_moves(stack: FakeStack, tmp_path: Path) -> None:

@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from plume.application.models import sessions
 from plume.application.models.concepts import concept_parts
 from plume.application.models.sessions import _error_model
 from plume.application.ports.search_index import DocumentSummary
@@ -102,3 +103,19 @@ async def test_mcp_tool_bugs_carry_a_short_message() -> None:
     ) as err:
         await _run(broken)
     assert "/secret/path" not in str(err.value)
+
+
+def test_kinds_of_the_concept_by_role_name_are_in_its_context(
+    packages: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """set-g1 (4): Mirakl's order customer billing address (model "Customer / Billing Address",
+    key billingaddress) was missing from an Address context."""
+    monkeypatch.setattr(sessions, "MIN_OWN_DOCS", 0)  # no text fill: the ranking alone
+    s = FakeStack(embedder=WordEmbedder())
+    for p in ("mirakl-mini", "shopify-mini"):
+        s.load(str(packages / p))
+    models = s.models()
+    ctx = models.context(models.start(["mirakl", "shopify"], "Address").session_id)
+    ids = [d["doc_id"] for e in ctx["apis"] if e["api"] == "mirakl" for d in e["documents"]]
+    assert "model:or11-response-200-orders-customer-billingaddress" in ids
+    assert "model:dr12-response-200-data-shippingto-address" in ids
