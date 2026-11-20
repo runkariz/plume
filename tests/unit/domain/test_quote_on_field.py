@@ -132,3 +132,19 @@ def test_no_quote_must_be_a_reason() -> None:
     draft = {"name": "L", "description": "d", "fields": [field]}
     with pytest.raises(DraftFormatError, match="noQuote must be a string"):
         parse_draft(draft)
+
+
+def test_enum_and_format_lines_are_not_sentences() -> None:
+    """set-g1: Mirakl order_state "Order's state" + 'Enum: "STAGING", ...' refused noQuote."""
+    from plume.domain.models.validation import usable_sentence  # noqa: PLC0415
+
+    enum_line = 'Enum: "STAGING", "WAITING_ACCEPTANCE", "WAITING_DEBIT", "SHIPPING", "SHIPPED"'
+    assert usable_sentence(["Order's state\n" + enum_line]) is None
+    assert usable_sentence(["Order's state. " + enum_line]) is None
+    assert usable_sentence(["Format: date-time (ISO 8601, e.g. 2024-01-01T00:00:00Z)"]) is None
+    assert (
+        usable_sentence(["- `order_state` (string): Order's state, one of the order states"])
+        is None
+    )
+    long = "The state of the order in the Mirakl workflow.\n" + enum_line
+    assert usable_sentence([long]) == "The state of the order in the Mirakl workflow."
