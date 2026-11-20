@@ -342,9 +342,22 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         if as_json:
             typer.echo(json.dumps(report.as_dict(), indent=2))
             return
-        if not report.results:
+        if not report.results and not report.relations:
             typer.echo(f"{target}: no model gold covers it (not evaluated)")
             return
+        for rel in report.relations:  # a set's relations against its set gold
+            held = " (held out)" if rel.held_out else ""
+            counts = ", ".join(f"{k} {v}" for k, v in sorted(rel.counts.items()))
+            sources = ", ".join(f"{k} {v}" for k, v in sorted(rel.source_counts.items()))
+            typer.echo(f"relations vs {rel.gold}{held}: {counts}; per API: {sources}")
+            for r_ in rel.relations:
+                off = {a: v for a, v in r_.sources.items() if v not in ("correct",
+                       "not_available_correct")}  # fmt: skip
+                if r_.verdict != "correct" or off:
+                    typer.echo(f"    {r_.verdict}: {r_.gold_id} ({r_.from_} -> {r_.to})"
+                               + (f"; sources {off}" if off else ""))  # fmt: skip
+            if rel.invented:
+                typer.echo(f"    invented: {', '.join(rel.invented)}")
         for model_id, r in report.results:
             held = " (held out)" if r.held_out else ""
             typer.echo(f"{model_id} {r.concept} vs {r.gold}{held} on {', '.join(r.apis)}")
@@ -386,7 +399,8 @@ def create_app(deps: CliDependencies) -> typer.Typer:
             bool, typer.Option("--held-out", help="Score separately (never for tuning)")
         ] = False,
     ) -> None:
-        """Convert the tester's "Expected mapping (gold)" table into a plume.model-gold.v1 file."""
+        """Convert the tester's "Expected mapping (gold)" table into a plume.model-gold.v1 file
+        (a model set report: its relation table into a plume.set-gold.v1 file)."""
         if deps.import_model_gold is None:
             raise typer.BadParameter("model-gold-import is not available in this build")
         try:
@@ -397,6 +411,12 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         Path(out).write_text(
             json.dumps(gold, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
         )
+        if "relations" in gold:  # a set gold
+            typer.echo(
+                f"wrote {out}: set {gold['name']} on {', '.join(gold['apis'])}; "
+                f"{len(gold['relations'])} relation(s)"
+            )
+            return
         cells = _gold_cells(gold["fields"])
         typer.echo(
             f"wrote {out}: {gold['concept']} on {', '.join(gold['apis'])}; "

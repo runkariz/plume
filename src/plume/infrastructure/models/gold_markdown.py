@@ -188,3 +188,102 @@ def import_markdown(text: str, group: str | None = None, held_out: bool = False)
         gold["group"] = group
     parse_gold(gold, "import")  # the result must be a valid gold file
     return gold
+
+
+# -- model sets: the relation table ------------------------------------------------------------
+
+_SET_TITLE = re.compile(
+    r"^#\s+Model set\s+(.+?)\s+across\s+(.+?)(?:\s*\(|,\s*tested|$)", re.I | re.M
+)
+_TICKS = re.compile(r"`([^`]+)`")
+_CARD = re.compile(r"\b([1n]):([1nm])\b", re.I)
+_SET_CALL = re.compile(r"^(GET|POST|PUT|PATCH|DELETE)\s+/", re.I)
+
+
+def is_set_report(text: str) -> bool:
+    return _SET_TITLE.search(text) is not None
+
+
+def _split_apis(cell: str, apis: list[str]) -> dict[str, str]:
+    """ "magento `items` → `x`; bigcommerce `products` (link to `GET /y`) → `id`" -> per API."""
+    names = "|".join(map(re.escape, apis))
+    parts = re.split(rf";\s*(?=(?:{names})\b)", cell)
+    out: dict[str, str] = {}
+    for part in parts:
+        head = part.strip().split(None, 1)
+        if head and head[0].lower() in {a.lower() for a in apis}:
+            api = next(a for a in apis if a.lower() == head[0].lower())
+            out[api] = head[1] if len(head) > 1 else ""
+    return out
+
+
+def _relation_source(text: str) -> dict[str, Any]:
+    """One API's key cell: its `from`-side paths, a fetch endpoint (sub-resource / link), or
+    not available."""
+    plain = text.strip()
+    if plain.lower().startswith(tuple(_NOT_AVAILABLE)):
+        return {"notAvailable": True}
+    ticks = _TICKS.findall(plain)
+    fetch = next((t for t in ticks if _SET_CALL.match(t)), None)
+    before_arrow = plain.split("→", 1)[0] if "→" in plain else plain
+    paths = [t for t in _TICKS.findall(before_arrow) if not _SET_CALL.match(t)]
+    out: dict[str, Any] = {}
+    if paths:
+        out["paths"] = paths
+    if fetch:
+        out["fetch"] = fetch
+    return out or {"notAvailable": True}
+
+
+def import_set_markdown(
+    text: str, group: str | None = None, held_out: bool = False
+) -> dict[str, Any]:
+    """The tester's set report: its relation table ("| relation | from | to | cardinality |
+    key (per API: path → path) |" under "## Expected mapping (gold)") as plume.set-gold.v1."""
+    from plume.domain.models.set_gold import SET_SCHEMA, parse_set_gold  # noqa: PLC0415
+
+    title = _SET_TITLE.search(text)
+    if title is None:
+        raise GoldImportError("no '# Model set <members> across <apis>' title")
+    members = [m.strip() for m in title.group(1).split("+") if m.strip()]
+    apis = [a.strip() for a in re.split(r",|\band\b", title.group(2)) if a.strip()]
+    start = _SECTION.search(text)
+    if start is None:
+        raise GoldImportError("no '## Expected mapping (gold)' section")
+    rows = [ln for ln in text[start.end() :].splitlines() if ln.strip().startswith("|")]
+    header_at = next(
+        (i for i, ln in enumerate(rows) if _clean(_cells(ln)[0]).lower() == "relation"), None
+    )
+    if header_at is None:
+        raise GoldImportError("no relation table ('| relation | from | to | ...')")
+    relations = []
+    for line in rows[header_at + 1 :]:
+        row = _cells(line)
+        if set("".join(row)) <= set("-: "):
+            continue
+        if len(row) < 5 or _clean(row[0]).lower() in ("member field", "relation"):
+            break  # the next table
+        rel_id, frm, to, card_cell, key_cell = (row[i] for i in range(5))
+        card = _CARD.search(card_cell)
+        kind = "embedded" if "embedded" in card_cell.lower() else "reference"
+        ticks = _TICKS.findall(card_cell)
+        relation: dict[str, Any] = {
+            "id": _clean(rel_id), "from": _clean(frm), "to": _clean(to), "kind": kind,
+            "cardinality": f"{card.group(1)}:{card.group(2)}".lower() if card else "",
+            "apis": {a: _relation_source(c) for a, c in _split_apis(key_cell, apis).items()},
+        }  # fmt: skip
+        if ticks:
+            relation["field"] = ticks[0]
+        if kind == "reference" and len(ticks) > 1:
+            relation["key"] = ticks[1].rsplit(".", 1)[-1]
+        relations.append(relation)
+    if not relations:
+        raise GoldImportError("the relation table is empty")
+    gold: dict[str, Any] = {"schema": SET_SCHEMA, "name": " + ".join(members), "members": members,
+                            "apis": apis, "relations": relations}  # fmt: skip
+    if group:
+        gold["group"] = group
+    if held_out:
+        gold["heldOut"] = True
+    parse_set_gold(gold)  # what we write must read back
+    return gold
