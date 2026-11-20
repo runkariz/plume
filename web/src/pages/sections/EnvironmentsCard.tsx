@@ -26,7 +26,7 @@ export function EnvironmentsCard({ apiId }: { apiId: string }) {
   return (
     <Card className="pad" role="region" aria-label="Environments">
       <h2 className="h2-sm">Environments</h2>
-      <Notices items={notices} />
+      <Notices items={notices} api={apiId} />
       <ul className="sec-list">
         {environments.map((e, i) => (
           <li key={`${e.key ?? e.name ?? i}`} className="sec-item env-item">

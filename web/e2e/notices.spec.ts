@@ -27,6 +27,37 @@ for (const theme of THEMES) {
       await shotOf(card, 'w32-auth-notice', theme);
     });
 
+    test('a note that names guides links them: auth section, scheme page, environments', async ({
+      page,
+    }) => {
+      await page.goto('/apis/shopify?section=auth');
+      const card = page.getByRole('region', { name: 'Authentication' });
+      const guides = card.getByRole('list', {
+        name: 'Guides for this note (auth-needs-core-change)',
+      });
+      await expect(
+        guides.getByRole('link', { name: 'REST Admin API request rate limits' }),
+      ).toBeVisible();
+      await settle(page);
+      await expectNoSeriousA11y(page);
+      await shotOf(card, 'w40-auth-notice-guides', theme);
+      await guides.getByRole('link').first().click();
+      await expect(page).toHaveURL(/\/apis\/shopify\/documents\/guide%3A/);
+      await page.goto('/apis/shopify/auth/oauth2-authorization-code');
+      await expect(
+        page.getByRole('list', { name: 'Notes on this package' }).getByRole('link'),
+      ).toHaveCount(2);
+      await shotOf(
+        page.getByRole('list', { name: 'Notes on this package' }),
+        'w40-scheme-notice-guides',
+        theme,
+      );
+      await page.goto('/apis/shopify');
+      const env = page.getByRole('region', { name: 'Environments' });
+      await expect(env.getByRole('link', { name: /rate limits/i })).toBeVisible();
+      await shotOf(env, 'w40-environments-notice-guides', theme);
+    });
+
     test('the environments card shows its note; warnings only after sign-in', async ({ page }) => {
       await page.goto('/apis/shopify');
       const env = page.getByRole('region', { name: 'Environments' });

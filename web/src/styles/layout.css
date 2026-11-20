@@ -2989,6 +2989,9 @@ ul.plain {
   font-size: 14px;
   overflow-wrap: anywhere;
 }
+.notice-guides {
+  margin: 4px 0 0;
+}
 .notice-mark {
   flex: none;
   width: 18px;

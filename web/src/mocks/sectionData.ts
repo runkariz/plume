@@ -63,6 +63,13 @@ const SHOPIFY_SCOPES = [
   ['read_themes', 'View themes'],
 ] as const;
 
+const AUTH_GUIDE_NOTICE = {
+  code: 'auth-needs-core-change',
+  section: 'auth',
+  text: 'This API signs requests in a way the connector cannot express yet; see: Pagination, Rate limits.',
+  docIds: ['guide:pagination', 'guide:rate-limits'],
+};
+
 export function authFor(api: string): AuthList {
   if (api === 'shopify')
     return {
@@ -83,6 +90,8 @@ export function authFor(api: string): AuthList {
           variables: 0,
         },
       ],
+      // a note that names the guides explaining it (mock text; the guides are the sample's)
+      notices: [AUTH_GUIDE_NOTICE],
     };
   if (api === 'stripe')
     return {
@@ -153,6 +162,7 @@ export function authDetailFor(api: string, id: string): AuthSchemeDetail | undef
           'Expiring offline access tokens come with a refresh_token used to obtain a new access token.',
         refreshBehavior: 'refresh-token',
       },
+      notices: [AUTH_GUIDE_NOTICE],
       scheme: {
         authorizationType: 'OAUTH2',
         grantType: 'authorization_code',
@@ -401,6 +411,12 @@ export function environmentsFor(api: string): EnvironmentsOut {
           code: 'default-environment-by-order',
           section: 'environments',
           text: 'The package does not say which environment is the default; the first one listed is used.',
+        },
+        {
+          code: 'sandbox-host-not-in-sources',
+          section: 'environments',
+          text: 'The sandbox host is not in the package sources; see: Rate limits.',
+          docIds: ['guide:rate-limits'],
         },
       ],
     };

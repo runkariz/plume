@@ -147,7 +147,12 @@ describe('API detail', () => {
       (await screen.findAllByText('/admin/api/latest/orders.json', { selector: 'a' })).length,
     ).toBe(2);
     await userEvent.click(screen.getByRole('radio', { name: 'Guides' }));
-    expect(await screen.findByText('REST Admin API request rate limits')).toBeInTheDocument();
+    // (the environments note links the same guide: look in the browse list)
+    expect(
+      await within(document.querySelector('.browse') as HTMLElement).findByText(
+        'REST Admin API request rate limits',
+      ),
+    ).toBeInTheDocument();
     await userEvent.click(screen.getByRole('radio', { name: 'All' }));
     await userEvent.type(screen.getByRole('searchbox', { name: /Filter by path/ }), 'customers');
     expect(await screen.findByText('Retrieve a single customer')).toBeInTheDocument();

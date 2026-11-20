@@ -957,6 +957,8 @@ export interface Notice {
   /** "auth" or "environments". */
   section: string;
   text: string;
+  /** Guides that explain it (document ids of the API); absent on older servers. */
+  docIds?: string[];
 }
 
 /** One warning of the package's manifest.json, verbatim (maintainer view). */
@@ -991,6 +993,8 @@ export interface AuthSchemeDetail {
   scheme: Record<string, unknown>;
   variablesSchema: Record<string, unknown> | null;
   file: string | null;
+  /** What the package's warnings mean for this scheme (as on the auth list); absent on older servers. */
+  notices?: Notice[];
 }
 
 export interface TriggerSummary {
