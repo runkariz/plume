@@ -1,6 +1,10 @@
 """A knowledge-export page keeps one of its endpoints next to it in the top-k (no page demotion)."""
 
-from plume.application.reader.ranking import pair_pages_with_endpoints, stale_version_guides_last
+from plume.application.reader.ranking import (
+    error_codes_after_endpoint,
+    pair_pages_with_endpoints,
+    stale_version_guides_last,
+)
 
 EPS = {"guide:page-orders": ["endpoint:GET~/orders", "endpoint:POST~/orders"]}
 
@@ -56,3 +60,16 @@ def test_a_guide_of_a_version_the_endpoints_lack_gives_way_to_its_sibling() -> N
     # unknown endpoint versions: unchanged
     assert stale_version_guides_last(ranked, 3, lambda d: links.get(d, []), lambda e: None,
                                      lambda d: True) == ranked  # fmt: skip
+
+
+def test_an_http_status_question_keeps_the_error_codes_guide_behind_the_endpoint() -> None:
+    """Mirakl N4: the accept endpoint names ORDER_INVALID_STATE; the 400 is in guide:context."""
+    ranked = ["endpoint:PUT~/api/orders/{order_id}/accept", "endpoint:GET~/api/orders", "m:x"]
+    q = "What HTTP status do I get when I accept an order in the wrong state?"
+    out = error_codes_after_endpoint(ranked, 3, q, lambda: "guide:context")
+    assert out[:3] == [ranked[0], "guide:context", ranked[1]]
+    # an order-state question, or the guide already in the top k: unchanged
+    assert error_codes_after_endpoint(ranked, 3, "what status will the order receive",
+                                      lambda: "guide:context") == ranked  # fmt: skip
+    already = ["guide:context", *ranked]
+    assert error_codes_after_endpoint(already, 3, q, lambda: "guide:context") == already

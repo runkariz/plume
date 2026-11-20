@@ -32,6 +32,7 @@ from plume.application.reader.ranking import (
     auth_first,
     context_after_named_endpoint,
     endpoint_before_its_model,
+    error_codes_after_endpoint,
     is_page,
     keep_endpoints,
     lift_operation_endpoints,
@@ -295,6 +296,7 @@ def rank_order(
     query: str = "",
     auth_docs: Callable[[], Sequence[str]] = tuple,
     all_endpoints: Callable[[], Sequence[str]] = tuple,
+    error_codes: Callable[[], str | None] = lambda: None,
 ) -> list[str]:
     """The final order of fused hits, shared by search and the eval gate: a page brings one of
     its endpoints into the top-k, so does a knowledge unit that names its endpoints (from the
@@ -325,12 +327,30 @@ def rank_order(
     order = endpoint_before_its_model(order, k)
     order = push_first(order, k, query, all_endpoints)
     order = context_after_named_endpoint(order, k, query)
+    order = error_codes_after_endpoint(order, k, query, error_codes)
     return keep_endpoints(order, k)
 
 
 def all_endpoint_ids(index: SearchIndex, build_id: BuildId) -> list[str]:
     """Every endpoint document id of the build (for a lookup by path structure)."""
     return [s.doc_id for s in index.browse(build_id, (DocumentKind.ENDPOINT,), None, 100_000, 0)[0]]
+
+
+_HTTP_CODE = re.compile(r"\b(4(?:00|01|03|04|05|06|09|10|15|22|29)|5(?:00|02|03|04))\b")
+_CODES_QUERIES = ("status codes", "error codes", "response codes", "return codes")
+MIN_CODES = 5  # distinct HTTP status codes a chunk lists to be the API's error-codes section
+
+
+def error_codes_guide(index: SearchIndex, build_id: BuildId) -> str | None:
+    """The guide whose chunk lists the most HTTP status codes (at least MIN_CODES), among the
+    guide chunks a text search for status / error codes finds."""
+    best: tuple[int, str] | None = None
+    for q in _CODES_QUERIES:
+        for h in index.text(build_id, q, 20, (DocumentKind.GUIDE,)):
+            n = len(set(_HTTP_CODE.findall(h.text)))
+            if n >= MIN_CODES and (best is None or n > best[0]):
+                best = (n, h.doc_id)
+    return best[1] if best else None
 
 
 def own_auth_docs(
@@ -478,6 +498,11 @@ class SearchDocs:
             query,
             auth_docs,
             endpoint_ids,
+            lambda: (
+                None
+                if kinds and DocumentKind.GUIDE not in kinds
+                else error_codes_guide(self._index, build_id)
+            ),
         )
         by_id = {h.doc_id: h for h in fuse_hits(wider_hits, [], query, WIDER_POOL)}
         by_id.update({h.doc_id: h for h in fused})
