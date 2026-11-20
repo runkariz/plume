@@ -1,6 +1,7 @@
 """A knowledge-export page keeps one of its endpoints next to it in the top-k (no page demotion)."""
 
 from plume.application.reader.ranking import (
+    auth_first,
     code_holder_first,
     error_codes_after_endpoint,
     limit_guide_after_endpoint,
@@ -141,3 +142,14 @@ def test_a_scoped_guide_gives_way_unless_the_question_names_its_part() -> None:
         ranked, 2, "how large can a product image be", lambda d: parts(d, frozenset())
     )
     assert kept == ranked
+
+
+def test_an_auth_question_leads_with_the_own_scheme_wherever_it_fused() -> None:
+    """CDON "how do I authenticate": app:cdon led, auth:basic-authorization fused 12th."""
+    ranked = ["app:cdon", "guide:context", "guide:x", "endpoint:GET~/orders"]
+    own = lambda: ["auth:basic-authorization", "app:cdon"]  # noqa: E731
+    out = auth_first(ranked, 2, "how do I authenticate with the CDON API", own)
+    assert out[:2] == ["auth:basic-authorization", "app:cdon"]
+    # a vendor auth guide that leads stays
+    led = ["guide:authentication", "app:cdon"]
+    assert auth_first(led, 2, "how do I authenticate", own) == led
