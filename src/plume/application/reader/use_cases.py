@@ -1088,9 +1088,7 @@ class CheckCall:
             alternatives,
             self._real_path(r.build.build_id, endpoint.owner_id),
             matched_server=(
-                f"{servers[endpoint.owner_id].key}: {servers[endpoint.owner_id].url}"
-                if endpoint.owner_id in servers
-                else None
+                servers[endpoint.owner_id].label if endpoint.owner_id in servers else None
             ),
         )
 
@@ -1147,9 +1145,8 @@ class CheckCall:
                 candidates.append((specificity(f_path), f, f_path))
                 continue
             for base, rest, alt in stripped:
-                if path_matches(f_path, alt) and self._endpoint_server(build_id, f.owner_id) in (
-                    base.key,
-                    None,
+                if path_matches(f_path, alt) and base.serves(
+                    self._endpoint_server(build_id, f.owner_id)
                 ):
                     candidates.append((specificity(f_path), f, f_path))
                     call_paths[f.owner_id], servers[f.owner_id] = rest, base

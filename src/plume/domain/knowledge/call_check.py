@@ -39,32 +39,61 @@ def normalize_call_path(path: str, known_versions: tuple[str, ...] = ()) -> str:
     return normalize_endpoint_path(stripped, known_versions)
 
 
-# The loader's environments guide: "- production: https://api.ebay.com (default)" and
-# "  - api_3: https://apim.ebay.com/commerce/media/v1_beta" (a server per line).
-_SERVER_LINE = re.compile(
-    r"^\s*-\s+([^:\n]+?)(?:\s+\([^)]*\))?:\s+(https?://[^\s,]+)", re.MULTILINE
-)
+# The loader's environments guide: an environment per line with its base URL ("- production:
+# https://apigw.trendyol.com/integration/ecgw (default)"), then its other servers indented
+# ("  - api_3: https://apim.ebay.com/commerce/media/v1_beta"). A server whose URL is the base URL
+# (usually `api`) is not listed again: the base URL stands for it.
+_ENV_LINE = re.compile(r"^-\s+([^:\n]+?)(?:\s+\([^)]*\))?:\s+(https?://[^\s,]+)")
+_SUB_LINE = re.compile(r"^\s+-\s+([A-Za-z0-9_]+):\s+(https?://[^\s,]+)")
 _SERVER_REF = re.compile(r"^\{\{\s*app_env\.servers\.([A-Za-z0-9_]+)\s*\}\}")
+_TEMPLATE = re.compile(r"^(\{\{[^{}]+\}\}|\{[^{}]+\})$")
 
 
 @dataclass(frozen=True, slots=True)
 class ServerBase:
-    key: str  # the server's name in app.json (api_3), or the environment's for a baseUrl
+    key: str  # the server (api_3), or the environment for its base URL (production)
     url: str
-    host: str
-    prefix: str  # the URL's path, without a trailing slash ("/commerce/media/v1_beta")
+    host: str  # lower case; may be a template ({{app_env.vars.host}})
+    prefix: str  # the URL's path, no trailing slash ("/integration/ecgw", "/stores/{{...}}")
+    # an environment's base URL: the servers it does NOT stand for (listed with their own URL)
+    others: frozenset[str] | None = None
+
+    def serves(self, server: str | None) -> bool:
+        """Whether an endpoint of this server (from its url; None: not named) is called here."""
+        if server is None:
+            return True
+        return server not in self.others if self.others is not None else server == self.key
+
+    @property
+    def label(self) -> str:
+        return (
+            f"{self.key}: {self.url}" if self.others is None else f"{self.key} base URL: {self.url}"
+        )
+
+
+def _base(key: str, raw: str, others: frozenset[str] | None) -> ServerBase | None:
+    url = raw.rstrip(".;)")
+    parsed = urlsplit(url)
+    prefix = parsed.path.rstrip("/")
+    return ServerBase(key.strip(), url, parsed.netloc.lower(), prefix, others) if prefix else None
 
 
 def server_bases(environments_text: str) -> list[ServerBase]:
-    """The servers whose base URL carries a path (eBay api_3 = https://apim.ebay.com/commerce/
-    media/v1_beta): endpoints of that server are stored without it."""
+    """Every environment's servers whose URL carries a path (eBay api_3 = https://apim.ebay.com/
+    commerce/media/v1_beta; Trendyol Export Center's base https://apigw.trendyol.com/integration/
+    ecgw, stage too): endpoints of those servers are stored without it."""
+    envs: list[tuple[bool, str, str, list[tuple[str, str]]]] = []  # default?, name, url, subs
+    for line in environments_text.splitlines():
+        if m := _ENV_LINE.match(line):
+            envs.append(("(default)" in line, m.group(1), m.group(2), []))
+        elif (m := _SUB_LINE.match(line)) and envs:
+            envs[-1][3].append((m.group(1), m.group(2)))
+    # the default environment first: a relative path reports its base URL
+    envs.sort(key=lambda e: not e[0])
     out: list[ServerBase] = []
-    for key, raw in _SERVER_LINE.findall(environments_text):
-        url = raw.rstrip(".;)")
-        parsed = urlsplit(url)
-        prefix = parsed.path.rstrip("/")
-        if prefix and "{" not in prefix:
-            out.append(ServerBase(key.strip(), url, parsed.netloc.lower(), prefix))
+    for _, name, url, subs in envs:
+        listed = frozenset(k for k, _ in subs)
+        out += [b for b in [_base(name, url, listed), *(_base(k, u, None) for k, u in subs)] if b]
     return out
 
 
@@ -74,25 +103,28 @@ def endpoint_server(url: str) -> str | None:
     return m.group(1) if m else None
 
 
+def _same_segment(template: str, given: str) -> bool:
+    return bool(_TEMPLATE.match(template)) or template.lower() == given.lower()
+
+
 def without_server_base(path: str, bases: list[ServerBase]) -> list[tuple[ServerBase, str]]:
     """The call path with a server's base path taken off, per server it starts with: the path a
-    developer calls (/commerce/media/v1_beta/video, or the full URL) as stored (/video). A full
-    URL counts only for its own host."""
+    developer calls (/integration/ecgw/v3/123/packages, or the full URL) as stored
+    (/v3/123/packages). A template segment of the base ({{app_env.vars.store_hash}}) matches any
+    one segment; a full URL counts only for that server's host (any host for a template)."""
     given = path.strip()
     parsed = urlsplit(given) if re.match(r"^[a-z]+://", given) else None
     host = parsed.netloc.lower() if parsed else None
-    rest = (parsed.path or "/") if parsed else given
-    if parsed and parsed.query:
-        rest += "?" + parsed.query
+    rest = (parsed.path or "/") if parsed else given.split("?", 1)[0]
+    query = (parsed.query if parsed else given.partition("?")[2]) or ""
+    segs = [x for x in rest.split("/") if x]
     out: list[tuple[ServerBase, str]] = []
     for b in bases:
-        if host is not None and host != b.host:
+        if host is not None and host != b.host and "{" not in b.host:
             continue
-        low = rest.lower()
-        if (
-            low == b.prefix.lower()
-            or low.startswith(b.prefix.lower() + "/")
-            or low.startswith(b.prefix.lower() + "?")
-        ):
-            out.append((b, rest[len(b.prefix) :] or "/"))
+        pre = [x for x in b.prefix.split("/") if x]
+        if len(segs) < len(pre) or not all(map(_same_segment, pre, segs)):
+            continue
+        tail = "/" + "/".join(segs[len(pre) :])
+        out.append((b, tail + (f"?{query}" if query else "")))
     return out
