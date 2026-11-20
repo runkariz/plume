@@ -451,6 +451,11 @@ def rate_limit_guide_first(ranked: Sequence[str], k: int, query: str) -> list[st
     return [best] + [d for d in ranked if d != best]
 
 
+def singular(word: str) -> str:
+    """A plural's singular for word matching (categories -> category, orders -> order)."""
+    return _singular(word)
+
+
 def _singular(word: str) -> str:
     word = word.lower()
     for suffix, repl in (("ies", "y"), ("sses", "ss"), ("s", "")):
@@ -723,4 +728,25 @@ def limit_guide_after_endpoint(
     order = [d for d in ranked if d != guide]
     first = next((i for i, d in enumerate(order[:k]) if d.startswith("endpoint:")), None)
     order.insert(0 if first is None else first + 1, guide)
+    return order
+
+
+SCOPED_PREFIX = "guide:scoped-"
+
+
+def scoped_last(
+    ranked: Sequence[str], k: int, query: str, parts: Callable[[str], frozenset[str]]
+) -> list[str]:
+    """A scoped-<topic> guide (stream: quotes for one part of the API, NOT the whole-API
+    answer) gives way to every other result of the top 2k, unless the question names the part
+    its quotes are about (one of `parts`: words of its quotes and its endpoints' paths). It
+    rated 1st for whole-API questions (BigCommerce's 8 MB image quote for an import size)."""
+    asked = {_singular(w) for w in re.findall(r"[a-z0-9]+", query.lower())}
+    order = list(ranked)
+    window = 2 * k
+    for doc in [d for d in order[:window] if d.startswith(SCOPED_PREFIX)]:
+        if asked & parts(doc):
+            continue
+        order.remove(doc)
+        order.insert(min(window - 1, len(order)), doc)
     return order

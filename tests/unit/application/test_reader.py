@@ -281,3 +281,15 @@ def test_operations_sharing_method_and_path_stay_distinct(packages: Path, tmp_pa
         "mirakl", "order_ids", owner="endpoint:GET~/{file_path}@get-tl05"
     )
     assert one.found
+
+
+@pytest.mark.parametrize(
+    "query", ["assigned fulfillment orders", "how do I authenticate", "customer address"]
+)
+def test_the_order_does_not_depend_on_top_k(shop: FakeStack, query: str) -> None:
+    """CDON "how do I authenticate": the auth scheme was 1st at top_k 10 and 20, missing at 3,
+    5 and 8. The order is computed on a fixed pool and window, then cut to top_k."""
+    lists = {k: [h.doc_id for h in shop.search().execute("shopify", query, top_k=k).hits]
+             for k in (3, 5, 8, 10, 20)}  # fmt: skip
+    for got in lists.values():
+        assert got == lists[20][: len(got)]

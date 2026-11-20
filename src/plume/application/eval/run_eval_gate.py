@@ -17,6 +17,7 @@ from plume.application.ports.search_index import FactQuery, SearchIndex
 from plume.application.ports.tag_repo import TagRepo
 from plume.application.reader.use_cases import (
     DEFAULT_FUSION,
+    RANK_POOL,
     WIDER_POOL,
     all_endpoint_ids,
     code_holders,
@@ -35,7 +36,7 @@ from plume.domain.knowledge.tag import LATEST, TagName
 from plume.domain.shared.clock import Clock
 from plume.domain.shared.ids import BuildId
 
-POOL = 20
+POOL = RANK_POOL  # the same candidate pool as search
 
 
 @dataclass(frozen=True, slots=True)

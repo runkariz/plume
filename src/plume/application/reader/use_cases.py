@@ -46,12 +46,15 @@ from plume.application.reader.ranking import (
     push_first,
     rate_limit_guide_first,
     request_models_last,
+    scoped_last,
+    singular,
     stale_version_guides_last,
     state_change_first,
     synthesized_after_vendor,
     triggers_after_endpoints,
 )
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
+from plume.domain.eval.metrics import K
 from plume.domain.knowledge.asset import ICON
 from plume.domain.knowledge.call_check import (
     ServerBase,
@@ -82,6 +85,10 @@ from plume.domain.shared.ids import BuildId
 DEFAULT_FUSION = Fusion()
 SearchMode = Literal["hybrid", "dense", "text"]
 MAX_TOP_K = 50
+# The candidate pool the final order is computed on (search and the eval gate alike).
+RANK_POOL = 20
+RANK_K = K  # the window the ranking rules work in (the eval's recall@K)
+SEARCH_POOL = MAX_TOP_K * 4  # hits per list behind the order's tail (fixed, any top_k)
 SNIPPET_CHARS = 320
 
 
@@ -349,6 +356,7 @@ def rank_order(
     order = code_holder_first(
         order, k, query, lambda d, c: holds_code(documents, build_id, d, c), code_holders
     )
+    order = scoped_last(order, k, query, lambda d: scoped_parts(documents, build_id, d))
     return keep_endpoints(order, k)
 
 
@@ -364,6 +372,39 @@ MIN_CODES = 5  # distinct HTTP status codes a chunk lists to be the API's error-
 
 def _code_token(code: str) -> re.Pattern[str]:
     return re.compile(rf"(?<![\w.]){re.escape(code)}(?![\w.])")
+
+
+# Words a scoped guide's quotes share with any limit question: they name no part of the API.
+_GENERIC_WORDS = (
+    "about after also allow allowed and any are api apis been before but call calls can cannot "
+    "data each earlier file files for from has have hour hours import imports into item items "
+    "its larger limit limited limits line lines max maximum may minute minutes more most must "
+    "not number one only page pages per rate request requests response second seconds size "
+    "than that the their there these this time times total upload uploads up use used using "
+    "value values was when which will with within you your batch batches bulk record records "
+    "state states webhook webhooks "
+    # a token's lifetime: the topic's own wording, not a part of the API
+    "token tokens lifetime expire expires expired expiry expiration valid validity access "
+    "refresh oauth bearer grant credential credentials user application new create obtain "
+    "current long how"
+)
+_GENERIC_PART = frozenset(_GENERIC_WORDS.split())
+
+
+def scoped_parts(documents: DocumentRepo, build_id: BuildId, doc_id: str) -> frozenset[str]:
+    """The parts of the API a scoped guide's quotes are about: the distinctive words of its
+    quote lines ("> ...", not Scope / Source) and of its endpoints' paths."""
+    doc = documents.get_document(build_id, doc_id)
+    if doc is None:
+        return frozenset()
+    quotes = [ln[1:] for ln in doc.text.splitlines() if ln.startswith(">")
+              and not re.match(r">\s*(Scope|Source):", ln)]  # fmt: skip
+    raw = doc.raw if isinstance(doc.raw, dict) else {}
+    paths = [e.split("~", 1)[-1] for e in raw.get("endpoints") or [] if isinstance(e, str)]
+    words = re.findall(r"[a-z][a-z0-9]{2,}", " ".join(quotes + paths).lower())
+    return frozenset(
+        singular(w) for w in words if w not in _GENERIC_PART and singular(w) not in _GENERIC_PART
+    )
 
 
 def code_holders(index: SearchIndex, build_id: BuildId, code: str) -> list[str]:
@@ -590,7 +631,7 @@ class SearchDocs:
                 f"build {build_id} was embedded with {spec.embed_model}; this server embeds "
                 f"queries with {self._embedder.model}. Use mode=text or load the build again."
             )
-        pool = max(top_k * 4, 20)
+        pool = SEARCH_POOL  # fixed: the order must not depend on top_k
         dense: list[ChunkHit] = []
         text: list[ChunkHit] = []
         vector: Vector | None = None
@@ -611,9 +652,17 @@ class SearchDocs:
                 "full-text search",
                 lambda: self._index.text(build_id, query, pool, kinds),
             )
+        # The order is computed as the eval gate computes it (the first RANK_POOL hits of each
+        # list, the rules over the top RANK_K), whatever top_k asks for; a longer list only
+        # appends the rest of the larger pool. (CDON "how do I authenticate": the auth scheme
+        # was 1st at top_k 10 and 20, missing at 3, 5 and 8.)
         fused = _timed(
-            trace, "plume", "fuse (RRF)", lambda: fuse_hits(dense, text, query, pool, self._fusion)
+            trace,
+            "plume",
+            "fuse (RRF)",
+            lambda: fuse_hits(dense[:RANK_POOL], text[:RANK_POOL], query, RANK_POOL, self._fusion),
         )
+        rest = fuse_hits(dense, text, query, pool, self._fusion)
         wider_hits: list[ChunkHit] = []
 
         def wider() -> list[str]:
@@ -637,7 +686,7 @@ class SearchDocs:
             self._documents,
             build_id,
             [h.doc_id for h in fused],
-            top_k,
+            RANK_K,
             wider,
             query,
             auth_docs,
@@ -654,7 +703,9 @@ class SearchDocs:
                 else limit_line_guide(self._index, build_id, query)
             ),
         )
+        order += [h.doc_id for h in rest if h.doc_id not in order]
         by_id = {h.doc_id: h for h in fuse_hits(wider_hits, [], query, WIDER_POOL)}
+        by_id.update({h.doc_id: h for h in rest})
         by_id.update({h.doc_id: h for h in fused})
         for d, summary in self._index.summaries(
             build_id, [d for d in order[:top_k] if d not in by_id]
