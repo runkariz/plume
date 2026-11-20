@@ -786,7 +786,7 @@ def scoped_last(
     its quotes are about (one of `parts`: words of its quotes and its endpoints' paths). It
     rated 1st for whole-API questions (BigCommerce's 8 MB image quote for an import size).
     When the question is about its topic and no other result of the top 2k is (TEC's 1000/min
-    is only there), it stays in the top k: right behind the first endpoint, else 2nd."""
+    is only there), it stays near the top: right behind a leading endpoint, else 2nd."""
     asked = {_singular(w) for w in re.findall(r"[a-z0-9]+", query.lower())}
     order = list(ranked)
     window = 2 * k
@@ -801,6 +801,8 @@ def scoped_last(
         if not alone:
             order.insert(min(window - 1, len(order)), doc)
             continue
-        first = next((i for i, d in enumerate(order[:k]) if d.startswith("endpoint:")), None)
+        # right behind a leading endpoint (the one that answers), else 2nd: an endpoint far
+        # down the list (Mirakl PUT /api/returns/receive for webhooks) is no reason to sink it
+        first = next((i for i, d in enumerate(order[:2]) if d.startswith("endpoint:")), None)
         order.insert(min(first + 1 if first is not None else 1, len(order)), doc)
     return order
