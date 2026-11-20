@@ -349,6 +349,67 @@ def _fields_section(title: str, fields: list[FieldSpec], level: int | None = Non
     return "\n".join(lines)
 
 
+def _webhook_document(api_name: str, hook: object) -> Document | None:
+    """A webhook delivery mechanism (connector/triggers/webhooks/*.json) as a searchable guide:
+    how a delivery is verified (HMAC header, algorithm, encoding, signed payload), the
+    delivery-id header for duplicates, the handshake, and the package's quoted evidence. Its
+    headers are fields, so find_fact finds them (X-Shopify-Hmac-SHA256 was only reachable
+    through list_triggers)."""
+    if not isinstance(hook, dict) or not _str(hook.get("id")):
+        return None
+    verification, delivery = _obj(hook.get("verification")), _obj(hook.get("deliveryIdFrom"))
+    handshake = _obj(hook.get("handshake"))
+    provenance = _obj(hook.get("provenance"))
+    parts = [f"# {api_name} webhooks: delivery and verification"]
+    fields: list[FieldSpec] = []
+    header = _str(verification.get("header"))
+    if verification:
+        kind = str(verification.get("kind") or "").upper()
+        algorithm = _str(verification.get("algorithm"))
+        payload = _str(verification.get("signedPayload"))
+        encoding = _str(verification.get("encoding"))
+        how = " ".join(
+            x for x in (
+                f"{kind}-{algorithm.upper()}" if kind and algorithm else kind or None,
+                f"over the {payload}" if payload else None,
+                f"{encoding}-encoded" if encoding else None,
+                f"in the `{header}` header" if header else None,
+            ) if x
+        )  # fmt: skip
+        secret = _str(verification.get("secretSource"))
+        lines = ["## Verifying a delivery", f"Each delivery is signed: {how}."]
+        if secret:
+            lines.append(f"The key is a secret you provide ({secret}).")
+        parts.append("\n".join(lines))
+        if header:
+            fields.append(FieldSpec(header, FieldLocation.HEADER, "string",
+                                    description=f"Webhook signature: {how}."))  # fmt: skip
+    delivery_header = _str(delivery.get("name"))
+    if delivery_header:
+        parts.append(
+            "## Duplicate deliveries\n"
+            f"The delivery id is in the `{delivery_header}` {delivery.get('in') or 'header'}; "
+            "use it to detect and skip a delivery you already processed."
+        )
+        fields.append(FieldSpec(delivery_header, FieldLocation.HEADER, "string",
+                                description="Webhook delivery id (for duplicates)."))  # fmt: skip
+    if _str(handshake.get("kind")):
+        parts.append(f"Subscription handshake: {handshake['kind']}.")
+    evidence = [e for e in provenance.get("evidence") or [] if _str(e)]
+    if evidence:
+        parts.append("## From the docs\n" + "\n".join(f"- {e}" for e in evidence))
+    if len(parts) == 1:
+        return None
+    return Document(
+        doc_id=slug_doc_id(DocumentKind.GUIDE, "webhook-delivery-" + _slug(hook["id"])),
+        kind=DocumentKind.GUIDE,
+        title=f"{api_name} webhooks: delivery and verification",
+        text="\n\n".join(parts),
+        source_url=_str(provenance.get("evidenceUrl")),
+        fields=tuple(fields),
+    )
+
+
 def _obj(value: object) -> JsonObj:
     return value if isinstance(value, dict) else {}
 
@@ -551,12 +612,15 @@ class StreamPackageSource:
             raw={
                 "app": app,
                 "environment_variables_schema": env_schema,
-                "webhooks": _json_files(connector / "triggers" / "webhooks"),
+                "webhooks": (hooks := _json_files(connector / "triggers" / "webhooks")),
                 "mcp": _mcp_section(connector / "mcp"),
             },
         )
-        documents: list[Document] = [app_doc]
-        seen: set[str] = {documents[0].doc_id}
+        documents: list[Document] = [
+            app_doc,  # then each webhook mechanism as a searchable guide
+            *(d for h in hooks if (d := _webhook_document(info.name, h))),
+        ]
+        seen: set[str] = {d.doc_id for d in documents}
 
         def add(doc: Document, origin: str) -> None:
             if doc.doc_id in seen:
