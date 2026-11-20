@@ -248,6 +248,13 @@ export interface CheckCallResponse {
   alternatives?: string[];
   /** Why a path matching a template is not documented, e.g. "the documented operation is GET /v4/orders". */
   note?: string | null;
+  /** ambiguous: the parameter whose value picks an operation, and every value with its operation; null otherwise. */
+  pick?: CallPick | null;
+}
+
+export interface CallPick {
+  param: string;
+  options: { value: string; docId: string }[];
 }
 
 // ---- maintainer: packages, jobs, build events (W3) ----

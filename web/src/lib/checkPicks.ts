@@ -29,3 +29,9 @@ export function withPick(paramsText: string, pick: CheckPick): string {
     .filter((s) => s && s.split('=')[0]?.trim() !== pick.key);
   return [...rest, `${pick.key}=${pick.value}`].join(', ');
 }
+
+/** The options whose value contains the text (case does not matter); all of them for an empty filter. */
+export function filterOptions<T extends { value: string }>(options: T[], text: string): T[] {
+  const q = text.trim().toLowerCase();
+  return q ? options.filter((o) => o.value.toLowerCase().includes(q)) : options;
+}
