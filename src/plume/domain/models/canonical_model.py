@@ -47,6 +47,7 @@ CONVERSION_KINDS = frozenset(
         "money-decimal-string",
         "currency-separate",  # the currency is another field
         "enum",  # value map: {API value: canonical value}
+        "code-system",  # a standard code list: format "ISO 3166-1 alpha-3 -> alpha-2"; no map
         "datetime",  # format / time zone in `format`
         "id-type",  # string vs number ids
         "array-vs-single",
@@ -88,6 +89,11 @@ def parse_conversion(raw: Any, where: str) -> Conversion | None:
         value = raw.get(key)
         return value.strip() if isinstance(value, str) and value.strip() else None
 
+    if kind == "code-system" and not text("format"):
+        raise DraftFormatError(
+            f"{where}.conversion: a code-system conversion needs format: the two code systems, "
+            'e.g. "ISO 3166-1 alpha-3 -> alpha-2"'
+        )
     unmapped = raw.get("unmapped") or []
     if not isinstance(unmapped, list):
         raise DraftFormatError(f"{where}.conversion.unmapped must be a list")

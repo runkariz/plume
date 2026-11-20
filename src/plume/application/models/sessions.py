@@ -127,7 +127,9 @@ returns their fields page by page (follow next_cursor). Rules (refused otherwise
 - State every conversion the value needs in `conversion` {kind, map?, format?, note?}. Kinds:
   money-minor (integer cents), money-decimal, money-decimal-string, currency-separate, enum
   (map: {API value: canonical value} covering every value of the API's enum, or list the ones
-  without a target in "unmapped"), datetime (format: e.g. "ISO 8601 UTC", "local, no tz"),
+  without a target in "unmapped"), code-system (a standard code list such as countries,
+  currencies or languages, mapped between two code systems; format: e.g. "ISO 3166-1 alpha-3
+  -> alpha-2"; no map needed), datetime (format: e.g. "ISO 8601 UTC", "local, no tz"),
   id-type (string vs number), array-vs-single, cardinality (e.g. one variant synthesized from
   product fields), embedded (only inside another resource), derived (from a field's name or
   position, e.g. billing_ prefix), meta-entry (an entry of a key/value list; format: the key),

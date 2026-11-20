@@ -15,8 +15,11 @@ SHAPES = {
     "salutation": (frozenset({"Salutation", "string"}), ()),  # a $ref'd enum model
     "billing": (frozenset({"object"}), ("city",)),
     "line_items": (frozenset({"array"}), ("sku",)),
+    "country_iso_code": (frozenset({"string"}), ()),
 }
-ENUMS = {"status": ("pending", "processing", "completed", "cancelled")}
+COUNTRIES = tuple(f"C{i:03d}" for i in range(250))  # Mirakl: ~250 ISO alpha-3 codes
+ENUMS = {"status": ("pending", "processing", "completed", "cancelled"),
+         "country_iso_code": COUNTRIES}  # fmt: skip
 FETCH = {"GET /orders/{id}": frozenset({"order.id", "order.status", "order.tags"})}
 
 
@@ -92,3 +95,23 @@ def test_enum_maps_cover_the_api_enum() -> None:
     [(code, message)] = _codes("state", "string", "status", conversion=wrong)
     assert code == "ENUM_KEY_UNKNOWN"
     assert "no value shipped" in message
+
+
+def test_a_code_list_is_a_code_system_conversion() -> None:
+    """set-g1 (2): Mirakl country_iso_code (~250 alpha-3 codes) demanded a 250-entry map."""
+    import pytest  # noqa: PLC0415
+
+    from plume.domain.models.canonical_model import DraftFormatError  # noqa: PLC0415
+
+    one = {"kind": "enum", "map": {"C000": "AA"}}
+    [(code, message)] = _codes("country", "string", "country_iso_code", conversion=one)
+    assert code == "ENUM_MAP_INCOMPLETE"
+    assert "and 209 more" in message
+    assert "code-system" in message
+    iso = {"kind": "code-system", "format": "ISO 3166-1 alpha-3 -> alpha-2"}
+    assert _codes("country", "string", "country_iso_code", conversion=iso) == []
+    with pytest.raises(DraftFormatError, match="code-system conversion needs format"):
+        _codes("country", "string", "country_iso_code", conversion={"kind": "code-system"})
+    [(_, short)] = _codes("state", "string", "status",
+                          conversion={"kind": "enum", "map": {"pending": "OPEN"}})  # fmt: skip
+    assert "code-system" not in short
