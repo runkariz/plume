@@ -630,3 +630,41 @@ def error_codes_after_endpoint(
     first = next((i for i, d in enumerate(order[:k]) if d.startswith("endpoint:")), None)
     order.insert(0 if first is None else first + 1, guide)
     return order
+
+
+# A question about events themselves: triggers keep their place.
+_EVENT_QUERY = re.compile(
+    r"\b(webhooks?|events?|notif\w*|callbacks?|bildirim\w*|subscri\w*|triggers?|payloads?)\b",
+    re.IGNORECASE,
+)
+
+
+def triggers_after_endpoints(
+    ranked: Sequence[str], k: int, query: str, resource_of: Callable[[str], str | None]
+) -> list[str]:
+    """A trigger (webhook event) gives way to the endpoint that shares its key word (Trendyol
+    "report an item as unsupplied": trigger:unsupplied led PUT .../items/unsupplied), else to
+    the first top-k endpoint of its resource, unless the question is about events / webhooks /
+    notifications."""
+    if _EVENT_QUERY.search(query):
+        return list(ranked)
+    order = list(ranked)
+    for trig in [d for d in order[:k] if d.startswith("trigger:")]:
+        at = order.index(trig)
+        key = {_stem(w) for w in re.split(r"[^a-z0-9]+", trig.split(":", 1)[1].lower()) if w}
+        later = [
+            (i, d) for i, d in enumerate(order[: 2 * k]) if i > at and d.startswith("endpoint:")
+        ]
+        by_key = next((i for i, d in later if key & {_stem(w) for w in _path_words(d)}), None)
+        resource = resource_of(trig)
+        by_resource = None
+        if by_key is None and resource:
+            want = _singular(resource.lower())
+            by_resource = next(
+                (i for i, d in later if i < k and want in {_singular(w) for w in _path_words(d)}),
+                None,
+            )
+        behind = by_key if by_key is not None else by_resource
+        if behind is not None:
+            order.insert(behind, order.pop(at))
+    return order
