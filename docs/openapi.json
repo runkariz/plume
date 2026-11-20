@@ -625,6 +625,18 @@
             ],
             "title": "Granttype"
           },
+          "headerEvidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The vendor's quote (only when header_source is vendor).",
+            "title": "Headerevidence"
+          },
           "headerName": {
             "anyOf": [
               {
@@ -635,6 +647,41 @@
               }
             ],
             "title": "Headername"
+          },
+          "headerNote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Label to show when the header is the standard's.",
+            "title": "Headernote"
+          },
+          "headerPrefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headerprefix"
+          },
+          "headerSource": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "\"vendor\" | \"standard:rfc6750\" | null (unknown).",
+            "title": "Headersource"
           },
           "id": {
             "title": "Id",
@@ -783,6 +830,18 @@
             ],
             "title": "Granttype"
           },
+          "headerEvidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The vendor's quote (only when header_source is vendor).",
+            "title": "Headerevidence"
+          },
           "headerName": {
             "anyOf": [
               {
@@ -793,6 +852,42 @@
               }
             ],
             "title": "Headername"
+          },
+          "headerNote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Label to show when the header is the standard's.",
+            "title": "Headernote"
+          },
+          "headerPrefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "e.g. \"Bearer \".",
+            "title": "Headerprefix"
+          },
+          "headerSource": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "\"vendor\" (the vendor states it: header_evidence) or \"standard:rfc6750\" (the OAuth 2.0 standard, not the vendor's text); null: unknown.",
+            "title": "Headersource"
           },
           "id": {
             "title": "Id",
@@ -2214,6 +2309,18 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How to read the evidence, e.g. the header is the OAuth 2.0 standard (RFC 6750), not stated in the vendor's docs.",
+            "title": "Note"
           },
           "ownerId": {
             "title": "Ownerid",

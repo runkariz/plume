@@ -14,6 +14,9 @@ from plume.application.reader.resolve import BuildResolver, ResolvedBuild
 from plume.domain.knowledge import package_warnings, rate_limits
 from plume.domain.knowledge.asset import ICON, Asset
 from plume.domain.knowledge.document import (
+    HEADER_SOURCE_STANDARD,
+    HEADER_SOURCE_VENDOR,
+    STANDARD_HEADER_NOTE,
     TRIGGER_PAYLOAD_KEY,
     Document,
     DocumentKind,
@@ -293,6 +296,16 @@ def scheme_view(d: Document) -> dict[str, Any]:
         "type": scheme.get("authorizationType"),
         "grant_type": scheme.get("grantType"),
         "header_name": scheme.get("headerName"),
+        "header_prefix": scheme.get("headerPrefix"),
+        "header_source": scheme.get("headerSource"),
+        "header_evidence": (
+            scheme.get("headerEvidence")
+            if scheme.get("headerSource") == HEADER_SOURCE_VENDOR
+            else None  # the standard is never quoted as the vendor's words
+        ),
+        "header_note": (
+            STANDARD_HEADER_NOTE if scheme.get("headerSource") == HEADER_SOURCE_STANDARD else None
+        ),
         "query_param": scheme.get("codeQueryParamName"),
         "scopes": _scopes_with_endpoints(scheme, scope_endpoints(d)),
         "variables": [
