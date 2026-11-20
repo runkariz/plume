@@ -836,6 +836,27 @@ def pick_operations(
     return [o for o in owners if all(fixed[o].get(k, "").lower() == v for k, v in given.items())]
 
 
+# words a guide id may have and still be about paging in general (not one resource's paging)
+_GENERAL_PAGING_WORDS = frozenset({
+    "guide", "page", "pages", "paging", "pagination", "paginated", "paginate", "cursor",
+    "cursors", "query", "parameter", "parameters", "param", "params", "request", "requests",
+    "response", "responses", "result", "results", "limit", "limits", "restriction",
+    "restrictions", "rule", "rules", "best", "practice", "practices", "implementation",
+    "implementing", "workflow", "validation", "rest", "api", "general", "overview", "how",
+    "to", "and", "the", "of", "for", "with", "using", "use", "list", "lists", "size", "offset",
+    "token", "tokens", "next", "link", "header", "headers", "conventions", "convention",
+})  # fmt: skip
+
+
+def _general_paging(doc_id: str) -> bool:
+    """A guide id about paging in general (rest-pagination, workflow-best-practices-pagination-
+    implementation), not one resource's paging (virtual-packs-...-query-parameters)."""
+    words = [w for w in re.split(r"[^a-z0-9]+", doc_id.removeprefix("guide:").lower()) if w]
+    return any(w.startswith("pag") for w in words) and all(
+        w in _GENERAL_PAGING_WORDS or w.isdigit() for w in words
+    )
+
+
 def _param_key(name: str) -> str:
     """A parameter's match key: the full name, case-insensitive, list marks ignored
     (items[].sku = items.sku); page[number] stays its own name."""
@@ -1044,7 +1065,7 @@ class CheckCall:
                 for x in links
             ):
                 return h
-            if not links and not g.resource and general is None:
+            if not links and not g.resource and general is None and _general_paging(h.doc_id):
                 general = h  # about paging in general
         return general
 
