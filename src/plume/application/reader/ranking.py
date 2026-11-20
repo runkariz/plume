@@ -606,3 +606,27 @@ def stale_version_guides_last(
         if behind is not None:
             order.insert(behind, order.pop(at))
     return order
+
+
+# An HTTP-status question ("what HTTP status do I get when I accept an order in the wrong
+# state"); not an order-state one ("what status will the order receive").
+_STATUS_QUERY = re.compile(
+    r"\b(http (status|code|error)s?|status codes?|error codes?|response codes?)\b", re.I
+)
+
+
+def error_codes_after_endpoint(
+    ranked: Sequence[str], k: int, query: str, error_codes: Callable[[], str | None]
+) -> list[str]:
+    """An HTTP-status question keeps the API's error-codes guide (the section listing the
+    status codes) in the top-k, right behind the first endpoint (Mirakl N4: the accept
+    endpoint names ORDER_INVALID_STATE; the 400 is in guide:context's Error Codes)."""
+    if not _STATUS_QUERY.search(query):
+        return list(ranked)
+    guide = error_codes()
+    if guide is None or guide in ranked[:k]:
+        return list(ranked)
+    order = [d for d in ranked if d != guide]
+    first = next((i for i, d in enumerate(order[:k]) if d.startswith("endpoint:")), None)
+    order.insert(0 if first is None else first + 1, guide)
+    return order

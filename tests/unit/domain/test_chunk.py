@@ -68,12 +68,13 @@ def test_a_long_guide_also_splits_at_plain_text_titles() -> None:
     text = (body + "\n\nShop Selection\n\nUse the shop_id parameter to select the shop."
             "\n\nYYYY : years (four-digit)\n\nA sentence that ends with a period.\n\n"
             "Offset pagination & sort\n\nUse max and offset.")  # fmt: skip
-    texts = [c.text for c in chunk_document(_doc(DocumentKind.GUIDE, text))]
+    texts = [c.text for c in chunk_document(_doc(DocumentKind.GUIDE, text), max_chars=1000)]
     assert texts[0].startswith("# Mirakl Marketplace APIs\n\nGeneral Notes")  # heading joined
     assert any(t.startswith("Shop Selection\n\nUse the shop_id") for t in texts)
     assert any(t.startswith("Offset pagination & sort") for t in texts)
     assert not any(t.startswith("YYYY") for t in texts)  # "x : y" is no title
-    noted = chunk_document(_doc(DocumentKind.GUIDE, body + "\n\nNote\n\nA callout."))
-    assert not any(c.text.startswith("Note") for c in noted)  # a callout label is no title
-    short = chunk_document(_doc(DocumentKind.GUIDE, "Intro\n\nShop Selection\n\ntext"))
-    assert len(short) == 1  # a short guide stays whole
+    for line in ("Note", 'Assuming your token is "abc"', "For more, see here"):
+        other = chunk_document(_doc(DocumentKind.GUIDE, f"{body}\n\n{line}\n\nMore."), 1000)
+        assert not any(c.text.startswith(line + "\n") for c in other)  # callout, quote, comma
+    # a guide that fits in one chunk stays whole (Newegg's rate-limits guide)
+    assert len(chunk_document(_doc(DocumentKind.GUIDE, text), max_chars=6000)) == 1
