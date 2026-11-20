@@ -1,0 +1,61 @@
+{
+  "title": "OR11_Response_200_Orders_Customer_BillingAddress",
+  "x-source-url": "https://developer.mirakl.com/_bundle/content/product/mmp/rest/seller/openapi3.yaml",
+  "x-complete": true,
+  "type": "object",
+  "properties": {
+    "city": {
+      "type": "string",
+      "description": "The city of the billing address of the customer."
+    },
+    "civility": {
+      "type": "string",
+      "description": "The civility or title of the customer (e.g., Mr., Mrs., Dr.)."
+    },
+    "company": {
+      "type": "string",
+      "description": "The company or organization name of the customer billing address."
+    },
+    "company2": {
+      "type": "string",
+      "description": "The secondary company or organization name of the customer billing address (e.g., department or subsidiary)."
+    },
+    "country_iso_code": {
+      "type": "string",
+      "description": "The ISO 3166-1 alpha-3 country code of the billing address of the customer."
+    },
+    "firstname": {
+      "type": "string",
+      "description": "The first name of the customer."
+    },
+    "lastname": {
+      "type": "string",
+      "description": "The last name of the customer."
+    },
+    "phone": {
+      "type": "string",
+      "description": "The primary phone number of the customer."
+    },
+    "phone_secondary": {
+      "type": "string",
+      "description": "The secondary phone number of the customer."
+    },
+    "state": {
+      "type": "string",
+      "description": "The state, province, or region of the billing address of the customer."
+    },
+    "street1": {
+      "type": "string",
+      "description": "The primary line of the customer billing address street address (e.g., street number and name)."
+    },
+    "street2": {
+      "type": "string",
+      "description": "The secondary line of the customer billing address street address (e.g., building, floor, or suite number)."
+    },
+    "zip_code": {
+      "type": "string",
+      "description": "The postal or zip code of the billing address of the customer."
+    }
+  },
+  "description": "Recipient contact and postal address information for delivery."
+}

@@ -421,6 +421,9 @@ class ModelSessions:
         summaries, _ = self._index.browse(build, (), None, 100_000, 0)
         groups = concept_docs(summaries)
         children = {k for k in groups for m in main if k != m and k.startswith(m)} | set(subs)
+        children |= {  # roles that are kinds of it: billingaddress / shippingaddress of Address
+            r for m in main for r in ROLE_SYNONYMS.get(m, ()) if r != m and r.endswith(m)
+        } & set(groups)
         picked: dict[str, DocumentSummary] = {}
         for k in (*main, *sorted(children)):
             for d in groups.get(k, []):
