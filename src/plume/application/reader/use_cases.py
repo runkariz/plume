@@ -27,6 +27,7 @@ from plume.application.reader.dto import (
     TraceStep,
 )
 from plume.application.reader.ranking import (
+    auth_first,
     is_page,
     keep_endpoints,
     lift_operation_endpoints,
@@ -271,6 +272,7 @@ def rank_order(
     fused: Sequence[str],
     k: int,
     wider: Callable[[], Sequence[str]] = tuple,
+    query: str = "",
 ) -> list[str]:
     """The final order of fused hits, shared by search and the eval gate: a page brings one of
     its endpoints into the top-k, so does a knowledge unit that names its endpoints (from the
@@ -285,6 +287,7 @@ def rank_order(
         order = lift_operation_endpoints(order, k, lambda d: _operation_owner(d, owners))
     order = request_models_last(order, k)
     order = near_duplicate_guides_last(order, k)
+    order = auth_first(order, k, query)
     return keep_endpoints(order, k)
 
 
@@ -389,7 +392,9 @@ class SearchDocs:
             )
             return list(dict.fromkeys(h.doc_id for h in wider_hits))
 
-        order = rank_order(self._documents, build_id, [h.doc_id for h in fused], top_k, wider)
+        order = rank_order(
+            self._documents, build_id, [h.doc_id for h in fused], top_k, wider, query
+        )
         by_id = {h.doc_id: h for h in fuse_hits(wider_hits, [], query, WIDER_POOL)}
         by_id.update({h.doc_id: h for h in fused})
         hits = [by_id[d] for d in order[:top_k]]
@@ -912,10 +917,13 @@ class CheckCall:
         """Several operations share METHOD + path and a parameter value picks one: say which
         to pass, with examples (AliExpress: 218 operations at POST /sync)."""
         key = picks[0]
-        examples = sorted(v[key] for v in fixed.values() if key in v)[:3]
+        values = sorted(v[key] for v in fixed.values() if key in v)
+        examples = values[:3]
+        unpicked = len(owners) - len(values)  # operations stating no fixed value for it
         note = (
             f"ambiguous: {len(owners)} operations share {method} {matched}; pass "
             f"{key}=<name> in params or query (e.g. {', '.join(f'{key}={e}' for e in examples)})"
+            + (f"; {len(values)} state a {key} value, {unpicked} do not" if unpicked else "")
         )
         return CheckCallResult(
             _ref(r), method, path, "ambiguous", True, None, method, matched,

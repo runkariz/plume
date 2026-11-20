@@ -184,3 +184,41 @@ def near_duplicate_guides_last(ranked: Sequence[str], k: int) -> list[str]:
             seen.append(words)
         kept.append(d)
     return kept + rest + moved
+
+
+# a question about authenticating / signing requests (not about an operation named "sign")
+_AUTH_QUERY = re.compile(
+    r"\bsign(s|ed|ing)?\b.*\b(requests?|calls?|param\w*)\b|\bsignatures?\b.*\b(requests?|calls?)\b"
+    r"|\b(compute|calculate|generate)\b.*\bsign(ature)?\b|\bsign param"
+    r"|\b(access|app|api|bearer|refresh|admin api)[ -]?(tokens?|keys?)\b|\boauth\b"
+    r"|\bclient credentials\b|\bauthenticat\w*\b.*\b(requests?|calls?|the api|api)\b"
+    r"|\bauth(entication|orization)? headers?\b|\bwhich header authenticates\b",
+    re.IGNORECASE,
+)
+_AUTH_DOC = re.compile(r"auth|sign|token|credential|oauth|hmac", re.IGNORECASE)
+
+
+_AUTH_OPERATION = re.compile(r"token|oauth|auth", re.IGNORECASE)  # not "sign": namesakes
+
+
+def _auth_doc(doc_id: str) -> bool:
+    """An auth scheme, a guide about auth / signing / tokens, or an operation or doc page that
+    issues or explains tokens (Magento POST /integration/admin/token, Shopify's OAuth page)."""
+    if doc_id.startswith("auth:"):
+        return True
+    if doc_id.startswith((PAGE_PREFIX, "endpoint:")):
+        return bool(_AUTH_OPERATION.search(doc_id.split(":", 1)[1]))
+    return doc_id.startswith("guide:") and bool(_AUTH_DOC.search(doc_id.removeprefix("guide:")))
+
+
+def auth_first(ranked: Sequence[str], k: int, query: str) -> list[str]:
+    """An auth question puts the best-ranked auth document (a scheme, or a guide about auth /
+    signing / tokens) first, ahead of operations that merely share a word (Lazada's sponsor
+    /account/sign endpoints for "how do I sign a request")."""
+    if not _AUTH_QUERY.search(query):
+        return list(ranked)
+    window = list(ranked[: 2 * k])
+    best = next((d for d in window if _auth_doc(d)), None)
+    if best is None or _auth_doc(window[0]):  # an auth answer already leads
+        return list(ranked)
+    return [best] + [d for d in ranked if d != best]
