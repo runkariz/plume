@@ -135,3 +135,15 @@ def test_a_rate_limit_question_leads_with_a_rate_limit_guide() -> None:
     ranked = ["guide:resource-rules-api-2", "endpoint:GET~/api/orders", "guide:rate-limits"]
     assert rate_limit_guide_first(ranked, 5, "what does a 429 mean")[0] == "guide:rate-limits"
     assert rate_limit_guide_first(ranked, 5, "list orders") == ranked
+
+
+def test_a_scope_question_leads_with_the_auth_scheme() -> None:
+    """Allegro "which scope do I need to read orders": guide:authentication led, the scheme
+    (it lists the scopes) was 6th."""
+    from plume.application.reader.ranking import auth_first  # noqa: PLC0415
+
+    ranked = ["guide:authentication", "endpoint:GET~/order/events"]
+    own = lambda: ["auth:oauth2-authorization-code"]  # noqa: E731
+    assert auth_first(ranked, 5, "which scope do I need to read orders", own)[0] == (
+        "auth:oauth2-authorization-code"
+    )

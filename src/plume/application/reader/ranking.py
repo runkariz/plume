@@ -197,6 +197,7 @@ _AUTH_QUERY = re.compile(
     r"how does (the )?authentication work)\s*\??\s*$",
     re.IGNORECASE,
 )
+_SCOPE_QUERY = re.compile(r"\b(which|what) (oauth )?scopes?\b|\bscopes? (do i|are) need", re.I)
 _SIGN_QUERY = re.compile(r"\bsign(s|ed|ing|ature)?\b", re.IGNORECASE)
 _AUTH_DOC = re.compile(r"auth|sign|token|credential|oauth|hmac", re.IGNORECASE)
 
@@ -226,6 +227,13 @@ def auth_first(
     signing / tokens) first, ahead of operations that merely share a word (Lazada's sponsor
     /account/sign endpoints for "how do I sign a request"). With none ranked, the first of
     ``own()`` (the API's auth schemes, then its app document: TikTok's signing setup)."""
+    if _SCOPE_QUERY.search(query):  # the scheme lists the scopes (Allegro "which scope …")
+        scheme = next((d for d in ranked[: 2 * k] if d.startswith("auth:")), None) or next(
+            (d for d in own() if d.startswith("auth:")), None
+        )
+        if scheme is not None and ranked and ranked[0] != scheme:
+            return [scheme] + [d for d in ranked if d != scheme]
+        return list(ranked)
     if not _AUTH_QUERY.search(query):
         return list(ranked)
     window = list(ranked[: 2 * k])
