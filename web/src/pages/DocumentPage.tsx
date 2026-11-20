@@ -269,9 +269,9 @@ export function DocumentPage() {
       ) : null}
 
       {groups.map((g) => (
-        <FieldTable key={g.location} title={g.title} fields={g.fields} />
+        <FieldTable key={g.location} title={g.title} fields={g.fields} api={apiId} />
       ))}
-      {other.length ? <FieldTable title="Other fields" fields={other} /> : null}
+      {other.length ? <FieldTable title="Other fields" fields={other} api={apiId} /> : null}
       {!hasStructure && !isGuide && d.kind !== 'auth' ? (
         <Card className="pad">
           <p className="muted">The package documents no fields for this {d.kind}.</p>

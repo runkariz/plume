@@ -827,6 +827,8 @@ export interface DocumentOut {
     description: string | null;
     /** What the package says about the allowed values; null when nothing. */
     constraints?: FieldConstraints | null;
+    /** The model document the field's type refers to ("model:address"); null or absent when none. */
+    modelId?: string | null;
   }[];
   scopes: string[];
   /** Endpoint: the scopes it needs per auth scheme (authId null = the package names no scheme). Absent on older servers. */

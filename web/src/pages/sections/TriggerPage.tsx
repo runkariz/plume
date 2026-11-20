@@ -55,7 +55,7 @@ function PayloadSection({ api, payload: p }: { api: string; payload: TriggerPayl
         ) : null}
       </Card>
       {!p.model && p.fields.length > 0 ? (
-        <FieldTable title="Payload fields" fields={p.fields} />
+        <FieldTable title="Payload fields" fields={p.fields} api={api} />
       ) : null}
       {hasSample ? (
         <RawJson raw={p.sample} title="Sample payload, as in the package" label="Sample payload" />
