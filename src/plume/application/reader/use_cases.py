@@ -647,7 +647,10 @@ class FindFact:
             raise NotFoundError(f"{owner} is not in build {build_id}")
         # The completeness of the sources in scope decides whether absence is proven.
         incomplete = tuple(
-            self._facts.incomplete_owners(build_id, owner_id=owner, resource=resource)
+            o
+            for o in self._facts.incomplete_owners(build_id, owner_id=owner, resource=resource)
+            # a model's completeness says nothing about whether an endpoint exists
+            if fact_kind is not FactKind.ENDPOINT or not o.startswith("model:")
         )
         complete = not incomplete and not endpoint_reasons
         reasons: list[str] = list(endpoint_reasons)  # what to ask instead comes first

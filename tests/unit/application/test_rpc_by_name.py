@@ -38,7 +38,7 @@ FACTS = SimpleNamespace(
     endpoints=lambda _b: ENDPOINTS,
     find=_find,
     for_owner=lambda _b, owner: [f for f in METHODS if f.owner_id == owner],
-    incomplete_owners=lambda *_a, **_k: [],
+    incomplete_owners=lambda *_a, **_k: ["model:orderresult"],
     bounded_owners=lambda *_a, **_k: {},
 )
 INDEX = SimpleNamespace(
@@ -82,4 +82,7 @@ def test_find_fact_needs_the_method_value() -> None:
     assert vague.complete is False
     picked = find.execute("ali", "POST /sync?method=shop.order.get", kind="endpoint")
     assert [m.owner_id for m in picked.matches] == ["endpoint:POST~/sync@a"]
-    assert picked.reasons == ()
+    assert picked.reasons == ()  # an incomplete model does not bear on an endpoint
+    assert picked.complete is True
+    field = find.execute("ali", "method", kind="field")
+    assert field.reasons == ("model:orderresult is flagged incomplete by its source",)
