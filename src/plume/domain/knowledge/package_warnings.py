@@ -2,6 +2,7 @@
 Plume shows for the codes it knows, on the section they concern. Unknown codes stay
 maintainer-only."""
 
+import re
 from dataclasses import dataclass
 
 AUTH = "auth"
@@ -33,6 +34,11 @@ UNSIGNED = (
     "(see the setup text)."
 )
 SETUP_TEXT = "(see the setup text)"
+# no guide in the package to point at
+NO_SIGNING_GUIDE = "(the package doesn't describe how to sign; see the vendor's docs)"
+NO_AUTH_GUIDE = "(the package doesn't describe it; see the vendor's docs)"
+CORE_CHANGE = "auth-needs-core-change"
+_REASON = re.compile(r'^\s*(?P<scheme>[\w.-]+)\s+"(?P<reason>[^"]+)"')
 NONE_PUBLIC = "auth-none-public-sources"  # signing, or no scheme at all: the evidence decides
 # Signing codes: when the package has an auth scheme of its own, any of them says the signing
 # comes on top of it (the rule is whether a scheme exists, not which code is present).
@@ -73,20 +79,28 @@ def parse(raw: object) -> list[PackageWarning]:
     return out
 
 
+def _core_change_reason(text: str) -> str | None:
+    """auth-needs-core-change: <scheme id> "<what the auth unit cannot express>" -> that
+    phrase (Newegg: the SecretKey header; OnBuy: consumer_key / secret_key, no Bearer)."""
+    m = _REASON.match(text.partition(":")[2])
+    return m.group("reason").strip().rstrip(".") if m else None
+
+
 def notices(
     warnings: list[PackageWarning],
     section: str | None = None,
     has_auth: bool = False,
     *,
     signed: bool | None = None,
-    guides: tuple[tuple[str, str], ...] = (),
+    guides: tuple[tuple[str, str], ...] | None = None,
 ) -> list[Notice]:
     """User-facing notices for the known codes, one per distinct text and section (in order),
     only the given section's when one is named. ``has_auth``: the package has an auth scheme
     (some codes then say the signing comes on top of it). ``signed``: whether the build shows
     signing (False: ``auth-none-public-sources`` says no scheme is documented; None: assume
     signing). ``guides`` ((doc id, title), ...): the API's auth / signing guides, named in
-    auth notices instead of "the setup text" and listed as their doc ids."""
+    auth notices instead of "the setup text" and listed as their doc ids; empty: the notice
+    says the package does not describe it; None: not looked up (the setup text)."""
     out: list[Notice] = []
     seen: set[tuple[str, str]] = set()
     for w in warnings:
@@ -96,10 +110,19 @@ def notices(
         where, text = known[0], (WITH_AUTH.get(w.code) if has_auth else None) or known[1]
         if w.code == NONE_PUBLIC and signed is False and not has_auth:
             text = UNSIGNED
+        if w.code == CORE_CHANGE and (reason := _core_change_reason(w.text)):
+            text = (
+                f"This API's auth uses a variant the connector can't express yet ({reason}); "
+                f"calls won't authenticate until Kariz supports it {SETUP_TEXT}."
+            )
         doc_ids: tuple[str, ...] = ()
-        if where == AUTH and guides and SETUP_TEXT in text:
-            text = text.replace(SETUP_TEXT, f"(see: {'; '.join(t for _, t in guides)})")
-            doc_ids = tuple(d for d, _ in guides)
+        if where == AUTH and guides is not None and SETUP_TEXT in text:
+            if guides:
+                text = text.replace(SETUP_TEXT, f"(see: {'; '.join(t for _, t in guides)})")
+                doc_ids = tuple(d for d, _ in guides)
+            else:  # nothing to point at: no "setup text" that does not exist
+                signing = w.code in SIGNING_CODES and text != UNSIGNED
+                text = text.replace(SETUP_TEXT, NO_SIGNING_GUIDE if signing else NO_AUTH_GUIDE)
         if (where, text) in seen:
             continue
         seen.add((where, text))
