@@ -6,6 +6,7 @@ from plume.application.reader.ranking import (
     limit_guide_after_endpoint,
     pair_pages_with_endpoints,
     query_code,
+    scoped_last,
     stale_version_guides_last,
     triggers_after_endpoints,
 )
@@ -125,3 +126,18 @@ def test_a_limit_question_keeps_the_guide_stating_the_limit_behind_the_endpoint(
     out = limit_guide_after_endpoint(ranked, 4, q, lambda: "guide:error-codes-buy-browse")
     assert out[:3] == ["endpoint:GET~/search", "guide:error-codes-buy-browse", ranked[1]]
     assert limit_guide_after_endpoint(ranked, 4, "list orders", lambda: "guide:g") == ranked
+
+
+def test_a_scoped_guide_gives_way_unless_the_question_names_its_part() -> None:
+    """BigCommerce: scoped-request-limits (one quote: an 8 MB product image) led a whole-API
+    import-size question."""
+    ranked = ["guide:scoped-request-limits", "endpoint:PUT~/catalog/products", "app:bc", "m:x"]
+    parts = {"guide:scoped-request-limits": frozenset({"image", "product", "catalog"})}.get
+    out = scoped_last(
+        ranked, 2, "what is the maximum import file size", lambda d: parts(d, frozenset())
+    )
+    assert out == ["endpoint:PUT~/catalog/products", "app:bc", "m:x", "guide:scoped-request-limits"]
+    kept = scoped_last(
+        ranked, 2, "how large can a product image be", lambda d: parts(d, frozenset())
+    )
+    assert kept == ranked

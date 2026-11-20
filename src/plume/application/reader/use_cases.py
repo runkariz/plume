@@ -46,6 +46,8 @@ from plume.application.reader.ranking import (
     push_first,
     rate_limit_guide_first,
     request_models_last,
+    scoped_last,
+    singular,
     stale_version_guides_last,
     state_change_first,
     synthesized_after_vendor,
@@ -354,6 +356,7 @@ def rank_order(
     order = code_holder_first(
         order, k, query, lambda d, c: holds_code(documents, build_id, d, c), code_holders
     )
+    order = scoped_last(order, k, query, lambda d: scoped_parts(documents, build_id, d))
     return keep_endpoints(order, k)
 
 
@@ -369,6 +372,39 @@ MIN_CODES = 5  # distinct HTTP status codes a chunk lists to be the API's error-
 
 def _code_token(code: str) -> re.Pattern[str]:
     return re.compile(rf"(?<![\w.]){re.escape(code)}(?![\w.])")
+
+
+# Words a scoped guide's quotes share with any limit question: they name no part of the API.
+_GENERIC_WORDS = (
+    "about after also allow allowed and any are api apis been before but call calls can cannot "
+    "data each earlier file files for from has have hour hours import imports into item items "
+    "its larger limit limited limits line lines max maximum may minute minutes more most must "
+    "not number one only page pages per rate request requests response second seconds size "
+    "than that the their there these this time times total upload uploads up use used using "
+    "value values was when which will with within you your batch batches bulk record records "
+    "state states webhook webhooks "
+    # a token's lifetime: the topic's own wording, not a part of the API
+    "token tokens lifetime expire expires expired expiry expiration valid validity access "
+    "refresh oauth bearer grant credential credentials user application new create obtain "
+    "current long how"
+)
+_GENERIC_PART = frozenset(_GENERIC_WORDS.split())
+
+
+def scoped_parts(documents: DocumentRepo, build_id: BuildId, doc_id: str) -> frozenset[str]:
+    """The parts of the API a scoped guide's quotes are about: the distinctive words of its
+    quote lines ("> ...", not Scope / Source) and of its endpoints' paths."""
+    doc = documents.get_document(build_id, doc_id)
+    if doc is None:
+        return frozenset()
+    quotes = [ln[1:] for ln in doc.text.splitlines() if ln.startswith(">")
+              and not re.match(r">\s*(Scope|Source):", ln)]  # fmt: skip
+    raw = doc.raw if isinstance(doc.raw, dict) else {}
+    paths = [e.split("~", 1)[-1] for e in raw.get("endpoints") or [] if isinstance(e, str)]
+    words = re.findall(r"[a-z][a-z0-9]{2,}", " ".join(quotes + paths).lower())
+    return frozenset(
+        singular(w) for w in words if w not in _GENERIC_PART and singular(w) not in _GENERIC_PART
+    )
 
 
 def code_holders(index: SearchIndex, build_id: BuildId, code: str) -> list[str]:
