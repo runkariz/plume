@@ -105,6 +105,7 @@ class ParamCheck:
     name: str
     found: bool
     where: str | None
+    note: str | None = None  # e.g. where this API's paging is described (not asserted)
 
 
 @dataclass(frozen=True, slots=True)

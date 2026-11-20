@@ -208,7 +208,9 @@ def check_call_payload(r: CheckCallResult) -> Json:
             if r.matched_id
             else None
         ),
-        "params": [{"name": p.name, "found": p.found, "where": p.where} for p in r.params],
+        "params": [
+            {"name": p.name, "found": p.found, "where": p.where, "note": p.note} for p in r.params
+        ],
         "checked": r.checked,
         "evidence": citation_payload(r.citation) if r.citation else None,
         "alternatives": list(r.alternatives),
