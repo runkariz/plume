@@ -433,16 +433,28 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
         @server.tool(annotations=READ_ONLY, structured_output=True)
         async def what_changed(api: str, since: str | None = None) -> dict[str, Any]:
             """What changed in an API's docs: the latest published build's changes, or every
-            build since a date (YYYY-MM-DD) or a build id. Only changes Plume could confirm in
-            the vendor's docs (or that the vendor's changelog names, perVendorChangelog). Report
+            build since a date (YYYY-MM-DD) or a build id: Plume's diff between builds of the
+            docs, only changes it could confirm in the vendor's docs (or that the vendor's
+            changelog names, perVendorChangelog); changelog_guides are the vendor's own. Report
             ONLY these as API changes; quote the evidence; when only wording changed say "docs
             updated, no API change"."""
 
             def go() -> dict[str, Any]:
                 out = changes().changes(api, since=since, limit=100)
+                guides = deps.sections().changelog_guides(api) if deps.sections else []
+                out["changelog_guides"] = guides
                 out["note"] = (
-                    "Changes Plume confirmed in the vendor docs (or that the vendor's changelog "
-                    "names). Extraction problems are never listed here."
+                    "This is Plume's diff between builds of the vendor docs (what changed in "
+                    "the docs between two loads), limited to changes Plume confirmed in the "
+                    "docs (or that the vendor's changelog names). Extraction problems are never "
+                    "listed here. It is not the vendor's release log"
+                    + (
+                        ": for the vendor's own account read "
+                        + "; ".join(f"{g['title']} ({g['doc_id']})" for g in guides)
+                        + "."
+                        if guides
+                        else "; this package has no changelog guide."
+                    )
                 )
                 return out
 
