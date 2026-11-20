@@ -13,6 +13,7 @@ from plume.application.ports.model_set_repo import ModelSetRepo
 from plume.domain.models.model_eval import ModelEval, ModelGatePolicy, score
 from plume.domain.models.model_gold import GoldModel
 from plume.domain.models.release import GateFailure
+from plume.domain.models.set_gold import SetEval, score_set
 from plume.domain.models.snapshot import ModelSnapshot, PinnedInput
 from plume.domain.models.validation import Oracle
 
@@ -23,6 +24,7 @@ OracleFor = Callable[[tuple[PinnedInput, ...]], Oracle]
 class EvalReport:
     target: str  # model or set id
     results: tuple[tuple[str, ModelEval], ...]  # (model id, result)
+    relations: tuple[SetEval, ...] = ()  # a set's relations against the set golds covering it
 
     def totals(self, held_out: bool) -> dict[str, object]:
         rows = [r for _, r in self.results if r.held_out == held_out]
@@ -47,7 +49,12 @@ class EvalReport:
             "tuning": self.totals(held_out=False),
             "heldOut": self.totals(held_out=True),
             "results": [{"modelId": m, **r.as_dict()} for m, r in self.results],
+            "relations": [r.as_dict() for r in self.relations],
         }
+
+
+def _set_member(name: str) -> str:
+    return "".join(c for c in name.lower() if c.isalnum())
 
 
 def _covers(gold: GoldModel, snap: ModelSnapshot) -> bool:
@@ -102,10 +109,26 @@ class ModelEvaluation:
             for g in golds
             if _covers(g, snap)
         ]
-        if gold_ref and not results:
+        relations = self._relations(target, gold_ref)
+        if gold_ref and not results and not relations:
             concepts = ", ".join(sorted({g.concept for g in golds}))
             raise NotFoundError(f"{gold_ref} has no gold for {target} (it covers: {concepts})")
-        return EvalReport(target, tuple(results))
+        return EvalReport(target, tuple(results), relations)
+
+    def _relations(self, target: str, gold_ref: str | None) -> tuple[SetEval, ...]:
+        """A set's relations against the set golds that cover it (same members, an API in
+        common); a model is no set."""
+        stored = self._sets.get_set(target) if self._sets is not None else None
+        if stored is None:
+            return ()
+        golds = self._gold.load_sets(gold_ref) if gold_ref else self._gold.sets()
+        members = {_set_member(m.concept) for m in stored.draft.members}
+        apis = {i.api for i in stored.inputs}
+        return tuple(
+            score_set(stored.draft, g)
+            for g in golds
+            if {_set_member(m) for m in g.members} <= members and apis & set(g.apis)
+        )
 
     def gate(self, snap: ModelSnapshot) -> list[GateFailure]:
         """Why ``snap`` may not be released (empty: it may). Without gold for its concept it may

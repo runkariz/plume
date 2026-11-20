@@ -50,8 +50,14 @@ def build_app(container: Container | None = None) -> typer.Typer:
         return run(package, out)
 
     def import_model_gold(text: str, group: str | None, held_out: bool) -> dict[str, Any]:
-        from plume.infrastructure.models.gold_markdown import import_markdown  # noqa: PLC0415
+        from plume.infrastructure.models.gold_markdown import (  # noqa: PLC0415
+            import_markdown,
+            import_set_markdown,
+            is_set_report,
+        )
 
+        if is_set_report(text):  # a set report: its relation table
+            return import_set_markdown(text, group, held_out)
         return import_markdown(text, group, held_out)
 
     def openapi() -> str:
