@@ -219,3 +219,20 @@ def test_a_push_question_leads_with_a_webhook_document() -> None:
         == "endpoint:POST~/{version}/webhooks/subscribe"
     )
     assert push_first(ranked, 5, "list orders", lambda: every) == ranked
+
+
+def test_push_lead_leaves_verification_and_context_cases() -> None:
+    from plume.application.reader.ranking import (  # noqa: PLC0415
+        context_after_named_endpoint,
+        push_first,
+    )
+
+    # METRO "how do I verify a webhook": the HMAC request-signing guide answers
+    signing = ["guide:validation-authentication-hmac-sha256-request-signing", "guide:x"]
+    every = ["endpoint:POST~/webhooks/subscribe"]
+    assert push_first(signing, 5, "how do I verify a webhook from METRO", lambda: every) == signing
+    # BigCommerce: the overview gives way to an endpoint named by the question
+    brands = "endpoint:GET~/{version}/catalog/brands/{brand_id}/metafields"
+    ranked = ["guide:context", "guide:y", brands]
+    assert context_after_named_endpoint(ranked, 5, "metadata for brands")[0] == brands
+    assert context_after_named_endpoint(ranked, 5, "how does paging work") == ranked

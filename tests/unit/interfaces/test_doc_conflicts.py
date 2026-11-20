@@ -56,6 +56,11 @@ def test_conflicts_are_shown_with_every_statement(packages: Path, tmp_path: Path
     call = stack.check_call().execute("shopify", "GET", "/admin/api/2026-10/products.json",
                                       ["limit"])  # fmt: skip
     assert call.params[0].found
+    note = call.params[0].note or ""  # where a developer hits it (OTTO GET /v4/orders [limit])
+    assert note.startswith("The docs state different values for the page size:")
+    other = stack.check_call().execute("shopify", "GET", "/admin/api/2026-10/products.json",
+                                       ["fields"])  # fmt: skip
+    assert other.params[0].note is None
 
 
 def test_malformed_conflicts_are_skipped() -> None:

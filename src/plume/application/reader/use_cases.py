@@ -30,6 +30,7 @@ from plume.application.reader.dto import (
 from plume.application.reader.links import linked_endpoints
 from plume.application.reader.ranking import (
     auth_first,
+    context_after_named_endpoint,
     endpoint_before_its_model,
     is_page,
     keep_endpoints,
@@ -315,6 +316,7 @@ def rank_order(
     order = rate_limit_guide_first(order, k, query)
     order = endpoint_before_its_model(order, k)
     order = push_first(order, k, query, all_endpoints)
+    order = context_after_named_endpoint(order, k, query)
     return keep_endpoints(order, k)
 
 
@@ -1080,6 +1082,17 @@ class CheckCall:
             return set()
         return {_param_key(v) for v in contract.values() if isinstance(v, str) and v.strip()}
 
+    def _conflict(self, build_id: BuildId, owner_id: str, name: str) -> str | None:
+        """The docs' different values for this parameter (x-kariz-conflicts), every statement
+        with its place; the check itself stays the vendor's text (never one value picked)."""
+        doc = self._documents.get_document(build_id, owner_id) if self._documents else None
+        want = f"param:{name.lower()}"
+        texts = [
+            c.text for c in (conflicts_of(doc.raw) if doc is not None else ())
+            if any(st.where.lower() == want for st in c.statements)
+        ]  # fmt: skip
+        return "\n".join(texts) or None
+
     def _paging_guide(
         self, build_id: BuildId, owner_id: str, hits: list[ChunkHit]
     ) -> ChunkHit | None:
@@ -1134,7 +1147,9 @@ class CheckCall:
             ]
             if hits:
                 where = hits[0].location.value if hits[0].location else None
-                checks.append(ParamCheck(p, True, where))
+                checks.append(
+                    ParamCheck(p, True, where, note=self._conflict(build_id, owner_id, p))
+                )
                 continue
             if location is not FieldLocation.BODY:
                 if paging is None:
