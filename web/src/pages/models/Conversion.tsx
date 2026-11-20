@@ -15,9 +15,13 @@ const KIND_LABEL: Record<string, string> = {
   embedded: 'embedded',
   derived: 'derived from name',
   'meta-entry': 'meta entry',
+  'code-system': 'code system',
   split: 'split or sum',
   other: 'conversion',
 };
+
+/** What `format` is called for the kinds that use it for something else than a format. */
+const FORMAT_LABEL: Record<string, string> = { 'meta-entry': 'key:', 'code-system': 'systems:' };
 
 export const conversionLabel = (kind: string) => KIND_LABEL[kind] ?? kind;
 
@@ -49,7 +53,7 @@ function Body({ c, label }: { c: FieldConversion; label: string }) {
     <div className="conv-body">
       {c.format ? (
         <p className="small">
-          <span className="faint">{c.kind === 'meta-entry' ? 'key:' : 'format:'}</span>{' '}
+          <span className="faint">{FORMAT_LABEL[c.kind] ?? 'format:'}</span>{' '}
           <span className="mono">{c.format}</span>
         </p>
       ) : null}

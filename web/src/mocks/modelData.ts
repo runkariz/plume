@@ -641,7 +641,11 @@ export const inventorySnapshot: ModelSnapshot = {
       required: false,
       support: { shopify: 'supported', woocommerce: 'unsupported', mirakl: 'unsupported' },
       sources: {
-        shopify: { paths: [{ path: 'inventory_levels[].location_id', type: 'integer' }] },
+        shopify: {
+          paths: [{ path: 'inventory_levels[].location_id', type: 'integer' }],
+          // no map: the systems are named in `format`
+          conversion: { kind: 'code-system', format: 'Shopify location id -> warehouse code' },
+        },
       },
     },
     {
