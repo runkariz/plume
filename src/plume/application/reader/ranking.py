@@ -228,6 +228,8 @@ def auth_first(
     /account/sign endpoints for "how do I sign a request"). With none ranked, the first of
     ``own()`` (the API's auth schemes, then its app document: TikTok's signing setup)."""
     if _SCOPE_QUERY.search(query):  # the scheme lists the scopes (Allegro "which scope …")
+        if ranked and "scope" in ranked[0].lower():  # a scope guide leads (Zalando): keep it
+            return list(ranked)
         scheme = next((d for d in ranked[: 2 * k] if d.startswith("auth:")), None) or next(
             (d for d in own() if d.startswith("auth:")), None
         )
