@@ -20,22 +20,31 @@ class GatePolicy:
             raise ValueError(f"gate source must be one of {', '.join(GATE_SOURCES)}")
 
 
+# A per-source drop gates only with at least this many questions of that source (as the
+# "too few questions to measure" note): one question of 3 moving from rank 1 to 2 is MRR -0.17.
+MIN_SOURCE_QUESTIONS = 10
+
+
 @dataclass(frozen=True, slots=True)
 class GateDecision:
     passed: bool
     reasons: tuple[str, ...]
+    notes: tuple[str, ...] = ()  # movements reported, not failing (a source with few questions)
 
     @property
     def message(self) -> str:
-        if self.passed:
-            return "Quality gate passed."
-        return "Quality gate failed: " + "; ".join(self.reasons)
+        head = (
+            "Quality gate passed." if self.passed
+            else "Quality gate failed: " + "; ".join(self.reasons)
+        )  # fmt: skip
+        return head + (" Note: " + "; ".join(self.notes) if self.notes else "")
 
 
 def decide(
     policy: GatePolicy, staged: EvalMetrics, live: EvalMetrics | None = None
 ) -> GateDecision:
     reasons: list[str] = []
+    notes: list[str] = []
     floor = staged.source(policy.source)
     label = "" if policy.source == COMBINED else f" ({policy.source} questions)"
     if floor is None or not floor.search_questions:
@@ -61,12 +70,19 @@ def decide(
             if new_m is None or old_m is None or not old_m.search_questions:
                 continue
             tail = "" if src == COMBINED else f" ({src} questions)"
+            few = src != COMBINED and min(new_m.search_questions, old_m.search_questions) < (
+                MIN_SOURCE_QUESTIONS
+            )
             for name, new, old in (
                 (f"recall@{staged.k}{tail}", new_m.recall_at_k, old_m.recall_at_k),
                 (f"MRR{tail}", new_m.mrr, old_m.mrr),
             ):
                 if old - new > policy.max_drop + 1e-9:
-                    reasons.append(
+                    text = (
                         f"{name} fell from {old:.2f} to {new:.2f} (more than {policy.max_drop:.2f})"
                     )
-    return GateDecision(passed=not reasons, reasons=tuple(reasons))
+                    if few:  # too few questions of that source to measure: reported, not gating
+                        notes.append(f"{text}; only {new_m.search_questions} questions")
+                    else:
+                        reasons.append(text)
+    return GateDecision(passed=not reasons, reasons=tuple(reasons), notes=tuple(notes))

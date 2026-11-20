@@ -136,11 +136,13 @@ def test_gate_reads_the_chosen_source_and_checks_each_for_regression() -> None:
     assert "recall@5 (spec questions) 0.50 is below the floor 0.70" in spec.message
     docs_only = score(Q[:1], [QuestionOutcome("a", GoldKind.SEARCH, ranked=("d1",))])
     assert decide(GatePolicy(source="spec"), docs_only).passed  # no spec questions: combined
-    # Spec falls by 0.5 while combined falls by 0.25: both are reported, docs is not.
+    # Spec falls by 0.5 while combined falls by 0.25: both are reported, docs is not. Spec has
+    # 2 questions: too few to gate on, so its fall is a note, not a reason.
     worse = _mixed((("y",), ("y",)))
     d = decide(GatePolicy(min_recall=0.0), worse, live=m)
     assert "recall@5 fell from 0.75 to 0.50" in d.message
-    assert "recall@5 (spec questions) fell from 0.50 to 0.00" in d.message
+    assert any("recall@5 (spec questions) fell from 0.50 to 0.00" in r for r in d.notes)
+    assert not any("spec questions" in r for r in d.reasons)
     assert "docs questions" not in d.message
     with pytest.raises(ValueError, match="gate source"):
         GatePolicy(source="both")
@@ -210,3 +212,34 @@ def test_any_lowercase_source_label_is_reported_apart() -> None:
     assert source_order(["zz", "spec", "tester", "docs"]) == ["docs", "spec", "tester", "zz"]
     with pytest.raises(ValueError, match="lowercase label"):
         GoldQuestion("x", GoldKind.SEARCH, "q", ("d",), source="Tester Set")
+
+
+def test_a_source_with_few_questions_reports_its_fall_without_failing() -> None:
+    """PrestaShop: 3 spec questions, one moved from rank 1 to 2 (MRR 1.00 -> 0.83) and failed
+    the load while the overall numbers were within limits."""
+
+    def build(spec_rank: tuple[str, ...], n_docs: int) -> EvalMetrics:
+        docs = [GoldQuestion(f"d{i}", GoldKind.SEARCH, "q", ("a",), source="docs")
+                for i in range(n_docs)]  # fmt: skip
+        spec = [GoldQuestion(f"s{i}", GoldKind.SEARCH, "q", ("c",), source="spec")
+                for i in range(3)]  # fmt: skip
+        out = [QuestionOutcome(q.qid, GoldKind.SEARCH, ranked=("a",)) for q in docs]
+        out += [QuestionOutcome("s0", GoldKind.SEARCH, ranked=spec_rank)]
+        out += [QuestionOutcome(f"s{i}", GoldKind.SEARCH, ranked=("c",)) for i in (1, 2)]
+        return score(docs + spec, out)
+
+    live, staged = build(("c",), 30), build(("x", "c"), 30)
+    d = decide(GatePolicy(), staged, live=live)
+    assert d.passed
+    assert "MRR (spec questions) fell from 1.00 to 0.83" in d.message  # as a note
+    docs = [GoldQuestion(f"d{i}", GoldKind.SEARCH, "q", ("a",), source="docs")
+            for i in range(1000)]  # fmt: skip
+    spec = [GoldQuestion(f"s{i}", GoldKind.SEARCH, "q", ("c",), source="spec") for i in range(10)]
+
+    def run(spec_rank: tuple[str, ...]) -> EvalMetrics:
+        out = [QuestionOutcome(q.qid, GoldKind.SEARCH, ranked=("a",)) for q in docs]
+        return score(docs + spec, out + [QuestionOutcome(q.qid, GoldKind.SEARCH, ranked=spec_rank)
+                                         for q in spec])  # fmt: skip
+
+    gated = decide(GatePolicy(), run(("x", "c")), live=run(("c",)))
+    assert any("MRR (spec questions) fell" in r for r in gated.reasons)  # 10 questions: gates
