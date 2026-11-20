@@ -84,7 +84,7 @@ class RunEvalGate:
                 text = self._index.text(build_id, q.question, POOL)
                 fused = [h.doc_id for h in fuse_hits(dense, text, q.question, POOL, self._fusion)]
                 wider = partial(self._endpoints_for, build_id, vector)
-                ranked = tuple(rank_order(self._documents, build_id, fused, K, wider))
+                ranked = tuple(rank_order(self._documents, build_id, fused, K, wider, q.question))
                 # Expected docs are alternatives: missing only when none of them is in the build.
                 present = [d for d in q.expect_docs if d in known]
                 missing = () if present else tuple(q.expect_docs)
