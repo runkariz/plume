@@ -758,19 +758,51 @@ def limit_guide_after_endpoint(
 SCOPED_PREFIX = "guide:scoped-"
 
 
+# What other results are about, per scoped topic (scoped-<topic>): a result whose id matches
+# answers the topic too, so the scoped guide can give way to it.
+_SCOPED_TOPIC = {
+    "rate-limits": r"rate[- ]?limit|throttl|quota|\b429\b|requests? per",
+    "request-limits": r"limit|size|batch|bulk|pagina|page[- ]size|upload",
+    "import-limits": r"limit|size|batch|bulk|import|upload|feed",
+    "token-lifetime": r"token|oauth|auth|expir|lifetime",
+    "webhooks": r"webhook|notification|subscri|event|callback|trigger:",
+    "state-transitions": r"state|status|lifecycle|transition",
+    "error-format": r"error|status[- ]code|response[- ]code",
+    "sandbox": r"sandbox|environment|test",
+}
+
+
+def _topic_pattern(doc: str) -> re.Pattern[str]:
+    topic = doc.removeprefix(SCOPED_PREFIX)
+    words = "|".join(re.escape(w) for w in topic.split("-") if len(w) > 3)
+    return re.compile(_SCOPED_TOPIC.get(topic) or words or re.escape(topic), re.IGNORECASE)
+
+
 def scoped_last(
     ranked: Sequence[str], k: int, query: str, parts: Callable[[str], frozenset[str]]
 ) -> list[str]:
     """A scoped-<topic> guide (stream: quotes for one part of the API, NOT the whole-API
     answer) gives way to every other result of the top 2k, unless the question names the part
     its quotes are about (one of `parts`: words of its quotes and its endpoints' paths). It
-    rated 1st for whole-API questions (BigCommerce's 8 MB image quote for an import size)."""
+    rated 1st for whole-API questions (BigCommerce's 8 MB image quote for an import size).
+    When the question is about its topic and no other result of the top 2k is (TEC's 1000/min
+    is only there), it stays near the top: right behind a leading endpoint, else 2nd."""
     asked = {_singular(w) for w in re.findall(r"[a-z0-9]+", query.lower())}
     order = list(ranked)
     window = 2 * k
     for doc in [d for d in order[:window] if d.startswith(SCOPED_PREFIX)]:
-        if asked & parts(doc):
-            continue
+        topic = _topic_pattern(doc)
+        others = [d for d in order[:window] if d != doc and not d.startswith(SCOPED_PREFIX)]
+        # the question is about its topic and nothing else here is: it is the only statement
+        alone = bool(topic.search(query)) and not any(topic.search(d) for d in others)
+        if not alone and asked & parts(doc):
+            continue  # the question names its part: it keeps its place
         order.remove(doc)
-        order.insert(min(window - 1, len(order)), doc)
+        if not alone:
+            order.insert(min(window - 1, len(order)), doc)
+            continue
+        # right behind a leading endpoint (the one that answers), else 2nd: an endpoint far
+        # down the list (Mirakl PUT /api/returns/receive for webhooks) is no reason to sink it
+        first = next((i for i, d in enumerate(order[:2]) if d.startswith("endpoint:")), None)
+        order.insert(min(first + 1 if first is not None else 1, len(order)), doc)
     return order
