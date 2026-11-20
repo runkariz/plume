@@ -555,3 +555,54 @@ def context_after_named_endpoint(ranked: Sequence[str], k: int, query: str) -> l
         if d.startswith("endpoint:") and words & {_singular(w) for w in _path_words(d)}:
             return [d, CONTEXT_GUIDE] + [x for x in ranked[1:] if x != d]
     return list(ranked)
+
+
+# A version a guide id names: "...-orders-api-v0-rate-limits", "...-v2026-01-01-rate-limits".
+_GUIDE_VERSION = re.compile(r"-v(\d{4}-\d\d-\d\d|\d+(?:\.\d+)?)(?=-|$)")
+
+
+def guide_version(doc_id: str) -> str | None:
+    m = _GUIDE_VERSION.search(doc_id) if doc_id.startswith("guide:") else None
+    return m.group(1) if m else None
+
+
+def _version(value: str) -> str:
+    return value.strip().lower().removeprefix("v")
+
+
+def stale_version_guides_last(
+    ranked: Sequence[str],
+    k: int,
+    links: Callable[[str], Sequence[str]],
+    versions: Callable[[str], str | None],
+    exists: Callable[[str], bool],
+) -> list[str]:
+    """A guide about an API version none of its linked endpoints carry (Amazon's "Orders API
+    v0 Rate Limits" linked to the package's v2026-01-01 getOrder) gives way to its sibling
+    guide for the endpoints' version (the same id with that version), which takes its place;
+    the stale guide then moves behind its first linked endpoint in the top 2k, if any."""
+    order = list(ranked)
+    for doc in [d for d in order[:k] if guide_version(d)]:
+        named = _version(guide_version(doc) or "")
+        linked = list(links(doc))
+        carried = {_version(v) for v in (versions(e) for e in linked) if v}
+        if not carried or named in carried:
+            continue
+        old = f"-v{guide_version(doc)}"
+        sibling = next(
+            (s for s in (doc.replace(old, f"-v{v}", 1) for v in sorted(carried))
+             if s in order or exists(s)),
+            None,
+        )  # fmt: skip
+        at = order.index(doc)
+        if sibling is not None:
+            if sibling in order[:at]:
+                continue  # the sibling already ranks above it
+            if sibling in order:
+                order.remove(sibling)
+            order.insert(at, sibling)
+            at += 1
+        behind = next((i for i, d in enumerate(order[: 2 * k]) if i > at and d in linked), None)
+        if behind is not None:
+            order.insert(behind, order.pop(at))
+    return order

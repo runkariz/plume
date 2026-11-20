@@ -43,6 +43,7 @@ from plume.application.reader.ranking import (
     push_first,
     rate_limit_guide_first,
     request_models_last,
+    stale_version_guides_last,
     state_change_first,
     synthesized_after_vendor,
 )
@@ -311,6 +312,13 @@ def rank_order(
     order = auth_first(order, k, query, auth_docs)
     order = state_change_first(order, k, query, all_endpoints)
     order = synthesized_after_vendor(order, k)
+    order = stale_version_guides_last(
+        order,
+        k,
+        lambda d: unit_endpoints(documents, build_id, d),
+        lambda e: endpoint_version(documents, build_id, e),
+        lambda d: documents.get_document(build_id, d) is not None,
+    )
     order = production_before_test(order, query)
     order = path_only_after_endpoints(order, k)
     order = rate_limit_guide_first(order, k, query)
@@ -347,6 +355,21 @@ def page_endpoints(documents: DocumentRepo, build_id: BuildId, doc_id: str) -> l
 
 
 WIDER_POOL = 50  # endpoints ranked for a query, for a knowledge unit's endpoint (rank_order)
+
+
+_URL_VERSION = re.compile(r"/(v\d+(?:\.\d+)?|\d{4}-\d\d-\d\d)(?=/|$)")
+
+
+def endpoint_version(documents: DocumentRepo, build_id: BuildId, doc_id: str) -> str | None:
+    """The API version an endpoint carries: its apiVersion, else a version segment of its url."""
+    if not doc_id.startswith("endpoint:"):
+        return None
+    doc = documents.get_document(build_id, doc_id)
+    raw = doc.raw if doc is not None and isinstance(doc.raw, dict) else {}
+    if isinstance(raw.get("apiVersion"), str) and raw["apiVersion"].strip():
+        return str(raw["apiVersion"])
+    m = _URL_VERSION.search(raw["url"]) if isinstance(raw.get("url"), str) else None
+    return m.group(1) if m else None
 
 
 def unit_endpoints(documents: DocumentRepo, build_id: BuildId, doc_id: str) -> list[str]:
