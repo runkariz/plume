@@ -303,3 +303,24 @@ def state_change_first(
     if best is None:
         return list(ranked)
     return [best[2]] + [d for d in ranked if d != best[2]]
+
+
+# guides Plume makes from the package's structured data (not the vendor's prose)
+_SYNTHESIZED = ("guide:webhook-delivery-", "guide:environments-and-base-urls")
+
+
+def synthesized_after_vendor(ranked: Sequence[str], k: int) -> list[str]:
+    """A guide Plume made from structured data (webhook delivery, environments) gives way to
+    the vendor's own guide on the topic: it moves just behind the first vendor guide of the
+    top-k (bol's signature-verification guide, Woo's webhooks page); with none it stays."""
+    order = list(ranked)
+    for doc in [d for d in order[:k] if d.startswith(_SYNTHESIZED)]:
+        at = order.index(doc)
+        vendor = next(
+            (i for i, d in enumerate(order[:k]) if i > at and d.startswith("guide:")
+             and not d.startswith(_SYNTHESIZED)),
+            None,
+        )  # fmt: skip
+        if vendor is not None:
+            order.insert(vendor, order.pop(at))
+    return order

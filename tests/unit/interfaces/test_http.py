@@ -102,7 +102,9 @@ def test_check_call(client: TestClient) -> None:
     ).json()
     assert r["verdict"] == "documented"
     assert r["matched"]["path"] == "/admin/api/{version}/products/{product_id}.json"
-    assert r["paramChecks"] == [{"name": "fields", "found": True, "where": "query", "note": None}]
+    assert r["paramChecks"] == [
+        {"name": "fields", "found": True, "where": "query", "note": None, "guideId": None}
+    ]
     unknown = {"method": "GET", "path": "/admin/api/2026-10/products.json", "bodyFields": ["x"]}
     assert client.post("/v1/apis/shopify/check-call", json=unknown).status_code == 422
     named = {"method": "GET", "path": "/admin/api/2026-10/products/1.json", "query": ["fields"]}

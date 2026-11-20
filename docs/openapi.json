@@ -3537,6 +3537,18 @@
             "title": "Found",
             "type": "boolean"
           },
+          "guideId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The guide the note points to.",
+            "title": "Guideid"
+          },
           "name": {
             "title": "Name",
             "type": "string"

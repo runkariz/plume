@@ -97,7 +97,14 @@ class RunEvalGate:
                 )
                 ranked = tuple(
                     rank_order(
-                        self._documents, build_id, fused, K, wider, q.question, own, endpoints
+                        self._documents,
+                        build_id,
+                        fused,
+                        K,
+                        wider,
+                        q.question,
+                        own,
+                        endpoints,
                     )
                 )
                 # Expected docs are alternatives: missing only when none of them is in the build.

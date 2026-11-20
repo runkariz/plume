@@ -44,7 +44,7 @@ def test_full_pipeline_seals_and_tags(packages: Path) -> None:
     build = stack.builds.get(result.build_id)
     assert build is not None
     assert build.is_sealed
-    assert result.documents == 8
+    assert result.documents == 9  # + the environments guide
     assert result.chunks == len(build) > 0
     assert result.embedded == result.chunks
     assert result.facts > 0

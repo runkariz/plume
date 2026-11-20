@@ -18,7 +18,9 @@ def test_reads_the_test_catalog(packages: Path) -> None:
     assert pkg.api.category.key == "e-commerce"
     assert pkg.contract_version == "1.2"
     kinds = sorted(d.kind.value for d in pkg.documents)
-    assert kinds == ["app", "auth", "endpoint", "endpoint", "guide", "model", "model", "model"]
+    assert kinds == [  # the guides: the package's and its environments
+        "app", "auth", "endpoint", "endpoint", "guide", "guide", "model", "model", "model",
+    ]  # fmt: skip
     orders = next(d for d in pkg.documents if d.doc_id == "endpoint:GET~/api/{version}/orders")
     assert orders.title == "List orders"
     assert orders.method == "GET"
