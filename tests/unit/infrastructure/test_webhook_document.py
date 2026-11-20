@@ -43,3 +43,10 @@ def test_webhook_verification_is_searchable_and_findable(packages: Path, tmp_pat
         assert [m.owner_id for m in found.matches] == [doc_id], name  # header names: any case
     hits = stack.search().execute("shopify", "how do I verify a webhook signature", mode="text")
     assert doc_id in [h.doc_id for h in hits.hits[:3]]
+
+
+def test_environments_are_a_searchable_guide_with_their_urls(packages: Path) -> None:
+    stack = FakeStack(embedder=WordEmbedder())
+    stack.load(str(packages / "woo-mini"))
+    doc = stack.get_document().execute("woocommerce", "guide:environments-and-base-urls").document
+    assert "- production: https://{host} (default)" in doc.text

@@ -28,6 +28,7 @@ from plume.application.reader.dto import (
 )
 from plume.application.reader.ranking import (
     auth_first,
+    environments_first,
     is_page,
     keep_endpoints,
     lift_operation_endpoints,
@@ -42,6 +43,7 @@ from plume.domain.knowledge.asset import ICON
 from plume.domain.knowledge.call_check import normalize_call_path, path_matches, specificity
 from plume.domain.knowledge.citation import Citation
 from plume.domain.knowledge.document import (
+    ENVIRONMENTS_DOC_ID,
     HEADER_SOURCE_STANDARD,
     HTTP_METHODS,
     STANDARD_HEADER_NOTE,
@@ -278,6 +280,7 @@ def rank_order(
     query: str = "",
     auth_docs: Callable[[], Sequence[str]] = tuple,
     all_endpoints: Callable[[], Sequence[str]] = tuple,
+    env_docs: Callable[[], Sequence[str]] = tuple,
 ) -> list[str]:
     """The final order of fused hits, shared by search and the eval gate: a page brings one of
     its endpoints into the top-k, so does a knowledge unit that names its endpoints (from the
@@ -294,12 +297,18 @@ def rank_order(
     order = near_duplicate_guides_last(order, k)
     order = auth_first(order, k, query, auth_docs)
     order = state_change_first(order, k, query, all_endpoints)
+    order = environments_first(order, k, query, env_docs)
     return keep_endpoints(order, k)
 
 
 def all_endpoint_ids(index: SearchIndex, build_id: BuildId) -> list[str]:
     """Every endpoint document id of the build (for a lookup by path structure)."""
     return [s.doc_id for s in index.browse(build_id, (DocumentKind.ENDPOINT,), None, 100_000, 0)[0]]
+
+
+def own_env_docs(index: SearchIndex, build_id: BuildId) -> list[str]:
+    """The API's environments document, when the package states environments."""
+    return list(index.summaries(build_id, [ENVIRONMENTS_DOC_ID]))
 
 
 def own_auth_docs(
@@ -418,6 +427,9 @@ class SearchDocs:
             allowed = [k for k in (DocumentKind.AUTH, DocumentKind.APP) if not kinds or k in kinds]
             return own_auth_docs(self._index, build_id, allowed)
 
+        def allowed_guides() -> bool:
+            return not kinds or DocumentKind.GUIDE in kinds
+
         def endpoint_ids() -> list[str]:
             if kinds and DocumentKind.ENDPOINT not in kinds:
                 return []
@@ -432,6 +444,7 @@ class SearchDocs:
             query,
             auth_docs,
             endpoint_ids,
+            lambda: own_env_docs(self._index, build_id) if allowed_guides() else [],
         )
         by_id = {h.doc_id: h for h in fuse_hits(wider_hits, [], query, WIDER_POOL)}
         by_id.update({h.doc_id: h for h in fused})

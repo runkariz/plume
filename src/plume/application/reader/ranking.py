@@ -303,3 +303,36 @@ def state_change_first(
     if best is None:
         return list(ranked)
     return [best[2]] + [d for d in ranked if d != best[2]]
+
+
+# where to call: sandbox / test environment / base URL / host questions
+_ENV_QUERY = re.compile(
+    r"\b(sandbox|test(ing)? environment|staging( environment)?|base[ -]?url|host ?names?|"
+    r"server url|environments?|production url|which url|api url)\b",
+    re.IGNORECASE,
+)
+_ENV_DOC = re.compile(r"environment|sandbox|base-?url|hosts?\b|servers?\b", re.IGNORECASE)
+
+
+def _env_doc(doc_id: str) -> bool:
+    return doc_id.startswith("guide:") and bool(_ENV_DOC.search(doc_id.removeprefix("guide:")))
+
+
+def environments_first(
+    ranked: Sequence[str], k: int, query: str, own: Callable[[], Sequence[str]] = tuple
+) -> list[str]:
+    """An environment question (sandbox / test environment / base URL) leads with the API's
+    own environments document (its environments and base URLs), else the best-ranked
+    environment guide of the top 2k (Walmart "what's the sandbox base URL" returned the
+    sandbox guide without a URL)."""
+    if not _ENV_QUERY.search(query):
+        return list(ranked)
+    window = list(ranked[: 2 * k])
+    best = next(iter(own()), None)  # the API's own: it states the URLs
+    if best is None:  # none: the best-ranked environment guide, unless one already leads
+        if window and _env_doc(window[0]):
+            return list(ranked)
+        best = next((d for d in window if _env_doc(d)), None)
+    if best is None or (window and window[0] == best):
+        return list(ranked)
+    return [best] + [d for d in ranked if d != best]

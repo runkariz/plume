@@ -31,6 +31,7 @@ from plume.domain.knowledge import rate_limits
 from plume.domain.knowledge.api import ApiId, ApiInfo, Category
 from plume.domain.knowledge.asset import CONTENT_TYPES, ICON, MAX_ASSET_BYTES, Asset
 from plume.domain.knowledge.document import (
+    ENVIRONMENTS_DOC_ID,
     FIELDS_BOUNDED_KEY,
     HEADER_SOURCE_STANDARD,
     HEADER_SOURCE_VENDOR,
@@ -377,6 +378,36 @@ def _auth_header(data: Mapping[str, Any]) -> tuple[str | None, tuple[FieldSpec, 
     return line, ()
 
 
+def _environments_document(api_name: str, app: Mapping[str, Any]) -> Document | None:
+    """app.json environments as a searchable guide with their base URLs ("what's the sandbox
+    base URL" found the sandbox guide without a URL; the URL was only in get_environments)."""
+    envs = [e for e in app.get("environments") or [] if isinstance(e, dict)]
+    if not envs:
+        return None
+    lines = [f"# {api_name} environments and base URLs"]
+    for e in envs:
+        name = _str(e.get("name")) or _str(e.get("key")) or "environment"
+        kind = _str(e.get("kind"))
+        url = _str(e.get("baseUrl"))
+        head = f"- {name}" + (f" ({kind})" if kind and kind != name else "")
+        head += f": {url}" if url else ": no base URL stated"
+        if e.get("isDefault") is True:
+            head += " (default)"
+        notes = _str(e.get("notes"))
+        lines.append(head + (f". {notes}" if notes else ""))
+        servers = _obj(e.get("servers"))
+        lines += [f"  - {k}: {v}" for k, v in servers.items() if _str(v) and v != url]
+    versioning = _obj(app.get("apiVersioning"))
+    if versioning:
+        lines.append("\n## API versioning\n" + json.dumps(versioning, sort_keys=True))
+    return Document(
+        doc_id=ENVIRONMENTS_DOC_ID,
+        kind=DocumentKind.GUIDE,
+        title=f"{api_name} environments and base URLs",
+        text="\n".join(lines),
+    )
+
+
 def _webhook_document(api_name: str, hook: object) -> Document | None:
     """A webhook delivery mechanism (connector/triggers/webhooks/*.json) as a searchable guide:
     how a delivery is verified (HMAC header, algorithm, encoding, signed payload), the
@@ -661,7 +692,8 @@ class StreamPackageSource:
             },
         )
         documents: list[Document] = [
-            app_doc,  # then each webhook mechanism as a searchable guide
+            app_doc,  # then the environments and each webhook mechanism as searchable guides
+            *([env] if (env := _environments_document(info.name, app)) else []),
             *(d for h in hooks if (d := _webhook_document(info.name, h))),
         ]
         seen: set[str] = {d.doc_id for d in documents}

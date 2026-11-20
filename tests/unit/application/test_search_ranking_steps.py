@@ -76,3 +76,15 @@ def test_a_state_change_question_leads_with_the_operation_that_makes_it() -> Non
     mirakl = ["endpoint:PUT~/api/orders/{order_id}/ship", "model:x"]
     assert state_change_first(mirakl, 5, "mark an order as shipped", lambda: mirakl) == mirakl
     assert state_change_first(ranked, 5, "list deliveries", lambda: every) == ranked
+
+
+def test_an_environment_question_leads_with_the_apis_environments() -> None:
+    """Walmart "what's the sandbox base URL": the sandbox guide without a URL ranked first."""
+    from plume.application.reader.ranking import environments_first  # noqa: PLC0415
+
+    own = "guide:environments-and-base-urls"
+    ranked = ["guide:validation-sandbox-test-user-limits", "endpoint:GET~/orders"]
+    assert environments_first(ranked, 5, "what is the sandbox base URL", lambda: [own])[0] == own
+    assert environments_first(ranked, 5, "list my orders", lambda: [own]) == ranked
+    # no environments document of its own: the best environment guide, as ranked
+    assert environments_first(ranked, 5, "is there a test environment", tuple) == ranked

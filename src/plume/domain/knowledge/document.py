@@ -241,3 +241,7 @@ def header_format(name: str, prefix: str | None) -> str:
     the prefix; it describes it)."""
     stripped = (prefix or "").strip()
     return f"{name}: {stripped} <token>" if stripped else f"{name}: <token>"
+
+
+# the guide the loader makes from app.json environments (their base URLs), searchable
+ENVIRONMENTS_DOC_ID = "guide:environments-and-base-urls"
