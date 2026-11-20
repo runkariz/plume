@@ -410,3 +410,30 @@ describe('a parameter check that carries a note', () => {
     expect(screen.queryByRole('list', { name: /Guide for/ })).not.toBeInTheDocument();
   });
 });
+
+describe('a call that carried the base path of a server', () => {
+  async function check(path: string, method = 'POST') {
+    renderApp('/apis/shopify/try');
+    await userEvent.click(screen.getByRole('radio', { name: 'Check call' }));
+    await userEvent.selectOptions(screen.getByLabelText('HTTP method'), method);
+    const p = screen.getByLabelText('Path');
+    await userEvent.clear(p);
+    await userEvent.type(p, path);
+    const params = screen.getByLabelText('Parameters, comma separated');
+    await userEvent.clear(params);
+    await userEvent.click(screen.getByRole('button', { name: 'Check' }));
+    await screen.findByText('Documented');
+  }
+
+  it('shows "via server ..." next to the matched endpoint', async () => {
+    await check('/commerce/media/v1_beta/video');
+    expect(screen.getByText(/via server/)).toHaveTextContent(
+      'via server api_3: https://apim.ebay.com/commerce/media/v1_beta',
+    );
+  });
+
+  it('shows nothing about a server when the match has none', async () => {
+    await check('/admin/api/latest/orders.json', 'GET');
+    expect(screen.queryByText(/via server/)).not.toBeInTheDocument();
+  });
+});
