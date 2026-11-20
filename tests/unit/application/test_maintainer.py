@@ -30,7 +30,7 @@ def test_wizard_flow(stack: FakeStack, packages: Path) -> None:
     job = m.upload("catalog.zip", zip_dir(packages / "test-catalog"))
     p = job_payload(job)
     assert p["status"] == "uploaded"
-    assert p["package"]["contents"] == {"endpoints": 2, "models": 3, "guides": 1}
+    assert p["package"]["contents"] == {"endpoints": 2, "models": 3, "guides": 2}  # + environments
     assert p["package"]["suggested"] == {
         "apiId": "test-catalog-api", "displayName": "Test Catalog API", "tag": "latest"
     }  # fmt: skip

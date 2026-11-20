@@ -106,6 +106,7 @@ class ParamCheck:
     found: bool
     where: str | None
     note: str | None = None  # e.g. where this API's paging is described (not asserted)
+    guide_id: str | None = None  # the guide the note points to
 
 
 @dataclass(frozen=True, slots=True)

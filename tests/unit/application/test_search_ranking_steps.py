@@ -76,3 +76,16 @@ def test_a_state_change_question_leads_with_the_operation_that_makes_it() -> Non
     mirakl = ["endpoint:PUT~/api/orders/{order_id}/ship", "model:x"]
     assert state_change_first(mirakl, 5, "mark an order as shipped", lambda: mirakl) == mirakl
     assert state_change_first(ranked, 5, "list deliveries", lambda: every) == ranked
+
+
+def test_a_synthesized_guide_gives_way_to_the_vendors() -> None:
+    """bol "verify the signature of a webhook": Plume's webhook-delivery guide took rank 1 above
+    bol's signature-verification guide; with no vendor guide (Shopify) it stays first."""
+    from plume.application.reader.ranking import synthesized_after_vendor  # noqa: PLC0415
+
+    ours = "guide:webhook-delivery-post-retailer-subscriptions-v11"
+    vendor = "guide:validation-subscriptions-digital-signature-verification"
+    ranked = [ours, vendor, "endpoint:POST~/retailer/subscriptions"]
+    assert synthesized_after_vendor(ranked, 5) == [vendor, ours, ranked[2]]
+    alone = [ours, "endpoint:POST~/webhooks.json"]
+    assert synthesized_after_vendor(alone, 5) == alone

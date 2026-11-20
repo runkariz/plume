@@ -35,5 +35,28 @@ for (const theme of THEMES) {
         theme,
       );
     });
+
+    test('a paging name that is not documented shows the note and links the paging guide', async ({
+      page,
+    }) => {
+      await page.goto('/apis/shopify/try');
+      await page.getByRole('radio', { name: 'Check call' }).check({ force: true });
+      await page.getByLabel('Parameters, comma separated').fill('limit, cursor');
+      await page.getByRole('button', { name: 'Check' }).click();
+      const item = page.getByRole('listitem').filter({ hasText: 'cursor' }).first();
+      await expect(item).toContainText("Not in this endpoint's documented parameters");
+      await expect(
+        item.getByRole('list', { name: 'Guide for cursor' }).getByRole('link'),
+      ).toBeVisible();
+      await settle(page);
+      await expectNoSeriousA11y(page);
+      await shotOf(
+        page
+          .getByText('Documented', { exact: true })
+          .locator('xpath=ancestor::*[contains(@class,"card")][1]'),
+        'w46-param-note',
+        theme,
+      );
+    });
   });
 }

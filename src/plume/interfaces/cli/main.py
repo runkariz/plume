@@ -50,9 +50,11 @@ class CliDependencies:
     gold: Callable[[], GoldSource] | None = None
     export_dump: Callable[[], ExportDump] | None = None
     restore_dump: Callable[[], RestoreDump] | None = None
-    # (written questions per source, skipped ids, the package's declared goldCounts or None)
+    # (written questions per source, skipped ids, the package's declared goldCounts or None,
+    # expected item ids that resolved to no document)
     import_gold: (
-        Callable[[str, str], tuple[dict[str, int], list[str], dict[str, int] | None]] | None
+        Callable[[str, str], tuple[dict[str, int], list[str], dict[str, int] | None, list[str]]]
+        | None
     ) = None
     release_notes: Callable[[], ReleaseNotes] | None = None
     remove_api: Callable[[], RemoveApi] | None = None
@@ -261,6 +263,15 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         version: Annotated[str | None, typer.Option(help="Tag or build id")] = None,
         gold: Annotated[str | None, typer.Option(help="Gold set file")] = None,
         as_json: Annotated[bool, typer.Option("--json")] = False,
+        store: Annotated[
+            bool | None,
+            typer.Option(
+                "--store/--no-store",
+                help="Keep the result as the build's eval (its quality card and gate). Default: "
+                "only with the gold set of the build's gate eval (same content); another gold "
+                "is an ad-hoc run.",
+            ),
+        ] = None,
     ) -> None:
         """Run the gold questions against a build and print the gate decision (exit 2 on fail)."""
         try:
@@ -270,7 +281,9 @@ def create_app(deps: CliDependencies) -> typer.Typer:
             if ref is None:
                 raise typer.BadParameter(f"no gold set for {api}; pass --gold")
             gold_set, gold_hash = source.load(ref)
-            run = _need(deps.run_eval, "eval").execute(build.build_id, gold_set, gold_hash)
+            run = _need(deps.run_eval, "eval").execute(
+                build.build_id, gold_set, gold_hash, store=store
+            )
         except (ApplicationError, DomainError) as exc:
             raise fail(exc) from exc
         out = {
@@ -280,6 +293,7 @@ def create_app(deps: CliDependencies) -> typer.Typer:
             "message": run.decision.message,
             "metrics": run.record.metrics.as_dict(),
             "baseline": run.baseline.build_id.value if run.baseline else None,
+            "stored": run.stored,  # False: ad hoc, not the build's quality card
             "details": list(run.record.details),
         }
         typer.echo(json.dumps(out, indent=None if as_json else 2))
@@ -295,13 +309,16 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         if deps.import_gold is None:
             raise typer.BadParameter("gold-import is not available in this build")
         try:
-            counts, skipped, declared = deps.import_gold(package, out)
+            counts, skipped, declared, unresolved = deps.import_gold(package, out)
         except (ApplicationError, DomainError) as exc:
             raise fail(exc) from exc
         per = ", ".join(f"{n} {s}" for s, n in counts.items()) or "none"
         typer.echo(
             f"wrote {out}: {sum(counts.values())} question(s) ({per}); skipped {len(skipped)}"
         )
+        if unresolved:  # expected items that name no document of the package: dropped
+            shown = ", ".join(unresolved[:20]) + (" …" if len(unresolved) > 20 else "")
+            typer.echo(f"  unresolved expected items: {len(unresolved)} ({shown})")
         if declared:
             typer.echo(
                 "  package goldCounts: " + ", ".join(f"{n} {s}" for s, n in declared.items())

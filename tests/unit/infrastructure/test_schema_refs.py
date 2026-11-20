@@ -96,3 +96,24 @@ def test_composed_and_referenced_types_and_their_model(tmp_path: Path) -> None:
     assert f"- `anything` ({UNTYPED}): Free-form." in text
     query = FieldSpec("q", FieldLocation.QUERY)
     assert UNTYPED not in _fields_section("Query", [query])  # parameters: no such note
+
+
+def test_a_local_definition_named_like_a_package_model_links_it(tmp_path: Path) -> None:
+    """Endpoint schemas use #/$defs/Address; the package has models/address.schema.json."""
+    connector = tmp_path / "connector"
+    (connector / "models").mkdir(parents=True)
+    responses = connector / "endpoints" / "get-order" / "responses"
+    responses.mkdir(parents=True)
+    _write(connector / "models", "address.schema.json", {"type": "object"})
+    _write(responses, "200.schema.json", {
+        "type": "object",
+        "properties": {"billing": {"$ref": "#/$defs/Address"},
+                       "other": {"$ref": "#/$defs/Nothing"}},
+        "$defs": {"Address": {"type": "object"}, "Nothing": {"type": "object"}},
+    })  # fmt: skip
+    data = json.loads((responses / "200.schema.json").read_text())
+    walked = {f.name: f.model_id for f in _walk_fields(
+        data, FieldLocation.RESPONSE, "200.schema.json#",
+        scope=_RefScope(data, "200.schema.json", responses))}  # fmt: skip
+    assert walked["billing"] == "model:address"
+    assert walked["other"] is None

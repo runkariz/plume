@@ -364,6 +364,7 @@ class ParamCheck(Schema):
         default=None,
         description="When not found: e.g. the guide that describes this API's paging (to check).",
     )
+    guide_id: str | None = Field(default=None, description="The guide the note points to.")
 
 
 class Checked(Schema):

@@ -55,6 +55,7 @@ def test_pagination_contract_and_guide(stack: FakeStack) -> None:
     note = r.params[2].note or ""
     assert note.startswith("Not in this endpoint's documented parameters. Paging for this API")
     assert "guide:pagination" in note
+    assert r.params[2].guide_id == "guide:pagination"
     assert r.params[0].note is None
     assert r.verdict == "not_documented"
     nope = _check(stack, PRODUCTS, params=["nope"])
@@ -106,3 +107,46 @@ async def test_unknown_mcp_arguments_are_refused(stack: FakeStack) -> None:
             {"api": "shopify", "method": "GET", "path": PRODUCTS, "query": ["limit"]},
         )
         assert not ok.is_error
+
+
+def _unit(stack_dir: Path, key: str, endpoint: str | None, text: str) -> None:
+    knowledge = stack_dir / "connector" / "knowledge"
+    meta = {"id": key, "kind": "pagination", "title": key.replace("-", " ").title()}
+    if endpoint:
+        meta["endpointId"] = endpoint
+    (knowledge / f"{key}.json").write_text(json.dumps(meta))
+    (knowledge / f"{key}.md").write_text(text)
+
+
+def test_the_paging_note_never_points_to_another_resources_guide(
+    packages: Path, tmp_path: Path
+) -> None:
+    """Walmart GET /orders [nextCursor] pointed to virtual packs' paging; Cdiscount GET /orders
+    [limit] to the offers'. Same resource first, then a general guide, else no note."""
+    dst = tmp_path / "shopify-units"
+    shutil.copytree(packages / "shopify-mini", dst)
+    text = "# Paging\\n\\nPage with the `since_cursor` query parameter (`since_cursor`).\\n"
+    _unit(dst, "fulfillment-paging", "get-admin-api-latest-assigned-fulfillment-orders-json", text)
+    _unit(dst, "general-paging", None, text)
+    s = FakeStack()
+    s.load(str(dst))
+    r = _check(s, PRODUCTS, params=["since_cursor"])
+    assert r.params[0].guide_id == "guide:general-paging"  # not the fulfillment orders' guide
+    _unit(dst, "products-paging", "get-admin-api-latest-products-json", text)
+    s2 = FakeStack()
+    s2.load(str(dst))
+    assert _check(s2, PRODUCTS, params=["since_cursor"]).params[0].guide_id == (
+        "guide:products-paging"
+    )
+
+
+def test_a_general_paging_guide_is_about_paging_only() -> None:
+    from plume.application.reader.use_cases import _general_paging  # noqa: PLC0415
+
+    assert _general_paging("guide:rest-pagination")  # Woo
+    assert _general_paging("guide:workflow-best-practices-pagination-implementation")  # Cdiscount
+    assert _general_paging("guide:validation-pagination-paginated-request-parameter-restrictions")
+    assert not _general_paging(  # Walmart: virtual packs' paging, unlinked
+        "guide:validation-virtual-packs-virtual-pack-retrieval-query-parameters"
+    )
+    assert not _general_paging("guide:offers-pagination")  # Cdiscount offers

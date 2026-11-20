@@ -26,6 +26,7 @@ from plume.application.reader.dto import (
     SearchResult,
     TraceStep,
 )
+from plume.application.reader.links import linked_endpoints
 from plume.application.reader.ranking import (
     auth_first,
     is_page,
@@ -36,6 +37,7 @@ from plume.application.reader.ranking import (
     pair_units_with_endpoints,
     request_models_last,
     state_change_first,
+    synthesized_after_vendor,
 )
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
 from plume.domain.knowledge.asset import ICON
@@ -294,6 +296,7 @@ def rank_order(
     order = near_duplicate_guides_last(order, k)
     order = auth_first(order, k, query, auth_docs)
     order = state_change_first(order, k, query, all_endpoints)
+    order = synthesized_after_vendor(order, k)
     return keep_endpoints(order, k)
 
 
@@ -833,6 +836,27 @@ def pick_operations(
     return [o for o in owners if all(fixed[o].get(k, "").lower() == v for k, v in given.items())]
 
 
+# words a guide id may have and still be about paging in general (not one resource's paging)
+_GENERAL_PAGING_WORDS = frozenset({
+    "guide", "page", "pages", "paging", "pagination", "paginated", "paginate", "cursor",
+    "cursors", "query", "parameter", "parameters", "param", "params", "request", "requests",
+    "response", "responses", "result", "results", "limit", "limits", "restriction",
+    "restrictions", "rule", "rules", "best", "practice", "practices", "implementation",
+    "implementing", "workflow", "validation", "rest", "api", "general", "overview", "how",
+    "to", "and", "the", "of", "for", "with", "using", "use", "list", "lists", "size", "offset",
+    "token", "tokens", "next", "link", "header", "headers", "conventions", "convention",
+})  # fmt: skip
+
+
+def _general_paging(doc_id: str) -> bool:
+    """A guide id about paging in general (rest-pagination, workflow-best-practices-pagination-
+    implementation), not one resource's paging (virtual-packs-...-query-parameters)."""
+    words = [w for w in re.split(r"[^a-z0-9]+", doc_id.removeprefix("guide:").lower()) if w]
+    return any(w.startswith("pag") for w in words) and all(
+        w in _GENERAL_PAGING_WORDS or w.isdigit() for w in words
+    )
+
+
 def _param_key(name: str) -> str:
     """A parameter's match key: the full name, case-insensitive, list marks ignored
     (items[].sku = items.sku); page[number] stays its own name."""
@@ -1017,6 +1041,34 @@ class CheckCall:
             return set()
         return {_param_key(v) for v in contract.values() if isinstance(v, str) and v.strip()}
 
+    def _paging_guide(
+        self, build_id: BuildId, owner_id: str, hits: list[ChunkHit]
+    ) -> ChunkHit | None:
+        """The paging guide to point to: one tied to this endpoint or its resource (by its
+        endpoint links or resource), else a general one (tied to no resource); never a guide
+        about another resource (Walmart GET /orders pointed to virtual packs' paging)."""
+        if not hits or self._documents is None:
+            return None
+        endpoint = self._documents.get_document(build_id, owner_id)
+        resource = (endpoint.resource or "").lower() if endpoint else ""
+        general: ChunkHit | None = None
+        for h in hits:
+            g = self._documents.get_document(build_id, h.doc_id)
+            if g is None:
+                continue
+            links = linked_endpoints(g)
+            if owner_id in links or (resource and (g.resource or "").lower() == resource):
+                return h  # this endpoint's own, or its resource's
+            if resource and any(
+                (e := self._documents.get_document(build_id, x)) is not None
+                and (e.resource or "").lower() == resource
+                for x in links
+            ):
+                return h
+            if not links and not g.resource and general is None and _general_paging(h.doc_id):
+                general = h  # about paging in general
+        return general
+
     def _paging_guides(self, build_id: BuildId) -> list[ChunkHit]:
         """The API's guides about paging, for a name the endpoint does not document."""
         return list(self._index.text(build_id, "pagination paging page", 10, (DocumentKind.GUIDE,)))
@@ -1055,14 +1107,17 @@ class CheckCall:
                     continue
                 if guides is None:
                     guides = self._paging_guides(build_id)
-                guide = next((h for h in guides if _term_use(h.text, p)[0] >= PAGING_TERM_SCORE),
-                             None)  # fmt: skip
+                guide = self._paging_guide(
+                    build_id,
+                    owner_id,
+                    [h for h in guides if _term_use(h.text, p)[0] >= PAGING_TERM_SCORE],
+                )
                 if guide is not None:  # point to it; do not assert the name
                     checks.append(ParamCheck(p, False, None, note=(
                         "Not in this endpoint's documented parameters. Paging for this API is "
                         f"described in {guide.doc_id} ({guide.title}); check it before using "
                         "this name."
-                    )))  # fmt: skip
+                    ), guide_id=guide.doc_id))  # fmt: skip
                     continue
             checks.append(ParamCheck(p, False, None))
         return checks

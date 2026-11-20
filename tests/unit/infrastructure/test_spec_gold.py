@@ -60,7 +60,7 @@ def _with_spec_gold(packages: Path, tmp_path: Path) -> Path:
 
 def test_gold_import_keeps_source_and_spec_provenance(packages: Path, tmp_path: Path) -> None:
     out = tmp_path / "woocommerce.json"
-    counts, skipped, declared = import_gold(str(_with_spec_gold(packages, tmp_path)), str(out))
+    counts, skipped, declared, _ = import_gold(str(_with_spec_gold(packages, tmp_path)), str(out))
     assert counts == {"docs": 3, "spec": 2}
     assert skipped == ["s-3"]
     assert declared == {"docs": 3, "spec": 3}
@@ -81,7 +81,7 @@ def test_gold_import_keeps_source_and_spec_provenance(packages: Path, tmp_path: 
 
 
 def test_plain_package_reports_docs_only(packages: Path, tmp_path: Path) -> None:
-    counts, skipped, declared = import_gold(str(packages / "woo-mini"), str(tmp_path / "w.json"))
+    counts, skipped, declared, _ = import_gold(str(packages / "woo-mini"), str(tmp_path / "w.json"))
     assert (counts, skipped, declared) == ({"docs": 3}, [], None)
 
 

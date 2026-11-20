@@ -242,7 +242,15 @@ export interface CheckCallResponse {
     anchor: string | null;
     quote: string | null;
   } | null;
-  paramChecks: { name: string; found: boolean; where: string | null }[];
+  /** `note` (when not found): e.g. the guide that describes this API's paging, to check before using the name. */
+  paramChecks: {
+    name: string;
+    found: boolean;
+    where: string | null;
+    note?: string | null;
+    /** The paging guide the note points to ("guide:pagination"); set exactly when it does. Absent on older servers. */
+    guideId?: string | null;
+  }[];
   checked: { endpoints: number; models: number };
   /** The other operation ids at the same METHOD + path (e.g. a package with three GET /{file_path} downloads). */
   alternatives?: string[];
