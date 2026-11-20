@@ -537,6 +537,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                     method=r.matched_method or "",
                     path=r.matched_path or "",
                     real_path=r.matched_real_path,
+                    server=r.matched_server,
                 )
                 if r.matched_id
                 else None

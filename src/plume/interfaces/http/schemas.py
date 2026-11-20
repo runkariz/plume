@@ -354,6 +354,11 @@ class MatchedEndpoint(Schema):
     method: str
     path: str
     real_path: str | None = Field(default=None, description=_REAL_PATH)
+    server: str | None = Field(
+        default=None,
+        description="The server whose base path the call carried and that was taken off to "
+        "match (e.g. api_3: https://apim.ebay.com/commerce/media/v1_beta).",
+    )
 
 
 class ParamCheck(Schema):
