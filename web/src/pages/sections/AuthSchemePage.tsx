@@ -15,6 +15,7 @@ import {
 } from '@/components';
 import { apiTitle } from '@/lib/names';
 import { resolveServers, usesServers } from '@/lib/servers';
+import { HeaderSource, headerLine } from './HeaderSource';
 
 /** Setup steps come verbatim from the package: {order, text} in Shopify; strings or other shapes elsewhere. */
 export function stepText(step: unknown): { order: number | null; text: string } {
@@ -175,12 +176,22 @@ export function AuthSchemePage() {
         <dl className="facts">
           {facts
             .filter(([, v]) => v)
-            .map(([k, v]) => (
-              <div key={k} className="fact">
-                <dt className="muted">{k}</dt>
-                <dd className="mono">{v}</dd>
-              </div>
-            ))}
+            .map(([k, v]) =>
+              k === 'Header' ? (
+                <div key={k} className="fact fact-url">
+                  <dt className="muted">{k}</dt>
+                  <dd>
+                    <span className="mono">{headerLine(d) ?? v}</span>
+                    <HeaderSource scheme={d} />
+                  </dd>
+                </div>
+              ) : (
+                <div key={k} className="fact">
+                  <dt className="muted">{k}</dt>
+                  <dd className="mono">{v}</dd>
+                </div>
+              ),
+            )}
           {urlFacts.map((u) => (
             <div key={u.key} className="fact fact-url">
               <dt className="muted">{u.label}</dt>

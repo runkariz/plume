@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
 import { Card, Chip, EmptyState, ErrorState, LoadingState, Notices } from '@/components';
+import { headerLine } from './HeaderSource';
 
 /** The auth schemes of the package (type, grant, header or query parameter, scopes, variables), one card each. */
 export function AuthPanel({ apiId }: { apiId: string }) {
@@ -42,9 +43,14 @@ export function AuthPanel({ apiId }: { apiId: string }) {
                 <div className="row" style={{ gap: 8, marginTop: 6 }}>
                   {s.type ? <Chip tone="info">{s.type}</Chip> : null}
                   {s.grantType ? <Chip>{s.grantType}</Chip> : null}
-                  {s.headerName ? <span className="mono small">header {s.headerName}</span> : null}
+                  {s.headerName ? (
+                    <span className="mono small">{headerLine(s) ?? `header ${s.headerName}`}</span>
+                  ) : null}
                   {s.queryParam ? <span className="mono small">query {s.queryParam}</span> : null}
                 </div>
+                {s.headerNote?.trim() ? (
+                  <p className="faint small header-note">{s.headerNote.trim()}</p>
+                ) : null}
               </div>
               <div className="faint small sec-counts">
                 {s.scopes} scope{s.scopes === 1 ? '' : 's'} · {s.variables} variable

@@ -63,6 +63,9 @@ const SHOPIFY_SCOPES = [
   ['read_themes', 'View themes'],
 ] as const;
 
+export const STANDARD_HEADER_NOTE =
+  "OAuth 2.0 standard (RFC 6750), not stated in the vendor's docs";
+
 const AUTH_GUIDE_NOTICE = {
   code: 'auth-needs-core-change',
   section: 'auth',
@@ -107,9 +110,32 @@ export function authFor(api: string): AuthList {
           type: 'API_KEY',
           grantType: null,
           headerName: 'Authorization',
+          headerPrefix: 'Bearer',
+          headerFormat: 'Authorization: Bearer <token>',
+          headerSource: 'vendor',
+          headerEvidence:
+            'Authenticate your account by including your secret key in the request as a Bearer token.',
+          headerNote: null,
           queryParam: null,
           scopes: 0,
           variables: 1,
+        },
+        {
+          // the standard's header: a label, no quote (the prefix ends in a space here: still one space shown)
+          id: 'oauth2-connect',
+          docId: 'auth:oauth2-connect',
+          name: 'OAuth 2.0 (Connect)',
+          type: 'OAUTH2',
+          grantType: 'authorization_code',
+          headerName: 'Authorization',
+          headerPrefix: 'Bearer ',
+          headerFormat: 'Authorization: Bearer <token>',
+          headerSource: 'standard:rfc6750',
+          headerEvidence: null,
+          headerNote: STANDARD_HEADER_NOTE,
+          queryParam: null,
+          scopes: 0,
+          variables: 0,
         },
       ],
       // a note about the package's auth, as the server words it (mock text)
@@ -170,8 +196,29 @@ export function authDetailFor(api: string, id: string): AuthSchemeDetail | undef
       },
       variablesSchema: null,
     };
+  if (id === 'oauth2-connect')
+    return {
+      ...base,
+      scopes: [],
+      variables: [],
+      setupSteps: null,
+      tokenLifetime: null,
+      scheme: { authorizationType: 'OAUTH2', grantType: 'authorization_code' },
+      variablesSchema: null,
+      headerPrefix: 'Bearer ',
+      headerFormat: 'Authorization: Bearer <token>',
+      headerSource: 'standard:rfc6750',
+      headerEvidence: null,
+      headerNote: STANDARD_HEADER_NOTE,
+    };
   return {
     ...base,
+    headerPrefix: 'Bearer',
+    headerFormat: 'Authorization: Bearer <token>',
+    headerSource: 'vendor',
+    headerEvidence:
+      'Authenticate your account by including your secret key in the request as a Bearer token.',
+    headerNote: null,
     testUrl: 'https://api.stripe.com/v1/balance',
     scopes: [],
     variables: [

@@ -945,6 +945,16 @@ export interface AuthSchemeSummary {
   type: string | null;
   grantType: string | null;
   headerName: string | null;
+  /** The prefix of the header value as the package writes it ("Bearer" or "Bearer "); null when none or unknown. */
+  headerPrefix?: string | null;
+  /** The header as a client sends it ("Authorization: Bearer <token>"), one space after the prefix; set with headerSource. */
+  headerFormat?: string | null;
+  /** Where the header comes from: "vendor" (headerEvidence quotes it), "standard:rfc6750" (headerNote says so) or null. */
+  headerSource?: string | null;
+  /** The vendor's quote; only when headerSource is "vendor". Never a quote for the standard's header. */
+  headerEvidence?: string | null;
+  /** The label to show when the header is the standard's ("OAuth 2.0 standard (RFC 6750), not stated in the vendor's docs"). */
+  headerNote?: string | null;
   queryParam: string | null;
   scopes: number;
   variables: number;
@@ -986,6 +996,16 @@ export interface AuthSchemeDetail {
   type: string | null;
   grantType: string | null;
   headerName: string | null;
+  /** The prefix of the header value as the package writes it ("Bearer" or "Bearer "); null when none or unknown. */
+  headerPrefix?: string | null;
+  /** The header as a client sends it ("Authorization: Bearer <token>"), one space after the prefix; set with headerSource. */
+  headerFormat?: string | null;
+  /** Where the header comes from: "vendor" (headerEvidence quotes it), "standard:rfc6750" (headerNote says so) or null. */
+  headerSource?: string | null;
+  /** The vendor's quote; only when headerSource is "vendor". Never a quote for the standard's header. */
+  headerEvidence?: string | null;
+  /** The label to show when the header is the standard's ("OAuth 2.0 standard (RFC 6750), not stated in the vendor's docs"). */
+  headerNote?: string | null;
   queryParam: string | null;
   scopes: {
     scope: string | null;
