@@ -30,6 +30,7 @@ from plume.application.reader.dto import (
 from plume.application.reader.links import linked_endpoints
 from plume.application.reader.ranking import (
     auth_first,
+    context_after_named_endpoint,
     endpoint_before_its_model,
     is_page,
     keep_endpoints,
@@ -315,6 +316,7 @@ def rank_order(
     order = rate_limit_guide_first(order, k, query)
     order = endpoint_before_its_model(order, k)
     order = push_first(order, k, query, all_endpoints)
+    order = context_after_named_endpoint(order, k, query)
     return keep_endpoints(order, k)
 
 

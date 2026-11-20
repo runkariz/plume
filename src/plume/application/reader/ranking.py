@@ -496,6 +496,9 @@ _PUSH_QUERY = re.compile(
 _PUSH_DOC = re.compile(r"webhook|subscri|event|notification|trigger:", re.IGNORECASE)
 
 
+_VERIFY_QUERY = re.compile(r"\b(verif\w*|signatures?|signed|hmac|authenticat\w*)\b", re.I)
+
+
 def _push_endpoint(doc_id: str) -> bool:
     """An endpoint whose literal path names webhooks / hooks / subscriptions / events (not a
     {webhook_id} parameter: BigCommerce PUT /hooks/{webhook_id} is no better than POST /hooks)."""
@@ -512,8 +515,8 @@ def push_first(
     """ "Does X call my URL / send webhooks": a webhook / event-subscription document leads
     (Magento POST /webhooks/subscribe and the Adobe I/O Events endpoints were not in the top 8);
     the best-ranked one of the top 2k, else such an endpoint among all of the API's."""
-    if not _PUSH_QUERY.search(query):
-        return list(ranked)
+    if not _PUSH_QUERY.search(query) or _VERIFY_QUERY.search(query):
+        return list(ranked)  # not a push question, or how to verify one (signing guides)
     window = list(ranked[: 2 * k])
     if window and (
         _push_endpoint(window[0])
@@ -536,3 +539,19 @@ def _push_rank(doc_id: str) -> tuple[int, int, int]:
     path = doc_id.split("~", 1)[-1].lower()
     kind = 0 if "hook" in path else 1 if "subscri" in path else 2
     return (kind, 0 if doc_id.startswith("endpoint:POST~") else 1, len(path))
+
+
+CONTEXT_GUIDE = "guide:context"  # the API-wide overview guide
+
+
+def context_after_named_endpoint(ranked: Sequence[str], k: int, query: str) -> list[str]:
+    """The API's context guide (an overview) at rank 1 gives way to an endpoint of the top-k
+    whose path names a word of the question (BigCommerce "metadata for brands": guide:context
+    above .../brands/{brand_id}/metafields); an overview answer with no such endpoint stays."""
+    if not ranked or ranked[0] != CONTEXT_GUIDE:
+        return list(ranked)
+    words = {_singular(w) for w in re.findall(r"[a-z]{4,}", query.lower())}
+    for d in ranked[1:k]:
+        if d.startswith("endpoint:") and words & {_singular(w) for w in _path_words(d)}:
+            return [d, CONTEXT_GUIDE] + [x for x in ranked[1:] if x != d]
+    return list(ranked)
