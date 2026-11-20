@@ -192,9 +192,12 @@ _AUTH_QUERY = re.compile(
     r"|\b(compute|calculate|generate)\b.*\bsign(ature)?\b|\bsign param"
     r"|\b(access|app|api|bearer|refresh|admin api)[ -]?(tokens?|keys?)\b|\boauth\b"
     r"|\bclient credentials\b|\bauthenticat\w*\b.*\b(requests?|calls?|the api|api)\b"
-    r"|\bauth(entication|orization)? headers?\b|\bwhich header authenticates\b",
+    r"|\bauth(entication|orization)? headers?\b|\bwhich header authenticates\b"
+    r"|^\s*(how (do|can|should) (i|we|you) (authenticate|log ?in)|(api )?authentication|"
+    r"how does (the )?authentication work)\s*\??\s*$",
     re.IGNORECASE,
 )
+_SCOPE_QUERY = re.compile(r"\b(which|what) (oauth )?scopes?\b|\bscopes? (do i|are) need", re.I)
 _SIGN_QUERY = re.compile(r"\bsign(s|ed|ing|ature)?\b", re.IGNORECASE)
 _AUTH_DOC = re.compile(r"auth|sign|token|credential|oauth|hmac", re.IGNORECASE)
 
@@ -207,6 +210,8 @@ def _auth_doc(doc_id: str) -> bool:
     issues or explains tokens (Magento POST /integration/admin/token, Shopify's OAuth page)."""
     if doc_id.startswith(("auth:", "app:")):  # the app document carries the setup / signing text
         return True
+    if "webhook" in doc_id.lower():  # verifying incoming calls, not calling the API (Trendyol)
+        return False
     if doc_id.startswith((PAGE_PREFIX, "endpoint:")):
         return bool(_AUTH_OPERATION.search(doc_id.split(":", 1)[1]))
     return doc_id.startswith("guide:") and bool(_AUTH_DOC.search(doc_id.removeprefix("guide:")))
@@ -222,6 +227,15 @@ def auth_first(
     signing / tokens) first, ahead of operations that merely share a word (Lazada's sponsor
     /account/sign endpoints for "how do I sign a request"). With none ranked, the first of
     ``own()`` (the API's auth schemes, then its app document: TikTok's signing setup)."""
+    if _SCOPE_QUERY.search(query):  # the scheme lists the scopes (Allegro "which scope …")
+        if ranked and "scope" in ranked[0].lower():  # a scope guide leads (Zalando): keep it
+            return list(ranked)
+        scheme = next((d for d in ranked[: 2 * k] if d.startswith("auth:")), None) or next(
+            (d for d in own() if d.startswith("auth:")), None
+        )
+        if scheme is not None and ranked and ranked[0] != scheme:
+            return [scheme] + [d for d in ranked if d != scheme]
+        return list(ranked)
     if not _AUTH_QUERY.search(query):
         return list(ranked)
     window = list(ranked[: 2 * k])
@@ -324,3 +338,67 @@ def synthesized_after_vendor(ranked: Sequence[str], k: int) -> list[str]:
         if vendor is not None:
             order.insert(vendor, order.pop(at))
     return order
+
+
+_TEST_SEGMENT = re.compile(r"/(test|tests|sandbox|simulations?|staging)(?=/|$)", re.IGNORECASE)
+_ASKS_FOR_TEST = re.compile(r"\b(test(ing)?|sandbox|staging|simulat\w*|demo)\b", re.IGNORECASE)
+
+
+def production_before_test(ranked: Sequence[str], query: str) -> list[str]:
+    """A test / sandbox / simulation endpoint gives way to its production twin when both are
+    ranked (Trendyol PUT /integration/test/order/... above the production PUT), unless the
+    question asks for the test environment."""
+    if _ASKS_FOR_TEST.search(query):
+        return list(ranked)
+    order = list(ranked)
+    for doc in [d for d in order if d.startswith("endpoint:") and _TEST_SEGMENT.search(d)]:
+        twin = _TEST_SEGMENT.sub("", doc, count=1)
+        if twin in order and order.index(twin) > order.index(doc):
+            order.remove(twin)
+            order.insert(order.index(doc), twin)
+    return order
+
+
+def _path_only(doc_id: str) -> bool:
+    """GET /{file_path}: an endpoint whose path is only parameters (a URL another call
+    returned), not a resource of its own."""
+    if not doc_id.startswith("endpoint:"):
+        return False
+    path = doc_id.split("~", 1)[-1].split("@", 1)[0]
+    segs = [x for x in path.strip("/").split("/") if x]
+    return bool(segs) and all(x.startswith("{") for x in segs)
+
+
+def path_only_after_endpoints(ranked: Sequence[str], k: int) -> list[str]:
+    """A path-only endpoint (Mirakl GET /{file_path}: fetch a chunk of an export file) moves
+    just behind the first other endpoint of the top-k: it is a follow-up step, not the
+    answer (it ranked 1 for invoice questions)."""
+    order = list(ranked)
+    for doc in [d for d in order[:k] if _path_only(d)]:
+        at = order.index(doc)
+        other = next(
+            (i for i, d in enumerate(order[:k]) if i > at and d.startswith("endpoint:")
+             and not _path_only(d)),
+            None,
+        )  # fmt: skip
+        if other is not None:
+            order.insert(other, order.pop(at))
+    return order
+
+
+_RATE_QUERY = re.compile(r"\b(rate[ -]?limit\w*|429|throttl\w*|too many requests|quota)\b", re.I)
+_RATE_DOC = re.compile(r"rate-?limit|throttl|quota", re.IGNORECASE)
+
+
+def rate_limit_guide_first(ranked: Sequence[str], k: int, query: str) -> list[str]:
+    """A rate-limit question leads with a guide about rate limits (its id says so) rather than
+    a one-sentence rule that states one endpoint's limit (Mirakl resource-rules-api-2 at 1)."""
+    if not _RATE_QUERY.search(query):
+        return list(ranked)
+    window = list(ranked[: 2 * k])
+    if window and _RATE_DOC.search(window[0]):
+        return list(ranked)
+    best = next((d for d in window if d.startswith("guide:") and _RATE_DOC.search(d)), None)
+    if best is None:
+        return list(ranked)
+    return [best] + [d for d in ranked if d != best]
