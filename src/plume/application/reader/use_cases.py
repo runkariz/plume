@@ -26,6 +26,7 @@ from plume.application.reader.dto import (
     SearchResult,
     TraceStep,
 )
+from plume.application.reader.links import linked_endpoints
 from plume.application.reader.ranking import (
     auth_first,
     environments_first,
@@ -1030,6 +1031,34 @@ class CheckCall:
             return set()
         return {_param_key(v) for v in contract.values() if isinstance(v, str) and v.strip()}
 
+    def _paging_guide(
+        self, build_id: BuildId, owner_id: str, hits: list[ChunkHit]
+    ) -> ChunkHit | None:
+        """The paging guide to point to: one tied to this endpoint or its resource (by its
+        endpoint links or resource), else a general one (tied to no resource); never a guide
+        about another resource (Walmart GET /orders pointed to virtual packs' paging)."""
+        if not hits or self._documents is None:
+            return None
+        endpoint = self._documents.get_document(build_id, owner_id)
+        resource = (endpoint.resource or "").lower() if endpoint else ""
+        general: ChunkHit | None = None
+        for h in hits:
+            g = self._documents.get_document(build_id, h.doc_id)
+            if g is None:
+                continue
+            links = linked_endpoints(g)
+            if owner_id in links or (resource and (g.resource or "").lower() == resource):
+                return h  # this endpoint's own, or its resource's
+            if resource and any(
+                (e := self._documents.get_document(build_id, x)) is not None
+                and (e.resource or "").lower() == resource
+                for x in links
+            ):
+                return h
+            if not links and not g.resource and general is None:
+                general = h  # about paging in general
+        return general
+
     def _paging_guides(self, build_id: BuildId) -> list[ChunkHit]:
         """The API's guides about paging, for a name the endpoint does not document."""
         return list(self._index.text(build_id, "pagination paging page", 10, (DocumentKind.GUIDE,)))
@@ -1068,8 +1097,11 @@ class CheckCall:
                     continue
                 if guides is None:
                     guides = self._paging_guides(build_id)
-                guide = next((h for h in guides if _term_use(h.text, p)[0] >= PAGING_TERM_SCORE),
-                             None)  # fmt: skip
+                guide = self._paging_guide(
+                    build_id,
+                    owner_id,
+                    [h for h in guides if _term_use(h.text, p)[0] >= PAGING_TERM_SCORE],
+                )
                 if guide is not None:  # point to it; do not assert the name
                     checks.append(ParamCheck(p, False, None, note=(
                         "Not in this endpoint's documented parameters. Paging for this API is "
