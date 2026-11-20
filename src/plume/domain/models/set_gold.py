@@ -61,6 +61,26 @@ def _path(path: str) -> str:
     return path.strip().lower().replace("[]", "")
 
 
+def _same_path(a: str, b: str) -> bool:
+    """The same relation path in two forms: equal, or one is the other inside a wrapper
+    (data[].order_id ~ order_id) or under its container (line_items ~ line_items[].id); list
+    marks ignored, at segment boundaries."""
+    x, y = _path(a), _path(b)
+    return (
+        x == y
+        or x.endswith("." + y)
+        or y.endswith("." + x)
+        or x.startswith(y + ".")
+        or (y.startswith(x + "."))
+    )
+
+
+def _alternative(relation_id: str) -> bool:
+    """A gold row that is an accepted alternative design ("order-customer (embedded
+    alternative)"), scored only when the set chose it."""
+    return "alternative" in relation_id.lower()
+
+
 def _fetch(call: str) -> str:
     """ "GET /{version}/orders/{order_id}/products" -> "get orders {} products": the method and
     the path's literals, any parameter as {} (names and a version segment do not matter)."""
@@ -163,33 +183,69 @@ def _source_verdict(gold: GoldRelationSource, found: Relation | None, api: str) 
         return "not_available_correct" if src is None else "invented"
     if src is None:
         return "missed"
-    paths = {_path(p.path) for p in src.paths}
-    gold_paths = {_path(p) for p in gold.paths}
-    if paths & gold_paths:
+    if any(_same_path(p.path, g) for p in src.paths for g in gold.paths):
         return "correct"
     if gold.fetch and src.fetch and _fetch(src.fetch).endswith(_fetch(gold.fetch)):
         return "correct"
     return "wrong"
 
 
+def _field_of(r: Relation) -> str:
+    return _path(r.embed_field or r.ref_field or "")
+
+
+def _pick(g: GoldRelation, draft: SetDraft, used: set[str]) -> Relation | None:
+    """The set's relation for a gold relation: the same id, else the same from / to and field,
+    else the same from / to (each set relation used once: billing and shipping address are
+    both Order -> Address)."""
+    free = [r for r in draft.relations if r.id not in used]
+    pair = [
+        r for r in free if (_member(r.from_), _member(r.to)) == (_member(g.from_), _member(g.to))
+    ]
+    return (
+        next((r for r in pair if r.id == _base(g.id)), None)
+        or next((r for r in pair if g.path and _same_path(_field_of(r), g.path)), None)
+        or next(iter(pair), None)
+    )
+
+
+def _base(relation_id: str) -> str:
+    return re.sub(r"\s*\(.*\)\s*$", "", relation_id)
+
+
 def score_set(draft: SetDraft, gold: SetGold) -> SetEval:
-    """A set's relations against the set gold (see the module doc)."""
-    by_pair: dict[tuple[str, str], Relation] = {
-        (_member(r.from_), _member(r.to)): r for r in draft.relations
-    }
+    """A set's relations against the set gold (see the module doc). A gold row's alternatives
+    ("<id> (… alternative)") are other accepted designs: the set's relation is judged against
+    the one its design matches; an alternative with no main row counts only when chosen."""
+    mains = [r for r in gold.relations if not _alternative(r.id)]
+    alternatives = [r for r in gold.relations if _alternative(r.id)]
     scores = []
-    matched: set[str] = set()
-    for g in gold.relations:
-        found = by_pair.get((_member(g.from_), _member(g.to)))
+    used: set[str] = set()
+    for g in mains:
+        found = _pick(g, draft, used)
+        options = [g, *(a for a in alternatives if _base(a.id) == g.id)]
         if found is not None:
-            matched.add(found.id)
-            design_ok = found.kind == g.kind and found.cardinality == g.cardinality
-            verdict = "correct" if design_ok else "wrong"
+            used.add(found.id)
+            chosen = next(
+                (o for o in options if (o.kind, o.cardinality) == (found.kind, found.cardinality)),
+                None,
+            )
+            verdict = "correct" if chosen is not None else "wrong"
         else:
-            verdict = "missed"
-        sources = {api: _source_verdict(src, found, api) for api, src in g.apis.items()}
+            chosen, verdict = None, "missed"
+        row = chosen or g
+        sources = {api: _source_verdict(src, found, api) for api, src in row.apis.items()}
         scores.append(
-            RelationScore(g.id, g.from_, g.to, verdict, found.id if found else None, sources)
+            RelationScore(row.id, row.from_, row.to, verdict, found.id if found else None, sources)
         )
-    invented = tuple(r.id for r in draft.relations if r.id not in matched)
+    for a in alternatives:  # an alternative of no main row: only when the set chose it
+        if any(_base(a.id) == m.id for m in mains):
+            continue
+        found = _pick(a, draft, used)
+        if found is None or (found.kind, found.cardinality) != (a.kind, a.cardinality):
+            continue
+        used.add(found.id)
+        sources = {api: _source_verdict(src, found, api) for api, src in a.apis.items()}
+        scores.append(RelationScore(a.id, a.from_, a.to, "correct", found.id, sources))
+    invented = tuple(r.id for r in draft.relations if r.id not in used)
     return SetEval(gold.source, gold.held_out, tuple(scores), invented)
