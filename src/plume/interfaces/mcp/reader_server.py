@@ -298,7 +298,7 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
         async def list_auth_schemes(api: str, version: str | None = None) -> dict[str, Any]:
             """Auth schemes as the package states them (type, header/query parameter, scopes,
             variables). present=false when the package documents none. notices: tell the user
-            (e.g. every request must be signed)."""
+            (e.g. every request must be signed); their doc_ids are the guides that explain it."""
 
             def run() -> dict[str, Any]:
                 ref, docs = sections().auth_schemes(api, version)
@@ -332,11 +332,14 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
         async def get_auth_scheme(
             api: str, scheme_id: str, version: str | None = None
         ) -> dict[str, Any]:
-            """One auth scheme: the package's auth JSON and variables schema verbatim."""
+            """One auth scheme: the package's auth JSON and variables schema verbatim.
+            notices: tell the user (e.g. every request must also be signed; doc_ids: the
+            guides that explain it)."""
 
             def run() -> dict[str, Any]:
                 ref, doc = sections().auth_scheme(api, scheme_id, version)
-                return {**payloads.ref_payload(ref), **scheme_view(doc)}
+                notices = sections().notices(api, AUTH, version)
+                return {**payloads.ref_payload(ref), **scheme_view(doc), "notices": notices}
 
             return await _run(run)
 

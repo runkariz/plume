@@ -644,6 +644,14 @@
             "title": "Name",
             "type": "string"
           },
+          "notices": {
+            "description": "User-facing notices about auth (package warnings), as on the auth list.",
+            "items": {
+              "$ref": "#/components/schemas/Notice"
+            },
+            "title": "Notices",
+            "type": "array"
+          },
           "queryParam": {
             "anyOf": [
               {
@@ -3281,6 +3289,14 @@
             "description": "The package warning code it comes from.",
             "title": "Code",
             "type": "string"
+          },
+          "docIds": {
+            "description": "Guides that explain it (auth / signing), to read with the document tools.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Docids",
+            "type": "array"
           },
           "section": {
             "description": "Where it applies: \"auth\" or \"environments\".",
