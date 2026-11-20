@@ -78,13 +78,14 @@ def test_a_state_change_question_leads_with_the_operation_that_makes_it() -> Non
     assert state_change_first(ranked, 5, "list deliveries", lambda: every) == ranked
 
 
-def test_an_environment_question_leads_with_the_apis_environments() -> None:
-    """Walmart "what's the sandbox base URL": the sandbox guide without a URL ranked first."""
-    from plume.application.reader.ranking import environments_first  # noqa: PLC0415
+def test_a_synthesized_guide_gives_way_to_the_vendors() -> None:
+    """bol "verify the signature of a webhook": Plume's webhook-delivery guide took rank 1 above
+    bol's signature-verification guide; with no vendor guide (Shopify) it stays first."""
+    from plume.application.reader.ranking import synthesized_after_vendor  # noqa: PLC0415
 
-    own = "guide:environments-and-base-urls"
-    ranked = ["guide:validation-sandbox-test-user-limits", "endpoint:GET~/orders"]
-    assert environments_first(ranked, 5, "what is the sandbox base URL", lambda: [own])[0] == own
-    assert environments_first(ranked, 5, "list my orders", lambda: [own]) == ranked
-    # no environments document of its own: the best environment guide, as ranked
-    assert environments_first(ranked, 5, "is there a test environment", tuple) == ranked
+    ours = "guide:webhook-delivery-post-retailer-subscriptions-v11"
+    vendor = "guide:validation-subscriptions-digital-signature-verification"
+    ranked = [ours, vendor, "endpoint:POST~/retailer/subscriptions"]
+    assert synthesized_after_vendor(ranked, 5) == [vendor, ours, ranked[2]]
+    alone = [ours, "endpoint:POST~/webhooks.json"]
+    assert synthesized_after_vendor(alone, 5) == alone

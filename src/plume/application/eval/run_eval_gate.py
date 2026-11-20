@@ -21,7 +21,6 @@ from plume.application.reader.use_cases import (
     all_endpoint_ids,
     fuse_hits,
     own_auth_docs,
-    own_env_docs,
     rank_order,
 )
 from plume.domain.eval.gate import GateDecision, GatePolicy, decide
@@ -86,7 +85,6 @@ class RunEvalGate:
         outcomes: list[QuestionOutcome] = []
         details: list[dict[str, object]] = []
         endpoints = partial(all_endpoint_ids, self._index, build_id)
-        envs = partial(own_env_docs, self._index, build_id)
         for q in gold.questions:
             if q.kind is GoldKind.SEARCH:
                 vector = self._embedder.embed_query(q.question)
@@ -107,7 +105,6 @@ class RunEvalGate:
                         q.question,
                         own,
                         endpoints,
-                        envs,
                     )
                 )
                 # Expected docs are alternatives: missing only when none of them is in the build.
