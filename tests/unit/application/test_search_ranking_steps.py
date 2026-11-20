@@ -41,3 +41,17 @@ def test_an_auth_question_leads_with_an_auth_document() -> None:
     # an auth answer already leading stays (Magento's token endpoint)
     token = ["endpoint:POST~/{version}/integration/admin/token", "guide:authentication"]
     assert auth_first(token, 5, "how do I get an admin access token") == token
+
+
+def test_with_no_auth_document_ranked_the_apis_own_comes_in() -> None:
+    """TikTok "how do I sign a TikTok Shop request": only business rules and affiliate endpoints
+    ranked; the app document (its signing setup) answers. A scheme first for other questions."""
+    from plume.application.reader.ranking import auth_first  # noqa: PLC0415
+
+    ranked = ["guide:resource-rules-api-9", "endpoint:GET~/affiliate_creator/shop_products"]
+    own = lambda: ["auth:oauth2-authorization-code", "app:tiktokshop"]  # noqa: E731
+    assert auth_first(ranked, 5, "how do I sign a TikTok Shop request", own)[0] == "app:tiktokshop"
+    assert auth_first(ranked, 5, "how do I get an access token", own)[0] == (
+        "auth:oauth2-authorization-code"
+    )
+    assert auth_first(ranked, 5, "list my warehouses", own) == ranked

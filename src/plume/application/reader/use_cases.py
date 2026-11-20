@@ -273,6 +273,7 @@ def rank_order(
     k: int,
     wider: Callable[[], Sequence[str]] = tuple,
     query: str = "",
+    auth_docs: Callable[[], Sequence[str]] = tuple,
 ) -> list[str]:
     """The final order of fused hits, shared by search and the eval gate: a page brings one of
     its endpoints into the top-k, so does a knowledge unit that names its endpoints (from the
@@ -287,8 +288,19 @@ def rank_order(
         order = lift_operation_endpoints(order, k, lambda d: _operation_owner(d, owners))
     order = request_models_last(order, k)
     order = near_duplicate_guides_last(order, k)
-    order = auth_first(order, k, query)
+    order = auth_first(order, k, query, auth_docs)
     return keep_endpoints(order, k)
+
+
+def own_auth_docs(
+    index: SearchIndex, build_id: BuildId, kinds: Sequence[DocumentKind]
+) -> list[str]:
+    """The API's auth schemes, then its app (setup) document, for an auth question none of
+    whose ranked documents is about auth."""
+    out: list[str] = []
+    for kind in (k for k in (DocumentKind.AUTH, DocumentKind.APP) if k in kinds):
+        out += [s.doc_id for s in index.browse(build_id, (kind,), None, 20, 0)[0]]
+    return out
 
 
 def page_endpoints(documents: DocumentRepo, build_id: BuildId, doc_id: str) -> list[str]:
@@ -392,11 +404,21 @@ class SearchDocs:
             )
             return list(dict.fromkeys(h.doc_id for h in wider_hits))
 
+        def auth_docs() -> list[str]:
+            allowed = [k for k in (DocumentKind.AUTH, DocumentKind.APP) if not kinds or k in kinds]
+            return own_auth_docs(self._index, build_id, allowed)
+
         order = rank_order(
-            self._documents, build_id, [h.doc_id for h in fused], top_k, wider, query
+            self._documents, build_id, [h.doc_id for h in fused], top_k, wider, query, auth_docs
         )
         by_id = {h.doc_id: h for h in fuse_hits(wider_hits, [], query, WIDER_POOL)}
         by_id.update({h.doc_id: h for h in fused})
+        for d, summary in self._index.summaries(
+            build_id, [d for d in order[:top_k] if d not in by_id]
+        ).items():  # an API's own auth document brought in for an auth question
+            by_id[d] = SearchHit(d, summary.kind, summary.title, "", "", None, None, None,
+                                 0.0, 0.0, 0.0)  # fmt: skip
+        order = [d for d in order if d in by_id]
         hits = [by_id[d] for d in order[:top_k]]
         summaries = self._index.summaries(build_id, [h.doc_id for h in hits])
         enriched = []
