@@ -68,7 +68,7 @@ def test_without_export_nothing_changes(packages: Path, tmp_path: Path) -> None:
 
 def test_gold_import(packages: Path, tmp_path: Path) -> None:
     out = tmp_path / "woocommerce.json"
-    counts, skipped, _ = import_gold(str(packages / "woo-mini"), str(out))
+    counts, skipped, _, _ = import_gold(str(packages / "woo-mini"), str(out))
     assert (counts, skipped) == ({"docs": 3}, [])
     gold, _ = JsonGoldSource().load(str(out))
     assert gold.api == "woocommerce"
@@ -202,3 +202,32 @@ def test_endpoints_with_an_empty_doc_anchor_have_none(packages: Path, tmp_path: 
         d for d in source.load(str(pkg)).documents if d.source_id == "get-wp-json-wc-v3-coupons"
     )
     assert doc.anchor != "#"
+
+
+def test_knowledge_items_map_to_their_guide_and_unknown_items_are_reported(
+    packages: Path, tmp_path: Path
+) -> None:
+    """Stream adds knowledge:<unit id> to expectedItemIds; it maps through the unit's source id
+    (not by rewriting the string). An item resolving to nothing is reported, not dropped
+    silently; a question keeps its resolvable items."""
+    import json  # noqa: PLC0415
+    import shutil  # noqa: PLC0415
+
+    dst = tmp_path / "woo"
+    shutil.copytree(packages / "woo-mini", dst)
+    endpoint = "delete-wp-json-wc-v3-coupons-id"
+    questions = [
+        {"id": "q1", "question": "authenticate and remove a coupon",
+         "expectedItemIds": [endpoint, "knowledge:authentication"]},
+        {"id": "q2", "question": "unknown only", "expectedItemIds": ["knowledge:nope"]},
+        {"id": "q3", "question": "remove a coupon", "expectedItemIds": [endpoint, "nope-endpoint"]},
+    ]  # fmt: skip
+    (dst / "knowledge-export" / "gold-questions.json").write_text(json.dumps(questions))
+    out = tmp_path / "gold.json"
+    _, skipped, _, unresolved = import_gold(str(dst), str(out))
+    written = {q["id"]: q["expect"] for q in json.loads(out.read_text())["questions"]}
+    assert written["q1"][1] == "guide:authentication"
+    assert len(written["q1"]) == 2
+    assert written["q3"] == written["q1"][:1]  # the endpoint kept, the unknown one reported
+    assert skipped == ["q2"]
+    assert sorted(unresolved) == ["knowledge:nope", "nope-endpoint"]

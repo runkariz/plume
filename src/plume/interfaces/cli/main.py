@@ -50,9 +50,11 @@ class CliDependencies:
     gold: Callable[[], GoldSource] | None = None
     export_dump: Callable[[], ExportDump] | None = None
     restore_dump: Callable[[], RestoreDump] | None = None
-    # (written questions per source, skipped ids, the package's declared goldCounts or None)
+    # (written questions per source, skipped ids, the package's declared goldCounts or None,
+    # expected item ids that resolved to no document)
     import_gold: (
-        Callable[[str, str], tuple[dict[str, int], list[str], dict[str, int] | None]] | None
+        Callable[[str, str], tuple[dict[str, int], list[str], dict[str, int] | None, list[str]]]
+        | None
     ) = None
     release_notes: Callable[[], ReleaseNotes] | None = None
     remove_api: Callable[[], RemoveApi] | None = None
@@ -295,13 +297,16 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         if deps.import_gold is None:
             raise typer.BadParameter("gold-import is not available in this build")
         try:
-            counts, skipped, declared = deps.import_gold(package, out)
+            counts, skipped, declared, unresolved = deps.import_gold(package, out)
         except (ApplicationError, DomainError) as exc:
             raise fail(exc) from exc
         per = ", ".join(f"{n} {s}" for s, n in counts.items()) or "none"
         typer.echo(
             f"wrote {out}: {sum(counts.values())} question(s) ({per}); skipped {len(skipped)}"
         )
+        if unresolved:  # expected items that name no document of the package: dropped
+            shown = ", ".join(unresolved[:20]) + (" …" if len(unresolved) > 20 else "")
+            typer.echo(f"  unresolved expected items: {len(unresolved)} ({shown})")
         if declared:
             typer.echo(
                 "  package goldCounts: " + ", ".join(f"{n} {s}" for s, n in declared.items())

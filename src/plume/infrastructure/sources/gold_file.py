@@ -61,20 +61,24 @@ def convert_stream_gold(
     api: str,
     endpoint_ids: dict[str, str],
     normalize: Callable[[str], str] = lambda endpoint_id: endpoint_id,
-) -> tuple[dict[str, object], list[str]]:
+) -> tuple[dict[str, object], list[str], list[str]]:
     """Stream's ``gold-questions.json`` -> a Plume gold set (search questions).
 
     ``endpoint_ids`` maps the producer's item ids (endpoints, ``model:<name>``) to Plume document
-    ids. Questions whose expected items are all unknown are skipped (returned in the second
-    value). The question's ``source`` (docs when missing) and its spec provenance (``specFile``,
+    ids. An expected item that resolves to nothing is dropped from its question and reported
+    (third value); questions whose expected items are all unknown are skipped (second value).
+    The question's ``source`` (docs when missing) and its spec provenance (``specFile``,
     ``operationId``, ``quote``, ``quoteField``, ``sourceUrl``) are kept."""
     data = json.loads(gold_path.read_text(encoding="utf-8"))
     raw = data.get("questions", []) if isinstance(data, dict) else data
     questions: list[dict[str, object]] = []
     skipped: list[str] = []
+    unresolved: list[str] = []
     for q in raw:
-        keys = [normalize(i) for i in q.get("expectedItemIds", [])]
+        items = list(q.get("expectedItemIds", []))
+        keys = [normalize(i) for i in items]
         expected = [endpoint_ids[k] for k in keys if k in endpoint_ids]
+        unresolved += [i for i, k in zip(items, keys, strict=True) if k not in endpoint_ids]
         if not expected or not q.get("question"):
             skipped.append(str(q.get("id")))
             continue
@@ -87,4 +91,8 @@ def convert_stream_gold(
         }
         item.update({k: q[k] for k in _PROVENANCE if q.get(k) is not None})
         questions.append(item)
-    return {"api": api, "version": "stream-1", "questions": questions}, skipped
+    return (
+        {"api": api, "version": "stream-1", "questions": questions},
+        skipped,
+        list(dict.fromkeys(unresolved)),
+    )
