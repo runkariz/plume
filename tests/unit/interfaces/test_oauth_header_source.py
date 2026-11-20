@@ -83,3 +83,22 @@ def test_the_header_format_has_one_space_after_the_prefix() -> None:
     assert header_format("Authorization", "Bearer") == "Authorization: Bearer <token>"
     assert header_format("Authorization", "Bearer ") == "Authorization: Bearer <token>"
     assert header_format("X-Api-Key", None) == "X-Api-Key: <token>"
+
+
+def test_the_standard_label_only_on_authorization_bearer(packages: Path, tmp_path: Path) -> None:
+    """Stream's held Shopify 20a: headerName X-Shopify-Access-Token, prefix "", headerSource
+    standard:rfc6750. Plume must not put the standard label on Shopify's own header: unknown
+    (no label, no source, no field), and a maintainer-only package warning."""
+    stack, http = _client(packages, tmp_path, headerName="X-Shopify-Access-Token",
+                          headerPrefix="", headerSource="standard:rfc6750")  # fmt: skip
+    scheme = http.get(f"/v1/apis/shopify/auth/{UNIT}").json()
+    assert (scheme["headerSource"], scheme["headerNote"], scheme["headerFormat"]) == (
+        None, None, None,
+    )  # fmt: skip
+    doc = stack.get_document().execute("shopify", f"auth:{UNIT}").document
+    assert "RFC 6750" not in doc.text
+    assert doc.fields == ()  # no header field claiming the standard
+    warnings = [w.text for w in stack.sections().package_warnings("shopify")]
+    assert any(w.startswith("plume-header-source-not-standard: ") for w in warnings)
+    assert all(n["code"] != "plume-header-source-not-standard"
+               for n in stack.sections().notices("shopify"))  # fmt: skip

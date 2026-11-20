@@ -22,6 +22,7 @@ from plume.domain.knowledge.document import (
     DocumentKind,
     FieldLocation,
     header_format,
+    standard_header,
 )
 from plume.domain.knowledge.fact import FactKind
 from plume.domain.knowledge.package_warnings import AUTH as AUTH_SECTION
@@ -290,6 +291,9 @@ def scheme_view(d: Document) -> dict[str, Any]:
     variables = _obj(raw.get("variables_schema"))
     props: dict[str, Any] = (_obj(variables.get("properties")) or {}) if variables else {}
     required = set(variables.get("required") or []) if variables else set()
+    source = scheme.get("headerSource")
+    if source == HEADER_SOURCE_STANDARD and not standard_header(scheme):
+        source = None  # the standard label only on Authorization: Bearer; else unknown
     return {
         "id": scheme.get("id") or d.source_id or d.doc_id,
         "doc_id": d.doc_id,
@@ -300,18 +304,16 @@ def scheme_view(d: Document) -> dict[str, Any]:
         "header_prefix": scheme.get("headerPrefix"),
         "header_format": (
             header_format(scheme["headerName"], scheme.get("headerPrefix"))
-            if isinstance(scheme.get("headerName"), str) and scheme.get("headerSource")
+            if isinstance(scheme.get("headerName"), str) and source
             else None
         ),
-        "header_source": scheme.get("headerSource"),
+        "header_source": source,
         "header_evidence": (
             scheme.get("headerEvidence")
             if scheme.get("headerSource") == HEADER_SOURCE_VENDOR
             else None  # the standard is never quoted as the vendor's words
         ),
-        "header_note": (
-            STANDARD_HEADER_NOTE if scheme.get("headerSource") == HEADER_SOURCE_STANDARD else None
-        ),
+        "header_note": STANDARD_HEADER_NOTE if source == HEADER_SOURCE_STANDARD else None,
         "query_param": scheme.get("codeQueryParamName"),
         "scopes": _scopes_with_endpoints(scheme, scope_endpoints(d)),
         "variables": [

@@ -34,6 +34,7 @@ from plume.domain.knowledge.document import (
     CONFLICTS_KEY,
     ENVIRONMENTS_DOC_ID,
     FIELDS_BOUNDED_KEY,
+    HEADER_SOURCE_MISUSED,
     HEADER_SOURCE_STANDARD,
     HEADER_SOURCE_VENDOR,
     RULE_SOURCES_KEY,
@@ -49,6 +50,7 @@ from plume.domain.knowledge.document import (
     normalize_endpoint_path,
     real_path,
     slug_doc_id,
+    standard_header,
     url_path,
 )
 from plume.domain.knowledge.model_names import display_names, parse_bundled_title
@@ -390,7 +392,7 @@ def _auth_header(data: Mapping[str, Any]) -> tuple[str | None, tuple[FieldSpec, 
     prefix = data.get("headerPrefix") if isinstance(data.get("headerPrefix"), str) else None
     source = _str(data.get("headerSource"))
     line = f"Header: `{header_format(name, prefix)}`"
-    if source == HEADER_SOURCE_STANDARD:
+    if source == HEADER_SOURCE_STANDARD and standard_header(data):
         line += f": {STANDARD_HEADER_NOTE}"
         return line, (FieldSpec(name, FieldLocation.HEADER, "string", pointer=source),)
     evidence = _str(data.get("headerEvidence"))
@@ -431,6 +433,27 @@ def _environments_document(api_name: str, app: Mapping[str, Any]) -> Document | 
         title=f"{api_name} environments and base URLs",
         text="\n".join(lines),
     )
+
+
+def _with_package_warnings(documents: list[Document], produced: object) -> list[Document]:
+    """The producer's manifest warnings, plus Plume's own maintainer-only ones (a
+    headerSource standard:rfc6750 on a header that is not Authorization: Bearer), on the app."""
+    misused = [
+        f"{HEADER_SOURCE_MISUSED}: {d.source_id} headerSource standard:rfc6750 on a "
+        f"non-Bearer header ({scheme.get('headerName')})"
+        for d in documents
+        if d.kind is DocumentKind.AUTH
+        and isinstance(scheme := (d.raw or {}).get("scheme"), dict)
+        and scheme.get("headerSource") == HEADER_SOURCE_STANDARD
+        and not standard_header(scheme)
+    ]
+    warnings = [*(produced if isinstance(produced, list) else []), *misused]
+    if not warnings:
+        return documents
+    app_index = next(i for i, d in enumerate(documents) if d.kind is DocumentKind.APP)
+    app_raw = {**(documents[app_index].raw or {}), "package_warnings": warnings}
+    return [*documents[:app_index], replace(documents[app_index], raw=app_raw),
+            *documents[app_index + 1 :]]  # fmt: skip
 
 
 def _webhook_document(api_name: str, hook: object) -> Document | None:
@@ -772,10 +795,7 @@ class StreamPackageSource:
         documents = _flag_unresolved_includes(documents, warnings)
         manifest = _opt_json(package_root / "manifest.json") or {}
         produced = manifest.get("warnings")
-        if isinstance(produced, list) and produced:  # the producer's own warnings, on the app
-            app_index = next(i for i, d in enumerate(documents) if d.kind is DocumentKind.APP)
-            app_raw = {**(documents[app_index].raw or {}), "package_warnings": produced}
-            documents[app_index] = replace(documents[app_index], raw=app_raw)
+        documents = _with_package_warnings(documents, produced)
         return SourcePackage(
             api=info,
             documents=tuple(documents),
