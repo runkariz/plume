@@ -57,3 +57,42 @@ def test_cycles_stop_and_only_sibling_files_are_read(tmp_path: Path) -> None:
     assert "children[].children[].name" not in fields  # then the cycle stops
     assert "outside" in fields  # the field itself is kept
     assert not any(k.startswith("outside.") for k in fields)  # but nothing outside the folder
+
+
+def test_composed_and_referenced_types_and_their_model(tmp_path: Path) -> None:
+    """$ref / oneOf / allOf fields get a type and a model link; a field stating no type says
+    so in the field list."""
+    from plume.domain.knowledge.document import FieldSpec  # noqa: PLC0415
+    from plume.infrastructure.sources.stream_package import UNTYPED, _fields_section  # noqa: PLC0415
+
+    models = tmp_path / "models"
+    models.mkdir()
+    _write(
+        models, "card.schema.json", {"type": "object", "properties": {"last4": {"type": "string"}}}
+    )
+    _write(models, "payment.schema.json", {
+        "type": "object",
+        "properties": {
+            "card": {"$ref": "card.schema.json"},
+            "cards": {"type": "array", "items": {"$ref": "card.schema.json"}},
+            "amount": {"oneOf": [{"type": "string"}, {"type": "number"}, {"type": "null"}]},
+            "method": {"allOf": [{"$ref": "card.schema.json"}], "description": "How paid."},
+            "meta": {"properties": {"k": {"type": "string"}}},
+            "anything": {"description": "Free-form."},
+        },
+    })  # fmt: skip
+    data = json.loads((models / "payment.schema.json").read_text())
+    walked = {f.name: f for f in _walk_fields(
+        data, FieldLocation.MODEL, "payment.schema.json#",
+        scope=_RefScope(data, "payment.schema.json", models))}  # fmt: skip
+    assert (walked["card"].type, walked["card"].model_id) == ("card", "model:card")
+    assert (walked["cards"].type, walked["cards"].model_id) == ("array", "model:card")
+    assert (walked["amount"].type, walked["amount"].model_id) == ("string|number", None)
+    assert (walked["method"].type, walked["method"].model_id) == ("card", "model:card")
+    assert walked["meta"].type == "object"
+    assert walked["anything"].type is None
+    text = _fields_section("Fields", [walked[n] for n in ("card", "anything")])
+    assert "- `card` (card, model:card)" in text
+    assert f"- `anything` ({UNTYPED}): Free-form." in text
+    query = FieldSpec("q", FieldLocation.QUERY)
+    assert UNTYPED not in _fields_section("Query", [query])  # parameters: no such note

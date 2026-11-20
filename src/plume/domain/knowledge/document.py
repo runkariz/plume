@@ -66,6 +66,7 @@ class FieldSpec:
     # enum / minimum / maximum / default / format / pattern, verbatim from the schema
     # (JSON text, so the spec stays hashable); see ``constraint_dict``.
     constraints: str | None = None
+    model_id: str | None = None  # the model document a $ref'd type is (model:orderlineitem)
 
     @property
     def constraint_dict(self) -> dict[str, Any]:

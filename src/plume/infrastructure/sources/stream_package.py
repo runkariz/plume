@@ -80,7 +80,13 @@ def _slug(value: str) -> str:
     return _SLUG.sub("-", value.lower()).strip("-") or "x"
 
 
+UNTYPED = "type not stated by the vendor"
+
+
 def _type_of(schema: Mapping[str, Any]) -> str | None:
+    """The stated type: ``type`` (nulls dropped), a ``$ref``'d schema's name, or for
+    ``oneOf`` / ``anyOf`` its members' types ("string|integer", "Card|BankAccount") and for
+    ``allOf`` its first typed member. None when the schema states none."""
     t = schema.get("type")
     if isinstance(t, list):
         names = [x for x in t if isinstance(x, str) and x != "null"]
@@ -89,6 +95,25 @@ def _type_of(schema: Mapping[str, Any]) -> str | None:
         return t
     if "$ref" in schema and isinstance(schema["$ref"], str):
         return schema["$ref"].rsplit("/", 1)[-1].removesuffix(".schema.json")
+    composed = _composed_type(schema)
+    if composed is None and "properties" in schema:
+        return "object"
+    if composed is None and isinstance(schema.get("items"), dict):
+        return "array"
+    return composed
+
+
+def _composed_type(schema: Mapping[str, Any]) -> str | None:
+    for key in ("oneOf", "anyOf"):
+        members = schema.get(key)
+        if isinstance(members, list):
+            types = [m_t for m in members if isinstance(m, dict) and (m_t := _type_of(m))]
+            types = [x for x in dict.fromkeys(types) if x != "null"]
+            if types:
+                return "|".join(types)
+    members = schema.get("allOf")
+    if isinstance(members, list):
+        return next((m_t for m in members if isinstance(m, dict) and (m_t := _type_of(m))), None)
     return None
 
 
@@ -100,6 +125,32 @@ class _RefScope:
     file: str
     folder: Path | None = None
     seen: frozenset[str] = frozenset()  # refs being expanded on this path (cycle guard)
+
+
+def _model_of(schema: Mapping[str, Any], scope: _RefScope) -> str | None:
+    """The model document a field's type refers to: a ``$ref`` (directly, as array items, or
+    the single typed member of a composition) to an existing schema file in the package's
+    models folder."""
+    ref = schema.get("$ref")
+    items = schema.get("items")
+    if not isinstance(ref, str) and isinstance(items, dict):
+        ref = items.get("$ref")
+    if not isinstance(ref, str):
+        for key in ("allOf", "oneOf", "anyOf"):
+            refs = [m.get("$ref") for m in schema.get(key) or [] if isinstance(m, dict)]
+            refs = [r for r in refs if isinstance(r, str)]
+            if len(refs) == 1:
+                ref = refs[0]
+                break
+    if not isinstance(ref, str) or scope.folder is None:
+        return None
+    file_part = ref.partition("#")[0]
+    if not file_part.endswith(".schema.json"):
+        return None
+    path = (scope.folder / file_part).resolve()
+    if not path.is_file() or path.parent.name != "models":
+        return None
+    return slug_doc_id(DocumentKind.MODEL, _slug(path.name.removesuffix(".schema.json")))
 
 
 def _pointer_get(doc: Mapping[str, Any], pointer: str) -> Any:
@@ -178,6 +229,7 @@ def _walk_fields(
                 description=_str(sub.get("description")) or _ref_description(sub, scope),
                 pointer=sub_pointer,
                 constraints=constraints_of(sub),
+                model_id=_model_of(sub, scope),
             )
             yield from _walk_fields(sub, location, sub_pointer, full, depth + 1, scope, max_depth)
     items = schema.get("items")
@@ -282,8 +334,12 @@ def _fields_section(title: str, fields: list[FieldSpec], level: int | None = Non
         lines.append(_bounded_note(level))
     for f in fields:
         bits = [f"`{f.name}`"]
-        if f.type:
+        if f.type and f.model_id:
+            bits.append(f"({f.type}, {f.model_id})")
+        elif f.type:
             bits.append(f"({f.type})")
+        elif f.location in (FieldLocation.MODEL, FieldLocation.RESPONSE, FieldLocation.BODY):
+            bits.append(f"({UNTYPED})")
         if f.required:
             bits.append("required")
         line = " ".join(bits)
