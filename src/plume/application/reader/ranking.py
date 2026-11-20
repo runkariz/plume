@@ -236,42 +236,66 @@ def _webhook_auth_doc(window: Sequence[str]) -> str | None:
     return next((d for d in docs if "webhook" in d.lower()), None) or next(iter(docs), None)
 
 
+def _lead_with(ranked: Sequence[str], best: str | None) -> list[str]:
+    if best is None or (ranked and ranked[0] == best):
+        return list(ranked)
+    return [best] + [d for d in ranked if d != best]
+
+
+def _scope_first(ranked: Sequence[str], k: int, own: Callable[[], Sequence[str]]) -> list[str]:
+    """The scheme lists the scopes (Allegro "which scope …"); a scope guide that leads stays
+    (Zalando)."""
+    if ranked and "scope" in ranked[0].lower():
+        return list(ranked)
+    scheme = next((d for d in ranked[: 2 * k] if d.startswith("auth:")), None) or next(
+        (d for d in own() if d.startswith("auth:")), None
+    )
+    return _lead_with(ranked, scheme)
+
+
+def _auth_answer(window: Sequence[str], options: Sequence[str], query: str) -> str | None:
+    """The document an auth question leads with: a scheme or a vendor auth guide of the
+    window, else the API's own scheme looked up wherever it fused, else the app document. A signing
+    question: an auth document of the window, else the app document (signing is set up there,
+    TikTok)."""
+    if _SIGN_QUERY.search(query):
+        found = next((d for d in window if d.startswith("auth:") or _auth_doc(d)), None)
+        return (
+            found
+            or next((d for d in options if d.startswith("app:")), None)
+            or next(iter(options), None)
+        )
+    in_window = next((d for d in window if d.startswith("auth:")), None) or next(
+        (d for d in window if _auth_doc(d) and not d.startswith("app:")), None
+    )
+    looked_up = next((d for d in options if d.startswith("auth:")), None)
+    return in_window or looked_up or next(iter(options), None)
+
+
 def auth_first(
     ranked: Sequence[str],
     k: int,
     query: str,
     own: Callable[[], Sequence[str]] = tuple,
 ) -> list[str]:
-    """An auth question puts the best-ranked auth document (a scheme, or a guide about auth /
-    signing / tokens) first, ahead of operations that merely share a word (Lazada's sponsor
-    /account/sign endpoints for "how do I sign a request"). With none ranked, the first of
-    ``own()`` (the API's auth schemes, then its app document: TikTok's signing setup)."""
-    if _SCOPE_QUERY.search(query):  # the scheme lists the scopes (Allegro "which scope …")
-        if ranked and "scope" in ranked[0].lower():  # a scope guide leads (Zalando): keep it
-            return list(ranked)
-        scheme = next((d for d in ranked[: 2 * k] if d.startswith("auth:")), None) or next(
-            (d for d in own() if d.startswith("auth:")), None
-        )
-        if scheme is not None and ranked and ranked[0] != scheme:
-            return [scheme] + [d for d in ranked if d != scheme]
-        return list(ranked)
+    """An auth question leads with the API's own auth scheme, looked up directly (``own()``:
+    its schemes, then its app document) wherever it fused, unless a scheme or a vendor guide
+    about auth already leads; ahead of operations that merely share a word (Lazada's sponsor
+    /account/sign endpoints for "how do I sign a request")."""
+    if _SCOPE_QUERY.search(query):
+        return _scope_first(ranked, k, own)
     if not _AUTH_QUERY.search(query):
         return list(ranked)
     window = list(ranked[: 2 * k])
     if _WEBHOOK_QUERY.search(query):  # how incoming calls are authenticated: webhook docs only
-        best = _webhook_auth_doc(window)
-    else:  # the API's own scheme first, then any other auth document
-        best = next((d for d in window if d.startswith("auth:")), None) or next(
-            (d for d in window if _auth_doc(d)), None
-        )
-    if best is None and not _WEBHOOK_QUERY.search(query):  # the API's own schemes / app doc
-        options = list(own())
-        if _SIGN_QUERY.search(query):  # signing is set up in the app text, not a scheme
-            options.sort(key=lambda d: not d.startswith("app:"))
-        best = next(iter(options), None)
-    if best is None or (window and _auth_doc(window[0])):  # an auth answer already leads
+        if window and _auth_doc(window[0]):
+            return list(ranked)
+        return _lead_with(ranked, _webhook_auth_doc(window))
+    # a scheme or a vendor guide about auth already leads: it stays (the app document is no
+    # such answer: CDON "how do I authenticate" led with app:cdon, the scheme 12th)
+    if window and _auth_doc(window[0]) and not window[0].startswith("app:"):
         return list(ranked)
-    return [best] + [d for d in ranked if d != best]
+    return _lead_with(ranked, _auth_answer(window, list(own()), query))
 
 
 # "mark an order as shipped", "change the state of a delivery": an operation that moves a state
