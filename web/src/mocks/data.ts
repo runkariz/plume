@@ -463,6 +463,22 @@ const SYNC_OPERATIONS = [
 ];
 
 export function sampleCheck(method: string, path: string, params: string[]): CheckCallResponse {
+  // a call whose path carries the base path of a declared server: matched with the server named
+  if (method === 'POST' && path === '/commerce/media/v1_beta/video')
+    return {
+      api: 'shopify',
+      build: '2026-11-14',
+      verdict: 'documented',
+      complete: true,
+      matched: {
+        id: 'endpoint:POST~/video',
+        method: 'POST',
+        path: '/video',
+        server: 'api_3: https://apim.ebay.com/commerce/media/v1_beta',
+      },
+      paramChecks: params.map((name) => ({ name, found: false, where: null })),
+      checked: { endpoints: 137, models: 31 },
+    };
   if (method === 'POST' && path === '/sync') {
     const given = params.find((p) => p.startsWith('method='))?.slice('method='.length);
     const base = {

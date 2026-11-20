@@ -545,6 +545,11 @@ function CheckTool({ apiId }: { apiId: string }) {
                     ) : null}
                   </div>
                 ) : null}
+                {d.matched?.server ? (
+                  <p className="faint small matched-server" style={{ marginBottom: 10 }}>
+                    via server <span className="mono">{d.matched.server}</span>
+                  </p>
+                ) : null}
                 {d.verdict !== 'ambiguous' && d.alternatives && d.alternatives.length > 0 ? (
                   <p className="small muted" style={{ marginBottom: 10 }}>
                     Other operations at the same method and path:{' '}
