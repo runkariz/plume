@@ -4,6 +4,7 @@ import { http, HttpResponse } from 'msw';
 import { authStore } from '@/app/authStore';
 import { warningText } from '@/components/Notices';
 import { shopifyDetail } from '@/mocks/data';
+import { authFor } from '@/mocks/sectionData';
 import { createHandlers } from '@/mocks/handlers';
 import { renderApp } from '@/test/render';
 import { server, TEST_API_BASE } from '@/test/server';
@@ -66,6 +67,11 @@ describe('notices', () => {
   });
 
   it('shows nothing when the server sends no notices', async () => {
+    server.use(
+      http.get(`${TEST_API_BASE}/v1/apis/shopify/auth`, () =>
+        HttpResponse.json({ ...authFor('shopify'), notices: undefined }),
+      ),
+    );
     renderApp('/apis/shopify?section=auth');
     await screen.findByRole('link', { name: 'OAuth2 authorization code' });
     const auth = screen.getByRole('region', { name: 'Authentication' });
@@ -152,5 +158,45 @@ describe('package warnings (maintainer view)', () => {
   it('only a leading "code:" is taken off the text', () => {
     expect(warningText({ code: 'a', text: 'a: b' })).toBe('b');
     expect(warningText({ code: 'a', text: 'about a: b' })).toBe('about a: b');
+  });
+});
+
+describe('guides named by a notice', () => {
+  it('the auth section links each guide, titled with its own title', async () => {
+    renderApp('/apis/shopify?section=auth');
+    const guides = await screen.findByRole('list', {
+      name: 'Guides for this note (auth-needs-core-change)',
+    });
+    const links = await within(guides).findAllByRole('link');
+    expect(links.map((a) => a.getAttribute('href'))).toEqual([
+      `/apis/shopify/documents/${encodeURIComponent('guide:pagination')}`,
+      `/apis/shopify/documents/${encodeURIComponent('guide:rate-limits')}`,
+    ]);
+    // the guide's title replaces the id once it is read
+    expect(
+      await within(guides).findByRole('link', { name: 'REST Admin API request rate limits' }),
+    ).toBeInTheDocument();
+  });
+
+  it('the auth scheme page shows its own notices with the guide links', async () => {
+    renderApp('/apis/shopify/auth/oauth2-authorization-code');
+    const list = await screen.findByRole('list', { name: 'Notes on this package' });
+    expect(list).toHaveTextContent('signs requests in a way the connector cannot express yet');
+    expect(within(list).getAllByRole('link')).toHaveLength(2);
+  });
+
+  it('the environments card links the guide of its note', async () => {
+    renderApp('/apis/shopify');
+    const card = await screen.findByRole('region', { name: 'Environments' });
+    const guides = await within(card).findByRole('list', {
+      name: 'Guides for this note (sandbox-host-not-in-sources)',
+    });
+    expect(within(guides).getAllByRole('link')).toHaveLength(1);
+  });
+
+  it('a notice without docIds, or an older server, shows the text alone', async () => {
+    renderApp('/apis/stripe?section=auth');
+    const list = await screen.findByRole('list', { name: 'Notes on this package' });
+    expect(within(list).queryByRole('link')).not.toBeInTheDocument();
   });
 });

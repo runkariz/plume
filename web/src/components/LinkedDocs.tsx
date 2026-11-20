@@ -96,12 +96,22 @@ function useTitles(api: string, ids: string[]): Record<string, string> {
 }
 
 /** The knowledge units (guides) that name an endpoint: links titled with the guide's own title. */
-export function GuideLinks({ api, ids }: { api: string; ids: string[] | undefined }) {
+export function GuideLinks({
+  api,
+  ids,
+  label = 'Related guides',
+  className = 'linked-list',
+}: {
+  api: string;
+  ids: string[] | undefined;
+  label?: string;
+  className?: string;
+}) {
   const list = ids ?? [];
   const titles = useTitles(api, list);
   if (list.length === 0) return null;
   return (
-    <ul className="linked-list" aria-label="Related guides">
+    <ul className={className} aria-label={label}>
       {list.map((id) => (
         <li key={id}>
           <Link to={docHref(api, id)} title={id}>

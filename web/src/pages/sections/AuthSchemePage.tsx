@@ -3,7 +3,16 @@ import { Link, useParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
 import { ApiError, type Environment } from '@/api/types';
-import { Card, Chip, Crumbs, EndpointLinks, ErrorState, LoadingState, RawJson } from '@/components';
+import {
+  Card,
+  Chip,
+  Crumbs,
+  EndpointLinks,
+  ErrorState,
+  LoadingState,
+  Notices,
+  RawJson,
+} from '@/components';
 import { apiTitle } from '@/lib/names';
 import { resolveServers, usesServers } from '@/lib/servers';
 
@@ -158,6 +167,8 @@ export function AuthSchemePage() {
           Back to {apiName}
         </Link>
       </div>
+
+      <Notices items={d.notices} api={apiId} />
 
       <Card className="pad doc-fields" role="region" aria-label="How it works">
         <h2 className="h2-sm">How it works</h2>

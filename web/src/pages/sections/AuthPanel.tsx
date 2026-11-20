@@ -20,7 +20,7 @@ export function AuthPanel({ apiId }: { apiId: string }) {
           onRetry={retry}
         />
       ) : null}
-      {state.status === 'ready' ? <Notices items={state.data.notices} /> : null}
+      {state.status === 'ready' ? <Notices items={state.data.notices} api={apiId} /> : null}
       {state.status === 'ready' && (!state.data.present || state.data.schemes.length === 0) ? (
         <EmptyState title="Not in this package">
           {state.data.note

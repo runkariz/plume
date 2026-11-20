@@ -2,17 +2,22 @@ import { useState } from 'react';
 import type { Notice, PackageWarning } from '@/api/types';
 import { Card } from './Card';
 import { Chip } from './Chip';
+import { GuideLinks } from './LinkedDocs';
 
 /**
  * What the package's warnings mean for a section, as a visible note (not an error): "Every request must be signed;
- * there is no ready auth option yet." Nothing when there are none. The text is the server's, shown as plain text.
+ * there is no ready auth option yet." Nothing when there are none. The text is the server's, shown as plain text. A
+ * notice that names guides (`docIds`) links them, titled with the guide's own title, when the API is known.
  */
 export function Notices({
   items,
   label = 'Notes on this package',
+  api,
 }: {
   items?: Notice[];
   label?: string;
+  /** The API the notices are about: needed to link their guides. */
+  api?: string;
 }) {
   if (!items || items.length === 0) return null;
   return (
@@ -25,6 +30,14 @@ export function Notices({
           <span>
             <span className="sr-only">Note: </span>
             {n.text}
+            {api && n.docIds?.length ? (
+              <GuideLinks
+                api={api}
+                ids={n.docIds}
+                label={`Guides for this note (${n.code})`}
+                className="linked-list notice-guides"
+              />
+            ) : null}
           </span>
         </li>
       ))}
