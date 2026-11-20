@@ -138,3 +138,15 @@ def test_the_paging_note_never_points_to_another_resources_guide(
     assert _check(s2, PRODUCTS, params=["since_cursor"]).params[0].guide_id == (
         "guide:products-paging"
     )
+
+
+def test_a_general_paging_guide_is_about_paging_only() -> None:
+    from plume.application.reader.use_cases import _general_paging  # noqa: PLC0415
+
+    assert _general_paging("guide:rest-pagination")  # Woo
+    assert _general_paging("guide:workflow-best-practices-pagination-implementation")  # Cdiscount
+    assert _general_paging("guide:validation-pagination-paginated-request-parameter-restrictions")
+    assert not _general_paging(  # Walmart: virtual packs' paging, unlinked
+        "guide:validation-virtual-packs-virtual-pack-retrieval-query-parameters"
+    )
+    assert not _general_paging("guide:offers-pagination")  # Cdiscount offers

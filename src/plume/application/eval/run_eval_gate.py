@@ -41,6 +41,7 @@ class EvalRun:
     decision: GateDecision
     outcomes: tuple[QuestionOutcome, ...]
     baseline: EvalRecord | None
+    stored: bool = True  # kept as the build's eval (False: an ad-hoc run)
 
 
 class RunEvalGate:
@@ -72,7 +73,16 @@ class RunEvalGate:
         hits = self._index.dense(build_id, vector, WIDER_POOL, (DocumentKind.ENDPOINT,))
         return list(dict.fromkeys(h.doc_id for h in hits))
 
-    def execute(self, build_id: BuildId, gold: GoldSet, gold_hash: str) -> EvalRun:
+    def execute(
+        self, build_id: BuildId, gold: GoldSet, gold_hash: str, *, store: bool | None = None
+    ) -> EvalRun:
+        """Score the build on the gold set. ``store``: keep it as the build's eval (its quality
+        card and gate). None: only when the build has no eval yet or this is the same gold set
+        (by hash) as the stored one, the gate eval plume load ran; another gold is ad hoc and
+        never replaces it (tester-gold scoring replaced Mirakl's 150-question card)."""
+        if store is None:
+            stored = self._evals.get(build_id)
+            store = stored is None or stored.gold_hash == gold_hash
         build = require_build(self._builds, build_id)
         if build.spec is not None and build.spec.embed_model != self._embedder.model:
             # Scores from vectors of two different models would be meaningless, not low.
@@ -155,5 +165,6 @@ class RunEvalGate:
             evaluated_at=self._clock.now(),
             details=tuple(details),
         )
-        self._evals.save(record)
-        return EvalRun(record, decision, tuple(outcomes), baseline)
+        if store:
+            self._evals.save(record)
+        return EvalRun(record, decision, tuple(outcomes), baseline, stored=store)

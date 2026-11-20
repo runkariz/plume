@@ -26,6 +26,6 @@ def test_gold_maps_ids_across_versions(tmp_path: Path) -> None:
     q = {"id": "q1", "question": "list orders", "expectedItemIds": ["get-orders-json"]}
     gold.write_text(json.dumps({"questions": [q]}))
     ids = {"get-orders-json": "endpoint:GET~/orders.json"}
-    data, skipped = convert_stream_gold(gold, "shop", ids, lambda i: endpoint_key(i, VERSIONS))
+    data, skipped, _ = convert_stream_gold(gold, "shop", ids, lambda i: endpoint_key(i, VERSIONS))
     assert not skipped
     assert "endpoint:GET~/orders.json" in json.dumps(data)

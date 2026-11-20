@@ -12,6 +12,8 @@ Issue codes (stable; clients key on them):
   that is an object in the API; map one of its fields (the refusal lists them).
 - ``ARRAY_FOR_SINGLE``: a scalar canonical field maps a list, without a cardinality /
   array-vs-single / split conversion.
+- ``TYPE_MISMATCH``: a boolean canonical field maps a string / number API field without a
+  conversion (which values mean true).
 - ``SINGLE_FOR_ARRAY``: a list canonical field maps a scalar API field, without a cardinality /
   array-vs-single conversion.
 - ``ENUM_KEY_UNKNOWN``: an enum conversion maps a value the cited documents' enum does not have.
@@ -165,6 +167,18 @@ def _shape_issues(
     for p in src.paths:
         types, subs = oracle.path_shape(api, p.path)
         kinds = {t.lower() for t in types}
+        if (
+            f.type.lower() in ("boolean", "bool")
+            and src.conversion is None
+            and kinds
+            and kinds <= {"string", "integer", "number", "null"}
+            and kinds - {"null"}
+        ):  # tax_exempt (boolean) <- tax_exempt_category (a code): which values mean true?
+            out.append(Issue("TYPE_MISMATCH", path, api,
+                             f"{p.path} is a {'/'.join(sorted(types))} in {api} and {path} is a "
+                             "boolean: map a boolean field, or state a conversion (enum: which "
+                             "values mean true)"))  # fmt: skip
+            continue
         if not kinds or kinds & _PRIMITIVE - {"null"}:
             continue  # the API states a scalar somewhere: fine
         if kinds <= {"array", "null"}:
