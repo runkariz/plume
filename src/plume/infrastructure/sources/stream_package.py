@@ -1472,19 +1472,25 @@ def _attach_page_rules(
             # A one-endpoint page that could not be cut: its rules-only guide would just
             # duplicate the endpoint in search; the rules go into the endpoint instead.
             doc = out[indexes[0]]
-            out[indexes[0]] = _with_rule_sources(
-                replace(
-                    doc,
-                    text=doc.text
-                    + "\n\n## Rules (documentation page)\n"
-                    + "\n".join(r.line() for r in page_rules),
+            out[indexes[0]] = _with_conflicts(
+                _with_rule_sources(
+                    replace(
+                        doc,
+                        text=doc.text
+                        + "\n\n## Rules (documentation page)\n"
+                        + "\n".join(r.line() for r in page_rules),
+                    ),
+                    page_rules,
                 ),
-                page_rules,
+                page.conflicts,
             )
             continue
         guide = _page_guide(page, page_rules, endpoints)
         if guide is not None:
-            out.append(_with_rule_sources(guide, page_rules))
+            out.append(_with_conflicts(_with_rule_sources(guide, page_rules), page.conflicts))
+        else:  # no page guide: the page's conflicts go where its text went, its endpoints
+            for i in dict.fromkeys(indexes):
+                out[i] = _with_conflicts(out[i], page.conflicts)
     used_rules.update(owner)
 
 
@@ -1551,12 +1557,26 @@ def _rule_sources(rules: "list[knowledge_export.Rule]") -> dict[str, dict[str, A
 
 
 def _with_rule_sources(doc: Document, rules: "list[knowledge_export.Rule]") -> Document:
+    """The rules' multi-page citations and their x-kariz-conflicts, on a document showing them."""
+    doc = _with_conflicts(doc, [c for r in rules for c in r.conflicts])
     sources = _rule_sources(rules)
     if not sources:
         return doc
     raw = dict(doc.raw) if isinstance(doc.raw, dict) else {}
     merged = {**(raw.get(RULE_SOURCES_KEY) or {}), **sources}
     return replace(doc, raw={**raw, RULE_SOURCES_KEY: merged})
+
+
+def _with_conflicts(doc: Document, items: "list[Any]") -> Document:
+    """x-kariz-conflicts from a rule or a page entry added to a document's own (no repeats)."""
+    if not items:
+        return doc
+    raw = dict(doc.raw) if isinstance(doc.raw, dict) else {}
+    have = [c for c in raw.get(CONFLICTS_KEY) or [] if isinstance(c, dict)]
+    seen = {json.dumps(c, sort_keys=True) for c in have}
+    new = [c for c in items if json.dumps(c, sort_keys=True) not in seen]
+    unique = list({json.dumps(c, sort_keys=True): c for c in new}.values())
+    return replace(doc, raw={**raw, CONFLICTS_KEY: have + unique}) if unique else doc
 
 
 def _unit_endpoint_ids(meta: JsonObj) -> list[str]:
