@@ -145,12 +145,21 @@ def keep_endpoints(ranked: Sequence[str], k: int, minimum: int = MIN_ENDPOINTS) 
     return sorted(top, key=position.__getitem__) + rest
 
 
+_REQUEST_MODEL = re.compile(r"request|(body|input|payload)$", re.IGNORECASE)
+
+
+def _request_model(doc_id: str) -> bool:
+    """What a client sends: model:...request... or a ...Body / ...Input / ...Payload model
+    (CDON updatearticlequantitybody above PUT /articles/{id}/quantity)."""
+    return doc_id.startswith("model:") and bool(_REQUEST_MODEL.search(doc_id))
+
+
 def request_models_last(ranked: Sequence[str], k: int) -> list[str]:
     """A request-body model (what a client sends) is rarely what a question is after: within
     the top 2k, they move behind the other results (the endpoint that takes them stays)."""
     window, rest = list(ranked[: 2 * k]), list(ranked[2 * k :])
-    first = [d for d in window if not (d.startswith("model:") and "request" in d)]
-    last = [d for d in window if d.startswith("model:") and "request" in d]
+    first = [d for d in window if not _request_model(d)]
+    last = [d for d in window if _request_model(d)]
     return first + last + rest
 
 
@@ -278,6 +287,15 @@ _QUERY_STOP = frozenset({"mark", "as", "the", "a", "an", "of", "or", "and", "wit
                          "can", "number", "tracking", "code", "order"})  # fmt: skip
 
 
+# the same act under other names in commerce APIs (CDON PUT /orders/{id}/fulfill for "shipped")
+_VERB_ALIASES: dict[str, tuple[str, ...]] = {
+    "ship": ("ship", "fulfill", "fulfil", "fulfillment", "dispatch", "shipment", "shipments"),
+    "send": ("send", "ship", "dispatch"),
+    "dispatch": ("dispatch", "ship", "fulfill", "fulfil"),
+    "fulfill": ("fulfill", "fulfil", "fulfillment", "ship", "dispatch"),
+}
+
+
 def _stem(word: str) -> str:
     word = word.lower()
     if word in _IRREGULAR:
@@ -319,7 +337,11 @@ def state_change_first(
         if not doc_id.startswith("endpoint:") or doc_id.startswith("endpoint:GET~"):
             return 0
         words = _path_words(doc_id)
-        changes = (verb is not None and verb in words) or bool(_STATE_WORDS & set(words))
+        verbs = set(_VERB_ALIASES.get(verb, (verb,))) if verb else set()
+        by_verb = bool(verbs & set(words))
+        changes = by_verb or bool(_STATE_WORDS & set(words))
+        if not nouns:  # "mark an order as shipped": only the verb names the change
+            return 1 if by_verb else 0
         named = sum(1 for n in nouns if any(n in w for w in words))
         return named if changes else 0
 
@@ -345,11 +367,16 @@ def synthesized_after_vendor(ranked: Sequence[str], k: int) -> list[str]:
     order = list(ranked)
     for doc in [d for d in order[:k] if d.startswith(_SYNTHESIZED)]:
         at = order.index(doc)
-        vendor = next(
-            (i for i, d in enumerate(order[:k]) if i > at and d.startswith("guide:")
-             and not d.startswith(_SYNTHESIZED)),
-            None,
-        )  # fmt: skip
+        vendors = [
+            i for i, d in enumerate(order[: 2 * k])
+            if i > at and d.startswith("guide:") and not d.startswith(_SYNTHESIZED)
+        ]  # fmt: skip
+        topic = "environment" if "environment" in doc else "webhook"
+        # the vendor's guide on the same topic (Back Market guide:environments, not its
+        # guide:context), else the first vendor guide
+        vendor = next((i for i in vendors if topic in order[i]), None)
+        if vendor is None:
+            vendor = next((i for i in vendors if i < k), None)
         if vendor is not None:
             order.insert(vendor, order.pop(at))
     return order
