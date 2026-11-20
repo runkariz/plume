@@ -132,3 +132,14 @@ def test_size_does_not_beat_relevance() -> None:
     assert not _role_part("ordertag", ("order",))
     assert not _role_part("orderdeliveryposition", ("order",))
     assert FIELD_BONUS_CAP == 60
+
+
+def test_a_sub_resource_of_another_resource_is_not_the_concepts_own_read() -> None:
+    """BigCommerce /orders/{order_id}/products is order lines, not Product's own read."""
+    from plume.application.models.sessions import _under_other_resource  # noqa: PLC0415
+
+    assert _under_other_resource("/{version}/orders/{order_id}/products", ("product",))
+    assert not _under_other_resource("/{version}/catalog/products", ("product",))
+    assert not _under_other_resource("/{version}/catalog/products/{product_id}", ("product",))
+    assert not _under_other_resource("/api/{version}/orders/{id}", ("order",))
+    assert not _under_other_resource("/admin/api/{version}/orders/{order_id}.json", ("order",))

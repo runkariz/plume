@@ -171,6 +171,21 @@ def normalize_concept(concept: str) -> str:
     return text[:1].upper() + text[1:] if text == text.lower() else text
 
 
+_ID_SEGMENT = re.compile(r"^\{(?!.*version)[^}]+\}$", re.IGNORECASE)
+
+
+def _under_other_resource(path: str, main: tuple[str, ...]) -> bool:
+    """/orders/{order_id}/products is order lines, not Product's own read: an earlier segment
+    names another resource followed by its id ({version} is no id)."""
+    segs = [x.split(".", 1)[0] for x in path.strip("/").split("/")]
+    return any(
+        not segs[i].startswith("{")
+        and _ID_SEGMENT.match(segs[i + 1])
+        and concept_key(segs[i]) not in main
+        for i in range(len(segs) - 2)
+    )
+
+
 FIELD_BONUS_CAP = 60  # data fields beyond this do not make a model rank higher
 
 
@@ -541,6 +556,7 @@ class ModelSessions:
             if d.kind is DocumentKind.ENDPOINT
             and d.method == "GET"
             and concept_key(last_literal(d.path or "")) in main
+            and not _under_other_resource(d.path or "", main)
         }
         out: dict[str, tuple[int, int, int, int]] = {}
         for d in docs:
