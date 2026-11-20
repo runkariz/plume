@@ -14,6 +14,7 @@ import {
   GuideLinks,
   LoadingState,
   MethodBadge,
+  DocConflicts,
   RawJson,
   RuleSources,
 } from '@/components';
@@ -162,6 +163,8 @@ export function DocumentPage() {
       </div>
 
       <EndpointRateLimitCard limit={d.rateLimit} />
+
+      <DocConflicts conflicts={d.conflicts} />
 
       {perScheme.length ? (
         <Card className="pad doc-scopes" role="region" aria-label="Required scopes">
