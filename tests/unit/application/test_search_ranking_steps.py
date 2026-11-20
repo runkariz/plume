@@ -89,3 +89,49 @@ def test_a_synthesized_guide_gives_way_to_the_vendors() -> None:
     assert synthesized_after_vendor(ranked, 5) == [vendor, ours, ranked[2]]
     alone = [ours, "endpoint:POST~/webhooks.json"]
     assert synthesized_after_vendor(alone, 5) == alone
+
+
+def test_a_test_endpoint_gives_way_to_its_production_twin() -> None:
+    """Trendyol "mark a package as shipped": the staging-only test PUT ranked first."""
+    from plume.application.reader.ranking import production_before_test  # noqa: PLC0415
+
+    test = "endpoint:PUT~/integration/test/order/sellers/{sellerId}/shipment-packages/{id}"
+    prod = "endpoint:PUT~/integration/order/sellers/{sellerId}/shipment-packages/{id}"
+    ranked = [test, "guide:x", prod]
+    assert production_before_test(ranked, "mark a package as shipped") == [prod, test, "guide:x"]
+    assert production_before_test(ranked, "mark a package as shipped in the test environment") == (
+        ranked
+    )
+    assert production_before_test([test, "guide:x"], "mark shipped") == [test, "guide:x"]
+
+
+def test_a_webhook_auth_guide_is_not_the_auth_answer() -> None:
+    """Trendyol "how do I authenticate": the webhook auth guide led, the Basic scheme was 7th."""
+    from plume.application.reader.ranking import auth_first  # noqa: PLC0415
+
+    ranked = ["guide:webhooks-authentication", "endpoint:GET~/x", "auth:basic"]
+    assert auth_first(ranked, 5, "how do I authenticate my api calls")[0] == "auth:basic"
+    assert auth_first(ranked, 5, "how do I authenticate?")[0] == "auth:basic"
+    assert auth_first(ranked, 5, "how do I authenticate a returning customer at checkout") == (
+        ranked  # an operation question that only uses the word
+    )
+
+
+def test_a_path_only_endpoint_follows_the_endpoints_it_serves() -> None:
+    """Mirakl GET /{file_path}@get-tl05 (an export file chunk) ranked 1 for invoices."""
+    from plume.application.reader.ranking import path_only_after_endpoints  # noqa: PLC0415
+
+    chunk = "endpoint:GET~/{file_path}@get-tl05"
+    invoices = "endpoint:GET~/api/invoices"
+    assert path_only_after_endpoints([chunk, "guide:x", invoices], 5) == [
+        "guide:x", invoices, chunk,
+    ]  # fmt: skip
+    assert path_only_after_endpoints([chunk, "guide:x"], 5) == [chunk, "guide:x"]
+
+
+def test_a_rate_limit_question_leads_with_a_rate_limit_guide() -> None:
+    from plume.application.reader.ranking import rate_limit_guide_first  # noqa: PLC0415
+
+    ranked = ["guide:resource-rules-api-2", "endpoint:GET~/api/orders", "guide:rate-limits"]
+    assert rate_limit_guide_first(ranked, 5, "what does a 429 mean")[0] == "guide:rate-limits"
+    assert rate_limit_guide_first(ranked, 5, "list orders") == ranked
