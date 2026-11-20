@@ -498,6 +498,13 @@ export function sampleCheck(method: string, path: string, params: string[]): Che
       matched: null,
       paramChecks: params.map((name) => ({ name, found: false, where: null })),
       alternatives: SYNC_OPERATIONS.map((o) => `endpoint:POST~/sync@post-${o.replace(/\./g, '-')}`),
+      pick: {
+        param: 'method',
+        options: [...SYNC_OPERATIONS].sort().map((o) => ({
+          value: o,
+          docId: `endpoint:POST~/sync@post-${o.replace(/\./g, '-')}`,
+        })),
+      },
       note: `ambiguous: 156 operations share POST /sync; pass method=<name> in params or query (e.g. ${SYNC_OPERATIONS.map((o) => `method=${o}`).join(', ')})`,
     };
   }

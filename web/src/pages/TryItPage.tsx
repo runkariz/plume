@@ -2,12 +2,13 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
 import { useAsync } from '@/api/useAsync';
-import { picksFromNote, withPick, type CheckPick } from '@/lib/checkPicks';
+import { filterOptions, picksFromNote, withPick, type CheckPick } from '@/lib/checkPicks';
 import { docHref, endpointOfId, operationOf, shownPath } from '@/lib/docHref';
 import { formatMs } from '@/lib/format';
 import {
   ApiError,
   type AskResponse,
+  type CallPick,
   type CheckCallResponse,
   type HttpMethod,
   type KindFilter,
@@ -313,15 +314,21 @@ function AskTool({ apiId }: { apiId: string }) {
  */
 function AmbiguousPicks({
   apiId,
+  pick,
   picks,
   alternatives,
   onPick,
 }: {
   apiId: string;
+  /** Every value that picks an operation, when the server sends it (newer servers). */
+  pick: CallPick | null;
+  /** Else the examples the note names. */
   picks: CheckPick[];
   alternatives: string[];
   onPick: (p: CheckPick) => void;
 }) {
+  if (pick && pick.options.length > 0)
+    return <PickList apiId={apiId} pick={pick} onPick={onPick} />;
   if (picks.length === 0 && alternatives.length === 0) return null;
   return (
     <div className="check-picks" style={{ marginBottom: 10 }}>
@@ -355,6 +362,71 @@ function AmbiguousPicks({
             ))}
           </ul>
         </details>
+      ) : null}
+    </div>
+  );
+}
+
+/** How many matches of the filter are listed at once; the rest are one more letter away. */
+const OPTIONS_SHOWN = 8;
+
+/**
+ * Every operation at the path, by the value that picks it: a filter, the first matches as buttons that fill the
+ * parameter and check again, and a link to each operation's page.
+ */
+function PickList({
+  apiId,
+  pick,
+  onPick,
+}: {
+  apiId: string;
+  pick: CallPick;
+  onPick: (p: CheckPick) => void;
+}) {
+  const [q, setQ] = useState('');
+  const matches = filterOptions(pick.options, q);
+  const shown = matches.slice(0, OPTIONS_SHOWN);
+  return (
+    <div className="check-picks" style={{ marginBottom: 10 }}>
+      <p className="small muted">
+        Pick the operation by its <span className="mono">{pick.param}</span> value; it fills the
+        parameter and checks again:
+      </p>
+      <label htmlFor="chk-pick-filter" className="sr-only">
+        Filter the operations
+      </label>
+      <input
+        id="chk-pick-filter"
+        type="search"
+        className="input"
+        placeholder={`Filter the ${pick.options.length} operations`}
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
+      <p className="faint small" aria-live="polite">
+        {matches.length === pick.options.length
+          ? `${pick.options.length} operations`
+          : `${matches.length} of ${pick.options.length} operations`}
+        {matches.length > shown.length ? `, the first ${shown.length} shown` : ''}
+      </p>
+      <ul className="check-pick-list plain" aria-label="Operations to pick">
+        {shown.map((o) => (
+          <li key={o.value} className="row">
+            <button
+              type="button"
+              className="btn sm mono check-pick"
+              onClick={() => onPick({ key: pick.param, value: o.value })}
+            >
+              {pick.param}={o.value}
+            </button>
+            <Link to={docHref(apiId, o.docId)} className="small" title={o.docId}>
+              page
+            </Link>
+          </li>
+        ))}
+      </ul>
+      {matches.length === 0 ? (
+        <p className="muted small">No operation matches this filter.</p>
       ) : null}
     </div>
   );
@@ -482,6 +554,7 @@ function CheckTool({ apiId }: { apiId: string }) {
                 {d.verdict === 'ambiguous' ? (
                   <AmbiguousPicks
                     apiId={apiId}
+                    pick={d.pick ?? null}
                     picks={picksFromNote(d.note)}
                     alternatives={d.alternatives ?? []}
                     onPick={pick}

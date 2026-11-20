@@ -1,4 +1,4 @@
-import { picksFromNote, withPick } from './checkPicks';
+import { filterOptions, picksFromNote, withPick } from './checkPicks';
 
 const NOTE =
   'ambiguous: 156 operations share POST /sync; pass method=<name> in params or query (e.g. method=ae.merchant.assortment.seller.arrangement.plan.list, method=ae.merchant.assortment.seller.plan.chance.download, method=aliexpress.affiliate.category.get)';
@@ -33,5 +33,17 @@ describe('withPick', () => {
       'limit, method=a.b',
     );
     expect(withPick('', { key: 'method', value: 'a.b' })).toBe('method=a.b');
+  });
+});
+
+describe('filterOptions', () => {
+  const options = [{ value: 'ae.plan.list' }, { value: 'aliexpress.Category.get' }, { value: 'x' }];
+  it('keeps the options that contain the text, whatever its case, and all of them for an empty filter', () => {
+    expect(filterOptions(options, '')).toHaveLength(3);
+    expect(filterOptions(options, '  ')).toHaveLength(3);
+    expect(filterOptions(options, 'CATEGORY').map((o) => o.value)).toEqual([
+      'aliexpress.Category.get',
+    ]);
+    expect(filterOptions(options, 'nope')).toEqual([]);
   });
 });
