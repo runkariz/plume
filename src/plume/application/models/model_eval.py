@@ -3,7 +3,7 @@ the release gate built on it. Gold is read here only: the generator's prompts an
 never built from it (an architecture test keeps the generator from importing gold)."""
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from plume.application.errors import NotFoundError
 from plume.application.models.concepts import concept_parts
@@ -57,6 +57,24 @@ def _set_member(name: str) -> str:
     return "".join(c for c in name.lower() if c.isalnum())
 
 
+def _without(gold: GoldModel, held: set[str]) -> GoldModel:
+    """The gold without the top-level fields another member holds (by name or alias)."""
+    if not held:
+        return gold
+    keep = tuple(f for f in gold.fields if not {_set_member(n) for n in f.names} & held)
+    return replace(gold, fields=keep)
+
+
+def _part(gold: GoldModel, field: str, concept: str) -> GoldModel | None:
+    """The gold of an embedded member: the owner gold's field (lines[] -> Order line)."""
+    key = _set_member(field)
+    sub = next((f for f in gold.fields if key in {_set_member(n) for n in f.names}), None)
+    if sub is None or not sub.fields:
+        return None
+    return replace(gold, concept=concept, fields=sub.fields, operations=(),
+                   source=f"{gold.source}#{field}")  # fmt: skip
+
+
 def _covers(gold: GoldModel, snap: ModelSnapshot) -> bool:
     """Gold covers a model when their main concepts meet ("Product / Offer" covers Product) and
     they share an API."""
@@ -103,17 +121,49 @@ class ModelEvaluation:
         """Score a model, or each member of a set, against the gold models that cover its
         concept: those of ``gold_ref``, else every configured gold file."""
         golds = self._gold.load(gold_ref) if gold_ref else self._gold.all()
-        results = [
-            (snap.snapshot_id, self._score(snap, g))
-            for snap in self._members(target)
-            for g in golds
-            if _covers(g, snap)
-        ]
+        results = self._member_scores(target, golds)
         relations = self._relations(target, gold_ref)
         if gold_ref and not results and not relations:
             concepts = ", ".join(sorted({g.concept for g in golds}))
             raise NotFoundError(f"{gold_ref} has no gold for {target} (it covers: {concepts})")
         return EvalReport(target, tuple(results), relations)
+
+    def _member_scores(
+        self, target: str, golds: tuple[GoldModel, ...]
+    ) -> list[tuple[str, ModelEval]]:
+        """A model against its concept golds. A set's member against its concept gold without
+        the fields its embedded relations hold (order-prod's lines[] and shipping_address are
+        the Order line and Address members); an embedded member against that part of its
+        owner's gold (Order line against order-prod's lines[])."""
+        snaps = self._members(target)
+        stored = self._sets.get_set(target) if self._sets is not None else None
+        if stored is None:
+            return [
+                (s.snapshot_id, self._score(s, g)) for s in snaps for g in golds if _covers(g, s)
+            ]
+        by_concept = {_set_member(m.concept): self._models.get_snapshot(m.model_id)
+                      for m in stored.draft.members}  # fmt: skip
+        embedded = [(r.from_, r.to, r.embed_field) for r in stored.draft.relations
+                    if r.kind == "embedded" and r.embed_field]  # fmt: skip
+        out: list[tuple[str, ModelEval]] = []
+        for snap in snaps:
+            held = {
+                _set_member(f)
+                for frm, _, f in embedded
+                if _set_member(frm) == _set_member(snap.concept)
+            }
+            for g in golds:
+                if _covers(g, snap):
+                    out.append((snap.snapshot_id, self._score(snap, _without(g, held))))
+        for frm, to, field in embedded:
+            owner, member = by_concept.get(_set_member(frm)), by_concept.get(_set_member(to))
+            if owner is None or member is None:
+                continue
+            for g in golds:
+                part = _part(g, field, to) if _covers(g, owner) else None
+                if part is not None and not any(_covers(x, member) for x in golds):
+                    out.append((member.snapshot_id, self._score(member, part)))
+        return out
 
     def _relations(self, target: str, gold_ref: str | None) -> tuple[SetEval, ...]:
         """A set's relations against the set golds that cover it (same members, an API in

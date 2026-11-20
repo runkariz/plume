@@ -90,3 +90,44 @@ def test_set_golds_live_beside_model_golds(tmp_path: Any) -> None:
     [gold] = source.sets()
     assert [r.id for r in gold.relations] == ["order-lines", "order-customer"]
     assert source.load_sets("set-g4.json") == (gold,)
+
+
+def test_scorer_fixes_from_the_group_1_check() -> None:
+    """Group 1 (tester: 7/7 correct) scored correct 7, wrong 1, missed 1, invented 1: two
+    Order -> Address relations matched one gold row; path forms (data[].order_id vs order_id,
+    line_items vs line_items[].id) read as wrong; alternative rows counted as required."""
+    from plume.domain.models.set_gold import _same_path  # noqa: PLC0415
+
+    assert _same_path("fulfillments[].order_id", "order_id")
+    assert _same_path("data[].shipment_lines[].order_line_id", "shipment_lines[].order_line_id")
+    assert _same_path("line_items", "line_items[].id")
+    assert not _same_path("order_id", "customer_id")
+    gold = parse_set_gold({"schema": "plume.set-gold.v1", "members": ["Order", "Address", "Customer"],
+        "apis": ["a"], "relations": [
+        {"id": "order-shipping-address", "from": "Order", "to": "Address", "kind": "embedded",
+         "cardinality": "1:1", "field": "shipping_address", "apis": {"a": {"paths": ["shipping"]}}},
+        {"id": "order-billing-address", "from": "Order", "to": "Address", "kind": "embedded",
+         "cardinality": "1:1", "field": "billing_address", "apis": {"a": {"paths": ["billing"]}}},
+        {"id": "order-customer", "from": "Order", "to": "Customer", "kind": "reference",
+         "cardinality": "n:1", "apis": {"a": {"paths": ["customer_id"]}}},
+        {"id": "order-customer (embedded alternative)", "from": "Order", "to": "Customer",
+         "kind": "embedded", "cardinality": "1:1", "apis": {"a": {"paths": ["customer"]}}},
+    ]})  # fmt: skip
+    draft = parse_set_draft({
+        "name": "S", "description": "d",
+        "members": [{"concept": c, "model_id": c} for c in ("Order", "Address", "Customer")],
+        "relations": [
+            {"id": "order-billing-address", "from": "Order", "to": "Address", "kind": "embedded",
+             "cardinality": "1:1", "embed": {"field": "billing_address"}, "confirmed": True,
+             "sources": {"a": _source("nested", ["billing"])}},
+            {"id": "order-shipping-address", "from": "Order", "to": "Address", "kind": "embedded",
+             "cardinality": "1:1", "embed": {"field": "shipping_address"}, "confirmed": True,
+             "sources": {"a": _source("nested", ["shipping"])}},
+            {"id": "order-customer", "from": "Order", "to": "Customer", "kind": "embedded",
+             "cardinality": "1:1", "embed": {"field": "customer"}, "confirmed": True,
+             "sources": {"a": _source("nested", ["customer"])}},
+        ],
+    })  # fmt: skip
+    result = score_set(draft, gold)
+    assert result.counts == {"correct": 3, "invented": 0}  # the embedded alternative is chosen
+    assert all(v == "correct" for r in result.relations for v in r.sources.values())
