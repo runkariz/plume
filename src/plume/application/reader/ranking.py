@@ -195,6 +195,7 @@ _AUTH_QUERY = re.compile(
     r"|\bauth(entication|orization)? headers?\b|\bwhich header authenticates\b",
     re.IGNORECASE,
 )
+_SIGN_QUERY = re.compile(r"\bsign(s|ed|ing|ature)?\b", re.IGNORECASE)
 _AUTH_DOC = re.compile(r"auth|sign|token|credential|oauth|hmac", re.IGNORECASE)
 
 
@@ -204,21 +205,32 @@ _AUTH_OPERATION = re.compile(r"token|oauth|auth", re.IGNORECASE)  # not "sign": 
 def _auth_doc(doc_id: str) -> bool:
     """An auth scheme, a guide about auth / signing / tokens, or an operation or doc page that
     issues or explains tokens (Magento POST /integration/admin/token, Shopify's OAuth page)."""
-    if doc_id.startswith("auth:"):
+    if doc_id.startswith(("auth:", "app:")):  # the app document carries the setup / signing text
         return True
     if doc_id.startswith((PAGE_PREFIX, "endpoint:")):
         return bool(_AUTH_OPERATION.search(doc_id.split(":", 1)[1]))
     return doc_id.startswith("guide:") and bool(_AUTH_DOC.search(doc_id.removeprefix("guide:")))
 
 
-def auth_first(ranked: Sequence[str], k: int, query: str) -> list[str]:
+def auth_first(
+    ranked: Sequence[str],
+    k: int,
+    query: str,
+    own: Callable[[], Sequence[str]] = tuple,
+) -> list[str]:
     """An auth question puts the best-ranked auth document (a scheme, or a guide about auth /
     signing / tokens) first, ahead of operations that merely share a word (Lazada's sponsor
-    /account/sign endpoints for "how do I sign a request")."""
+    /account/sign endpoints for "how do I sign a request"). With none ranked, the first of
+    ``own()`` (the API's auth schemes, then its app document: TikTok's signing setup)."""
     if not _AUTH_QUERY.search(query):
         return list(ranked)
     window = list(ranked[: 2 * k])
     best = next((d for d in window if _auth_doc(d)), None)
-    if best is None or _auth_doc(window[0]):  # an auth answer already leads
+    if best is None:  # none ranked: the API's own auth schemes / app (setup) document
+        options = list(own())
+        if _SIGN_QUERY.search(query):  # signing is set up in the app text, not a scheme
+            options.sort(key=lambda d: not d.startswith("app:"))
+        best = next(iter(options), None)
+    if best is None or (window and _auth_doc(window[0])):  # an auth answer already leads
         return list(ranked)
     return [best] + [d for d in ranked if d != best]

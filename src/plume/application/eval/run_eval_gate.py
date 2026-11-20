@@ -15,7 +15,13 @@ from plume.application.ports.embedder import Embedder, Vector
 from plume.application.ports.eval_repo import EvalRecord, EvalRepo
 from plume.application.ports.search_index import FactQuery, SearchIndex
 from plume.application.ports.tag_repo import TagRepo
-from plume.application.reader.use_cases import DEFAULT_FUSION, WIDER_POOL, fuse_hits, rank_order
+from plume.application.reader.use_cases import (
+    DEFAULT_FUSION,
+    WIDER_POOL,
+    fuse_hits,
+    own_auth_docs,
+    rank_order,
+)
 from plume.domain.eval.gate import GateDecision, GatePolicy, decide
 from plume.domain.eval.gold import GoldKind, GoldSet
 from plume.domain.eval.metrics import K, QuestionOutcome, score
@@ -84,7 +90,12 @@ class RunEvalGate:
                 text = self._index.text(build_id, q.question, POOL)
                 fused = [h.doc_id for h in fuse_hits(dense, text, q.question, POOL, self._fusion)]
                 wider = partial(self._endpoints_for, build_id, vector)
-                ranked = tuple(rank_order(self._documents, build_id, fused, K, wider, q.question))
+                own = partial(
+                    own_auth_docs, self._index, build_id, (DocumentKind.AUTH, DocumentKind.APP)
+                )
+                ranked = tuple(
+                    rank_order(self._documents, build_id, fused, K, wider, q.question, own)
+                )
                 # Expected docs are alternatives: missing only when none of them is in the build.
                 present = [d for d in q.expect_docs if d in known]
                 missing = () if present else tuple(q.expect_docs)
