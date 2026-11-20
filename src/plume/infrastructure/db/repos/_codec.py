@@ -27,6 +27,7 @@ def fields_to_json(fields: Sequence[FieldSpec]) -> str:
                 "description": f.description,
                 "pointer": f.pointer,
                 **({"constraints": f.constraints} if f.constraints else {}),
+                **({"model_id": f.model_id} if f.model_id else {}),
             }
             for f in fields
         ]
@@ -44,6 +45,7 @@ def fields_from_json(raw: Any) -> tuple[FieldSpec, ...]:
             description=i.get("description"),
             pointer=i.get("pointer"),
             constraints=i.get("constraints"),
+            model_id=i.get("model_id"),
         )
         for i in items
     )
