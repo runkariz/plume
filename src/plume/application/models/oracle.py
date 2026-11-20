@@ -2,19 +2,26 @@
 cached for one validation: a large draft cites the same documents, paths and endpoints many
 times, and each lookup would be a database round trip."""
 
+from collections.abc import Sequence
+
 from plume.application.ports.document_repo import DocumentRepo
 from plume.application.ports.search_index import FactQuery
 from plume.domain.knowledge.call_check import path_matches, specificity
-from plume.domain.knowledge.document import Document, DocumentKind, FieldLocation
+from plume.domain.knowledge.document import Document, DocumentKind, FieldLocation, FieldSpec
 from plume.domain.models.validation import Oracle
 from plume.domain.shared.ids import BuildId
 
 
-def same_field(name: str, path: str) -> bool:
-    """A documented field name and a mapped path name the same field: equal, or one is a dotted
-    suffix of the other (case-insensitive; ``[]`` ignored)."""
-    a, b = name.lower().replace("[]", ""), path.lower().replace("[]", "")
-    return a == b or a.endswith("." + b) or b.endswith("." + a)
+def own_specs(fields: Sequence[FieldSpec], path: str) -> list[FieldSpec]:
+    """The field a path names in a document: its exact name ([] ignored), else longer names
+    ending with it (checkoutForm.fulfillment.status for fulfillment.status); never a shorter
+    or another path with the same last segment (region.region is not region; lineItems[]
+    .quantity is not reconciliation.quantity)."""
+    wanted = path.lower().replace("[]", "")
+    exact = [f for f in fields if f.name.lower().replace("[]", "") == wanted]
+    if exact:
+        return exact
+    return [f for f in fields if f.name.lower().replace("[]", "").endswith("." + wanted)]
 
 
 class PinnedLookups:
@@ -68,15 +75,10 @@ class PinnedLookups:
         d = self.doc(api, doc_id)
         if d is None:
             return None
-        specs = [f for f in d.fields if same_field(f.name, path)]
+        specs = own_specs(d.fields, path)
         if not specs:
             return None
-        lines = [
-            ln
-            for f in specs
-            for ln in d.text.splitlines()
-            if f"`{f.name}`" in ln or f"`{f.name.split('.')[-1]}`" in ln
-        ]
+        lines = [ln for f in specs for ln in d.text.splitlines() if f"`{f.name}`" in ln]
         return tuple(t for t in (*(f.description or "" for f in specs), *lines) if t)
 
     def field_exists(self, api: str, path: str) -> bool:
@@ -140,18 +142,13 @@ class PinnedLookups:
         IS the path, or ends with it (checkoutForm.fulfillment.status for fulfillment.status),
         never a shorter one (status is another field than fulfillment.status). None: none
         states one."""
-        wanted = path.lower().replace("[]", "")
-        exact: dict[str, None] = {}
-        longer: dict[str, None] = {}
+        values: dict[str, None] = {}
         for doc_id in doc_ids:
             d = self.doc(api, doc_id)
-            for spec in d.fields if d is not None else ():
-                name = spec.name.lower().replace("[]", "")
-                into = exact if name == wanted else longer if name.endswith("." + wanted) else None
-                if into is not None:
-                    for v in spec.constraint_dict.get("enum") or ():
-                        into[str(v)] = None
-        return tuple(exact or longer) or None  # the path itself first
+            for spec in own_specs(d.fields, path) if d is not None else ():
+                for v in spec.constraint_dict.get("enum") or ():
+                    values[str(v)] = None
+        return tuple(values) or None
 
     def _endpoint_rows(self, api: str) -> list[tuple[str, str, str]]:
         if api not in self._endpoints:

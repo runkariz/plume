@@ -265,7 +265,7 @@ class ModelDraftRefusedError(ApplicationError):
 
     def __init__(self, issues: list[Issue]) -> None:
         self.issues = issues
-        summary = "; ".join(f"{i.code} {i.field}/{i.api}" for i in issues[:10])
+        summary = "; ".join(f"{i.code} {i.field}/{i.api}" for i in issues)  # all of them
         super().__init__(f"{len(issues)} issue(s): {summary}")
 
 
