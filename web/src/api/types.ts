@@ -849,6 +849,24 @@ export interface DocumentOut {
   endpointLinks?: EndpointLinkOut[];
   /** Rules in the text that the package states on several pages, each with every page (sourceUrl first); [] or absent when none. */
   ruleSources?: RuleSource[];
+  /** Limits the docs state with different values; [] or absent when none. Plume never picks one. */
+  conflicts?: DocConflict[];
+}
+
+/** One place the docs state a value for a limit. `where`: "description", "param:<name>" or "page:<url>". */
+export interface ConflictStatement {
+  where: string;
+  quote: string;
+  sourceUrl?: string | null;
+  isExample?: boolean;
+}
+
+/** The docs state different values for `limit` (e.g. a page size of 128 here and 256 there). */
+export interface DocConflict {
+  limit: string;
+  /** "The docs state different values for <limit>:" and the quotes, as the server words it. */
+  text?: string;
+  statements: ConflictStatement[];
 }
 
 /** A rule stated on several documentation pages: its id and the pages (untrusted addresses). */

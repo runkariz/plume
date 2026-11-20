@@ -2920,6 +2920,30 @@ ul.plain {
 .scheme-scopes a:hover {
   text-decoration-color: currentColor;
 }
+.conflict {
+  margin-top: 12px;
+}
+.conflict-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+.conflict-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.conflict-statement {
+  overflow-wrap: anywhere;
+  border-left: 3px solid var(--warn);
+  padding-left: 10px;
+}
+.conflict-place a {
+  color: var(--accent-ink);
+}
 .rule-list {
   display: flex;
   flex-direction: column;

@@ -207,6 +207,23 @@ function linksOf(docId: string, kind: string, method: string | null) {
         },
       ],
       guides: ['guide:pagination', 'guide:rate-limits'],
+      // the docs state different page sizes: every statement with its place, none picked
+      conflicts: [
+        {
+          limit: 'page size',
+          text: 'The docs state different values for page size: "up to 128 items per page" (description); "limit: max 256" (param:limit).',
+          statements: [
+            { where: 'description', quote: 'Returns up to 128 items per page.' },
+            { where: 'param:limit', quote: 'The maximum is 256.' },
+            {
+              where: 'page:https://shopify.dev/docs/api/usage/pagination-rest',
+              quote: 'For example, limit=250 returns 250 orders.',
+              sourceUrl: 'https://shopify.dev/docs/api/usage/pagination-rest',
+              isExample: true,
+            },
+          ],
+        },
+      ],
     };
   if (docId === 'guide:pagination')
     return {
