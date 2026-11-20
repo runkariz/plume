@@ -18,6 +18,7 @@ from plume.application.ports.tag_repo import TagRepo
 from plume.application.reader.use_cases import (
     DEFAULT_FUSION,
     WIDER_POOL,
+    all_endpoint_ids,
     fuse_hits,
     own_auth_docs,
     rank_order,
@@ -83,6 +84,7 @@ class RunEvalGate:
         known = {s.doc_id for s in self._index.browse(build_id, (), None, 100_000, 0)[0]}
         outcomes: list[QuestionOutcome] = []
         details: list[dict[str, object]] = []
+        endpoints = partial(all_endpoint_ids, self._index, build_id)
         for q in gold.questions:
             if q.kind is GoldKind.SEARCH:
                 vector = self._embedder.embed_query(q.question)
@@ -94,7 +96,9 @@ class RunEvalGate:
                     own_auth_docs, self._index, build_id, (DocumentKind.AUTH, DocumentKind.APP)
                 )
                 ranked = tuple(
-                    rank_order(self._documents, build_id, fused, K, wider, q.question, own)
+                    rank_order(
+                        self._documents, build_id, fused, K, wider, q.question, own, endpoints
+                    )
                 )
                 # Expected docs are alternatives: missing only when none of them is in the build.
                 present = [d for d in q.expect_docs if d in known]

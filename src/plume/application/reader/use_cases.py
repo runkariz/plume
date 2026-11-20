@@ -35,6 +35,7 @@ from plume.application.reader.ranking import (
     pair_pages_with_endpoints,
     pair_units_with_endpoints,
     request_models_last,
+    state_change_first,
 )
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
 from plume.domain.knowledge.asset import ICON
@@ -274,6 +275,7 @@ def rank_order(
     wider: Callable[[], Sequence[str]] = tuple,
     query: str = "",
     auth_docs: Callable[[], Sequence[str]] = tuple,
+    all_endpoints: Callable[[], Sequence[str]] = tuple,
 ) -> list[str]:
     """The final order of fused hits, shared by search and the eval gate: a page brings one of
     its endpoints into the top-k, so does a knowledge unit that names its endpoints (from the
@@ -289,7 +291,13 @@ def rank_order(
     order = request_models_last(order, k)
     order = near_duplicate_guides_last(order, k)
     order = auth_first(order, k, query, auth_docs)
+    order = state_change_first(order, k, query, all_endpoints)
     return keep_endpoints(order, k)
+
+
+def all_endpoint_ids(index: SearchIndex, build_id: BuildId) -> list[str]:
+    """Every endpoint document id of the build (for a lookup by path structure)."""
+    return [s.doc_id for s in index.browse(build_id, (DocumentKind.ENDPOINT,), None, 100_000, 0)[0]]
 
 
 def own_auth_docs(
@@ -408,15 +416,29 @@ class SearchDocs:
             allowed = [k for k in (DocumentKind.AUTH, DocumentKind.APP) if not kinds or k in kinds]
             return own_auth_docs(self._index, build_id, allowed)
 
+        def endpoint_ids() -> list[str]:
+            if kinds and DocumentKind.ENDPOINT not in kinds:
+                return []
+            return all_endpoint_ids(self._index, build_id)
+
         order = rank_order(
-            self._documents, build_id, [h.doc_id for h in fused], top_k, wider, query, auth_docs
+            self._documents,
+            build_id,
+            [h.doc_id for h in fused],
+            top_k,
+            wider,
+            query,
+            auth_docs,
+            endpoint_ids,
         )
         by_id = {h.doc_id: h for h in fuse_hits(wider_hits, [], query, WIDER_POOL)}
         by_id.update({h.doc_id: h for h in fused})
         for d, summary in self._index.summaries(
             build_id, [d for d in order[:top_k] if d not in by_id]
-        ).items():  # an API's own auth document brought in for an auth question
-            by_id[d] = SearchHit(d, summary.kind, summary.title, "", "", None, None, None,
+        ).items():  # brought in by path or as the API's own auth document: no ranks
+            full = self._documents.get_document(build_id, d)
+            by_id[d] = SearchHit(d, summary.kind, summary.title, "",
+                                 _snippet(full.text if full else "", query), None, None, None,
                                  0.0, 0.0, 0.0)  # fmt: skip
         order = [d for d in order if d in by_id]
         hits = [by_id[d] for d in order[:top_k]]
