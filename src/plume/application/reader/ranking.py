@@ -234,3 +234,72 @@ def auth_first(
     if best is None or (window and _auth_doc(window[0])):  # an auth answer already leads
         return list(ranked)
     return [best] + [d for d in ranked if d != best]
+
+
+# "mark an order as shipped", "change the state of a delivery": an operation that moves a state
+_MARK_AS = re.compile(r"\bmark\b.*?\bas\s+(?:a\s+|an\s+)?(?P<state>[a-z]+)", re.IGNORECASE)
+_SET_STATE = re.compile(r"\b(change|set|update|move)\b.*\b(status|state)\b", re.IGNORECASE)
+_IRREGULAR = {"sent": "send", "paid": "pay", "shipped": "ship", "cancelled": "cancel",
+              "canceled": "cancel", "dispatched": "dispatch", "fulfilled": "fulfill",
+              "delivered": "deliver", "received": "receive", "accepted": "accept",
+              "refunded": "refund", "returned": "return", "read": "read"}  # fmt: skip
+_STATE_WORDS = frozenset({"state", "status", "transition", "transitions"})
+_QUERY_STOP = frozenset({"mark", "as", "the", "a", "an", "of", "or", "and", "with", "to", "my",
+                         "change", "set", "update", "move", "status", "state", "how", "do", "i",
+                         "can", "number", "tracking", "code", "order"})  # fmt: skip
+
+
+def _stem(word: str) -> str:
+    word = word.lower()
+    if word in _IRREGULAR:
+        return _IRREGULAR[word]
+    for suffix in ("ed", "d"):
+        if word.endswith(suffix) and len(word) > len(suffix) + 2:
+            return word[: -len(suffix)]
+    return word
+
+
+def _path_words(doc_id: str) -> list[str]:
+    path = doc_id.split("~", 1)[-1].split("@", 1)[0]
+    return [w for w in re.split(r"[^a-z0-9]+", path.lower()) if w]
+
+
+def state_change_first(
+    ranked: Sequence[str],
+    k: int,
+    query: str,
+    endpoints: Callable[[], Sequence[str]] = tuple,
+) -> list[str]:
+    """ "mark X as shipped" / "change the state of X": the write operation that makes that
+    change goes first (Shopware POST /_action/order_delivery/{id}/state/{transition}, Mirakl
+    PUT /orders/{id}/ship), ahead of the resource's generic update and create endpoints. Found
+    by path among all of the API's endpoints (Shopware's rank below its thousands of CRUD
+    ones): it names a noun of the question, and the state's verb or a state / transition."""
+    m = _MARK_AS.search(query)
+    if m is None and not _SET_STATE.search(query):
+        return list(ranked)
+    verb = _stem(m.group("state")) if m else None
+    nouns = {
+        _stem(w).removesuffix("s")
+        for w in re.split(r"[^a-z]+", query.lower())
+        if len(w) > 3 and w not in _QUERY_STOP
+    } - ({verb} if verb else set())
+
+    def score(doc_id: str) -> int:
+        """Nouns of the question the path names (0: not a state change of them)."""
+        if not doc_id.startswith("endpoint:") or doc_id.startswith("endpoint:GET~"):
+            return 0
+        words = _path_words(doc_id)
+        changes = (verb is not None and verb in words) or bool(_STATE_WORDS & set(words))
+        named = sum(1 for n in nouns if any(n in w for w in words))
+        return named if changes else 0
+
+    window = list(ranked[: 2 * k])
+    if window and score(window[0]):
+        return list(ranked)
+    pool = list(dict.fromkeys([*window, *endpoints()]))
+    scored = [(score(d), -i, d) for i, d in enumerate(pool)]
+    best = max((x for x in scored if x[0] > 0), default=None)
+    if best is None:
+        return list(ranked)
+    return [best[2]] + [d for d in ranked if d != best[2]]
