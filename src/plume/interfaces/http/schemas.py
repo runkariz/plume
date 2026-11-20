@@ -360,6 +360,10 @@ class ParamCheck(Schema):
     name: str
     found: bool
     where: str | None
+    note: str | None = Field(
+        default=None,
+        description="When not found: e.g. the guide that describes this API's paging (to check).",
+    )
 
 
 class Checked(Schema):

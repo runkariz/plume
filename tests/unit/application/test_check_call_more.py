@@ -49,10 +49,26 @@ def test_pagination_contract_and_guide(stack: FakeStack) -> None:
     assert [(p.name, p.found, p.where) for p in r.params] == [
         ("limit", True, "query"),
         ("page_info", True, "pagination"),  # the endpoint's contract names it
-        ("since_cursor", True, "pagination"),  # the pagination guide uses it as a parameter
+        # a guide using it is no proof (Allegro gate B1): not found, the guide pointed to
+        ("since_cursor", False, None),
     ]
-    assert r.verdict == "documented"
-    assert _check(stack, PRODUCTS, params=["nope"]).verdict == "not_documented"
+    note = r.params[2].note or ""
+    assert note.startswith("Not in this endpoint's documented parameters. Paging for this API")
+    assert "guide:pagination" in note
+    assert r.params[0].note is None
+    assert r.verdict == "not_documented"
+    nope = _check(stack, PRODUCTS, params=["nope"])
+    assert (nope.verdict, nope.params[0].note) == ("not_documented", None)  # no paging word
+
+
+def test_a_dotted_name_matches_by_its_full_name_only(stack: FakeStack) -> None:
+    """Allegro gate B1: status matched publication.status, id matched offer.id."""
+    products = stack.check_call().execute("shopify", "POST", "/admin/api/2026-10/products.json",
+                                          body=["product.title"])  # fmt: skip
+    assert [(p.name, p.found) for p in products.params] == [("product.title", True)]
+    bare = stack.check_call().execute("shopify", "POST", "/admin/api/2026-10/products.json",
+                                      body=["title"])  # fmt: skip
+    assert [(p.name, p.found) for p in bare.params] == [("title", False)]
 
 
 def test_query_and_body_names_are_checked_where_given(stack: FakeStack) -> None:

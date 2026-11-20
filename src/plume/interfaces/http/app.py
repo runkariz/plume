@@ -541,7 +541,8 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 else None
             ),
             param_checks=[
-                s.ParamCheck(name=c.name, found=c.found, where=c.where) for c in r.params
+                s.ParamCheck(name=c.name, found=c.found, where=c.where, note=c.note)
+                for c in r.params
             ],
             checked=s.Checked(**r.checked),
             evidence=_citation(p["evidence"]) if p["evidence"] else None,

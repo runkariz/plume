@@ -774,8 +774,10 @@ class FindFact:
         )
 
 
-PAGING_TERM_SCORE = 3  # used as a parameter in the guide (quoted, or next to "parameter")
 _VERSION_SEGMENT = re.compile(r"^(?:v\d+(?:\.\d+)*|\d{4}-\d{2}(?:-\d{2})?)$", re.I)
+
+
+PAGING_TERM_SCORE = 3  # used as a parameter in the guide (quoted, or next to "parameter")
 
 
 def _is_version(segment: str) -> bool:
@@ -829,6 +831,12 @@ def pick_operations(
     """The operations whose fixed values match the given ones (case-insensitive)."""
     given = {k: v.lower() for k, v in values.items() if k in picks}
     return [o for o in owners if all(fixed[o].get(k, "").lower() == v for k, v in given.items())]
+
+
+def _param_key(name: str) -> str:
+    """A parameter's match key: the full name, case-insensitive, list marks ignored
+    (items[].sku = items.sku); page[number] stays its own name."""
+    return name.strip().lower().replace("[]", "")
 
 
 class CheckCall:
@@ -1000,16 +1008,18 @@ class CheckCall:
             for i, seg in enumerate(real)
         )
 
-    def _pagination(self, build_id: BuildId, owner_id: str) -> tuple[set[str], list[str]]:
-        """The names the endpoint's pagination contract gives, and the API's pagination guide
-        texts (Shopify page_info, Mirakl max / offset live there)."""
-        names: set[str] = set()
+    def _pagination(self, build_id: BuildId, owner_id: str) -> set[str]:
+        """The parameter names the endpoint's pagination contract gives (e.g. Shopify
+        page_info, Mirakl max / offset), as match keys."""
         doc = self._documents.get_document(build_id, owner_id) if self._documents else None
         contract = doc.raw.get("pagination") if doc and isinstance(doc.raw, dict) else None
-        if isinstance(contract, dict):
-            names |= {v.lower() for v in contract.values() if isinstance(v, str) and v.strip()}
-        hits = self._index.text(build_id, "pagination paging page", 10, (DocumentKind.GUIDE,))
-        return names, [h.text for h in hits]
+        if not isinstance(contract, dict):
+            return set()
+        return {_param_key(v) for v in contract.values() if isinstance(v, str) and v.strip()}
+
+    def _paging_guides(self, build_id: BuildId) -> list[ChunkHit]:
+        """The API's guides about paging, for a name the endpoint does not document."""
+        return list(self._index.text(build_id, "pagination paging page", 10, (DocumentKind.GUIDE,)))
 
     def _param_checks(
         self,
@@ -1018,14 +1028,16 @@ class CheckCall:
         names: Sequence[tuple[str, FieldLocation | None]],
     ) -> list[ParamCheck]:
         owned = self._facts.for_owner(build_id, owner_id)
-        paging: tuple[set[str], list[str]] | None = None
+        paging: set[str] | None = None
+        guides: list[ChunkHit] | None = None
         checks = []
         for p, location in names:
-            hits = [
+            wanted = _param_key(p)
+            hits = [  # the full name only: status is not publication.status (Allegro gate B1)
                 f
                 for f in owned
                 if f.kind is FactKind.FIELD
-                and (f.name.lower() == p.lower() or f.name.lower().endswith("." + p.lower()))
+                and _param_key(f.name) == wanted
                 and f.location is not FieldLocation.RESPONSE
                 and (location is None or f.location is location)
             ]
@@ -1036,11 +1048,21 @@ class CheckCall:
             if location is not FieldLocation.BODY:
                 if paging is None:
                     paging = self._pagination(build_id, owner_id)
-                named, guides = paging
-                if p.lower() in named or any(
-                    _term_use(text, p)[0] >= PAGING_TERM_SCORE for text in guides
-                ):
+                # only what the endpoint's own pagination contract names: a guide that uses
+                # "page" does not make page a parameter of an endpoint paging by offset/limit
+                if wanted in paging:
                     checks.append(ParamCheck(p, True, "pagination"))
+                    continue
+                if guides is None:
+                    guides = self._paging_guides(build_id)
+                guide = next((h for h in guides if _term_use(h.text, p)[0] >= PAGING_TERM_SCORE),
+                             None)  # fmt: skip
+                if guide is not None:  # point to it; do not assert the name
+                    checks.append(ParamCheck(p, False, None, note=(
+                        "Not in this endpoint's documented parameters. Paging for this API is "
+                        f"described in {guide.doc_id} ({guide.title}); check it before using "
+                        "this name."
+                    )))  # fmt: skip
                     continue
             checks.append(ParamCheck(p, False, None))
         return checks

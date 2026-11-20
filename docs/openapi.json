@@ -3541,6 +3541,18 @@
             "title": "Name",
             "type": "string"
           },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When not found: e.g. the guide that describes this API's paging (to check).",
+            "title": "Note"
+          },
           "where": {
             "anyOf": [
               {
