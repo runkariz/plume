@@ -16,6 +16,8 @@ SHAPES = {
     "billing": (frozenset({"object"}), ("city",)),
     "line_items": (frozenset({"array"}), ("sku",)),
     "country_iso_code": (frozenset({"string"}), ()),
+    "tax_exempt_category": (frozenset({"string"}), ()),
+    "taxes_included": (frozenset({"boolean"}), ()),
 }
 COUNTRIES = tuple(f"C{i:03d}" for i in range(250))  # Mirakl: ~250 ISO alpha-3 codes
 ENUMS = {"status": ("pending", "processing", "completed", "cancelled"),
@@ -115,3 +117,15 @@ def test_a_code_list_is_a_code_system_conversion() -> None:
     [(_, short)] = _codes("state", "string", "status",
                           conversion={"kind": "enum", "map": {"pending": "OPEN"}})  # fmt: skip
     assert "code-system" not in short
+
+
+def test_a_boolean_from_a_code_needs_a_conversion() -> None:
+    """Tester gate: tax_exempt (boolean) <- tax_exempt_category (a code) was accepted."""
+    [(code, message)] = _codes("tax_exempt", "boolean", "tax_exempt_category")
+    assert code == "TYPE_MISMATCH"
+    assert "which values mean true" in message
+    enum = {"kind": "enum", "map": {"CA_STATUS_CARD_EXEMPTION": "true"},
+            "unmapped": []}  # fmt: skip
+    mapped = _codes("tax_exempt", "boolean", "tax_exempt_category", conversion=enum)
+    assert "TYPE_MISMATCH" not in [c for c, _ in mapped]
+    assert _codes("taxes_included", "boolean", "taxes_included") == []
