@@ -294,6 +294,10 @@
   min-width: 0;
   flex: 1;
 }
+.res-body .mono,
+.res-body p {
+  overflow-wrap: anywhere;
+}
 .res-title {
   display: flex;
   align-items: center;

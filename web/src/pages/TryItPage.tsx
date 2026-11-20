@@ -193,16 +193,26 @@ function SearchTool({ apiId }: { apiId: string }) {
                             <Chip>{h.kind}</Chip>
                           </div>
                           <div className="mono muted">{h.subtitle}</div>
-                          <p className="muted">{h.snippet}</p>
+                          {h.snippet.trim() ? <p className="muted">{h.snippet}</p> : null}
                           <div className="sc">
                             <span>dense {h.denseRank ? `#${h.denseRank}` : '–'}</span>
-                            <ScoreBar value={h.denseScore} label="dense" />
+                            {h.denseRank ? <ScoreBar value={h.denseScore} label="dense" /> : null}
                             <span>text {h.textRank ? `#${h.textRank}` : '–'}</span>
-                            <ScoreBar value={h.textScore} label="text" />
+                            {h.textRank ? <ScoreBar value={h.textScore} label="text" /> : null}
                             <span>
-                              fused <b>{h.fused.toFixed(4)}</b>
+                              fused{' '}
+                              <b>
+                                {!h.denseRank && !h.textRank && h.fused === 0
+                                  ? '–'
+                                  : h.fused.toFixed(4)}
+                              </b>
                             </span>
                           </div>
+                          {!h.denseRank && !h.textRank ? (
+                            <p className="faint small">
+                              Added to the results: it has no text or meaning rank.
+                            </p>
+                          ) : null}
                         </div>
                       </Card>
                     </li>

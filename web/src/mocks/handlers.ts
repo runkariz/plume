@@ -1861,6 +1861,21 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
       if (!detailFor(String(params.id))) return notFound();
       const body = (await request.json()) as SearchRequest;
       const hits = sampleHits.filter((h) => body.kind === 'all' || h.kind === body.kind);
+      // like the server for an auth question: the app (or auth scheme) document is added with no snippet and no rank
+      if (/\bsign\b/i.test(body.query ?? '') && body.kind === 'all')
+        hits.unshift({
+          id: 'app:shopify',
+          kind: 'app',
+          title: 'Shopify Admin REST',
+          subtitle: 'app · shopify',
+          snippet: '',
+          sourceUrl: null,
+          denseRank: null,
+          textRank: null,
+          denseScore: 0,
+          textScore: 0,
+          fused: 0,
+        });
       return HttpResponse.json({
         api: String(params.id),
         docsAsOf: '2026-11-14',
