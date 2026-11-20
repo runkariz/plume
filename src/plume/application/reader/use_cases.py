@@ -1062,7 +1062,7 @@ class CheckCall:
                         "Not in this endpoint's documented parameters. Paging for this API is "
                         f"described in {guide.doc_id} ({guide.title}); check it before using "
                         "this name."
-                    )))  # fmt: skip
+                    ), guide_id=guide.doc_id))  # fmt: skip
                     continue
             checks.append(ParamCheck(p, False, None))
         return checks

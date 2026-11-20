@@ -55,6 +55,7 @@ def test_pagination_contract_and_guide(stack: FakeStack) -> None:
     note = r.params[2].note or ""
     assert note.startswith("Not in this endpoint's documented parameters. Paging for this API")
     assert "guide:pagination" in note
+    assert r.params[2].guide_id == "guide:pagination"
     assert r.params[0].note is None
     assert r.verdict == "not_documented"
     nope = _check(stack, PRODUCTS, params=["nope"])

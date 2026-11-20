@@ -541,7 +541,9 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 else None
             ),
             param_checks=[
-                s.ParamCheck(name=c.name, found=c.found, where=c.where, note=c.note)
+                s.ParamCheck(
+                    name=c.name, found=c.found, where=c.where, note=c.note, guide_id=c.guide_id
+                )
                 for c in r.params
             ],
             checked=s.Checked(**r.checked),
