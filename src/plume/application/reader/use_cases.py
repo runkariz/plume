@@ -38,6 +38,7 @@ from plume.application.reader.ranking import (
     pair_units_with_endpoints,
     path_only_after_endpoints,
     production_before_test,
+    push_first,
     rate_limit_guide_first,
     request_models_last,
     state_change_first,
@@ -311,6 +312,7 @@ def rank_order(
     order = path_only_after_endpoints(order, k)
     order = rate_limit_guide_first(order, k, query)
     order = endpoint_before_its_model(order, k)
+    order = push_first(order, k, query, all_endpoints)
     return keep_endpoints(order, k)
 
 

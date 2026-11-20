@@ -486,3 +486,53 @@ def endpoint_before_its_model(ranked: Sequence[str], k: int) -> list[str]:
         if twin is not None:
             order.insert(at, order.pop(twin))
     return order
+
+
+_PUSH_QUERY = re.compile(
+    r"\b(webhooks?|call(s)? my (url|endpoint|server)|notif(y|ies) me|push notifications?|"
+    r"callback urls?|subscribe to (events?|notifications?)|event notifications?)\b",
+    re.IGNORECASE,
+)
+_PUSH_DOC = re.compile(r"webhook|subscri|event|notification|trigger:", re.IGNORECASE)
+
+
+def _push_endpoint(doc_id: str) -> bool:
+    """An endpoint whose literal path names webhooks / hooks / subscriptions / events (not a
+    {webhook_id} parameter: BigCommerce PUT /hooks/{webhook_id} is no better than POST /hooks)."""
+    if not doc_id.startswith("endpoint:"):
+        return False
+    path = doc_id.split("~", 1)[-1].split("@", 1)[0]
+    literal = "/".join(x for x in path.split("/") if x and not x.startswith("{"))
+    return bool(re.search(r"hook|subscri|events?\b|notification", literal, re.IGNORECASE))
+
+
+def push_first(
+    ranked: Sequence[str], k: int, query: str, endpoints: Callable[[], Sequence[str]] = tuple
+) -> list[str]:
+    """ "Does X call my URL / send webhooks": a webhook / event-subscription document leads
+    (Magento POST /webhooks/subscribe and the Adobe I/O Events endpoints were not in the top 8);
+    the best-ranked one of the top 2k, else such an endpoint among all of the API's."""
+    if not _PUSH_QUERY.search(query):
+        return list(ranked)
+    window = list(ranked[: 2 * k])
+    if window and (
+        _push_endpoint(window[0])
+        or window[0].startswith("trigger:")
+        or (window[0].startswith("guide:") and _PUSH_DOC.search(window[0]))
+    ):
+        return list(ranked)  # fmt: skip
+    best = next((d for d in window if _push_endpoint(d) or d.startswith("trigger:")
+                 or (d.startswith("guide:") and "webhook" in d.lower())), None)  # fmt: skip
+    if best is None:
+        found = [d for d in endpoints() if _push_endpoint(d)]
+        best = min(found, key=_push_rank, default=None)
+    if best is None:
+        return list(ranked)
+    return [best] + [d for d in ranked if d != best]
+
+
+def _push_rank(doc_id: str) -> tuple[int, int, int]:
+    """Webhook paths first, then subscriptions, then events; a POST (subscribe) first."""
+    path = doc_id.split("~", 1)[-1].lower()
+    kind = 0 if "hook" in path else 1 if "subscri" in path else 2
+    return (kind, 0 if doc_id.startswith("endpoint:POST~") else 1, len(path))
