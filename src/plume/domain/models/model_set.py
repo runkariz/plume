@@ -17,12 +17,14 @@ from typing import Any
 from plume.domain.models.canonical_model import (
     DraftFormatError,
     Evidence,
+    FieldSource,
     ModelDraft,
     OpenQuestion,
     SourcePath,
+    parse_evidence,
 )
 from plume.domain.models.snapshot import PROMPT_VERSION, Origin, PinnedInput, Visibility
-from plume.domain.models.validation import Issue, Oracle, quote_in
+from plume.domain.models.validation import Issue, Oracle, evidence_issues
 
 MIN_MEMBERS = 1
 MAX_MEMBERS = 8
@@ -141,17 +143,10 @@ def _relation_source(raw: Any, where: str) -> RelationSource:
             paths.append(SourcePath(p["path"]))
         else:
             raise DraftFormatError(f"{where}.paths[{i}] must be a string or {{path}}")
-    evidence = []
-    for i, e in enumerate(raw.get("evidence") or []):
-        if not isinstance(e, dict):
-            raise DraftFormatError(f"{where}.evidence[{i}] must be an object")
-        evidence.append(
-            Evidence(
-                doc_id=_s(e, "doc_id", f"{where}.evidence[{i}]") or "",
-                quote=_s(e, "quote", f"{where}.evidence[{i}]") or "",
-                anchor=_s(e, "anchor", where, required=False),
-            )
-        )
+    items = raw.get("evidence") or []
+    if not isinstance(items, list):
+        raise DraftFormatError(f"{where}.evidence must be a list")
+    evidence = parse_evidence(items, where)  # the same forms as field evidence (noQuote)
     fetch = raw.get("fetch")
     if fetch is not None and not isinstance(fetch, str):
         raise DraftFormatError(f"{where}.fetch must be a string like 'GET /path'")
@@ -416,19 +411,22 @@ def _source_issues(r: Relation, apis: frozenset[str], oracle: Oracle) -> list[Is
             continue
         if not src.evidence:
             issues.append(Issue("MISSING_CITATION", where, api, "the relation cites nothing"))
-        for e in src.evidence:
-            text = oracle.doc_text(api, e.doc_id)
-            if text is None:
-                issues.append(Issue("DOC_NOT_FOUND", where, api, f"{e.doc_id} is not in the build"))
-            elif not quote_in(e.quote, text):
-                issues.append(
-                    Issue(
-                        "QUOTE_NOT_FOUND",
-                        where,
-                        api,
-                        f"the quote is not in {e.doc_id}: {e.quote[:80]!r}",
-                    )
-                )
+        # the same citation checks as a field's: in the build, quoted verbatim, about the
+        # cited path, substantive; noQuote only where that path's description has nothing
+        paths = (
+            tuple(SourcePath(p.path.removesuffix("[]")) for p in src.paths)  # order_lines[]
+            if src.as_ != "sub_resource"
+            else ()
+        )
+        issues.extend(
+            Issue(i.code, where, i.api, i.message)
+            for i in evidence_issues(where, api, FieldSource(paths, src.evidence), oracle)
+            if i.code != "MISSING_CITATION"
+        )
+        if not paths and any(e.no_quote for e in src.evidence):
+            issues.append(Issue("NO_QUOTE_NOT_ALLOWED", where, api,
+                                "noQuote needs a cited field path; a sub_resource source "
+                                "quotes its endpoint"))  # fmt: skip
         for p in src.paths:
             if src.as_ != "sub_resource" and not oracle.field_exists(
                 api,

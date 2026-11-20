@@ -260,7 +260,7 @@ def _quote_issue(
                  '{"doc_id": "...", "noQuote": "<why>"}')  # fmt: skip
 
 
-def _evidence_issues(path: str, api: str, src: FieldSource, oracle: Oracle) -> list[Issue]:
+def evidence_issues(path: str, api: str, src: FieldSource, oracle: Oracle) -> list[Issue]:
     """Each citation: in the build, its quote in the document, substantive, and about the
     mapped field."""
     out: list[Issue] = []
@@ -368,7 +368,7 @@ def validate(draft: ModelDraft, apis: frozenset[str], oracle: Oracle) -> list[Is
                     Issue("API_NOT_IN_SESSION", path, api, f"{api} is not in this session")
                 )
                 continue
-            issues.extend(_evidence_issues(path, api, src, oracle))
+            issues.extend(evidence_issues(path, api, src, oracle))
             for p in src.paths:
                 if not oracle.field_exists(api, p.path):
                     issues.append(

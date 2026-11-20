@@ -227,20 +227,11 @@ def _list(d: dict[str, Any], key: str, where: str) -> list[Any]:
     return v
 
 
-def _source(raw: Any, where: str) -> FieldSource:
-    if not isinstance(raw, dict):
-        raise DraftFormatError(f"{where} must be an object")
-    paths = []
-    for i, p in enumerate(_list(raw, "paths", where)):
-        if isinstance(p, str):
-            paths.append(SourcePath(p))
-        elif isinstance(p, dict):
-            path = _str(p, "path", f"{where}.paths[{i}]")
-            paths.append(SourcePath(path or "", _str(p, "type", where, required=False)))
-        else:
-            raise DraftFormatError(f"{where}.paths[{i}] must be a string or an object")
+def parse_evidence(items: list[Any], where: str) -> list[Evidence]:
+    """Citations: {doc_id, quote, anchor?}, or {doc_id, noQuote: "why"} for a field whose own
+    description has nothing to quote (fields, operations and relations alike)."""
     evidence = []
-    for i, e in enumerate(_list(raw, "evidence", where)):
+    for i, e in enumerate(items):
         if not isinstance(e, dict):
             raise DraftFormatError(f"{where}.evidence[{i}] must be an object")
         if "noQuote" in e and not isinstance(e["noQuote"], str):
@@ -260,6 +251,22 @@ def _source(raw: Any, where: str) -> FieldSource:
                 no_quote=no_quote.strip()[:300] if no_quote else None,
             )
         )
+    return evidence
+
+
+def _source(raw: Any, where: str) -> FieldSource:
+    if not isinstance(raw, dict):
+        raise DraftFormatError(f"{where} must be an object")
+    paths = []
+    for i, p in enumerate(_list(raw, "paths", where)):
+        if isinstance(p, str):
+            paths.append(SourcePath(p))
+        elif isinstance(p, dict):
+            path = _str(p, "path", f"{where}.paths[{i}]")
+            paths.append(SourcePath(path or "", _str(p, "type", where, required=False)))
+        else:
+            raise DraftFormatError(f"{where}.paths[{i}] must be a string or an object")
+    evidence = parse_evidence(_list(raw, "evidence", where), where)
     fetch = raw.get("fetch")
     if isinstance(fetch, dict):
         fetch = fetch.get("endpoint")
