@@ -75,3 +75,45 @@ def test_enum_of_the_path_itself_not_a_same_named_field() -> None:
     cited = ("model:checkoutform",)
     assert lookups.path_enum("a", "fulfillment.status", cited) == ("NEW", "PROCESSING", "SENT")
     assert lookups.path_enum("a", "status", cited) == ("BOUGHT", "FILLED_IN", "CANCELLED")
+
+
+def _doc_with(*fields: tuple[str, str]) -> Document:
+    from plume.domain.knowledge.document import FieldSpec as Spec  # noqa: PLC0415
+
+    text = "\n".join(f"- `{n}` (string): {d}" for n, d in fields)
+    specs = tuple(Spec(n, FieldLocation.MODEL, "string", description=d) for n, d in fields)
+    return Document(doc_id="model:x", kind=DocumentKind.MODEL, title="t", text=text, fields=specs)
+
+
+def _no_quote_codes(doc: Document, path: str) -> list[str]:
+    from plume.domain.models.canonical_model import parse_draft  # noqa: PLC0415
+    from plume.domain.models.validation import validate  # noqa: PLC0415
+
+    lookups = PinnedLookups(
+        {"a": BuildId("b-" + "0" * 32)},
+        SimpleNamespace(
+            field_names=lambda _b: [f.name for f in doc.fields],
+            field_types=lambda _b: [(f.name, "string") for f in doc.fields],
+            endpoints=lambda _b: [],
+        ),
+        SimpleNamespace(get_document=lambda _b, _d: doc),
+    )  # fmt: skip
+    ev = {"doc_id": "model:x", "noQuote": "the description is one word"}
+    field = {"name": "f", "type": "string", "description": "d",
+             "sources": {"a": {"paths": [path], "evidence": [ev]}}}  # fmt: skip
+    draft = parse_draft({"name": "M", "description": "d", "fields": [field]})
+    return [i.code for i in validate(draft, frozenset({"a"}), lookups.oracle())]
+
+
+def test_no_quote_is_judged_by_the_exact_path_not_its_parent_or_a_namesake() -> None:
+    """plume-l2 s-ecf4c80be7564cb1: Magento region.region "Region" was refused as noQuote
+    because the parent `region` has a sentence; Allegro lineItems[].quantity because
+    reconciliation.quantity has one."""
+    magento = _doc_with(("region", "Region or state details for the address."),
+                        ("region.region", "Region"))  # fmt: skip
+    assert _no_quote_codes(magento, "region.region") == []
+    assert _no_quote_codes(magento, "region") == ["NO_QUOTE_NOT_ALLOWED"]
+    allegro = _doc_with(("reconciliation.quantity", "Quantity of reconciled items"),
+                        ("lineItems[].quantity", "quantity"))  # fmt: skip
+    assert _no_quote_codes(allegro, "lineItems[].quantity") == []
+    assert _no_quote_codes(allegro, "reconciliation.quantity") == ["NO_QUOTE_NOT_ALLOWED"]
