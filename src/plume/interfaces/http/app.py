@@ -442,6 +442,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
             required_scopes=links.required_scopes(d),
             guides=links.linked_guides(d),
             linked_endpoints=links.linked_endpoints(d),
+            conflicts=[s.DocConflict(**c) for c in payloads.conflicts_payload(d)],
             endpoint_links=[
                 s.EndpointLink(endpoint_id=e["endpointId"], link_basis=e["linkBasis"])
                 for e in links.endpoint_links(d)

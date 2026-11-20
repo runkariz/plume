@@ -31,6 +31,7 @@ from plume.domain.knowledge import rate_limits
 from plume.domain.knowledge.api import ApiId, ApiInfo, Category
 from plume.domain.knowledge.asset import CONTENT_TYPES, ICON, MAX_ASSET_BYTES, Asset
 from plume.domain.knowledge.document import (
+    CONFLICTS_KEY,
     ENVIRONMENTS_DOC_ID,
     FIELDS_BOUNDED_KEY,
     HEADER_SOURCE_STANDARD,
@@ -1011,9 +1012,15 @@ class StreamPackageSource:
             source_id=key,
             # resolved to endpoint document ids by _link_documents once all endpoints are read;
             # the unit's own links are "text" links (knowledge-export/unit-links.json adds more)
-            raw={"endpointIds": linked, "linkBasis": dict.fromkeys(linked, CONNECTOR_BASIS)}
-            if linked
-            else None,
+            raw={
+                **(
+                    {"endpointIds": linked, "linkBasis": dict.fromkeys(linked, CONNECTOR_BASIS)}
+                    if linked
+                    else {}
+                ),
+                **({CONFLICTS_KEY: meta[CONFLICTS_KEY]} if meta.get(CONFLICTS_KEY) else {}),
+            }
+            or None,
         )
 
     @staticmethod

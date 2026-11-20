@@ -26,6 +26,7 @@ from plume.application.reader.dto import (
 from plume.domain.eval.metrics import few_questions_note
 from plume.domain.knowledge import rate_limits
 from plume.domain.knowledge.citation import Citation
+from plume.domain.knowledge.document import Document, conflicts_of
 from plume.domain.models.canonical_model import CanonicalField, conversion_json
 from plume.domain.models.model_set import ModelSetSnapshot
 from plume.domain.models.snapshot import ModelSnapshot, Visibility
@@ -111,9 +112,27 @@ def document_payload(r: DocumentResult) -> Json:
         "linked_endpoints": links.linked_endpoints(d),
         "endpoint_links": links.endpoint_links(d),
         "rule_sources": links.rule_sources(d),
+        "conflicts": conflicts_payload(d),
         "text": d.text,
         "citation": citation_payload(r.citation),
     }
+
+
+def conflicts_payload(d: Document) -> list[Json]:
+    """x-kariz-conflicts: the docs state different values for a limit; every statement with
+    its place (examples marked), never one picked."""
+    return [
+        {
+            "limit": c.limit,
+            "text": c.text,
+            "statements": [
+                {"where": st.where, "quote": st.quote, "source_url": st.source_url,
+                 "is_example": st.is_example}
+                for st in c.statements
+            ],
+        }
+        for c in conflicts_of(d.raw)
+    ]  # fmt: skip
 
 
 COMPACT_TEXT = 8_000  # characters of text in a compact document

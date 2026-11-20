@@ -457,7 +457,7 @@ class Container:
         return GetDocument(self.resolver(), self.documents)
 
     def find_fact(self) -> FindFact:
-        return FindFact(self.resolver(), self.fact_query, self.search_index)
+        return FindFact(self.resolver(), self.fact_query, self.search_index, self.documents)
 
     def check_call(self) -> CheckCall:
         return CheckCall(self.resolver(), self.fact_query, self.search_index, self.documents)

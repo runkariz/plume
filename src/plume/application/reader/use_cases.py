@@ -3,6 +3,7 @@
 import re
 import time
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from typing import Literal
 
 from plume.application.errors import ApplicationError, NotFoundError
@@ -56,6 +57,7 @@ from plume.domain.knowledge.document import (
     SUMMARY_LABEL,
     DocumentKind,
     FieldLocation,
+    conflicts_of,
     constraint_dict,
 )
 from plume.domain.knowledge.fact import Fact, FactKind
@@ -576,10 +578,31 @@ class FindFact:
         resolver: BuildResolver,
         facts: FactQuery,
         index: SearchIndex,
+        documents: DocumentRepo | None = None,
     ) -> None:
         self._resolver = resolver
         self._facts = facts
         self._index = index
+        self._documents = documents
+
+    def _conflict_note(self, build_id: BuildId, fact: Fact) -> str | None:
+        """x-kariz-conflicts of the fact's document that concern it: the endpoint itself, or a
+        statement about this parameter (param:<name>). Every statement, never one picked."""
+        if self._documents is None:
+            return None
+        doc = self._documents.get_document(build_id, fact.owner_id)
+        conflicts = conflicts_of(doc.raw) if doc is not None else ()
+        name = fact.name.lower()
+        hits = [
+            c for c in conflicts
+            if fact.kind is FactKind.ENDPOINT
+            or any(st.where.lower() == f"param:{name}" for st in c.statements)
+        ]  # fmt: skip
+        return "\n".join(c.text for c in hits) or None
+
+    def _with_conflicts(self, build_id: BuildId, m: FactMatch, fact: Fact) -> FactMatch:
+        conflict = self._conflict_note(build_id, fact)
+        return replace(m, note="\n".join(x for x in (m.note, conflict) if x)) if conflict else m
 
     def _mentions(self, build_id: BuildId, name: str) -> list[ChunkHit]:
         """Prose mentions, the API's own guides first: those general notes (pagination, rate
@@ -783,7 +806,7 @@ class FindFact:
             ref=_ref(r),
             name=name,
             found=bool(found),
-            matches=tuple(_match(f, titles) for f in found),
+            matches=tuple(self._with_conflicts(build_id, _match(f, titles), f) for f in found),
             complete=complete,
             checked=checked,
             text_mentions=mentions,

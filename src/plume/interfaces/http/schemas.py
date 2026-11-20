@@ -474,6 +474,19 @@ class FieldOut(Schema):
     )
 
 
+class ConflictStatementOut(Schema):
+    where: str = Field(description='"description", "param:<name>" or "page:<url>".')
+    quote: str
+    source_url: str | None = None
+    is_example: bool = False
+
+
+class DocConflict(Schema):
+    limit: str
+    text: str = Field(description='"The docs state different values for <limit>:" + quotes.')
+    statements: list[ConflictStatementOut]
+
+
 class DocumentOut(Schema):
     api: str
     build: str
@@ -508,6 +521,11 @@ class DocumentOut(Schema):
     guides: list[str] = Field(
         default_factory=list,
         description="Endpoint: the knowledge units that name it (endpointId/endpointIds).",
+    )
+    conflicts: list[DocConflict] = Field(
+        default_factory=list,
+        description="x-kariz-conflicts: the docs state different values for a limit; every "
+        "statement with its place, examples marked. Plume never picks one.",
     )
     linked_endpoints: list[str] = Field(
         default_factory=list,
