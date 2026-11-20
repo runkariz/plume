@@ -49,9 +49,18 @@ from plume.application.reader.ranking import (
 )
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
 from plume.domain.knowledge.asset import ICON
-from plume.domain.knowledge.call_check import normalize_call_path, path_matches, specificity
+from plume.domain.knowledge.call_check import (
+    ServerBase,
+    endpoint_server,
+    normalize_call_path,
+    path_matches,
+    server_bases,
+    specificity,
+    without_server_base,
+)
 from plume.domain.knowledge.citation import Citation
 from plume.domain.knowledge.document import (
+    ENVIRONMENTS_DOC_ID,
     HEADER_SOURCE_STANDARD,
     HTTP_METHODS,
     STANDARD_HEADER_NOTE,
@@ -966,20 +975,17 @@ class CheckCall:
             raise ReaderInputError("path is empty")
         r = self._resolver.resolve(api, version)
         build_id = r.build.build_id
-        wanted = normalize_call_path(path, r.api.versions)
-        endpoints = self._facts.endpoints(build_id)
-        candidates = []
-        for f in endpoints:
-            f_method, _, f_path = f.name.partition(" ")
-            if f_method == method and path_matches(f_path, wanted):
-                candidates.append((specificity(f_path), f, f_path))
+        candidates, call_paths, servers = self._candidates(build_id, method, path, r.api.versions)
         counts = self._index.counts(build_id)
         checked = {"endpoints": counts.get("endpoint", 0), "models": counts.get("model", 0)}
         names = [(p, None) for p in params] + [(q, FieldLocation.QUERY) for q in query]
         names += [(b, FieldLocation.BODY) for b in body]
         version_note: str | None = None
         if candidates:
-            fitting = [c for c in candidates if self._same_version(build_id, c[1].owner_id, path)]
+            fitting = [
+                c for c in candidates
+                if self._same_version(build_id, c[1].owner_id, call_paths.get(c[1].owner_id, path))
+            ]  # fmt: skip
             if not fitting:
                 fixed = self._real_path(build_id, candidates[0][1].owner_id)
                 version_note = f"the documented operation is {method} {fixed}"
@@ -1043,6 +1049,11 @@ class CheckCall:
             endpoint.evidence,
             alternatives,
             self._real_path(r.build.build_id, endpoint.owner_id),
+            matched_server=(
+                f"{servers[endpoint.owner_id].key}: {servers[endpoint.owner_id].url}"
+                if endpoint.owner_id in servers
+                else None
+            ),
         )
 
     def _ambiguous(
@@ -1074,6 +1085,50 @@ class CheckCall:
             tuple(sorted(owners)[:MAX_AMBIGUOUS_MATCHES]), note=note, pick_param=key,
             pick_options=tuple(sorted((v[key], o) for o, v in fixed.items() if key in v)),
         )  # fmt: skip
+
+    def _candidates(
+        self, build_id: BuildId, method: str, path: str, versions: tuple[str, ...]
+    ) -> tuple[list[tuple[int, Fact, str]], dict[str, str], dict[str, ServerBase]]:
+        """The endpoints at METHOD + path: as given, or with a server's base path taken off
+        (the path a developer calls may carry eBay api_3's /commerce/media/v1_beta, which the
+        stored paths do not). Also, per endpoint matched that way, the call path as stored and
+        the server."""
+        wanted = normalize_call_path(path, versions)
+        stripped = [
+            (b, rest, normalize_call_path(rest, versions))
+            for b, rest in without_server_base(path, self._server_bases(build_id))
+        ]
+        candidates: list[tuple[int, Fact, str]] = []
+        call_paths: dict[str, str] = {}
+        servers: dict[str, ServerBase] = {}
+        for f in self._facts.endpoints(build_id):
+            f_method, _, f_path = f.name.partition(" ")
+            if f_method != method:
+                continue
+            if path_matches(f_path, wanted):
+                candidates.append((specificity(f_path), f, f_path))
+                continue
+            for base, rest, alt in stripped:
+                if path_matches(f_path, alt) and self._endpoint_server(build_id, f.owner_id) in (
+                    base.key,
+                    None,
+                ):
+                    candidates.append((specificity(f_path), f, f_path))
+                    call_paths[f.owner_id], servers[f.owner_id] = rest, base
+                    break
+        return candidates, call_paths, servers
+
+    def _server_bases(self, build_id: BuildId) -> list[ServerBase]:
+        """The API's servers with a base path, from the loader's environments guide."""
+        if self._documents is None:
+            return []
+        doc = self._documents.get_document(build_id, ENVIRONMENTS_DOC_ID)
+        return server_bases(doc.text) if doc is not None else []
+
+    def _endpoint_server(self, build_id: BuildId, owner_id: str) -> str | None:
+        doc = self._documents.get_document(build_id, owner_id) if self._documents else None
+        url = doc.raw.get("url") if doc is not None and isinstance(doc.raw, dict) else None
+        return endpoint_server(url) if isinstance(url, str) else None
 
     def _real_path(self, build_id: BuildId, doc_id: str) -> str | None:
         summary = self._index.summaries(build_id, [doc_id]).get(doc_id)

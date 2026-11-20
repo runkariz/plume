@@ -3119,6 +3119,18 @@
             ],
             "description": "The package's own path when it fixes the API version (e.g. /vendor/orders/v1/purchaseOrders); null when the version is variable ({version} in `path`) or absent.",
             "title": "Realpath"
+          },
+          "server": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The server whose base path the call carried and that was taken off to match (e.g. api_3: https://apim.ebay.com/commerce/media/v1_beta).",
+            "title": "Server"
           }
         },
         "required": [
