@@ -44,7 +44,10 @@ from plume.domain.shared.hashing import ContentHash, content_hash
 # 22: a one-endpoint page that could not be cut puts its rules into the endpoint (no guide).
 # 23: rules with sourceUrls go to every page they name; the resource fallback matches pages
 #     like sourceUrl does (loose key); multi-page rules record their citations in raw.
-CHUNKER_VERSION = "24"
+# 24: $ref / composition types and model links in field lists; untyped fields say so.
+# 25: long guides also split at plain-text section titles (a short title line between blank
+#     lines: Mirakl's "Shop Selection" sat in a chunk about date formats and paging).
+CHUNKER_VERSION = "25"
 DEFAULT_MAX_CHARS = 6000
 # Endpoint/model chunks embedded per document. The largest reference documents (Magento
 # order endpoints) take 23; Shopware's entity graph took up to 14,000 before the field bound.
@@ -76,12 +79,52 @@ class Chunk:
         return content_hash(f"{self.doc_id}\n{self.heading}\n{self.text}")
 
 
-def _split_sections(text: str) -> list[str]:
+# A plain-text section title of a long guide: a short line standing alone between blank lines,
+# starting with a capital, no end punctuation, not a list item / table row / code.
+_PSEUDO_HEADING = re.compile(
+    r"(?<=\n\n)(?=[A-Z][^\n]{2,59}\n\n)(?![^\n]*[:|`])(?![^\n]*[.;,?!]\s*\n)(?![-*>#\d])"
+)
+PSEUDO_HEADING_MIN_CHARS = 1500  # shorter guides stay whole
+
+
+# Callout labels stand alone too, but belong to the text around them.
+_CALLOUTS = frozenset({"note", "notes", "warning", "caution", "info", "tip", "important"})
+
+
+def _is_title(line: str) -> bool:
+    words = line.split()
+    return (
+        0 < len(words) <= 7
+        and line.strip().lower() not in _CALLOUTS
+        and ". " not in line
+        and not line.rstrip().endswith("…")
+    )
+
+
+def _split_sections(text: str, pseudo: bool = False) -> list[str]:
     starts = [m.start() for m in _HEADING.finditer(text)]
+    titles: set[int] = set()
+    if pseudo and len(text) >= PSEUDO_HEADING_MIN_CHARS:  # short guides stay as before
+        titles = {
+            m.start()
+            for m in _PSEUDO_HEADING.finditer(text)
+            if _is_title(text[m.start() : text.find("\n", m.start())])
+        }
+        starts = sorted({*starts, *titles})
     if not starts or starts[0] != 0:
         starts = [0, *starts]
     bounds = [*starts, len(text)]
-    return [text[a:b].strip() for a, b in itertools.pairwise(bounds)]
+    sections: list[str] = []
+    for a, b in itertools.pairwise(bounds):
+        section = text[a:b].strip()
+        last = sections[-1] if sections else ""
+        # a markdown heading left alone by a title right after it ("# Mirakl Marketplace APIs"
+        # then "General Notes") joins that section, as it did before titles split
+        if a in titles and last.startswith("#") and "\n" not in last:
+            sections[-1] = f"{last}\n\n{section}"
+        else:
+            sections.append(section)
+    return sections
 
 
 def _split_to_size(text: str, max_chars: int) -> list[str]:
@@ -112,7 +155,8 @@ def chunk_document(document: Document, max_chars: int = DEFAULT_MAX_CHARS) -> li
     if max_chars < 200:
         raise ValueError("max_chars must be at least 200")
     if document.kind in (DocumentKind.GUIDE, DocumentKind.AUTH, DocumentKind.APP):
-        sections = [s for s in _split_sections(document.text) if s]
+        guide = document.kind is DocumentKind.GUIDE
+        sections = [s for s in _split_sections(document.text, pseudo=guide) if s]
     else:
         sections = [document.text.strip()]
     texts = [piece for section in sections for piece in _split_to_size(section, max_chars) if piece]
