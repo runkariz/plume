@@ -29,6 +29,7 @@ from plume.application.reader.dto import (
 from plume.application.reader.links import linked_endpoints
 from plume.application.reader.ranking import (
     auth_first,
+    endpoint_before_its_model,
     is_page,
     keep_endpoints,
     lift_operation_endpoints,
@@ -50,6 +51,8 @@ from plume.domain.knowledge.document import (
     HEADER_SOURCE_STANDARD,
     HTTP_METHODS,
     STANDARD_HEADER_NOTE,
+    SUMMARY_HEADING,
+    SUMMARY_LABEL,
     DocumentKind,
     FieldLocation,
     constraint_dict,
@@ -126,7 +129,11 @@ def _snippet(text: str, query: str, exact: str | None = None) -> str:
             pos = at
     start = max(0, pos - 80)
     piece = flat[start : start + SNIPPET_CHARS]
-    return ("…" if start else "") + piece + ("…" if start + SNIPPET_CHARS < len(flat) else "")
+    out = ("…" if start else "") + piece + ("…" if start + SNIPPET_CHARS < len(flat) else "")
+    summary = flat.find(SUMMARY_HEADING)
+    if summary >= 0 and start + len(piece) > summary and SUMMARY_HEADING not in piece:
+        out = f"[{SUMMARY_LABEL}] {out}"  # the label stays with model-written text
+    return out
 
 
 class ListApiOverviews:
@@ -303,6 +310,7 @@ def rank_order(
     order = production_before_test(order, query)
     order = path_only_after_endpoints(order, k)
     order = rate_limit_guide_first(order, k, query)
+    order = endpoint_before_its_model(order, k)
     return keep_endpoints(order, k)
 
 

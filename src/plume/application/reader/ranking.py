@@ -402,3 +402,40 @@ def rate_limit_guide_first(ranked: Sequence[str], k: int, query: str) -> list[st
     if best is None:
         return list(ranked)
     return [best] + [d for d in ranked if d != best]
+
+
+def _singular(word: str) -> str:
+    word = word.lower()
+    for suffix, repl in (("ies", "y"), ("sses", "ss"), ("s", "")):
+        if word.endswith(suffix) and len(word) > len(suffix) + 2:
+            return word[: -len(suffix)] + repl
+    return word
+
+
+def _endpoint_key(doc_id: str) -> str:
+    """The last literal path segment, singular and without separators (orders -> order)."""
+    path = doc_id.split("~", 1)[-1].split("@", 1)[0]
+    literals = [x.split(".", 1)[0] for x in path.strip("/").split("/") if x and "{" not in x]
+    return _singular(re.sub(r"[^a-z0-9]", "", literals[-1].lower())) if literals else ""
+
+
+def _model_key(doc_id: str) -> str:
+    return _singular(re.sub(r"[^a-z0-9]", "", doc_id.removeprefix("model:").lower()))
+
+
+def endpoint_before_its_model(ranked: Sequence[str], k: int) -> list[str]:
+    """A model ranked just above the endpoint of the same resource gives way to it (Amazon
+    model:destination above POST /notifications/destinations; model:order above GET
+    /orders/{orderId}): the endpoint is the operation asked about, the model its shape."""
+    order = list(ranked)
+    for model in [d for d in order[:k] if d.startswith("model:")]:
+        key = _model_key(model)
+        at = order.index(model)
+        twin = next(
+            (i for i, d in enumerate(order[:k]) if i > at and d.startswith("endpoint:")
+             and _endpoint_key(d) == key),
+            None,
+        )  # fmt: skip
+        if twin is not None:
+            order.insert(at, order.pop(twin))
+    return order

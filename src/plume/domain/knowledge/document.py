@@ -245,3 +245,17 @@ def header_format(name: str, prefix: str | None) -> str:
 
 # the guide the loader makes from app.json environments (their base URLs), searchable
 ENVIRONMENTS_DOC_ID = "guide:environments-and-base-urls"
+
+
+# Knowledge topic documents: verbatim quotes, then a model-written summary under this heading
+# (owner decision: accepted, always shown with its label, never cited as the vendor's words).
+SUMMARY_HEADING = "## Summary of the quotes above"
+SUMMARY_LABEL = "Summary of the quotes above (model-written)"
+_SUMMARY_SECTION = re.compile(
+    r"^## Summary of the quotes above[^\n]*\n.*?(?=^#{1,2} |\Z)", re.MULTILINE | re.DOTALL
+)
+
+
+def without_summaries(text: str) -> str:
+    """The text without its model-written summary sections: what evidence may quote."""
+    return _SUMMARY_SECTION.sub("", text)

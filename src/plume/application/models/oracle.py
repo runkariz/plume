@@ -7,7 +7,13 @@ from collections.abc import Sequence
 from plume.application.ports.document_repo import DocumentRepo
 from plume.application.ports.search_index import FactQuery
 from plume.domain.knowledge.call_check import path_matches, specificity
-from plume.domain.knowledge.document import Document, DocumentKind, FieldLocation, FieldSpec
+from plume.domain.knowledge.document import (
+    Document,
+    DocumentKind,
+    FieldLocation,
+    FieldSpec,
+    without_summaries,
+)
 from plume.domain.models.validation import Oracle
 from plume.domain.shared.ids import BuildId
 
@@ -61,7 +67,9 @@ class PinnedLookups:
             self._texts[(api, doc_id)] = (
                 None
                 if d is None
-                else f"{d.title}\n{d.text}\n{' '.join(f.description or '' for f in d.fields)}"
+                # never a model-written summary: evidence quotes the vendor's words
+                else f"{d.title}\n{without_summaries(d.text)}\n"
+                f"{' '.join(f.description or '' for f in d.fields)}"
             )
         return self._texts[(api, doc_id)]
 

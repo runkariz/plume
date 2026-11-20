@@ -147,3 +147,16 @@ def test_a_scope_question_leads_with_the_auth_scheme() -> None:
     assert auth_first(ranked, 5, "which scope do I need to read orders", own)[0] == (
         "auth:oauth2-authorization-code"
     )
+
+
+def test_an_endpoint_goes_before_its_resources_model() -> None:
+    """Amazon "register an SQS destination": model:destination above POST /destinations."""
+    from plume.application.reader.ranking import endpoint_before_its_model  # noqa: PLC0415
+
+    post = "endpoint:POST~/notifications/{version}/destinations"
+    ranked = ["model:destination", post, "model:sqsresource"]
+    assert endpoint_before_its_model(ranked, 5) == [post, "model:destination", "model:sqsresource"]
+    get = "endpoint:GET~/orders/{version}/orders/{orderId}"
+    assert endpoint_before_its_model(["model:order", get], 5) == [get, "model:order"]
+    other = ["model:order", "endpoint:GET~/customers"]
+    assert endpoint_before_its_model(other, 5) == other
