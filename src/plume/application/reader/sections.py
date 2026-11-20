@@ -20,6 +20,7 @@ from plume.domain.knowledge.document import (
     FieldLocation,
 )
 from plume.domain.knowledge.fact import FactKind
+from plume.domain.knowledge.package_warnings import AUTH as AUTH_SECTION
 from plume.domain.knowledge.package_warnings import PackageWarning
 
 WEBHOOKS_TAG = "webhooks"
@@ -117,12 +118,15 @@ class PackageSections:
         has_auth = any(w.code in package_warnings.WITH_AUTH for w in warnings) and bool(
             self._index.browse(r.build.build_id, (DocumentKind.AUTH,), None, 1, 0)[0]
         )
-        signing = [w for w in warnings if w.code in package_warnings.SIGNING_CODES]
-        guides: tuple[tuple[str, str], ...] = ()
+        auth_codes = [
+            w for w in warnings if package_warnings.KNOWN.get(w.code, ("",))[0] == AUTH_SECTION
+        ]
+        guides: tuple[tuple[str, str], ...] | None = None
         signed: bool | None = None
-        if signing and section in (None, package_warnings.AUTH):
-            signed = self._signed(r, warnings)
-            guides = self._auth_guides(r, signed=signed)
+        if auth_codes and section in (None, AUTH_SECTION):
+            if any(w.code in package_warnings.SIGNING_CODES for w in auth_codes):
+                signed = self._signed(r, warnings)
+            guides = self._auth_guides(r, signed=bool(signed))
         found = package_warnings.notices(
             warnings, section, has_auth=has_auth, signed=signed, guides=guides
         )

@@ -136,3 +136,35 @@ def test_auth_notices_name_and_link_the_guides() -> None:
     assert n.doc_ids == ("guide:authentication", "guide:hmac")
     [env] = notices(parse(["default-environment-by-order: x"]), guides=guides)
     assert env.doc_ids == ()  # environments notices are not about auth
+
+
+def test_nothing_to_link_points_at_the_vendor_not_a_setup_text() -> None:
+    """Shopee / TikTok: no signing guide in the package; "see the setup text" pointed nowhere."""
+    [signed] = notices(parse(["auth-signed-request: x"]), AUTH, guides=())
+    assert signed.text == (
+        "Every request must be signed (the package doesn't describe how to sign; see the "
+        "vendor's docs); there is no ready auth option yet."
+    )
+    assert signed.doc_ids == ()
+
+
+NEWEGG = (
+    'auth-needs-core-change: api-key-authorization "the credential is two values sent together '
+    "(Authorization and SecretKey): this auth unit applies one (Authorization); SecretKey is "
+    'not emitted as a unit"'
+)
+
+
+def test_core_change_names_what_cannot_be_expressed_and_links_guides() -> None:
+    """OnBuy / Newegg: the notice says what the connector cannot express."""
+    guides = (("guide:authentication", "Authentication"),)
+    [n] = notices(parse([NEWEGG]), AUTH, guides=guides)
+    assert n.text == (
+        "This API's auth uses a variant the connector can't express yet (the credential is "
+        "two values sent together (Authorization and SecretKey): this auth unit applies one "
+        "(Authorization); SecretKey is not emitted as a unit); calls won't authenticate until "
+        "Kariz supports it (see: Authentication)."
+    )
+    assert n.doc_ids == ("guide:authentication",)
+    [bare] = notices(parse(["auth-needs-core-change: x"]), AUTH, guides=())
+    assert bare.text.endswith("(the package doesn't describe it; see the vendor's docs).")
