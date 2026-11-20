@@ -4,6 +4,7 @@ versions, visibility and release (docs/design/model-relations.md)."""
 import json
 import secrets
 import uuid
+from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -155,17 +156,36 @@ def _as_members(
     for concept in concepts:
         for k in (concept_key(concept), *role_keys(concept)):
             member_of.setdefault(k, concept_key(concept))
+
+    def by_other_name(c: RelationCandidate) -> bool:
+        """Reached through a role's other name (consignment for Shipment), not the member's
+        own name or a kind of it (billingaddress is an address)."""
+        return any(k != member_of[k] and not k.endswith(member_of[k]) for k in (c.parent, c.child))
+
+    # pair -> (api, evidence kind) documented under the members' own names
+    named: dict[tuple[str, str], set[tuple[str, str]]] = defaultdict(set)
+    for c in candidates:
+        parent, child = member_of.get(c.parent), member_of.get(c.child)
+        if parent and child and parent != child and not by_other_name(c):
+            named[(parent, child)].update((a, e.kind) for a, es in c.sources.items() for e in es)
     merged: dict[tuple[str, str], RelationCandidate] = {}
     for c in candidates:
         parent, child = member_of.get(c.parent), member_of.get(c.child)
         if parent is None or child is None or parent == child:
             continue
         into = merged.setdefault((parent, child), RelationCandidate(parent, child))
-        for api, evidence in c.sources.items():
+        for api, found in c.sources.items():
+            evidence = (  # BigCommerce consignments beside its shipments: same kind, dropped
+                [e for e in found if (api, e.kind) not in named[(parent, child)]]
+                if by_other_name(c)
+                else found
+            )
+            if not evidence:
+                continue
             bucket = into.sources.setdefault(api, [])
             have = {(e.kind, e.doc_id, tuple(e.paths)) for e in bucket}
             bucket.extend(e for e in evidence if (e.kind, e.doc_id, tuple(e.paths)) not in have)
-    return [merged[k] for k in sorted(merged)]
+    return [merged[k] for k in sorted(merged) if merged[k].sources]
 
 
 class ModelSets:

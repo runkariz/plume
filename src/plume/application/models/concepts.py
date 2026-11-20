@@ -63,9 +63,13 @@ def _singular(word: str) -> str:
     return word
 
 
+# a merged package's section suffix (OTTO "Address__Orders-V4", resource "OrdersV4")
+_SECTION = re.compile(r"__[A-Za-z][\w-]*$|(?<=[a-z])V\d+$")
+
+
 @lru_cache(maxsize=65536)
 def concept_key(name: str) -> str:
-    return _singular(re.sub(r"[^a-z0-9]", "", name.lower()))
+    return _singular(re.sub(r"[^a-z0-9]", "", _SECTION.sub("", name).lower()))
 
 
 # The same resource role under another name: tried when no document carries the concept's
@@ -76,7 +80,8 @@ ROLE_SYNONYMS: dict[str, tuple[str, ...]] = {
     "fulfillment": ("delivery", "shipment"),
     "inventory": ("stock",),
     "stock": ("inventory",),
-    "orderline": ("lineitem", "orderitem", "orderlineitem"),
+    # an order's items[] / products[] list (Magento, BigCommerce /orders/{id}/products)
+    "orderline": ("lineitem", "orderitem", "orderlineitem", "orderproduct", "positionitem"),
     "lineitem": ("orderline", "orderitem"),
     # the nested address objects APIs use (Woo billing / shipping, Shopify default_address)
     "address": (
@@ -86,8 +91,14 @@ ROLE_SYNONYMS: dict[str, tuple[str, ...]] = {
         "shippingaddress",
         "defaultaddress",
         "customeraddress",
+        "invoiceaddress",  # OTTO
+        "deliveryaddress",
     ),
 }
+
+
+# every key that names a role: a container named <holder><key> (order + items) is that role
+ROLE_NAMES = frozenset({*ROLE_SYNONYMS, *(r for rs in ROLE_SYNONYMS.values() for r in rs)})
 
 
 def role_keys(concept: str) -> tuple[str, ...]:

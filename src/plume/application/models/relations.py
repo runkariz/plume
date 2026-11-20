@@ -18,13 +18,14 @@ evidence in BOTH APIs (each a child of the same, exactly matching parent), for t
 
 import re
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from difflib import SequenceMatcher
 from functools import lru_cache
 from typing import Any
 
 from plume.application.models.concepts import (
     NOISE,
+    ROLE_NAMES,
     ModelInputError,
     concept_docs,
     concept_key,
@@ -56,6 +57,7 @@ class CandidateEvidence:
     fetch: str | None = None  # "GET /products/{product_id}/variants.json" (sub_resource)
     many: bool = False  # an array / collection / *_ids: the child side is "many"
     read: bool = True  # from a model or a response (False: a request body only)
+    home: bool = True  # in a document of the parent or the child (not reached through others)
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,8 +213,13 @@ def _ranked(bucket: list[CandidateEvidence]) -> list[CandidateEvidence]:
     """Model/response evidence first; request-body-only evidence is dropped when the API also
     documents the relation where it is read (WooCommerce product.images[] over the
     create[]/update[] paths of POST /products/batch). Then at most MAX_EVIDENCE_PER_KIND each."""
+    if not any(e.read or e.home for e in bucket):
+        return []  # only write echoes in other resources (BigCommerce checkout consignments)
     if any(e.read for e in bucket):
         bucket = [e for e in bucket if e.read]
+    if any(e.home for e in bucket):  # Shopware taxruletype rules[].country.orderAddresses[]
+        bucket = [e for e in bucket if e.home]
+    bucket = sorted(bucket, key=_depth)  # stable: shallow paths first
     out: list[CandidateEvidence] = []
     seen: set[tuple[str, str, tuple[str, ...]]] = set()  # the same evidence once
     for e in bucket:
@@ -223,6 +230,26 @@ def _ranked(bucket: list[CandidateEvidence]) -> list[CandidateEvidence]:
             seen.add(key)
             out.append(e)
     return out
+
+
+def _home(scan: _Api, ev: CandidateEvidence, parent: str, child: str, canon: Any) -> bool:
+    """The evidence's document belongs to the parent or the child, or the path starts at one
+    of them (not order.lineItems[] in Shopware's ordertag document)."""
+    owner = scan.owner.get(ev.doc_id)
+    if owner is None or canon(owner, ev.doc_id) in (parent, child):
+        return True
+    first = min(ev.paths, key=len, default="").split(".", 1)[0]
+    return ev.kind == "sub_resource" or _segment_key(first) in (parent, child)
+
+
+def _depth(e: CandidateEvidence) -> int:
+    return min((p.count(".") for p in e.paths), default=0)
+
+
+def _compound(holder: str, key: str) -> str | None:
+    """order + items -> orderitem: a holder's container named by a role (Order line)."""
+    joined = f"{holder}{key}"
+    return joined if joined in ROLE_NAMES and key not in ROLE_NAMES else None
 
 
 def _wrapper(seg: str) -> bool:
@@ -362,6 +389,10 @@ class SuggestRelated:
                 for p, c, ev in raw
                 if (cp := canon(p, ev.doc_id)) != (cc := canon(c, ev.doc_id))
             ]
+            evidence = [
+                (cp, cc, ev if _home(scan, ev, cp, cc, canon) else replace(ev, home=False))
+                for cp, cc, ev in evidence
+            ]
             for k, v in scan.names.items():
                 labels.setdefault(k, v)
             # An id field is evidence both ways: order.customer_id is "a customer has orders"
@@ -380,8 +411,9 @@ class SuggestRelated:
                     ):  # prefer the listing endpoint as the cited evidence
                         known[child] = ev
         for cand in found.values():
-            for api, bucket in cand.sources.items():
-                cand.sources[api] = _ranked(bucket)
+            ranked = {api: _ranked(bucket) for api, bucket in cand.sources.items()}
+            cand.sources = {api: es for api, es in ranked.items() if es}
+        found = {k: c for k, c in found.items() if c.sources}
         aliases = self._aliases(resolved, structural, found)
         return sorted(found.values(), key=lambda c: c.id), aliases, labels
 
@@ -437,6 +469,7 @@ class SuggestRelated:
                     if _PARAM.match(segs[i + 2]):
                         continue
                     parent, child = concept_key(segs[i]), concept_key(segs[i + 2])
+                    child = _compound(parent, child) or child  # /orders/{id}/products
                     # The child may be a collection that is no concept of its own in this API
                     # (WooCommerce tags /products/{id}/variations with resource "Product").
                     if (
@@ -465,7 +498,7 @@ class SuggestRelated:
                         break
         return out
 
-    def _field_hits(
+    def _field_hits(  # noqa: PLR0912
         self, r: ResolvedBuild, scan: _Api, concepts: set[str]
     ) -> dict[str, list[tuple[str, str, str, str, bool, str]]]:
         """Field facts that may be evidence: nested containers, id fields, model refs."""
@@ -479,12 +512,22 @@ class SuggestRelated:
                 continue
             segs = f.name.split(".")
             sub = f.owner_id in scan.sub  # its top level is the sub-collection, not the owner
+            listing = f.owner_id.startswith("endpoint:") and not f.owner_id.endswith("}")
             current = owner  # the innermost enclosing concept (holder of nested concepts)
             inner = owner  # the innermost enclosing container (holder of an id field)
             for depth, seg in enumerate(segs[:-1]):
                 key = _segment_key(seg)
                 if _wrapper(seg):
                     break  # under _links / previous / ...: links, not nesting
+                # order.items[]: order lines (not a list endpoint's own items[]: the orders)
+                listed = depth == 0 and listing
+                compound = _compound(current, key) if seg.endswith("[]") and not listed else None
+                if compound and not (sub and current == owner):
+                    scan.names.setdefault(compound, concept_label(compound))
+                    path = ".".join(segs[: depth + 1])
+                    wanted[f.owner_id].append(("nested", current, compound, path, True, f.name))
+                    current = inner = compound
+                    continue
                 if not key or key in NOISE:
                     continue
                 if key != inner:
