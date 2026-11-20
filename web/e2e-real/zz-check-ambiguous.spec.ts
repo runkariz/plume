@@ -18,9 +18,16 @@ for (const theme of THEMES) {
       const res = await request.post(`${API}/v1/apis/aliexpress/check-call`, {
         data: { method: 'POST', path: '/sync', params: [] },
       });
-      const body = (await res.json()) as { verdict: string; alternatives: string[]; note: string };
+      const body = (await res.json()) as {
+        verdict: string;
+        note: string;
+        pick: { param: string; options: { value: string; docId: string }[] } | null;
+      };
       expect(body.verdict).toBe('ambiguous');
       expect(body.note).toContain('pass method=<name>');
+      expect(body.pick?.param).toBe('method');
+      const total = body.pick?.options.length ?? 0;
+      expect(total).toBeGreaterThan(100);
       await page.goto('/apis/aliexpress/try');
       await page.getByRole('radio', { name: 'Check call' }).check({ force: true });
       await page.getByLabel('HTTP method').selectOption('POST');
@@ -28,14 +35,16 @@ for (const theme of THEMES) {
       await page.getByLabel('Parameters, comma separated').fill('');
       await page.getByRole('button', { name: 'Check' }).click();
       await expect(page.getByText('Several operations share this method and path')).toBeVisible();
-      const picks = page.getByRole('group', { name: 'Examples to pick' }).getByRole('button');
-      await expect(picks).toHaveCount(3);
+      const picks = page.getByRole('list', { name: 'Operations to pick' }).getByRole('button');
+      await expect(page.getByText(`${total} operations, the first 8 shown`)).toBeVisible();
+      await expect(picks).toHaveCount(8); // the first matches; the filter narrows the rest
       const label = (await picks.first().textContent()) ?? '';
       expect(label).toMatch(/^method=\S+$/);
-      await page.getByText('Some of the operations at this path').click();
-      await expect(
-        page.getByRole('list', { name: 'Operations at this path' }).getByRole('link'),
-      ).toHaveCount(body.alternatives.length);
+      // a filter finds one of the 156
+      const filter = page.getByRole('searchbox', { name: 'Filter the operations' });
+      await filter.fill('affiliate.category');
+      await expect(picks.first()).toContainText('affiliate.category');
+      await filter.fill('');
       await settle(page);
       await expectNoSeriousA11y(page);
       const card = page

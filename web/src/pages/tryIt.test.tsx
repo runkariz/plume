@@ -166,6 +166,19 @@ describe('Try it', () => {
   });
 
   describe('an ambiguous call (several operations share METHOD + path)', () => {
+    /** An older server: the examples are only in the note, and `pick` is absent. */
+    function olderServer() {
+      server.use(
+        http.post(`${TEST_API_BASE}/v1/apis/:id/check-call`, async ({ request }) => {
+          const body = (await request.json()) as { params: string[] };
+          const { sampleCheck } = await import('@/mocks/data');
+          const { pick: _pick, ...rest } = sampleCheck('POST', '/sync', body.params);
+          void _pick;
+          return HttpResponse.json(rest);
+        }),
+      );
+    }
+
     async function openAmbiguous() {
       renderApp('/apis/shopify/try');
       await userEvent.click(screen.getByRole('radio', { name: 'Check call' }));
@@ -180,7 +193,7 @@ describe('Try it', () => {
       return params as HTMLInputElement;
     }
 
-    it('is a warning with the note and the examples as buttons, not a "not documented"', async () => {
+    it('is a warning with the note and every operation to pick from, not a "not documented"', async () => {
       await openAmbiguous();
       expect(
         await screen.findByText('Several operations share this method and path'),
@@ -189,18 +202,38 @@ describe('Try it', () => {
       expect(screen.getByRole('note')).toHaveTextContent(
         'ambiguous: 156 operations share POST /sync',
       );
-      const picks = within(screen.getByRole('group', { name: 'Examples to pick' })).getAllByRole(
-        'button',
-      );
-      expect(picks.map((b) => b.textContent)).toEqual([
+      const list = screen.getByRole('list', { name: 'Operations to pick' });
+      expect(
+        within(list)
+          .getAllByRole('button')
+          .map((b) => b.textContent),
+      ).toEqual([
+        'method=ae.merchant.plan.list',
         'method=aliexpress.affiliate.category.get',
         'method=aliexpress.affiliate.product.query',
-        'method=ae.merchant.plan.list',
       ]);
+      // each has its page
+      expect(within(list).getAllByRole('link')[0]?.getAttribute('href')).toBe(
+        `/apis/shopify/documents/${encodeURIComponent('endpoint:POST~/sync@post-ae-merchant-plan-list')}`,
+      );
       // nothing matched: the "other operations ... matched the one above" line is for a documented call
       expect(screen.queryByText(/The check matched the one shown above/)).not.toBeInTheDocument();
       // nothing was decided: no "wording rule" line, no parameter verdicts
       expect(screen.queryByText(/Wording rule/)).not.toBeInTheDocument();
+    });
+
+    it('a filter narrows the operations, case does not matter', async () => {
+      await openAmbiguous();
+      await userEvent.type(
+        await screen.findByRole('searchbox', { name: 'Filter the operations' }),
+        'AFFILIATE.PRODUCT',
+      );
+      const list = screen.getByRole('list', { name: 'Operations to pick' });
+      expect(within(list).getAllByRole('button')).toHaveLength(1);
+      expect(screen.getByText('1 of 3 operations')).toBeInTheDocument();
+      await userEvent.clear(screen.getByRole('searchbox', { name: 'Filter the operations' }));
+      await userEvent.type(screen.getByRole('searchbox', { name: 'Filter the operations' }), 'zzz');
+      expect(screen.getByText('No operation matches this filter.')).toBeInTheDocument();
     });
 
     it('a pick fills the parameter (keeping the others) and checks again', async () => {
@@ -210,21 +243,32 @@ describe('Try it', () => {
       );
       expect(params.value).toBe('app_key, method=aliexpress.affiliate.category.get');
       expect(await screen.findByText('Documented')).toBeInTheDocument();
-      expect(screen.queryByRole('group', { name: 'Examples to pick' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('list', { name: 'Operations to pick' })).not.toBeInTheDocument();
     });
 
-    it('lists some of the operations as links to their pages', async () => {
+    it('an older server (no pick): the examples of the note are the buttons, and some operations are linked', async () => {
+      olderServer();
       await openAmbiguous();
-      await userEvent.click(await screen.findByText('Some of the operations at this path'));
+      const picks = within(
+        await screen.findByRole('group', { name: 'Examples to pick' }),
+      ).getAllByRole('button');
+      expect(picks.map((b) => b.textContent)).toEqual([
+        'method=aliexpress.affiliate.category.get',
+        'method=aliexpress.affiliate.product.query',
+        'method=ae.merchant.plan.list',
+      ]);
+      await userEvent.click(screen.getByText('Some of the operations at this path'));
       const list = screen.getByRole('list', { name: 'Operations at this path' });
       const first = within(list).getAllByRole('link')[0] as HTMLAnchorElement;
       expect(first).toHaveTextContent('post-aliexpress-affiliate-category-get');
       expect(first.getAttribute('href')).toBe(
         `/apis/shopify/documents/${encodeURIComponent('endpoint:POST~/sync@post-aliexpress-affiliate-category-get')}`,
       );
+      await userEvent.click(picks[0] as HTMLElement);
+      expect(await screen.findByText('Documented')).toBeInTheDocument();
     });
 
-    it('shows the note alone when the server names no examples', async () => {
+    it('shows the note alone when the server names no examples and sends no pick', async () => {
       server.use(
         http.post(`${TEST_API_BASE}/v1/apis/:id/check-call`, () =>
           HttpResponse.json({
@@ -243,6 +287,7 @@ describe('Try it', () => {
       await openAmbiguous();
       expect(await screen.findByRole('note')).toHaveTextContent('pass method=<name>');
       expect(screen.queryByRole('group', { name: 'Examples to pick' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('list', { name: 'Operations to pick' })).not.toBeInTheDocument();
     });
   });
 

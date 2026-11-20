@@ -17,9 +17,11 @@ for (const theme of THEMES) {
       await page.getByRole('button', { name: 'Check' }).click();
       await expect(page.getByText('Several operations share this method and path')).toBeVisible();
       await expect(page.getByRole('note')).toContainText('ambiguous: 156 operations');
-      const picks = page.getByRole('group', { name: 'Examples to pick' }).getByRole('button');
+      const picks = page.getByRole('list', { name: 'Operations to pick' }).getByRole('button');
       await expect(picks).toHaveCount(3);
-      await page.getByText('Some of the operations at this path').click();
+      await page.getByRole('searchbox', { name: 'Filter the operations' }).fill('affiliate');
+      await expect(picks).toHaveCount(2);
+      await page.getByRole('searchbox', { name: 'Filter the operations' }).fill('');
       await settle(page);
       await expectNoSeriousA11y(page);
       const card = page
@@ -28,7 +30,7 @@ for (const theme of THEMES) {
       await shotOf(card, 'w41-check-ambiguous', theme);
       await picks.first().click();
       await expect(page.getByLabel('Parameters, comma separated')).toHaveValue(
-        'app_key, method=aliexpress.affiliate.category.get',
+        'app_key, method=ae.merchant.plan.list',
       );
       await expect(page.getByText('Documented', { exact: true })).toBeVisible();
       await shotOf(
