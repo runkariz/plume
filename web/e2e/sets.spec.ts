@@ -1,5 +1,5 @@
 import { expect, type Page } from '@playwright/test';
-import { expectNoSeriousA11y, openControls, settle, shot, test, THEMES } from './helpers';
+import { expectNoSeriousA11y, openControls, settle, shot, shotOf, test, THEMES } from './helpers';
 
 /** Model sets: the diagram, the control box, the relation editor, release, and the lists. */
 const OFFICIAL = '/model-sets/set_shop00000000000000000';
@@ -30,9 +30,15 @@ for (const theme of THEMES) {
       const detail = page.getByRole('region', { name: 'Selected model or relation' });
       await expect(detail.getByRole('heading', { name: 'Order → Product' })).toBeVisible();
       await expect(page).toHaveURL(/sel=r%3Aorder-items|sel=r:order-items/);
+      await expect(detail).toContainText('cited without quote: the description of line_items');
       await settle(page);
       await expectNoSeriousA11y(page);
       await shot(page, 'w16-set', theme);
+      await shotOf(
+        detail.getByRole('list', { name: 'Sources' }),
+        'w39-set-relation-noquote',
+        theme,
+      );
       // a model: its coverage and the way into the field mapping
       await list.getByRole('option', { name: /^Product\s+\d+ fields/ }).click();
       await expect(detail.getByRole('link', { name: 'Open the field mapping' })).toBeVisible();

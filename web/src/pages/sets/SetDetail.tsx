@@ -220,7 +220,13 @@ function RelationDetail({
                   {fetch ? <div className="mono small faint">{fetch}</div> : null}
                   {src.evidence?.map((e, i) => (
                     <blockquote key={`${e.docId ?? ''}-${i}`} className="evidence">
-                      <p>“{e.quote}”</p>
+                      <p>
+                        {e.noQuote && !e.quote ? (
+                          <span className="faint">cited without quote: {e.noQuote}</span>
+                        ) : (
+                          <>“{e.quote}”</>
+                        )}
+                      </p>
                       {e.docId ? (
                         <cite className="faint small">
                           {renderDocLink ? renderDocLink(a.id, e.docId) : e.docId}

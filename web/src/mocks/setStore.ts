@@ -92,7 +92,13 @@ function orderItems(confirmed: boolean, current: 'embedded' | 'reference'): SetR
       woocommerce: {
         as: 'nested',
         paths: ['line_items[].product_id'],
-        evidence: [{ docId: 'model:order', quote: 'Line items of the order.' }],
+        evidence: [
+          {
+            docId: 'model:order',
+            quote: '',
+            noQuote: 'the description of line_items is only a label (Items)',
+          },
+        ],
       },
     },
     editableOptions: [

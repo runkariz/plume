@@ -19,6 +19,22 @@ describe('conversion labels', () => {
   });
 });
 
+describe('code-system conversions', () => {
+  it('say "code system" and show the systems from the format, with nothing else to open', async () => {
+    expect(conversionLabel('code-system')).toBe('code system');
+    render(
+      <ConversionChip
+        conversion={{ kind: 'code-system', format: 'ISO 3166-1 alpha-3 -> alpha-2' }}
+      />,
+    );
+    await userEvent.click(screen.getByText('code system'));
+    expect(screen.getByText('systems:').parentElement).toHaveTextContent(
+      'systems: ISO 3166-1 alpha-3 -> alpha-2',
+    );
+    expect(screen.queryByRole('list')).not.toBeInTheDocument();
+  });
+});
+
 describe('ConversionChip', () => {
   it('shows nothing without a conversion', () => {
     expect(render(<ConversionChip conversion={undefined} />).container).toBeEmptyDOMElement();
