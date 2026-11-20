@@ -310,3 +310,21 @@ def conflicts_of(raw: object) -> tuple[Conflict, ...]:
         if len(statements) >= 2:
             out.append(Conflict(item["limit"], statements))
     return tuple(out)
+
+
+def standard_header(scheme: Mapping[str, object]) -> bool:
+    """headerSource standard:rfc6750 holds only for the standard's own header: Authorization
+    with a Bearer prefix. On any other header (Shopify X-Shopify-Access-Token) it is treated as
+    unknown: no standard label (the producer's mistake, reported to maintainers)."""
+    name = scheme.get("headerName")
+    prefix = scheme.get("headerPrefix")
+    return (
+        scheme.get("headerSource") == HEADER_SOURCE_STANDARD
+        and isinstance(name, str)
+        and name.strip().lower() == "authorization"
+        and isinstance(prefix, str)
+        and prefix.strip().lower() == "bearer"
+    )
+
+
+HEADER_SOURCE_MISUSED = "plume-header-source-not-standard"
