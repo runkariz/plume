@@ -377,7 +377,7 @@ class Citation(Schema):
 class CheckCallResponse(Schema):
     api: str
     build: str
-    verdict: Literal["documented", "not_documented"]
+    verdict: Literal["documented", "not_documented", "ambiguous"]
     complete: bool
     matched: MatchedEndpoint | None
     param_checks: list[ParamCheck]

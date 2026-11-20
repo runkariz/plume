@@ -567,17 +567,38 @@ class FindFact:
                 return [], [f'{name!r} is not an endpoint form; ask "METHOD /path" or "/path"']
             return [], []
         method = (m.group("method") or "").upper()
-        path = re.sub(r"^[a-z]+://[^/]+", "", m.group("path"), flags=re.I).split("?", 1)[0]
+        path, _, qs = re.sub(r"^[a-z]+://[^/]+", "", m.group("path"), flags=re.I).partition("?")
         on_path = [
             f
             for f in self._facts.endpoints(build_id)
             if (p := f.name.partition(" ")[2]) == path or path_matches(p, path)
         ]
         hits = [f for f in on_path if not method or f.name.partition(" ")[0] == method]
+        if len(hits) > 1 and len({f.name for f in hits}) == 1:  # RPC by name (POST /sync)
+            return self._by_value(build_id, hits, split_values(qs.split("&"))[1])
         if hits or not on_path:
             return hits, []
         others = sorted({f.name.partition(" ")[0] for f in on_path})
         return [], [f"{path} is documented for {', '.join(others)}, not {method}"]
+
+    def _by_value(
+        self, build_id: BuildId, hits: list[Fact], values: dict[str, str]
+    ) -> tuple[list[Fact], list[str]]:
+        """Operations sharing METHOD + path: the fixed value given in the query string picks
+        one ("POST /sync?method=aliexpress.x.get"); without it, say which to pass."""
+        owners = [f.owner_id for f in hits]
+        fixed, picks = fixed_values(self._facts, build_id, owners, list(values))
+        if not picks:
+            return hits, []
+        if any(k in values for k in picks):
+            chosen = set(pick_operations(owners, fixed, picks, values))
+            return [f for f in hits if f.owner_id in chosen], []
+        key = picks[0]
+        example = sorted(v[key] for v in fixed.values() if key in v)[0]
+        return hits[:MAX_AMBIGUOUS_MATCHES], [
+            f"ambiguous: {len(hits)} operations share {hits[0].name}; pass {key}=<name> "
+            f'(e.g. "{hits[0].name}?{key}={example}"); {MAX_AMBIGUOUS_MATCHES} shown'
+        ]
 
     def execute(
         self,
@@ -607,6 +628,12 @@ class FindFact:
         endpoint_reasons: list[str] = []
         if not found and fact_kind in (None, FactKind.ENDPOINT):
             found, endpoint_reasons = self._endpoint_forms(build_id, name, fact_kind)
+        elif (
+            len(found) > 1
+            and all(f.kind is FactKind.ENDPOINT for f in found)
+            and len({f.name for f in found}) == 1
+        ):  # "POST /sync" itself: 156 AliExpress operations, a method value picks one
+            found, endpoint_reasons = self._by_value(build_id, found, {})
         titles = {
             k: s.title
             for k, s in self._index.summaries(build_id, [f.owner_id for f in found]).items()
@@ -623,8 +650,8 @@ class FindFact:
             self._facts.incomplete_owners(build_id, owner_id=owner, resource=resource)
         )
         complete = not incomplete and not endpoint_reasons
-        reasons: list[str] = [f"{o} is flagged incomplete by its source" for o in incomplete]
-        reasons += endpoint_reasons
+        reasons: list[str] = list(endpoint_reasons)  # what to ask instead comes first
+        reasons += [f"{o} is flagged incomplete by its source" for o in incomplete]
         field_like = fact_kind in (None, FactKind.FIELD) and loc not in (
             FieldLocation.PATH,
             FieldLocation.QUERY,
@@ -696,6 +723,55 @@ def _is_version(segment: str) -> bool:
     return bool(_VERSION_SEGMENT.match(segment))
 
 
+# Parameters RPC-by-name APIs pick the operation with (AliExpress POST /sync?method=...)
+RPC_PARAMS = ("method", "action", "operation", "op", "command", "cmd", "function", "service")
+MAX_AMBIGUOUS_MATCHES = 10
+
+
+def split_values(entries: Sequence[str]) -> tuple[list[str], dict[str, str]]:
+    """``["method=aliexpress.x.get", "fields"]`` -> the names, and {name: value} where a
+    value is given."""
+    names, values = [], {}
+    for entry in entries:
+        name, eq, value = entry.partition("=")
+        names.append(name.strip())
+        if eq and value.strip():
+            values[name.strip().lower()] = value.strip()
+    return names, values
+
+
+def fixed_values(
+    facts: FactQuery, build_id: BuildId, owners: Sequence[str], names: Sequence[str]
+) -> tuple[dict[str, dict[str, str]], list[str]]:
+    """The fixed parameter values (a single-value enum) of these operations, for the given
+    names and the usual RPC ones: {owner: {name: value}}, and the names whose value differs
+    between them (what picks one operation at a shared METHOD + path)."""
+    wanted = set(owners)
+    out: dict[str, dict[str, str]] = {o: {} for o in owners}
+    for name in dict.fromkeys(n.lower() for n in (*names, *RPC_PARAMS)):
+        for f in facts.find(build_id, name, kind=FactKind.FIELD):
+            if f.owner_id not in wanted or f.name.lower() != name or f.location not in (
+                FieldLocation.QUERY, FieldLocation.HEADER, FieldLocation.BODY,
+            ):  # fmt: skip
+                continue
+            enum = constraint_dict(f.constraints).get("enum")
+            if isinstance(enum, list) and len(enum) == 1:
+                out[f.owner_id][name] = str(enum[0])
+    picks = sorted(
+        n for n in {k for v in out.values() for k in v} if len({v.get(n) for v in out.values()}) > 1
+    )
+    return out, picks
+
+
+def pick_operations(
+    owners: Sequence[str], fixed: dict[str, dict[str, str]], picks: Sequence[str],
+    values: dict[str, str],
+) -> list[str]:  # fmt: skip
+    """The operations whose fixed values match the given ones (case-insensitive)."""
+    given = {k: v.lower() for k, v in values.items() if k in picks}
+    return [o for o in owners if all(fixed[o].get(k, "").lower() == v for k, v in given.items())]
+
+
 class CheckCall:
     """Is ``METHOD /path`` with these params documented? Matches templates like ``{id}``."""
 
@@ -728,6 +804,9 @@ class CheckCall:
         method = method.upper().strip()
         if method not in HTTP_METHODS:
             raise ReaderInputError(f"unknown HTTP method {method!r}")
+        params, given = split_values(params)  # "method=aliexpress.x.get": a name and a value
+        query, given_q = split_values(query)
+        given |= given_q
         if not path.strip():
             raise ReaderInputError("path is empty")
         r = self._resolver.resolve(api, version)
@@ -770,6 +849,22 @@ class CheckCall:
         # Several operations at the same METHOD + path: the one that documents the most of
         # these params; the others are named as alternatives.
         tied = [c for c in candidates if c[2] == best[2]]
+        if len(tied) > 1:  # RPC by name: a fixed parameter value picks the operation
+            owners = [c[1].owner_id for c in tied]
+            by_owner, picks = fixed_values(self._facts, build_id, owners, [p for p, _ in names])
+            if picks:
+                if not any(k in given for k in picks):
+                    return self._ambiguous(r, method, path, best[2], owners, by_owner, picks, names,
+                                           checked)  # fmt: skip
+                chosen = set(pick_operations(owners, by_owner, picks, given))
+                if not chosen:
+                    asked = ", ".join(f"{k}={v}" for k, v in given.items() if k in picks)
+                    return CheckCallResult(
+                        _ref(r), method, path, "not_documented", True, None, None, None,
+                        tuple(ParamCheck(p, False, None) for p, _ in names), checked, None,
+                        note=f"no operation at {method} {best[2]} has {asked}",
+                    )  # fmt: skip
+                tied = [c for c in tied if c[1].owner_id in chosen]
         scored = []
         for _, f, f_path in tied:
             checks = self._param_checks(build_id, f.owner_id, names)
@@ -794,6 +889,32 @@ class CheckCall:
             alternatives,
             self._real_path(r.build.build_id, endpoint.owner_id),
         )
+
+    def _ambiguous(
+        self,
+        r: ResolvedBuild,
+        method: str,
+        path: str,
+        matched: str,
+        owners: list[str],
+        fixed: dict[str, dict[str, str]],
+        picks: list[str],
+        names: Sequence[tuple[str, FieldLocation | None]],
+        checked: dict[str, int],
+    ) -> CheckCallResult:
+        """Several operations share METHOD + path and a parameter value picks one: say which
+        to pass, with examples (AliExpress: 218 operations at POST /sync)."""
+        key = picks[0]
+        examples = sorted(v[key] for v in fixed.values() if key in v)[:3]
+        note = (
+            f"ambiguous: {len(owners)} operations share {method} {matched}; pass "
+            f"{key}=<name> in params or query (e.g. {', '.join(f'{key}={e}' for e in examples)})"
+        )
+        return CheckCallResult(
+            _ref(r), method, path, "ambiguous", True, None, method, matched,
+            tuple(ParamCheck(p, False, None) for p, _ in names), checked, None,
+            tuple(sorted(owners)[:MAX_AMBIGUOUS_MATCHES]), note=note,
+        )  # fmt: skip
 
     def _real_path(self, build_id: BuildId, doc_id: str) -> str | None:
         summary = self._index.summaries(build_id, [doc_id]).get(doc_id)
