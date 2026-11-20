@@ -1653,6 +1653,41 @@
         "title": "Concept",
         "type": "object"
       },
+      "ConflictStatementOut": {
+        "properties": {
+          "isExample": {
+            "default": false,
+            "title": "Isexample",
+            "type": "boolean"
+          },
+          "quote": {
+            "title": "Quote",
+            "type": "string"
+          },
+          "sourceUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sourceurl"
+          },
+          "where": {
+            "description": "\"description\", \"param:<name>\" or \"page:<url>\".",
+            "title": "Where",
+            "type": "string"
+          }
+        },
+        "required": [
+          "where",
+          "quote"
+        ],
+        "title": "ConflictStatementOut",
+        "type": "object"
+      },
       "Connect": {
         "properties": {
           "claudeCode": {
@@ -1767,6 +1802,33 @@
         "title": "DisplayNameIn",
         "type": "object"
       },
+      "DocConflict": {
+        "properties": {
+          "limit": {
+            "title": "Limit",
+            "type": "string"
+          },
+          "statements": {
+            "items": {
+              "$ref": "#/components/schemas/ConflictStatementOut"
+            },
+            "title": "Statements",
+            "type": "array"
+          },
+          "text": {
+            "description": "\"The docs state different values for <limit>:\" + quotes.",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "limit",
+          "text",
+          "statements"
+        ],
+        "title": "DocConflict",
+        "type": "object"
+      },
       "DocsUpdated": {
         "properties": {
           "at": {
@@ -1825,6 +1887,14 @@
           "complete": {
             "title": "Complete",
             "type": "boolean"
+          },
+          "conflicts": {
+            "description": "x-kariz-conflicts: the docs state different values for a limit; every statement with its place, examples marked. Plume never picks one.",
+            "items": {
+              "$ref": "#/components/schemas/DocConflict"
+            },
+            "title": "Conflicts",
+            "type": "array"
           },
           "deprecated": {
             "title": "Deprecated",

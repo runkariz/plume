@@ -259,3 +259,54 @@ _SUMMARY_SECTION = re.compile(
 def without_summaries(text: str) -> str:
     """The text without its model-written summary sections: what evidence may quote."""
     return _SUMMARY_SECTION.sub("", text)
+
+
+# Producer field x-kariz-conflicts: the docs state different values for one limit. Plume shows
+# every statement with its place and never picks one.
+CONFLICTS_KEY = "x-kariz-conflicts"
+
+
+@dataclass(frozen=True, slots=True)
+class ConflictStatement:
+    where: str  # "description" | "param:<name>" | "page:<url>"
+    quote: str  # verbatim
+    source_url: str | None = None
+    is_example: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class Conflict:
+    limit: str  # what is limited, in the docs' words
+    statements: tuple[ConflictStatement, ...]
+
+    @property
+    def text(self) -> str:
+        """\"The docs state different values for <limit>:\" and each quote with its place."""
+        lines = [f"The docs state different values for {self.limit}:"]
+        for st in self.statements:
+            mark = " (example)" if st.is_example else ""
+            lines.append(f'- {st.where}{mark}: "{st.quote}"')
+        return "\n".join(lines)
+
+
+def conflicts_of(raw: object) -> tuple[Conflict, ...]:
+    """The document's x-kariz-conflicts (raw JSON), skipping malformed items (fewer than two
+    statements, no limit)."""
+    items = raw.get(CONFLICTS_KEY) if isinstance(raw, Mapping) else None
+    out: list[Conflict] = []
+    for item in items if isinstance(items, list) else []:
+        if not isinstance(item, Mapping) or not isinstance(item.get("limit"), str):
+            continue
+        statements = tuple(
+            ConflictStatement(
+                where=str(st.get("where") or ""),
+                quote=str(st["quote"]),
+                source_url=st.get("sourceUrl") if isinstance(st.get("sourceUrl"), str) else None,
+                is_example=st.get("isExample") is True,
+            )
+            for st in item.get("statements") or []
+            if isinstance(st, Mapping) and isinstance(st.get("quote"), str)
+        )
+        if len(statements) >= 2:
+            out.append(Conflict(item["limit"], statements))
+    return tuple(out)
