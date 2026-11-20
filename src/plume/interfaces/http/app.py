@@ -546,6 +546,14 @@ def create_app(deps: HttpDependencies) -> FastAPI:
             evidence=_citation(p["evidence"]) if p["evidence"] else None,
             alternatives=list(r.alternatives),
             note=r.note,
+            pick=(
+                s.CallPick(
+                    param=r.pick_param,
+                    options=[s.CallPickOption(value=v, doc_id=d) for v, d in r.pick_options],
+                )
+                if r.pick_param
+                else None
+            ),
         )
 
     @app.post(

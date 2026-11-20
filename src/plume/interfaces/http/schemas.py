@@ -374,6 +374,16 @@ class Citation(Schema):
     quote: str | None
 
 
+class CallPickOption(Schema):
+    value: str
+    doc_id: str
+
+
+class CallPick(Schema):
+    param: str
+    options: list[CallPickOption]
+
+
 class CheckCallResponse(Schema):
     api: str
     build: str
@@ -390,6 +400,11 @@ class CheckCallResponse(Schema):
     note: str | None = Field(
         default=None,
         description="Why a path matching a template is not documented (e.g. another version).",
+    )
+    pick: CallPick | None = Field(
+        default=None,
+        description="ambiguous: the parameter whose value picks one of the operations sharing "
+        "METHOD + path, and every value with its operation.",
     )
 
 

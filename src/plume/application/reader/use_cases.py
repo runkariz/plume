@@ -30,8 +30,10 @@ from plume.application.reader.ranking import (
     is_page,
     keep_endpoints,
     lift_operation_endpoints,
+    near_duplicate_guides_last,
     pair_pages_with_endpoints,
     pair_units_with_endpoints,
+    request_models_last,
 )
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
 from plume.domain.knowledge.asset import ICON
@@ -281,6 +283,8 @@ def rank_order(
     owners = operation_owners(documents, build_id)
     if owners:
         order = lift_operation_endpoints(order, k, lambda d: _operation_owner(d, owners))
+    order = request_models_last(order, k)
+    order = near_duplicate_guides_last(order, k)
     return keep_endpoints(order, k)
 
 
@@ -916,7 +920,8 @@ class CheckCall:
         return CheckCallResult(
             _ref(r), method, path, "ambiguous", True, None, method, matched,
             tuple(ParamCheck(p, False, None) for p, _ in names), checked, None,
-            tuple(sorted(owners)[:MAX_AMBIGUOUS_MATCHES]), note=note,
+            tuple(sorted(owners)[:MAX_AMBIGUOUS_MATCHES]), note=note, pick_param=key,
+            pick_options=tuple(sorted((v[key], o) for o, v in fixed.items() if key in v)),
         )  # fmt: skip
 
     def _real_path(self, build_id: BuildId, doc_id: str) -> str | None:

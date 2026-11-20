@@ -65,6 +65,10 @@ def test_check_call_needs_the_method_value() -> None:
     assert vague.verdict == "ambiguous"
     assert vague.note is not None
     assert vague.note.startswith("ambiguous: 2 operations share POST /sync; pass method=<name>")
+    assert vague.pick_param == "method"
+    assert vague.pick_options == (
+        ("shop.order.get", "endpoint:POST~/sync@a"), ("shop.product.get", "endpoint:POST~/sync@b"),
+    )  # fmt: skip
     picked = check.execute("ali", "POST", "/sync", ["method=shop.product.get"])
     assert (picked.verdict, picked.matched_id) == ("documented", "endpoint:POST~/sync@b")
     as_query = check.execute("ali", "POST", "/sync", query=["method=SHOP.ORDER.GET"])

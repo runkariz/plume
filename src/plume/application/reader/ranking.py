@@ -7,6 +7,7 @@ from the rest of the pool moves in right after the page, and the lowest-ranked r
 neither a page nor such an endpoint makes room.
 """
 
+import re
 from collections.abc import Callable, Sequence
 
 PAGE_PREFIX = "guide:page-"
@@ -142,3 +143,44 @@ def keep_endpoints(ranked: Sequence[str], k: int, minimum: int = MIN_ENDPOINTS) 
         have += 1
     position = {d: i for i, d in enumerate(ranked)}
     return sorted(top, key=position.__getitem__) + rest
+
+
+def request_models_last(ranked: Sequence[str], k: int) -> list[str]:
+    """A request-body model (what a client sends) is rarely what a question is after: within
+    the top 2k, they move behind the other results (the endpoint that takes them stays)."""
+    window, rest = list(ranked[: 2 * k]), list(ranked[2 * k :])
+    first = [d for d in window if not (d.startswith("model:") and "request" in d)]
+    last = [d for d in window if d.startswith("model:") and "request" in d]
+    return first + last + rest
+
+
+# words every guide id of a package shares (its kind, the vendor's doc site): no meaning
+_GUIDE_FILLER = frozenset({
+    "guide", "page", "docs", "doc", "developer", "com", "www", "api", "apis", "workflow",
+    "lifecycle", "state", "machine", "validation", "resource", "rules", "rule", "best",
+    "practice", "using", "the", "and", "for", "with", "how", "overview", "us", "marketplace",
+})  # fmt: skip
+DUPLICATE_GUIDE = 0.5  # word overlap (Jaccard) of two guide ids that say the same thing
+
+
+def _guide_words(doc_id: str) -> frozenset[str]:
+    words = re.split(r"[^a-z0-9]+", doc_id.removeprefix("guide:").lower())
+    return frozenset(w for w in words if len(w) > 2 and w not in _GUIDE_FILLER)
+
+
+def near_duplicate_guides_last(ranked: Sequence[str], k: int) -> list[str]:
+    """A guide whose id says nearly what a better-ranked guide's says (Walmart's access token
+    lifecycle in three sections) moves behind the top 2k: one of them is enough."""
+    window, rest = list(ranked[: 2 * k]), list(ranked[k * 2 :])
+    kept: list[str] = []
+    moved: list[str] = []
+    seen: list[frozenset[str]] = []
+    for d in window:
+        if d.startswith("guide:"):
+            words = _guide_words(d)
+            if words and any(len(words & w) / len(words | w) >= DUPLICATE_GUIDE for w in seen):
+                moved.append(d)
+                continue
+            seen.append(words)
+        kept.append(d)
+    return kept + rest + moved
