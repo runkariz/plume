@@ -47,6 +47,7 @@ from plume.application.reader.ranking import (
     stale_version_guides_last,
     state_change_first,
     synthesized_after_vendor,
+    triggers_after_endpoints,
 )
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
 from plume.domain.knowledge.asset import ICON
@@ -337,6 +338,9 @@ def rank_order(
     order = push_first(order, k, query, all_endpoints)
     order = context_after_named_endpoint(order, k, query)
     order = error_codes_after_endpoint(order, k, query, error_codes)
+    order = triggers_after_endpoints(
+        order, k, query, lambda d: trigger_resource(documents, build_id, d)
+    )
     return keep_endpoints(order, k)
 
 
@@ -399,6 +403,15 @@ def endpoint_version(documents: DocumentRepo, build_id: BuildId, doc_id: str) ->
         return str(raw["apiVersion"])
     m = _URL_VERSION.search(raw["url"]) if isinstance(raw.get("url"), str) else None
     return m.group(1) if m else None
+
+
+def trigger_resource(documents: DocumentRepo, build_id: BuildId, doc_id: str) -> str | None:
+    """The resource a trigger (webhook event) is about (Trendyol UNSUPPLIED: order)."""
+    if not doc_id.startswith("trigger:"):
+        return None
+    doc = documents.get_document(build_id, doc_id)
+    raw = doc.raw if doc is not None and isinstance(doc.raw, dict) else {}
+    return str(raw["resource"]) if isinstance(raw.get("resource"), str) else None
 
 
 def unit_endpoints(documents: DocumentRepo, build_id: BuildId, doc_id: str) -> list[str]:

@@ -4,6 +4,7 @@ from plume.application.reader.ranking import (
     error_codes_after_endpoint,
     pair_pages_with_endpoints,
     stale_version_guides_last,
+    triggers_after_endpoints,
 )
 
 EPS = {"guide:page-orders": ["endpoint:GET~/orders", "endpoint:POST~/orders"]}
@@ -73,3 +74,24 @@ def test_an_http_status_question_keeps_the_error_codes_guide_behind_the_endpoint
                                       lambda: "guide:context") == ranked  # fmt: skip
     already = ["guide:context", *ranked]
     assert error_codes_after_endpoint(already, 3, q, lambda: "guide:context") == already
+
+
+def test_a_trigger_gives_way_to_its_endpoint_unless_the_question_is_about_events() -> None:
+    """Trendyol "report an item as unsupplied": trigger:unsupplied led the endpoint."""
+    ep = "endpoint:PUT~/integration/order/shipment-packages/{packageId}/items/unsupplied"
+    ranked = ["trigger:unsupplied", ep, "trigger:undelivered", "endpoint:GET~/claims"]
+    res = {"trigger:unsupplied": "order", "trigger:undelivered": "order"}.get
+    out = triggers_after_endpoints(ranked, 4, "report an item as unsupplied", res)
+    assert out[:2] == [ep, "trigger:unsupplied"]
+    # by resource: behind the first top-k endpoint of the trigger's resource
+    by_res = {"trigger:returned": "order"}.get
+    out = triggers_after_endpoints(
+        ["trigger:returned", "endpoint:GET~/orders/{id}"],
+        2,
+        "how are returned packages sorted",
+        by_res,
+    )
+    assert out == ["endpoint:GET~/orders/{id}", "trigger:returned"]
+    # an event question keeps the trigger first
+    q = "which webhook event fires when an item is unsupplied"
+    assert triggers_after_endpoints(ranked, 4, q, res) == ranked
