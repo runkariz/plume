@@ -77,8 +77,8 @@ def test_rule_and_page_conflicts_reach_every_document_showing_them(tmp_path: Pat
         limits = [c.limit for c in conflicts_of(d.raw)]
         assert limits.count("the attribute API's request rate") == 1, d.doc_id
     [page_guide] = [d for d in out if d.kind is DocumentKind.GUIDE and d.source_url == PAGE]
-    limits = {c.limit for c in conflicts_of(page_guide.raw)}
-    assert "attribute values per request" in limits
+    page_limits = {c.limit for c in conflicts_of(page_guide.raw)}
+    assert "attribute values per request" in page_limits
     [rate] = [c for c in conflicts_of(out[0].raw) if c.limit.endswith("request rate")]
     assert rate.text.splitlines()[1] == f'- page:{PAGE}: "100 requests per minute"'
 
