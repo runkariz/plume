@@ -235,7 +235,14 @@ export interface CheckCallResponse {
   verdict: 'documented' | 'not_documented' | 'ambiguous';
   /** false when the schema is flagged partial: absence is then not proven */
   complete: boolean;
-  matched: { id: string; method: HttpMethod; path: string; realPath?: string | null } | null;
+  matched: {
+    id: string;
+    method: HttpMethod;
+    path: string;
+    realPath?: string | null;
+    /** The server whose base path the call carried and that was taken off to match ("api_3: https://apim.ebay.com/..."). */
+    server?: string | null;
+  } | null;
   evidence?: {
     docId: string;
     sourceUrl: string | null;
