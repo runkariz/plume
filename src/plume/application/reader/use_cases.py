@@ -386,7 +386,13 @@ _GENERIC_WORDS = (
     # a token's lifetime: the topic's own wording, not a part of the API
     "token tokens lifetime expire expires expired expiry expiration valid validity access "
     "refresh oauth bearer grant credential credentials user application new create obtain "
-    "current long how"
+    "current long how "
+    # the other topics' own wording (error format, state transitions, sandbox, webhooks)
+    "error errors response responses format formats code codes status statuses message "
+    "messages body http json field fields order orders transition transitions exist exists "
+    "allowed which what happens happen get got return returned sandbox test testing environment "
+    "environments url urls base event events notification notifications subscribe subscription "
+    "callback callbacks"
 )
 _GENERIC_PART = frozenset(_GENERIC_WORDS.split())
 

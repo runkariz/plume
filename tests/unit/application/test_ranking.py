@@ -132,16 +132,19 @@ def test_a_limit_question_keeps_the_guide_stating_the_limit_behind_the_endpoint(
 def test_a_scoped_guide_gives_way_unless_the_question_names_its_part() -> None:
     """BigCommerce: scoped-request-limits (one quote: an 8 MB product image) led a whole-API
     import-size question."""
-    ranked = ["guide:scoped-request-limits", "endpoint:PUT~/catalog/products", "app:bc", "m:x"]
-    parts = {"guide:scoped-request-limits": frozenset({"image", "product", "catalog"})}.get
-    out = scoped_last(
-        ranked, 2, "what is the maximum import file size", lambda d: parts(d, frozenset())
-    )
-    assert out == ["endpoint:PUT~/catalog/products", "app:bc", "m:x", "guide:scoped-request-limits"]
-    kept = scoped_last(
-        ranked, 2, "how large can a product image be", lambda d: parts(d, frozenset())
-    )
-    assert kept == ranked
+    ranked = ["guide:scoped-request-limits", "endpoint:PUT~/catalog/products",
+              "guide:validation-batch-size-limits", "m:x"]  # fmt: skip
+    parts = {"guide:scoped-request-limits": frozenset({"image", "product", "catalog"})}
+    get = lambda d: parts.get(d, frozenset())  # noqa: E731
+    out = scoped_last(ranked, 2, "what is the maximum import file size", get)
+    assert out == [ranked[1], ranked[2], ranked[3], ranked[0]]  # another limits guide answers
+    assert scoped_last(ranked, 2, "how large can a product image be", get) == ranked
+    # the only document on its topic (TEC's 1000/min): it stays in the top k behind the endpoint
+    alone = ["guide:scoped-rate-limits", "endpoint:GET~/orders", "guide:context", "m:x"]
+    assert scoped_last(alone, 2, "what is the rate limit", lambda d: frozenset())[:2] == [
+        "endpoint:GET~/orders",
+        "guide:scoped-rate-limits",
+    ]
 
 
 def test_an_auth_question_leads_with_the_own_scheme_wherever_it_fused() -> None:
