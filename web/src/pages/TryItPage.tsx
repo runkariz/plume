@@ -24,6 +24,7 @@ import {
   Crumbs,
   EmptyState,
   ErrorState,
+  GuideLinks,
   LoadingState,
   MethodBadge,
   ScoreBar,
@@ -576,6 +577,19 @@ function CheckTool({ apiId }: { apiId: string }) {
                       <Chip tone={p.found ? 'ok' : 'bad'}>{p.found ? 'found' : 'missing'}</Chip>
                       <span className="mono">{p.name}</span>
                       {p.where ? <span className="faint small">in {p.where}</span> : null}
+                      {p.note ? (
+                        <div className="param-note">
+                          <p className="faint small">{p.note}</p>
+                          {p.guideId ? (
+                            <GuideLinks
+                              api={apiId}
+                              ids={[p.guideId]}
+                              label={`Guide for ${p.name}`}
+                              className="linked-list param-guide"
+                            />
+                          ) : null}
+                        </div>
+                      ) : null}
                     </li>
                   ))}
                 </ul>
