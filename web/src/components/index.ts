@@ -20,4 +20,5 @@ export { EndpointLink, EndpointLinks, GuideLinks } from './LinkedDocs';
 export { QualityBySource } from './QualityBySource';
 export { FieldTable } from './FieldTable';
 export { RuleSources } from './RuleSources';
+export { DocConflicts } from './DocConflicts';
 export { Notices, PackageWarningsCard } from './Notices';
