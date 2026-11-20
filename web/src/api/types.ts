@@ -436,7 +436,7 @@ export interface FieldConversion {
   map?: Record<string, string> | null;
   /** enum: API values deliberately left without a target. */
   unmapped?: string[] | null;
-  /** datetime: the format; meta-entry: the key. */
+  /** datetime: the format; meta-entry: the key; code-system: the systems ("ISO 3166-1 alpha-3 -> alpha-2"). */
   format?: string | null;
   note?: string | null;
 }
@@ -1093,7 +1093,8 @@ export interface RelationSource {
   paths: string[];
   /** The endpoint to fetch the related thing from: a string, or an object with the endpoint. */
   fetch?: string | { endpoint: string } | null;
-  evidence?: { docId?: string; quote: string; anchor?: string }[];
+  /** `noQuote` (then `quote` is empty) says why the docs are cited without a quote. */
+  evidence?: { docId?: string; quote: string; anchor?: string; noQuote?: string | null }[];
 }
 
 /** One way the relation could be designed, and whether it can be chosen without new field mappings. */

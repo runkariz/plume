@@ -188,6 +188,33 @@ for (const theme of THEMES) {
       }
     });
 
+    test('a code-system conversion shows its label and the systems (sandboxed frame)', async ({
+      page,
+    }) => {
+      const coded = {
+        ...small,
+        fields: (small.fields as { sources: Record<string, Record<string, unknown>> }[]).map(
+          (f) => ({
+            ...f,
+            sources: Object.fromEntries(
+              Object.entries(f.sources).map(([api, src]) => [
+                api,
+                {
+                  ...src,
+                  conversion: { kind: 'code-system', format: 'ISO 3166-1 alpha-3 -> alpha-2' },
+                },
+              ]),
+            ),
+          }),
+        ),
+      };
+      const { frame, problems } = await open(page, theme, asResult(coded), { width: 900 });
+      const detail = frame.getByRole('region', { name: 'Mapping detail' });
+      await expect(detail.getByText('code system')).toBeVisible();
+      await expect(detail.getByText('ISO 3166-1 alpha-3 -> alpha-2')).toBeVisible();
+      expect(problems).toEqual([]);
+    });
+
     test('a save without a token: "Your models" link with Copy, in the sandboxed frame; nothing is stored or requested', async ({
       page,
     }) => {

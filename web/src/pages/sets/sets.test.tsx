@@ -210,6 +210,13 @@ describe('the model set page', () => {
     expect(
       within(sources).getByText(/An array of line items, each with a product_id/),
     ).toBeInTheDocument();
+    // a citation without a quote says why, in the style of the fields; no empty quotation marks
+    expect(
+      within(sources).getByText(
+        'cited without quote: the description of line_items is only a label (Items)',
+      ),
+    ).toBeInTheDocument();
+    expect(within(sources).queryByText('“”')).not.toBeInTheDocument();
     const radios = within(d).getAllByRole('radio');
     expect(radios).toHaveLength(3);
     expect(radios[0]).toBeChecked(); // the current design
