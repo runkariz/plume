@@ -149,7 +149,7 @@ class BuildPipeline:
         if gold_ref is not None and evaluate is not None and self._gold is not None:
             gold, gold_hash = self._gold.load(gold_ref)
             run = self._step(
-                job_id, "evaluate", lambda: evaluate.execute(build_id, gold, gold_hash)
+                job_id, "evaluate", lambda: evaluate.execute(build_id, gold, gold_hash, store=True)
             )
             gate = GateSummary(
                 passed=run.decision.passed,
