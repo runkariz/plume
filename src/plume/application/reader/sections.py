@@ -21,6 +21,7 @@ from plume.domain.knowledge.document import (
     Document,
     DocumentKind,
     FieldLocation,
+    header_format,
 )
 from plume.domain.knowledge.fact import FactKind
 from plume.domain.knowledge.package_warnings import AUTH as AUTH_SECTION
@@ -297,6 +298,11 @@ def scheme_view(d: Document) -> dict[str, Any]:
         "grant_type": scheme.get("grantType"),
         "header_name": scheme.get("headerName"),
         "header_prefix": scheme.get("headerPrefix"),
+        "header_format": (
+            header_format(scheme["headerName"], scheme.get("headerPrefix"))
+            if isinstance(scheme.get("headerName"), str) and scheme.get("headerSource")
+            else None
+        ),
         "header_source": scheme.get("headerSource"),
         "header_evidence": (
             scheme.get("headerEvidence")

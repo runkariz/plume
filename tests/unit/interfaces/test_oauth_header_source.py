@@ -40,10 +40,13 @@ def _client(packages: Path, tmp_path: Path, **header: Any) -> tuple[FakeStack, T
 
 
 def test_a_standard_header_is_labelled_and_never_quoted(packages: Path, tmp_path: Path) -> None:
-    _, http = _client(packages, tmp_path, headerName="Authorization", headerPrefix="Bearer ",
-                      headerSource="standard:rfc6750")  # fmt: skip
+    stack, http = _client(packages, tmp_path, headerName="Authorization", headerPrefix="Bearer",
+                          headerSource="standard:rfc6750")  # fmt: skip
     scheme = http.get(f"/v1/apis/shopify/auth/{UNIT}").json()
-    assert (scheme["headerName"], scheme["headerPrefix"]) == ("Authorization", "Bearer ")
+    assert (scheme["headerName"], scheme["headerPrefix"]) == ("Authorization", "Bearer")  # raw
+    assert scheme["headerFormat"] == "Authorization: Bearer <token>"  # one space either way
+    doc = stack.get_document().execute("shopify", f"auth:{UNIT}").document
+    assert "Header: `Authorization: Bearer <token>`: OAuth 2.0 standard (RFC 6750)" in doc.text
     assert scheme["headerSource"] == "standard:rfc6750"
     assert scheme["headerNote"] == STANDARD_HEADER_NOTE
     assert scheme["headerEvidence"] is None
@@ -72,3 +75,11 @@ def test_an_unknown_source_shows_nothing(packages: Path, tmp_path: Path) -> None
     assert scheme["headerSource"] is None
     assert scheme["headerNote"] is None
     assert scheme["headerName"] == "X-Shopify-Access-Token"
+
+
+def test_the_header_format_has_one_space_after_the_prefix() -> None:
+    from plume.domain.knowledge.document import header_format  # noqa: PLC0415
+
+    assert header_format("Authorization", "Bearer") == "Authorization: Bearer <token>"
+    assert header_format("Authorization", "Bearer ") == "Authorization: Bearer <token>"
+    assert header_format("X-Api-Key", None) == "X-Api-Key: <token>"

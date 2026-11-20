@@ -637,6 +637,18 @@
             "description": "The vendor's quote (only when header_source is vendor).",
             "title": "Headerevidence"
           },
+          "headerFormat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How to send it: \"Authorization: Bearer <token>\".",
+            "title": "Headerformat"
+          },
           "headerName": {
             "anyOf": [
               {
@@ -842,6 +854,18 @@
             "description": "The vendor's quote (only when header_source is vendor).",
             "title": "Headerevidence"
           },
+          "headerFormat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How to send it: \"Authorization: Bearer <token>\".",
+            "title": "Headerformat"
+          },
           "headerName": {
             "anyOf": [
               {
@@ -874,7 +898,7 @@
                 "type": "null"
               }
             ],
-            "description": "e.g. \"Bearer \".",
+            "description": "Raw, e.g. \"Bearer\".",
             "title": "Headerprefix"
           },
           "headerSource": {
