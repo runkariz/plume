@@ -1,8 +1,11 @@
 """A knowledge-export page keeps one of its endpoints next to it in the top-k (no page demotion)."""
 
 from plume.application.reader.ranking import (
+    code_holder_first,
     error_codes_after_endpoint,
+    limit_guide_after_endpoint,
     pair_pages_with_endpoints,
+    query_code,
     stale_version_guides_last,
     triggers_after_endpoints,
 )
@@ -95,3 +98,30 @@ def test_a_trigger_gives_way_to_its_endpoint_unless_the_question_is_about_events
     # an event question keeps the trigger first
     q = "which webhook event fires when an item is unsupplied"
     assert triggers_after_endpoints(ranked, 4, q, res) == ranked
+
+
+def test_a_named_code_leads_with_the_document_that_contains_it() -> None:
+    """eBay Buy "what does error 12006 mean": the Offer error guide led; 12006 is in Browse's."""
+    ranked = ["guide:error-codes-buy-offer", "guide:topic-error-format", "model:error"]
+    holders = {"12006": ["guide:error-codes-buy-browse"]}
+    out = code_holder_first(ranked, 3, "what does error 12006 mean", lambda d, c: False,
+                            lambda c: holders.get(c, []))  # fmt: skip
+    assert out[:2] == ["guide:error-codes-buy-browse", "guide:error-codes-buy-offer"]
+    assert query_code("what does error 12006 mean") == "12006"
+    assert query_code("how many orders since 2024") is None  # no error / code wording
+    assert query_code("what does a 409 error mean") is None  # HTTP statuses: their own rule
+    # TikTok: the endpoint at rank 1 has the code (not among the text-search hits): it stays
+    held = ["endpoint:GET~/coupons/{id}", "app:tiktokshop"]
+    out = code_holder_first(held, 3, "error code 36009003", lambda d, c: d.startswith("endpoint"),
+                            lambda c: ["app:tiktokshop"])  # fmt: skip
+    assert out == held
+
+
+def test_a_limit_question_keeps_the_guide_stating_the_limit_behind_the_endpoint() -> None:
+    """eBay Buy "how many charity ids can I filter a search by": 20, one row of the Browse
+    error-code table."""
+    ranked = ["endpoint:GET~/search", "endpoint:POST~/search_by_image", "guide:a", "model:b"]
+    q = "how many charity ids can I filter a search by"
+    out = limit_guide_after_endpoint(ranked, 4, q, lambda: "guide:error-codes-buy-browse")
+    assert out[:3] == ["endpoint:GET~/search", "guide:error-codes-buy-browse", ranked[1]]
+    assert limit_guide_after_endpoint(ranked, 4, "list orders", lambda: "guide:g") == ranked

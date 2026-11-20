@@ -19,8 +19,10 @@ from plume.application.reader.use_cases import (
     DEFAULT_FUSION,
     WIDER_POOL,
     all_endpoint_ids,
+    code_holders,
     error_codes_guide,
     fuse_hits,
+    limit_line_guide,
     own_auth_docs,
     rank_order,
 )
@@ -117,6 +119,8 @@ class RunEvalGate:
                         own,
                         endpoints,
                         partial(error_codes_guide, self._index, build_id),
+                        partial(code_holders, self._index, build_id),
+                        partial(limit_line_guide, self._index, build_id, q.question),
                     )
                 )
                 # Expected docs are alternatives: missing only when none of them is in the build.

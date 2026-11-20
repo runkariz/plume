@@ -30,12 +30,14 @@ from plume.application.reader.dto import (
 from plume.application.reader.links import linked_endpoints
 from plume.application.reader.ranking import (
     auth_first,
+    code_holder_first,
     context_after_named_endpoint,
     endpoint_before_its_model,
     error_codes_after_endpoint,
     is_page,
     keep_endpoints,
     lift_operation_endpoints,
+    limit_guide_after_endpoint,
     near_duplicate_guides_last,
     pair_pages_with_endpoints,
     pair_units_with_endpoints,
@@ -307,6 +309,8 @@ def rank_order(
     auth_docs: Callable[[], Sequence[str]] = tuple,
     all_endpoints: Callable[[], Sequence[str]] = tuple,
     error_codes: Callable[[], str | None] = lambda: None,
+    code_holders: Callable[[str], Sequence[str]] = lambda c: (),
+    limit_guide: Callable[[], str | None] = lambda: None,
 ) -> list[str]:
     """The final order of fused hits, shared by search and the eval gate: a page brings one of
     its endpoints into the top-k, so does a knowledge unit that names its endpoints (from the
@@ -341,6 +345,10 @@ def rank_order(
     order = triggers_after_endpoints(
         order, k, query, lambda d: trigger_resource(documents, build_id, d)
     )
+    order = limit_guide_after_endpoint(order, k, query, limit_guide)
+    order = code_holder_first(
+        order, k, query, lambda d, c: holds_code(documents, build_id, d, c), code_holders
+    )
     return keep_endpoints(order, k)
 
 
@@ -352,6 +360,120 @@ def all_endpoint_ids(index: SearchIndex, build_id: BuildId) -> list[str]:
 _HTTP_CODE = re.compile(r"\b(4(?:00|01|03|04|05|06|09|10|15|22|29)|5(?:00|02|03|04))\b")
 _CODES_QUERIES = ("status codes", "error codes", "response codes", "return codes")
 MIN_CODES = 5  # distinct HTTP status codes a chunk lists to be the API's error-codes section
+
+
+def _code_token(code: str) -> re.Pattern[str]:
+    return re.compile(rf"(?<![\w.]){re.escape(code)}(?![\w.])")
+
+
+def code_holders(index: SearchIndex, build_id: BuildId, code: str) -> list[str]:
+    """The documents whose text contains this exact code (a text search, then the token)."""
+    token = _code_token(code)
+    hits = index.text(build_id, code, 20)
+    return list(dict.fromkeys(h.doc_id for h in hits if token.search(h.text)))
+
+
+def holds_code(documents: DocumentRepo, build_id: BuildId, doc_id: str, code: str) -> bool:
+    """Whether the document's full text contains this exact code."""
+    doc = documents.get_document(build_id, doc_id)
+    return doc is not None and bool(_code_token(code).search(doc.text))
+
+
+_LIMIT_LINE = re.compile(
+    r"\b(maximum|max|limit|up to|at most|no more than|exceed\w*)\b[^\n]{0,80}?\b\d+\b"
+    r"|\b\d+\b[^\n]{0,30}\b(maximum|max)\b",
+    re.IGNORECASE,
+)
+_LIMIT_STOP = frozenset(
+    [
+        "about",
+        "allow",
+        "allowed",
+        "call",
+        "calls",
+        "could",
+        "does",
+        "each",
+        "every",
+        "fetch",
+        "fetched",
+        "filter",
+        "filters",
+        "from",
+        "have",
+        "into",
+        "item",
+        "items",
+        "limit",
+        "limits",
+        "list",
+        "make",
+        "many",
+        "maximum",
+        "more",
+        "most",
+        "much",
+        "number",
+        "per",
+        "query",
+        "querying",
+        "request",
+        "requests",
+        "result",
+        "results",
+        "return",
+        "returns",
+        "search",
+        "send",
+        "should",
+        "specify",
+        "than",
+        "that",
+        "their",
+        "there",
+        "this",
+        "time",
+        "times",
+        "total",
+        "under",
+        "using",
+        "value",
+        "values",
+        "what",
+        "when",
+        "where",
+        "which",
+        "will",
+        "with",
+        "would",
+    ]
+)
+
+
+def limit_line_guide(index: SearchIndex, build_id: BuildId, query: str) -> str | None:
+    """The guide with a line stating a field's limit (maximum / limit / up to ... N), the field
+    named by question words ("charity ids" -> charity_ids): the line naming the most question
+    words wins, the first found on a tie."""
+    words = [w for w in dict.fromkeys(re.findall(r"[a-z][a-z0-9]{3,}", query.lower()))
+             if w not in _LIMIT_STOP]  # fmt: skip
+    asked = set(re.findall(r"[a-z0-9]+", query.lower()))
+    best: tuple[int, str] | None = None
+    for word in words:
+        for h in index.text(build_id, word, 20, (DocumentKind.GUIDE,)):
+            for line in h.text.splitlines():
+                clean = line.replace("\\", "").lower()
+                norm = clean.replace("_", " ")
+                names = set(re.findall(r"[a-z0-9]+", norm))
+                if word not in names or not _LIMIT_LINE.search(norm):
+                    continue
+                # the limit is a field's: an identifier made of question words (charity_ids)
+                fields = re.findall(r"[a-z0-9]+(?:_[a-z0-9]+)+", clean)
+                if not any(set(f.split("_")) <= asked for f in fields):
+                    continue
+                score = sum(w in names for w in words)
+                if best is None or score > best[0]:
+                    best = (score, h.doc_id)
+    return best[1] if best else None
 
 
 def error_codes_guide(index: SearchIndex, build_id: BuildId) -> str | None:
@@ -524,6 +646,12 @@ class SearchDocs:
                 None
                 if kinds and DocumentKind.GUIDE not in kinds
                 else error_codes_guide(self._index, build_id)
+            ),
+            lambda c: code_holders(self._index, build_id, c),
+            lambda: (
+                None
+                if kinds and DocumentKind.GUIDE not in kinds
+                else limit_line_guide(self._index, build_id, query)
             ),
         )
         by_id = {h.doc_id: h for h in fuse_hits(wider_hits, [], query, WIDER_POOL)}

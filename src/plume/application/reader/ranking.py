@@ -668,3 +668,59 @@ def triggers_after_endpoints(
         if behind is not None:
             order.insert(behind, order.pop(at))
     return order
+
+
+# A question about a specific code: "what does error 12006 mean", "error code 36009003".
+_CODE_QUERY = re.compile(r"\b(errors?|codes?|error_?ids?|exceptions?|faults?)\b", re.IGNORECASE)
+_CODE_TOKEN = re.compile(r"\b\d{4,}\b")
+
+
+def query_code(query: str) -> str | None:
+    """The code a question names (4+ digits, next to error / code wording), if any."""
+    m = _CODE_TOKEN.search(query) if _CODE_QUERY.search(query) else None
+    return m.group(0) if m else None
+
+
+def code_holder_first(
+    ranked: Sequence[str],
+    k: int,
+    query: str,
+    holds: Callable[[str, str], bool],
+    holders: Callable[[str], Sequence[str]],
+) -> list[str]:
+    """A question naming a code leads with a document that contains that exact code (eBay Buy
+    "what does error 12006 mean": the Offer API's error guide led by meaning; 12006 is only in
+    the Browse API's): the best-ranked top-k document whose text has it, else the first one a
+    text search finds."""
+    code = query_code(query)
+    if code is None:
+        return list(ranked)
+    lead = next((d for d in ranked[:k] if holds(d, code)), None)
+    if lead is None:
+        lead = next(iter(holders(code)), None)
+    if lead is None or (ranked and ranked[0] == lead):
+        return list(ranked)
+    return [lead] + [d for d in ranked if d != lead]
+
+
+_LIMIT_QUERY = re.compile(
+    r"\b(how many|max(imum)?|limit\w*|up to|at most|no more than)\b", re.IGNORECASE
+)
+
+
+def limit_guide_after_endpoint(
+    ranked: Sequence[str], k: int, query: str, limit_guide: Callable[[], str | None]
+) -> list[str]:
+    """A limit question ("how many charity ids can I filter a search by") keeps the guide whose
+    line states that limit for a word of the question ("The 'charity_ids' field has exceeded
+    the maximum limit of 20", one row of eBay's Browse error-code table) in the top-k, right
+    behind the first endpoint."""
+    if not _LIMIT_QUERY.search(query):
+        return list(ranked)
+    guide = limit_guide()
+    if guide is None or guide in ranked[:k]:
+        return list(ranked)
+    order = [d for d in ranked if d != guide]
+    first = next((i for i, d in enumerate(order[:k]) if d.startswith("endpoint:")), None)
+    order.insert(0 if first is None else first + 1, guide)
+    return order
