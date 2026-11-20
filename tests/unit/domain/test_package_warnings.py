@@ -112,3 +112,27 @@ def test_sandbox_host_not_in_sources_is_an_environments_notice() -> None:
     assert found[0].text == (
         "The docs mention a sandbox, but no source gives its address, so only production is listed."
     )
+
+
+def test_no_public_auth_is_signing_only_with_evidence() -> None:
+    """lazada/shopee F1: auth-none-public-sources reads as signing when the build shows it
+    (sign params, other codes); without any, it says no scheme is documented."""
+    from plume.domain.knowledge.package_warnings import UNSIGNED  # noqa: PLC0415
+
+    none = parse(["auth-none-public-sources: the spec declares no security scheme"])
+    assert [n.text for n in notices(none, AUTH, signed=False)] == [UNSIGNED]
+    assert [n.text for n in notices(none, AUTH, signed=True)] == [SIGNED]
+    assert [n.text for n in notices(none, AUTH)] == [SIGNED]  # unknown: as before
+
+
+def test_auth_notices_name_and_link_the_guides() -> None:
+    """kaufland: "see the setup text" pointed nowhere."""
+    guides = (("guide:authentication", "Authentication"), ("guide:hmac", "HMAC request signing"))
+    [n] = notices(parse(["auth-signed-request: x"]), AUTH, guides=guides)
+    assert n.text == (
+        "Every request must be signed (see: Authentication; HMAC request signing); there is "
+        "no ready auth option yet."
+    )
+    assert n.doc_ids == ("guide:authentication", "guide:hmac")
+    [env] = notices(parse(["default-environment-by-order: x"]), guides=guides)
+    assert env.doc_ids == ()  # environments notices are not about auth

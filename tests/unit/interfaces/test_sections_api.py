@@ -162,6 +162,7 @@ async def test_mcp_section_tools(stack: FakeStack) -> None:
             client, "get_auth_scheme", api="shopify", scheme_id="oauth2-authorization-code"
         )
         assert one["scheme"]["headerName"] == "X-Shopify-Access-Token"
+        assert one["notices"] == []  # the auth notices, as on the list (none here)
         none = await call(client, "list_triggers", api="woocommerce")
         assert none["present"] is False
         trig = await call(client, "get_trigger", api="shopify", key="carts/create")
@@ -469,10 +470,15 @@ def test_signed_request_notice_says_also_when_the_package_has_auth(
     )
     auth = http.get("/v1/apis/shopify/auth").json()  # shopify-mini has an OAuth2 scheme
     assert auth["present"] is True
-    assert [n["text"] for n in auth["notices"]] == [
-        "Every request must also be signed (see the setup text); Kariz can't sign requests "
-        "yet, so calls will fail even with this auth."
-    ]
+    [notice] = auth["notices"]
+    assert notice["text"].startswith("Every request must also be signed (see: ")
+    assert notice["text"].endswith("; Kariz can't sign requests yet, so calls will fail even "
+                                   "with this auth.")  # fmt: skip
+    assert notice["docIds"]
+    assert all(d.startswith("guide:") for d in notice["docIds"])
+    # the scheme itself carries them too (tiktokshop F1: a client opening it saw nothing)
+    scheme = http.get(f"/v1/apis/shopify/auth/{auth['schemes'][0]['id']}").json()
+    assert scheme["notices"] == auth["notices"]
 
 
 def _merged_rule_package(packages: Path, tmp_path: Path) -> Path:

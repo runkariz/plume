@@ -177,6 +177,10 @@ class Notice(Schema):
     code: str = Field(description="The package warning code it comes from.")
     section: str = Field(description='Where it applies: "auth" or "environments".')
     text: str = Field(description="What to tell the user.")
+    doc_ids: list[str] = Field(
+        default_factory=list,
+        description="Guides that explain it (auth / signing), to read with the document tools.",
+    )
 
 
 class ApiDetail(ApiSummary):
@@ -866,6 +870,10 @@ class AuthSchemeDetail(Schema):
         '"variables": {"schema": …, "sample": …}.',
     )
     file: str | None
+    notices: list[Notice] = Field(
+        default_factory=list,
+        description="User-facing notices about auth (package warnings), as on the auth list.",
+    )
 
 
 class TriggerSummary(Schema):

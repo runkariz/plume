@@ -89,6 +89,7 @@ def sections_router(sections: Callable[[], PackageSections]) -> APIRouter:
             variables_schema=v["variables_schema"],
             companions=v["companions"],
             file=v["file"],
+            notices=[s.Notice(**n) for n in sections().notices(api, AUTH, version)],
         )
 
     @router.get("/v1/apis/{api}/environments", response_model=s.EnvironmentsOut, responses=errors)

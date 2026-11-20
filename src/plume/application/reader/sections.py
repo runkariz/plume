@@ -1,20 +1,36 @@
 """Package sections exposed as stored (never derived): auth schemes, triggers, the icon."""
 
+import re
 from dataclasses import dataclass
 from typing import Any
 
 from plume.application.errors import NotFoundError
 from plume.application.ports.asset_repo import AssetRepo
 from plume.application.ports.document_repo import DocumentRepo
-from plume.application.ports.search_index import SearchIndex
+from plume.application.ports.search_index import FactQuery, SearchIndex
 from plume.application.reader.dto import BuildRef
 from plume.application.reader.links import scope_endpoints
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
 from plume.domain.knowledge import package_warnings, rate_limits
 from plume.domain.knowledge.asset import ICON, Asset
-from plume.domain.knowledge.document import TRIGGER_PAYLOAD_KEY, Document, DocumentKind
+from plume.domain.knowledge.document import (
+    TRIGGER_PAYLOAD_KEY,
+    Document,
+    DocumentKind,
+    FieldLocation,
+)
+from plume.domain.knowledge.fact import FactKind
+from plume.domain.knowledge.package_warnings import PackageWarning
 
 WEBHOOKS_TAG = "webhooks"
+MAX_AUTH_GUIDES = 4
+# query / header parameters that carry a request signature
+SIGNATURE_PARAMS = ("sign", "signature", "x-signature", "x-sign", "sig", "hmac")
+_SIGN_WORD = re.compile(r"\b(sign|signs|signed|signing|signature\w*|hmac)\b", re.IGNORECASE)
+_WEBHOOK_WORD = re.compile(r"\bwebhooks?\b", re.IGNORECASE)
+_AUTH_WORD = re.compile(
+    r"\b(auth\w*|access token\w*|api keys?|credentials?|oauth\w*)\b", re.IGNORECASE
+)
 MAX_SECTION_ITEMS = 1000
 
 
@@ -36,11 +52,13 @@ class PackageSections:
         index: SearchIndex,
         documents: DocumentRepo,
         assets: AssetRepo,
+        facts: FactQuery | None = None,
     ) -> None:
         self._resolver = resolver
         self._index = index
         self._documents = documents
         self._assets = assets
+        self._facts = facts
 
     def _docs(self, r: ResolvedBuild, kind: DocumentKind) -> list[Document]:
         build = r.build.build_id
@@ -91,15 +109,66 @@ class PackageSections:
 
     def notices(
         self, api: str, section: str | None = None, version: str | None = None
-    ) -> list[dict[str, str]]:
-        """User-facing notices for the package warnings Plume knows ({code, section, text})."""
+    ) -> list[dict[str, Any]]:
+        """User-facing notices for the package warnings Plume knows ({code, section, text,
+        doc_ids}); auth notices name and link the API's auth / signing guides."""
         r = self._resolver.resolve(api, version)
         warnings = package_warnings.parse(self._app_raw(r).get("package_warnings"))
         has_auth = any(w.code in package_warnings.WITH_AUTH for w in warnings) and bool(
             self._index.browse(r.build.build_id, (DocumentKind.AUTH,), None, 1, 0)[0]
         )
-        found = package_warnings.notices(warnings, section, has_auth=has_auth)
-        return [{"code": n.code, "section": n.section, "text": n.text} for n in found]
+        signing = [w for w in warnings if w.code in package_warnings.SIGNING_CODES]
+        guides: tuple[tuple[str, str], ...] = ()
+        signed: bool | None = None
+        if signing and section in (None, package_warnings.AUTH):
+            signed = self._signed(r, warnings)
+            guides = self._auth_guides(r, signed=signed)
+        found = package_warnings.notices(
+            warnings, section, has_auth=has_auth, signed=signed, guides=guides
+        )
+        return [
+            {"code": n.code, "section": n.section, "text": n.text, "doc_ids": list(n.doc_ids)}
+            for n in found
+        ]
+
+    def _signed(self, r: ResolvedBuild, warnings: list[PackageWarning]) -> bool:
+        """The build shows request signing: a signing code beyond "no public auth", the
+        producer's own words, or a signature parameter on its endpoints (Lazada, Shopee)."""
+        if any(
+            w.code in package_warnings.SIGNING_CODES and w.code != package_warnings.NONE_PUBLIC
+            for w in warnings
+        ):
+            return True
+        if any(w.code == package_warnings.NONE_PUBLIC and _SIGN_WORD.search(w.text)
+               for w in warnings):  # fmt: skip
+            return True
+        if self._facts is None:
+            return False
+        build = r.build.build_id
+        return any(
+            f.location in (FieldLocation.QUERY, FieldLocation.HEADER)
+            for name in SIGNATURE_PARAMS
+            for f in self._facts.find(build, name, kind=FactKind.FIELD)
+        )
+
+    def _auth_guides(self, r: ResolvedBuild, *, signed: bool) -> tuple[tuple[str, str], ...]:
+        """The API's guides about auth / signing (title, else a heading names it), signing
+        ones first when requests are signed; at most MAX_AUTH_GUIDES."""
+        scored: list[tuple[int, str, str]] = []
+        for d in self._docs(r, DocumentKind.GUIDE):
+            headings = [ln for ln in (d.text or "").splitlines() if ln.lstrip().startswith("#")]
+            title = d.title or d.doc_id
+            if _WEBHOOK_WORD.search(title):
+                continue  # verifying incoming events, not signing requests
+            sign = bool(_SIGN_WORD.search(title)) or any(_SIGN_WORD.search(h) for h in headings)
+            auth = bool(_AUTH_WORD.search(title)) or any(_AUTH_WORD.search(h) for h in headings)
+            if not (sign or auth):
+                continue
+            in_title = bool(_SIGN_WORD.search(title) or _AUTH_WORD.search(title))
+            rank = (0 if sign and signed else 1) * 2 + (0 if in_title else 1)
+            scored.append((rank, title, d.doc_id))
+        scored.sort()
+        return tuple((doc_id, title) for _, title, doc_id in scored[:MAX_AUTH_GUIDES])
 
     def webhooks(self, api: str, version: str | None = None) -> list[dict[str, Any]]:
         """connector/triggers/webhooks/*.json (the delivery mechanism), verbatim."""

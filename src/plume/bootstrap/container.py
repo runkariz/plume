@@ -437,7 +437,9 @@ class Container:
         )
 
     def sections(self) -> PackageSections:
-        return PackageSections(self.resolver(), self.search_index, self.documents, self.assets)
+        return PackageSections(
+            self.resolver(), self.search_index, self.documents, self.assets, self.fact_query
+        )
 
     def browse(self) -> BrowseDocuments:
         return BrowseDocuments(self.resolver(), self.search_index)
