@@ -311,3 +311,42 @@ describe('Try it', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('API not found');
   });
 });
+
+describe('a hit the server added to an auth question (no snippet, no ranks)', () => {
+  async function runSign() {
+    renderApp('/apis/shopify/try');
+    const q = screen.getByLabelText('Question or search text');
+    await userEvent.clear(q);
+    await userEvent.type(q, 'how do I sign a request');
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+    const title = await screen.findByRole('heading', { name: 'Shopify Admin REST' });
+    return title.closest('.res') as HTMLElement;
+  }
+
+  it('shows no empty snippet, no score bars for a missing rank, never "null"', async () => {
+    const hit = await runSign();
+    expect(within(hit).getByText('app')).toBeInTheDocument();
+    expect(hit.querySelector('p.muted')).toBeNull();
+    expect(within(hit).getByText('dense –')).toBeInTheDocument();
+    expect(within(hit).getByText('text –')).toBeInTheDocument();
+    expect(within(hit).queryByRole('img')).not.toBeInTheDocument(); // no score bars
+    expect(
+      within(hit).getByText('Added to the results: it has no text or meaning rank.'),
+    ).toBeInTheDocument();
+    expect(hit.textContent).not.toMatch(/null|undefined|NaN/);
+    // no score to fuse: a dash, not "0.0000"
+    expect(within(hit).getByText('fused').textContent).toBe('fused –');
+  });
+
+  it('an ordinary hit keeps its snippet and its score bars', async () => {
+    renderApp('/apis/shopify/try');
+    await userEvent.click(screen.getByRole('button', { name: 'Run' }));
+    const title = await screen.findByText(
+      'Pagination: Link header, URL lifespan and range searches',
+    );
+    const hit = title.closest('.res') as HTMLElement;
+    expect(hit.querySelector('p.muted')).not.toBeNull();
+    expect(within(hit).getAllByRole('img').length).toBeGreaterThan(0);
+    expect(within(hit).queryByText(/Added to the results/)).not.toBeInTheDocument();
+  });
+});
