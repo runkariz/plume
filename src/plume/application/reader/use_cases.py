@@ -52,6 +52,7 @@ from plume.application.reader.ranking import (
     triggers_after_endpoints,
 )
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
+from plume.domain.eval.metrics import K
 from plume.domain.knowledge.asset import ICON
 from plume.domain.knowledge.call_check import (
     ServerBase,
@@ -82,6 +83,10 @@ from plume.domain.shared.ids import BuildId
 DEFAULT_FUSION = Fusion()
 SearchMode = Literal["hybrid", "dense", "text"]
 MAX_TOP_K = 50
+# The candidate pool the final order is computed on (search and the eval gate alike).
+RANK_POOL = 20
+RANK_K = K  # the window the ranking rules work in (the eval's recall@K)
+SEARCH_POOL = MAX_TOP_K * 4  # hits per list behind the order's tail (fixed, any top_k)
 SNIPPET_CHARS = 320
 
 
@@ -590,7 +595,7 @@ class SearchDocs:
                 f"build {build_id} was embedded with {spec.embed_model}; this server embeds "
                 f"queries with {self._embedder.model}. Use mode=text or load the build again."
             )
-        pool = max(top_k * 4, 20)
+        pool = SEARCH_POOL  # fixed: the order must not depend on top_k
         dense: list[ChunkHit] = []
         text: list[ChunkHit] = []
         vector: Vector | None = None
@@ -611,9 +616,17 @@ class SearchDocs:
                 "full-text search",
                 lambda: self._index.text(build_id, query, pool, kinds),
             )
+        # The order is computed as the eval gate computes it (the first RANK_POOL hits of each
+        # list, the rules over the top RANK_K), whatever top_k asks for; a longer list only
+        # appends the rest of the larger pool. (CDON "how do I authenticate": the auth scheme
+        # was 1st at top_k 10 and 20, missing at 3, 5 and 8.)
         fused = _timed(
-            trace, "plume", "fuse (RRF)", lambda: fuse_hits(dense, text, query, pool, self._fusion)
+            trace,
+            "plume",
+            "fuse (RRF)",
+            lambda: fuse_hits(dense[:RANK_POOL], text[:RANK_POOL], query, RANK_POOL, self._fusion),
         )
+        rest = fuse_hits(dense, text, query, pool, self._fusion)
         wider_hits: list[ChunkHit] = []
 
         def wider() -> list[str]:
@@ -637,7 +650,7 @@ class SearchDocs:
             self._documents,
             build_id,
             [h.doc_id for h in fused],
-            top_k,
+            RANK_K,
             wider,
             query,
             auth_docs,
@@ -654,7 +667,9 @@ class SearchDocs:
                 else limit_line_guide(self._index, build_id, query)
             ),
         )
+        order += [h.doc_id for h in rest if h.doc_id not in order]
         by_id = {h.doc_id: h for h in fuse_hits(wider_hits, [], query, WIDER_POOL)}
+        by_id.update({h.doc_id: h for h in rest})
         by_id.update({h.doc_id: h for h in fused})
         for d, summary in self._index.summaries(
             build_id, [d for d in order[:top_k] if d not in by_id]
