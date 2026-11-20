@@ -87,32 +87,44 @@ _PSEUDO_HEADING = re.compile(
 PSEUDO_HEADING_MIN_CHARS = 1500  # shorter guides stay whole
 
 
+# Callout labels stand alone too, but belong to the text around them.
+_CALLOUTS = frozenset({"note", "notes", "warning", "caution", "info", "tip", "important"})
+
+
 def _is_title(line: str) -> bool:
-    return 0 < len(line.split()) <= 7
+    words = line.split()
+    return (
+        0 < len(words) <= 7
+        and line.strip().lower() not in _CALLOUTS
+        and ". " not in line
+        and not line.rstrip().endswith("…")
+    )
 
 
 def _split_sections(text: str, pseudo: bool = False) -> list[str]:
     starts = [m.start() for m in _HEADING.finditer(text)]
-    if pseudo and len(text) >= PSEUDO_HEADING_MIN_CHARS:
-        starts += [
+    titles: set[int] = set()
+    if pseudo and len(text) >= PSEUDO_HEADING_MIN_CHARS:  # short guides stay as before
+        titles = {
             m.start()
             for m in _PSEUDO_HEADING.finditer(text)
             if _is_title(text[m.start() : text.find("\n", m.start())])
-        ]
-        starts = sorted(set(starts))
+        }
+        starts = sorted({*starts, *titles})
     if not starts or starts[0] != 0:
         starts = [0, *starts]
     bounds = [*starts, len(text)]
-    sections = [text[a:b].strip() for a, b in itertools.pairwise(bounds)]
-    if not pseudo:
-        return sections
-    merged: list[str] = []  # a heading alone ("# Mirakl Marketplace APIs") joins the next
-    for section in sections:
-        if merged and len(merged[-1]) < 80 and "\n" not in merged[-1]:
-            merged[-1] = f"{merged[-1]}\n\n{section}"
+    sections: list[str] = []
+    for a, b in itertools.pairwise(bounds):
+        section = text[a:b].strip()
+        last = sections[-1] if sections else ""
+        # a markdown heading left alone by a title right after it ("# Mirakl Marketplace APIs"
+        # then "General Notes") joins that section, as it did before titles split
+        if a in titles and last.startswith("#") and "\n" not in last:
+            sections[-1] = f"{last}\n\n{section}"
         else:
-            merged.append(section)
-    return merged
+            sections.append(section)
+    return sections
 
 
 def _split_to_size(text: str, max_chars: int) -> list[str]:
