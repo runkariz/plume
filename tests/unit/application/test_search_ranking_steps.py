@@ -184,3 +184,24 @@ def test_trendyol_live_cases() -> None:
         production_before_test([test, "trigger:shipped", prod], "mark a package as shipped")[0]
         == prod
     )
+
+
+def test_batch1b_cdon_and_back_market_cases() -> None:
+    from plume.application.reader.ranking import (  # noqa: PLC0415
+        request_models_last,
+        state_change_first,
+        synthesized_after_vendor,
+    )
+
+    fulfill = "endpoint:PUT~/{version}/orders/{order_id}/fulfill"  # CDON: fulfill = ship
+    ranked = ["endpoint:GET~/{version}/orders", "model:order", fulfill]
+    assert state_change_first(ranked, 5, "mark an order as shipped with tracking",
+                              lambda: ranked)[0] == fulfill  # fmt: skip
+    body = "model:updatearticlequantitybody"  # CDON: a request body above the endpoint
+    put = "endpoint:PUT~/{version}/articles/{article_id}/quantity"
+    assert request_models_last([body, put], 5) == [put, body]
+    ours = "guide:environments-and-base-urls"  # Back Market: behind its own environments guide
+    out = synthesized_after_vendor(
+        [ours, "guide:context", "endpoint:GET~/x", "guide:environments"], 5
+    )
+    assert out.index("guide:environments") < out.index(ours)
