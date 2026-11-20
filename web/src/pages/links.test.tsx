@@ -170,3 +170,102 @@ describe('auth scheme page', () => {
     expect(screen.queryByRole('columnheader', { name: 'Endpoints that need it' })).toBeNull();
   });
 });
+
+describe('a field whose type is a model of the package', () => {
+  const doc = `/apis/shopify/documents/${encodeURIComponent('endpoint:GET~/orders.json')}`;
+
+  it('links its type to the model document, with the model id as the title', async () => {
+    renderApp(doc);
+    const response = await screen.findByRole('region', { name: 'Response fields' });
+    const link = within(response).getByRole('link', { name: 'customer' });
+    expect(link).toHaveAttribute(
+      'href',
+      `/apis/shopify/documents/${encodeURIComponent('model:customer')}`,
+    );
+    expect(link).toHaveAttribute('title', 'model:customer');
+    // a field without a model keeps a plain type
+    expect(within(response).getByText('string')).not.toHaveAttribute('href');
+    expect(within(response).getAllByRole('link')).toHaveLength(1);
+  });
+
+  it('keeps the type and links the model after an arrow when the type is not the model name', async () => {
+    const { FieldTable } = await import('@/components/FieldTable');
+    const { MemoryRouter } = await import('react-router-dom');
+    const { render } = await import('@testing-library/react');
+    render(
+      <MemoryRouter>
+        <FieldTable
+          title="Fields"
+          api="tiktokshop"
+          fields={[
+            {
+              name: 'detail.extra_errors',
+              location: 'response',
+              type: 'array',
+              required: false,
+              description: null,
+              modelId: 'model:activateproductextraerror',
+            },
+          ]}
+        />
+      </MemoryRouter>,
+    );
+    const cell = screen.getByText('array', { exact: false }).closest('td') as HTMLElement;
+    expect(cell.textContent).toBe('array → activateproductextraerror');
+    expect(within(cell).getByRole('link')).toHaveAttribute(
+      'title',
+      'model:activateproductextraerror',
+    );
+    expect(within(cell).getByRole('link')).toHaveTextContent('activateproductextraerror');
+  });
+
+  it('shows the model id when the field has no type of its own', async () => {
+    const { FieldTable } = await import('@/components/FieldTable');
+    const { MemoryRouter } = await import('react-router-dom');
+    const { render } = await import('@testing-library/react');
+    render(
+      <MemoryRouter>
+        <FieldTable
+          title="Fields"
+          api="shopify"
+          fields={[
+            {
+              name: 'x',
+              location: 'response',
+              type: null,
+              required: false,
+              description: null,
+              modelId: 'model:address',
+            },
+          ]}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('link', { name: 'model:address' })).toBeInTheDocument();
+  });
+
+  it('is plain text when the field has no modelId or the API is unknown', async () => {
+    const { FieldTable } = await import('@/components/FieldTable');
+    const { MemoryRouter } = await import('react-router-dom');
+    const { render } = await import('@testing-library/react');
+    render(
+      <MemoryRouter>
+        <FieldTable
+          title="Fields"
+          fields={[
+            {
+              name: 'x',
+              location: 'response',
+              type: 'address',
+              required: false,
+              description: null,
+              modelId: 'model:address',
+            },
+          ]}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.getByText('address')).toBeInTheDocument();
+  });
+});

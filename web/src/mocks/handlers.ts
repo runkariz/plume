@@ -1762,6 +1762,15 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
                   required: false,
                   description: null,
                 },
+                // a field whose type is a model of the package: the type links to it
+                {
+                  name: 'orders[].customer',
+                  location: 'response',
+                  type: 'customer',
+                  required: false,
+                  description: 'The customer of the order.',
+                  modelId: 'model:customer',
+                },
               ]
             : []),
         ],
