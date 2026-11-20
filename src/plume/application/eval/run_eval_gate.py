@@ -72,7 +72,12 @@ class RunEvalGate:
         hits = self._index.dense(build_id, vector, WIDER_POOL, (DocumentKind.ENDPOINT,))
         return list(dict.fromkeys(h.doc_id for h in hits))
 
-    def execute(self, build_id: BuildId, gold: GoldSet, gold_hash: str) -> EvalRun:
+    def execute(
+        self, build_id: BuildId, gold: GoldSet, gold_hash: str, *, store: bool = True
+    ) -> EvalRun:
+        """Score the build on the gold set. ``store``: keep it as the build's eval (its quality
+        card and gate). An ad-hoc run with another gold set passes False, so it never
+        replaces the gate eval (tester-gold scoring replaced Mirakl's 150-question card)."""
         build = require_build(self._builds, build_id)
         if build.spec is not None and build.spec.embed_model != self._embedder.model:
             # Scores from vectors of two different models would be meaningless, not low.
@@ -155,5 +160,6 @@ class RunEvalGate:
             evaluated_at=self._clock.now(),
             details=tuple(details),
         )
-        self._evals.save(record)
+        if store:
+            self._evals.save(record)
         return EvalRun(record, decision, tuple(outcomes), baseline)

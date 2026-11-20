@@ -263,16 +263,29 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         version: Annotated[str | None, typer.Option(help="Tag or build id")] = None,
         gold: Annotated[str | None, typer.Option(help="Gold set file")] = None,
         as_json: Annotated[bool, typer.Option("--json")] = False,
+        store: Annotated[
+            bool | None,
+            typer.Option(
+                "--store/--no-store",
+                help="Keep the result as the build's eval (its quality card and gate). Default: "
+                "only with the API's own gold set; another --gold is an ad-hoc run.",
+            ),
+        ] = None,
     ) -> None:
         """Run the gold questions against a build and print the gate decision (exit 2 on fail)."""
         try:
             build = _need(deps.resolver, "eval").resolve(api, version).build
             source = _need(deps.gold, "eval")
-            ref = gold or source.for_api(api)
+            own = source.for_api(api)
+            ref = gold or own
             if ref is None:
                 raise typer.BadParameter(f"no gold set for {api}; pass --gold")
+            if store is None:
+                store = own is not None and Path(ref).resolve() == Path(own).resolve()
             gold_set, gold_hash = source.load(ref)
-            run = _need(deps.run_eval, "eval").execute(build.build_id, gold_set, gold_hash)
+            run = _need(deps.run_eval, "eval").execute(
+                build.build_id, gold_set, gold_hash, store=store
+            )
         except (ApplicationError, DomainError) as exc:
             raise fail(exc) from exc
         out = {
@@ -282,6 +295,7 @@ def create_app(deps: CliDependencies) -> typer.Typer:
             "message": run.decision.message,
             "metrics": run.record.metrics.as_dict(),
             "baseline": run.baseline.build_id.value if run.baseline else None,
+            "stored": store,  # False: ad hoc, not the build's quality card
             "details": list(run.record.details),
         }
         typer.echo(json.dumps(out, indent=None if as_json else 2))

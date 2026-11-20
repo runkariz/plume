@@ -64,3 +64,34 @@ def test_load_no_tag(packages: Path) -> None:
     result = runner.invoke(_app(stack), ["load", str(packages / "second-catalog"), "--no-tag"])
     assert result.exit_code == 0
     assert "tag " not in result.output
+
+
+def test_an_ad_hoc_eval_never_replaces_the_gate_eval(packages: Path, tmp_path: Path) -> None:
+    """Tester-gold scoring (plume eval --gold <other>) replaced live quality cards: the card
+    and gatePassed must stay the gate eval that plume load ran with the API's own gold."""
+    from plume.infrastructure.sources.gold_file import JsonGoldSource  # noqa: PLC0415
+    from plume.interfaces.cli.main import CliDependencies, create_app  # noqa: PLC0415
+
+    gold_dir = packages.parent / "gold"
+    stack = FakeStack(gold=JsonGoldSource([gold_dir]))
+    app = create_app(
+        CliDependencies(
+            migrate_schema=lambda: MigrateSchema(FakeSchemaMigrator([])),
+            build_pipeline=stack.pipeline, list_apis=lambda: ListApis(stack.apis),
+            list_builds=lambda: ListBuilds(stack.builds, stack.tags),
+            diff_builds=lambda: DiffBuilds(stack.builds), tag_build=stack.tag,
+            resolver=stack.resolver, gold=lambda: stack.gold, run_eval=stack.run_eval,
+        )
+    )  # fmt: skip
+    assert runner.invoke(app, ["load", str(packages / "test-catalog"), "--json"]).exit_code == 0
+    build = stack.resolver().resolve("test-catalog-api").build.build_id
+    gate = stack.evals.get(build)
+    assert gate is not None  # the gate eval of plume load
+    other = tmp_path / "tester.json"
+    question = {"id": "t1", "kind": "search", "question": "list products", "expect": ["nope"]}
+    other.write_text(json.dumps({"api": "test-catalog-api", "questions": [question]}))
+    adhoc = runner.invoke(app, ["eval", "test-catalog-api", "--gold", str(other), "--json"])
+    assert json.loads(adhoc.stdout)["stored"] is False
+    assert stack.evals.get(build) == gate  # the card still shows the gate eval
+    own = runner.invoke(app, ["eval", "test-catalog-api", "--json"])
+    assert json.loads(own.stdout)["stored"] is True  # the API's own gold: stored as before
