@@ -76,6 +76,9 @@ def test_document(client: TestClient) -> None:
     assert r["title"] == "Customer"
     assert r["complete"] is False
     assert r["fields"]
+    by_name = {f["name"]: f for f in r["fields"]}
+    assert by_name["default_address"]["modelId"] == "model:address"  # $ref'd model
+    assert by_name["email"]["modelId"] is None
     doc = client.get(f"/v1/apis/shopify/documents/{ASSIGNED}").json()
     assert doc["scopes"] == ["read_assigned_fulfillment_orders"]
 

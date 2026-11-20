@@ -151,6 +151,7 @@ def compact_document_payload(r: DocumentResult, cursor: int = 0) -> Json:
             "description": (desc := _plain(f.description or ""))[:COMPACT_DESCRIPTION]
             + ("…" if len(desc) > COMPACT_DESCRIPTION else ""),
         }
+        | ({"model_id": f.model_id} if f.model_id else {})  # the model its type is
         for f in page
     ]
     end = start + len(page)

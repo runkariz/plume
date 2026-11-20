@@ -16,6 +16,7 @@ from plume.application.models.collections import (
     owner_key_hash,
 )
 from plume.application.models.concepts import (
+    ROLE_NAMES,
     ROLE_SYNONYMS,
     ModelInputError,
     concept_docs,
@@ -29,7 +30,11 @@ from plume.application.ports.document_repo import DocumentRepo
 from plume.application.ports.model_repo import ModelRepo, ModelSession
 from plume.application.ports.search_index import DocumentSummary, FactQuery, SearchIndex
 from plume.application.reader.resolve import BuildResolver
-from plume.domain.knowledge.document import Document, DocumentKind, FieldLocation
+from plume.domain.knowledge.document import (
+    Document,
+    DocumentKind,
+    FieldLocation,
+)
 from plume.domain.models.canonical_model import DraftFormatError, ModelDraft, parse_draft
 from plume.domain.models.release import GateFailure
 from plume.domain.models.snapshot import (
@@ -163,6 +168,27 @@ def normalize_concept(concept: str) -> str:
     typed it all lower case ("order" -> "Order"; "Product/Offer" and "SKU" stay as typed)."""
     text = " ".join(concept.split())
     return text[:1].upper() + text[1:] if text == text.lower() else text
+
+
+_ID_SEGMENT = re.compile(r"^\{(?!.*version)[^}]+\}$", re.IGNORECASE)
+
+
+def _under_other_resource(path: str, main: tuple[str, ...]) -> bool:
+    """/orders/{order_id}/products is order lines, not Product's own read: an earlier segment
+    names another resource followed by its id ({version} is no id)."""
+    segs = [x.split(".", 1)[0] for x in path.strip("/").split("/")]
+    return any(
+        not segs[i].startswith("{")
+        and _ID_SEGMENT.match(segs[i + 1])
+        and concept_key(segs[i]) not in main
+        for i in range(len(segs) - 2)
+    )
+
+
+def _role_part(key: str, main: tuple[str, ...]) -> bool:
+    """orderlineitem / orderaddress / orderdelivery under Order: the concept plus a role name
+    (a part the model is built from), not any entity whose name starts the same (ordertag)."""
+    return any(key.startswith(m) and key[len(m) :] in ROLE_NAMES for m in main)
 
 
 def _evidence_rank(d: DocumentSummary, key: str) -> tuple[bool, bool, bool, int, str]:
@@ -511,40 +537,48 @@ class ModelSessions:
         docs: list[DocumentSummary],
         main: tuple[str, ...],
         children: set[str],
-    ) -> dict[str, tuple[int, int]]:
-        """(tier, -data fields for child and other models) per document. Tier 0: own list/get
-        endpoints and the models they return (or named as the concept); 1: child resources
-        and sub-concepts; 2: other reads and models under the concept; 3: writes and request
-        models. Child and other models without data fields are left out."""
+    ) -> dict[str, tuple[int, int, int]]:
+        """(tier, not a role part, -data fields) per document. Tier 0: own list/get endpoints
+        and the models they return (or named as the concept); 1: child resources and
+        sub-concepts; 2: other reads and models under the concept; 3: writes and request
+        models. Within a tier a part named by a role (order + lineitem / address / delivery:
+        orderlineitem, orderaddress) comes before other entities whose name starts the same
+        (Shopware's 1,900-field ordertag and orderdeliveryposition led by size). Child and
+        other models without data fields are left out."""
         own = {
             d.doc_id
             for d in docs
             if d.kind is DocumentKind.ENDPOINT
             and d.method == "GET"
             and concept_key(last_literal(d.path or "")) in main
+            and not _under_other_resource(d.path or "", main)
         }
-        out: dict[str, tuple[int, int]] = {}
+        out: dict[str, tuple[int, int, int]] = {}
         for d in docs:
             if d.kind is DocumentKind.ENDPOINT:
                 key = concept_key(last_literal(d.path or ""))
                 if d.method != "GET":
-                    out[d.doc_id] = (3, 0)
+                    out[d.doc_id] = (3, 0, 0)
                 elif d.doc_id in own:
-                    out[d.doc_id] = (0, 0)
+                    out[d.doc_id] = (0, 0, 0)
                 else:
                     child = key in children or _child_of(key, main, children)
-                    out[d.doc_id] = (1 if child else 2, 0)
+                    out[d.doc_id] = (1 if child else 2, int(not _role_part(key, main)), 0)
                 continue
             full = self._documents.get_document(build, d.doc_id)
             returned = _returned_ids(full)
             key = concept_key(d.title.split(" / ")[-1])
             fields = sum(1 for f in full.fields if f.location in _DATA_LOCATIONS) if full else 0
             if "request" in d.doc_id.lower() and not returned:
-                out[d.doc_id] = (3, 0)
+                out[d.doc_id] = (3, 0, 0)
             elif returned & own or (key in main and not returned):
-                out[d.doc_id] = (0, 0)  # returned by its own reads, or the concept's model
+                out[d.doc_id] = (0, 0, 0)  # returned by its own reads, or the concept's model
             elif fields:
-                out[d.doc_id] = (1 if key in children else 2, -fields)
+                out[d.doc_id] = (
+                    1 if key in children else 2,
+                    int(not _role_part(key, main)),
+                    -fields,
+                )
         return out
 
     def _pin(self, session: ModelSession, api: str) -> BuildId:

@@ -92,3 +92,6 @@ async def test_what_changed_tool(stack: FakeStack, packages: Path, tmp_path: Pat
         ).structured_content or {}
     assert [i["subject"]["fieldPath"] for i in out["items"]] == ["channel"]
     assert "never listed" in out["note"]
+    assert "diff between builds" in out["note"]  # not the vendor's release log
+    assert out["changelog_guides"] == []
+    assert out["note"].endswith("this package has no changelog guide.")

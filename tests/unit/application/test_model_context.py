@@ -119,3 +119,26 @@ def test_kinds_of_the_concept_by_role_name_are_in_its_context(
     ids = [d["doc_id"] for e in ctx["apis"] if e["api"] == "mirakl" for d in e["documents"]]
     assert "model:or11-response-200-orders-customer-billingaddress" in ids
     assert "model:dr12-response-200-data-shippingto-address" in ids
+
+
+def test_size_does_not_beat_relevance() -> None:
+    """order-g4 / customer-g4: Shopware's 1,900-field ordertag and orderdeliveryposition ranked
+    above orderlineitem / orderaddress; role parts now lead within a tier."""
+    from plume.application.models.sessions import _role_part  # noqa: PLC0415
+
+    assert _role_part("orderlineitem", ("order",))
+    assert _role_part("orderaddress", ("order",))
+    assert _role_part("customeraddress", ("customer",))
+    assert not _role_part("ordertag", ("order",))
+    assert not _role_part("orderdeliveryposition", ("order",))
+
+
+def test_a_sub_resource_of_another_resource_is_not_the_concepts_own_read() -> None:
+    """BigCommerce /orders/{order_id}/products is order lines, not Product's own read."""
+    from plume.application.models.sessions import _under_other_resource  # noqa: PLC0415
+
+    assert _under_other_resource("/{version}/orders/{order_id}/products", ("product",))
+    assert not _under_other_resource("/{version}/catalog/products", ("product",))
+    assert not _under_other_resource("/{version}/catalog/products/{product_id}", ("product",))
+    assert not _under_other_resource("/api/{version}/orders/{id}", ("order",))
+    assert not _under_other_resource("/admin/api/{version}/orders/{order_id}.json", ("order",))

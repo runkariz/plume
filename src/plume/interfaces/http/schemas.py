@@ -457,6 +457,11 @@ class FieldOut(Schema):
         description="Verbatim from the package schema: enum, minimum, maximum, default, "
         "format, pattern, minLength/maxLength, minItems/maxItems (null when none).",
     )
+    model_id: str | None = Field(
+        default=None,
+        description="The model document the field's type is ($ref to a package model), "
+        "e.g. model:orderlineitem; null when none.",
+    )
 
 
 class DocumentOut(Schema):

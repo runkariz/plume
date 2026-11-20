@@ -25,6 +25,11 @@ from plume.domain.knowledge.package_warnings import PackageWarning
 
 WEBHOOKS_TAG = "webhooks"
 MAX_AUTH_GUIDES = 4
+MAX_CHANGELOG_GUIDES = 3
+_CHANGELOG = re.compile(
+    r"change[ -]?log|release[ -]?notes|what'?s[ -]new|(release|version)[ -]history|api[ -]updates",
+    re.IGNORECASE,
+)
 # query / header parameters that carry a request signature
 SIGNATURE_PARAMS = ("sign", "signature", "x-signature", "x-sign", "sig", "hmac")
 _SIGN_WORD = re.compile(r"\b(sign|signs|signed|signing|signature\w*|hmac)\b", re.IGNORECASE)
@@ -173,6 +178,17 @@ class PackageSections:
             scored.append((rank, title, d.doc_id))
         scored.sort()
         return tuple((doc_id, title) for _, title, doc_id in scored[:MAX_AUTH_GUIDES])
+
+    def changelog_guides(self, api: str, version: str | None = None) -> list[dict[str, str]]:
+        """The API's own changelog / release-notes guides ({doc_id, title}), at most
+        MAX_CHANGELOG_GUIDES: the vendor's account of its changes, next to Plume's build diff."""
+        r = self._resolver.resolve(api, version)
+        out = [
+            {"doc_id": d.doc_id, "title": d.title or d.doc_id}
+            for d in self._docs(r, DocumentKind.GUIDE)
+            if _CHANGELOG.search(d.title or "") or _CHANGELOG.search(d.doc_id)
+        ]
+        return out[:MAX_CHANGELOG_GUIDES]
 
     def webhooks(self, api: str, version: str | None = None) -> list[dict[str, Any]]:
         """connector/triggers/webhooks/*.json (the delivery mechanism), verbatim."""

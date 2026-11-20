@@ -434,6 +434,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                     required=f.required,
                     description=f.description,
                     constraints=f.constraint_dict or None,
+                    model_id=f.model_id,
                 )
                 for f in d.fields
             ],
