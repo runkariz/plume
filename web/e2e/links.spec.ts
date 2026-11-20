@@ -22,6 +22,18 @@ for (const theme of THEMES) {
       await expect(page).toHaveURL(/\/apis\/shopify\/auth\/oauth2-authorization-code$/);
     });
 
+    test('a field whose type is a model links to the model', async ({ page }) => {
+      await page.goto(`/apis/shopify/documents/${EP}`);
+      const response = page.getByRole('region', { name: 'Response fields' });
+      const link = response.getByRole('link', { name: 'customer' });
+      await expect(link).toHaveAttribute('title', 'model:customer');
+      await settle(page);
+      await expectNoSeriousA11y(page);
+      await shotOf(response, 'w44-field-model-link', theme);
+      await link.click();
+      await expect(page).toHaveURL(/\/apis\/shopify\/documents\/model%3Acustomer$/);
+    });
+
     test('a guide lists the endpoints it is about', async ({ page }) => {
       await page.goto(`/apis/shopify/documents/${GUIDE}`);
       const card = page.getByRole('region', { name: 'About these endpoints' });
