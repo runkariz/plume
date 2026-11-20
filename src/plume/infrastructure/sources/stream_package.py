@@ -136,27 +136,51 @@ class _RefScope:
 def _model_of(schema: Mapping[str, Any], scope: _RefScope) -> str | None:
     """The model document a field's type refers to: a ``$ref`` (directly, as array items, or
     the single typed member of a composition) to an existing schema file in the package's
-    models folder."""
+    models folder, or to a local definition named like one (#/$defs/Address -> address)."""
+    ref = _type_ref(schema)
+    path = _model_path(ref, scope.folder) if ref and scope.folder is not None else None
+    if path is None:
+        return None
+    return slug_doc_id(DocumentKind.MODEL, _slug(path.name.removesuffix(".schema.json")))
+
+
+def _type_ref(schema: Mapping[str, Any]) -> str | None:
     ref = schema.get("$ref")
     items = schema.get("items")
     if not isinstance(ref, str) and isinstance(items, dict):
         ref = items.get("$ref")
-    if not isinstance(ref, str):
-        for key in ("allOf", "oneOf", "anyOf"):
-            refs = [m.get("$ref") for m in schema.get(key) or [] if isinstance(m, dict)]
-            refs = [r for r in refs if isinstance(r, str)]
-            if len(refs) == 1:
-                ref = refs[0]
-                break
-    if not isinstance(ref, str) or scope.folder is None:
-        return None
-    file_part = ref.partition("#")[0]
-    if not file_part.endswith(".schema.json"):
-        return None
-    path = (scope.folder / file_part).resolve()
-    if not path.is_file() or path.parent.name != "models":
-        return None
-    return slug_doc_id(DocumentKind.MODEL, _slug(path.name.removesuffix(".schema.json")))
+    if isinstance(ref, str):
+        return ref
+    for key in ("allOf", "oneOf", "anyOf"):
+        refs = [m.get("$ref") for m in schema.get(key) or [] if isinstance(m, dict)]
+        refs = [r for r in refs if isinstance(r, str)]
+        if len(refs) == 1:
+            return refs[0]
+    return None
+
+
+def _model_path(ref: str, folder: Path) -> Path | None:
+    file_part, _, fragment = ref.partition("#")
+    if file_part:
+        path = (folder / file_part).resolve()
+        ok = file_part.endswith(".schema.json") and path.parent.name == "models"
+    else:  # #/$defs/Address in an endpoint schema: the package's model "address"
+        name, models = _LOCAL_DEF.match(fragment), _models_folder(folder)
+        if name is None or models is None:
+            return None
+        path, ok = models / f"{name.group(1).lower()}.schema.json", True
+    return path if ok and path.is_file() else None
+
+
+_LOCAL_DEF = re.compile(r"^/(?:\$defs|definitions|components/schemas)/([A-Za-z0-9_.-]+)$")
+
+
+def _models_folder(folder: Path) -> Path | None:
+    """connector/models, from any folder inside the connector (endpoints/<id>/responses)."""
+    for parent in (folder, *folder.parents):
+        if (parent / "models").is_dir() and (parent / "endpoints").is_dir():
+            return parent / "models"
+    return None
 
 
 def _pointer_get(doc: Mapping[str, Any], pointer: str) -> Any:
