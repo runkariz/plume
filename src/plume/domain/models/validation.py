@@ -194,6 +194,33 @@ def substantive(quote: str) -> bool:
     )
 
 
+# value lists, formats and examples are not sentences (Mirakl order_state: "Order's state" +
+# 'Enum: "STAGING", ...')
+_NOT_A_SENTENCE = re.compile(
+    r"^\s*(enum|enums|allowed values?|possible values?|values?|format|pattern|example|examples|"
+    r"e\.g\.|default|min(imum)?|max(imum)?|min ?length|max ?length|deprecated)\b\s*[:=]",
+    re.IGNORECASE,
+)
+
+
+_VALUE_TAIL = re.compile(
+    r"(?<=[.;,)])\s+(?:enum|allowed values|possible values|format|example)s?\s*:", re.IGNORECASE
+)
+
+
+def usable_sentence(own: list[str]) -> str | None:
+    """The first substantive sentence of a field's own descriptions (not its field-list lines,
+    not enum / format / example lines), or None when there is nothing to quote."""
+    for text in own:
+        if text.lstrip().startswith("- `"):
+            continue
+        for raw in text.splitlines():
+            line = _VALUE_TAIL.split(raw, maxsplit=1)[0].strip()  # "Order's state. Enum: ..."
+            if line and not _NOT_A_SENTENCE.match(line) and substantive(line):
+                return line
+    return None
+
+
 def _own_texts(api: str, doc_id: str, paths: list[str], oracle: Oracle) -> list[str] | None:
     """The mapped fields' own texts in the document (None: it lists none of them)."""
     if oracle.field_texts is None:
@@ -216,10 +243,11 @@ def _quote_issue(
             listed = ", ".join(paths) or "the field"
             return Issue("NO_QUOTE_NOT_ALLOWED", path, api,
                          f"noQuote needs {e.doc_id} to list {listed}")  # fmt: skip
-        descriptions = [t for t in own if not t.lstrip().startswith("- `")]  # not the lines
-        if any(substantive(t) for t in descriptions):
+        sentence = usable_sentence(own)
+        if sentence is not None:
             return Issue("NO_QUOTE_NOT_ALLOWED", path, api,
-                         "the field's own description has a usable sentence: quote it")  # fmt: skip
+                         f"the field's own description has a usable sentence: quote it: "
+                         f"{sentence[:200]!r}")  # fmt: skip
         return None
     whole = own is not None and any(
         _norm(t) == _norm(e.quote) and len(_WORD.findall(_norm(t))) >= 2 for t in own
