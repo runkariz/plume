@@ -14,11 +14,12 @@ The reader depends only on the package's files, not on who produced it. Layout (
 ``ref`` is a directory that contains ``connector/`` (or is the ``connector/`` folder itself).
 """
 
+import dataclasses
 import hashlib
 import itertools
 import json
 import re
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -42,6 +43,7 @@ from plume.domain.knowledge.document import (
     FieldSpec,
     constraints_of,
     endpoint_doc_id,
+    header_format,
     normalize_endpoint_path,
     real_path,
     slug_doc_id,
@@ -361,7 +363,7 @@ def _auth_header(data: Mapping[str, Any]) -> tuple[str | None, tuple[FieldSpec, 
         return None, ()
     prefix = data.get("headerPrefix") if isinstance(data.get("headerPrefix"), str) else None
     source = _str(data.get("headerSource"))
-    line = f"Header: {name}" + (f' (value prefix "{prefix}")' if prefix else "")
+    line = f"Header: `{header_format(name, prefix)}`"
     if source == HEADER_SOURCE_STANDARD:
         line += f": {STANDARD_HEADER_NOTE}"
         return line, (FieldSpec(name, FieldLocation.HEADER, "string", pointer=source),)
@@ -434,6 +436,22 @@ def _webhook_document(api_name: str, hook: object) -> Document | None:
         source_url=_str(provenance.get("evidenceUrl")),
         fields=tuple(fields),
     )
+
+
+def output_hash(documents: Sequence[Document]) -> str:
+    """A fingerprint of what the loader made of the package: every document as derived (text,
+    fields, raw sections, ...). Part of the build identity, so a loader change that alters its
+    output makes a new build on reload instead of reusing the old one (the webhook guides and
+    OAuth header fields were no-ops on reload)."""
+    digest = hashlib.sha256()
+    for d in documents:
+        digest.update(json.dumps(dataclasses.asdict(d), sort_keys=True, default=str).encode())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def _with_output(input_hash: str, documents: Sequence[Document]) -> str:
+    return hashlib.sha256(f"{input_hash}\0{output_hash(documents)}".encode()).hexdigest()
 
 
 def _obj(value: object) -> JsonObj:
@@ -697,18 +715,21 @@ class StreamPackageSource:
         documents = _flag_unresolved_includes(documents, warnings)
         manifest = _opt_json(package_root / "manifest.json") or {}
         produced = manifest.get("warnings")
-        if isinstance(produced, list):  # the producer's own warnings, on the app document
+        if isinstance(produced, list) and produced:  # the producer's own warnings, on the app
             app_index = next(i for i, d in enumerate(documents) if d.kind is DocumentKind.APP)
             app_raw = {**(documents[app_index].raw or {}), "package_warnings": produced}
             documents[app_index] = replace(documents[app_index], raw=app_raw)
         return SourcePackage(
             api=info,
             documents=tuple(documents),
-            package_hash=self._hash(
-                connector,
-                export if export.is_dir() else None,
-                extra_hashed,
-                produced if isinstance(produced, list) else None,
+            package_hash=_with_output(
+                self._hash(
+                    connector,
+                    export if export.is_dir() else None,
+                    extra_hashed,
+                    produced if isinstance(produced, list) else None,
+                ),
+                documents,
             ),
             source_ref=str(package_root),
             run_id=_str(manifest.get("runId")),

@@ -233,3 +233,11 @@ class Document:
 HEADER_SOURCE_VENDOR = "vendor"
 HEADER_SOURCE_STANDARD = "standard:rfc6750"
 STANDARD_HEADER_NOTE = "OAuth 2.0 standard (RFC 6750), not stated in the vendor's docs"
+
+
+def header_format(name: str, prefix: str | None) -> str:
+    """How the header is sent, e.g. "Authorization: Bearer <token>": one space after the
+    prefix whether the package writes "Bearer" or "Bearer " (Core never builds the header from
+    the prefix; it describes it)."""
+    stripped = (prefix or "").strip()
+    return f"{name}: {stripped} <token>" if stripped else f"{name}: <token>"

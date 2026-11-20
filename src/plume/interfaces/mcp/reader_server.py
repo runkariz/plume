@@ -320,6 +320,7 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
                                 "grant_type",
                                 "header_name",
                                 "header_prefix",
+                                "header_format",
                                 "header_source",
                                 "header_evidence",
                                 "header_note",

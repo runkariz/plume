@@ -853,7 +853,10 @@ class AuthSchemeSummary(Schema):
     type: str | None = Field(description="authorizationType from the package, verbatim.")
     grant_type: str | None
     header_name: str | None
-    header_prefix: str | None = Field(default=None, description='e.g. "Bearer ".')
+    header_prefix: str | None = Field(default=None, description='Raw, e.g. "Bearer".')
+    header_format: str | None = Field(
+        default=None, description='How to send it: "Authorization: Bearer <token>".'
+    )
     header_source: str | None = Field(
         default=None,
         description='"vendor" (the vendor states it: header_evidence) or "standard:rfc6750" '
@@ -891,6 +894,9 @@ class AuthSchemeDetail(Schema):
     grant_type: str | None
     header_name: str | None
     header_prefix: str | None = None
+    header_format: str | None = Field(
+        default=None, description='How to send it: "Authorization: Bearer <token>".'
+    )
     header_source: str | None = Field(
         default=None, description='"vendor" | "standard:rfc6750" | null (unknown).'
     )
