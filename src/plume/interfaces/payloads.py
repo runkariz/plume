@@ -223,6 +223,7 @@ def check_call_payload(r: CheckCallResult) -> Json:
                 "method": r.matched_method,
                 "path": r.matched_path,
                 "real_path": r.matched_real_path,
+                "server": r.matched_server,
             }
             if r.matched_id
             else None
