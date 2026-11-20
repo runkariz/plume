@@ -231,7 +231,8 @@ export interface CheckCallRequest {
 export interface CheckCallResponse {
   api: string;
   build: string;
-  verdict: 'documented' | 'not_documented';
+  /** ambiguous: several operations share METHOD + path; the note says what to pass (`method=<name>`). */
+  verdict: 'documented' | 'not_documented' | 'ambiguous';
   /** false when the schema is flagged partial: absence is then not proven */
   complete: boolean;
   matched: { id: string; method: HttpMethod; path: string; realPath?: string | null } | null;

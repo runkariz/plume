@@ -165,6 +165,87 @@ describe('Try it', () => {
     expect(screen.queryByRole('note')).not.toBeInTheDocument();
   });
 
+  describe('an ambiguous call (several operations share METHOD + path)', () => {
+    async function openAmbiguous() {
+      renderApp('/apis/shopify/try');
+      await userEvent.click(screen.getByRole('radio', { name: 'Check call' }));
+      await userEvent.selectOptions(screen.getByLabelText('HTTP method'), 'POST');
+      const path = screen.getByLabelText('Path');
+      await userEvent.clear(path);
+      await userEvent.type(path, '/sync');
+      const params = screen.getByLabelText('Parameters, comma separated');
+      await userEvent.clear(params);
+      await userEvent.type(params, 'app_key');
+      await userEvent.click(screen.getByRole('button', { name: 'Check' }));
+      return params as HTMLInputElement;
+    }
+
+    it('is a warning with the note and the examples as buttons, not a "not documented"', async () => {
+      await openAmbiguous();
+      expect(
+        await screen.findByText('Several operations share this method and path'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/Not documented in build/)).not.toBeInTheDocument();
+      expect(screen.getByRole('note')).toHaveTextContent(
+        'ambiguous: 156 operations share POST /sync',
+      );
+      const picks = within(screen.getByRole('group', { name: 'Examples to pick' })).getAllByRole(
+        'button',
+      );
+      expect(picks.map((b) => b.textContent)).toEqual([
+        'method=aliexpress.affiliate.category.get',
+        'method=aliexpress.affiliate.product.query',
+        'method=ae.merchant.plan.list',
+      ]);
+      // nothing matched: the "other operations ... matched the one above" line is for a documented call
+      expect(screen.queryByText(/The check matched the one shown above/)).not.toBeInTheDocument();
+      // nothing was decided: no "wording rule" line, no parameter verdicts
+      expect(screen.queryByText(/Wording rule/)).not.toBeInTheDocument();
+    });
+
+    it('a pick fills the parameter (keeping the others) and checks again', async () => {
+      const params = await openAmbiguous();
+      await userEvent.click(
+        await screen.findByRole('button', { name: 'method=aliexpress.affiliate.category.get' }),
+      );
+      expect(params.value).toBe('app_key, method=aliexpress.affiliate.category.get');
+      expect(await screen.findByText('Documented')).toBeInTheDocument();
+      expect(screen.queryByRole('group', { name: 'Examples to pick' })).not.toBeInTheDocument();
+    });
+
+    it('lists some of the operations as links to their pages', async () => {
+      await openAmbiguous();
+      await userEvent.click(await screen.findByText('Some of the operations at this path'));
+      const list = screen.getByRole('list', { name: 'Operations at this path' });
+      const first = within(list).getAllByRole('link')[0] as HTMLAnchorElement;
+      expect(first).toHaveTextContent('post-aliexpress-affiliate-category-get');
+      expect(first.getAttribute('href')).toBe(
+        `/apis/shopify/documents/${encodeURIComponent('endpoint:POST~/sync@post-aliexpress-affiliate-category-get')}`,
+      );
+    });
+
+    it('shows the note alone when the server names no examples', async () => {
+      server.use(
+        http.post(`${TEST_API_BASE}/v1/apis/:id/check-call`, () =>
+          HttpResponse.json({
+            api: 'shopify',
+            build: 'b',
+            verdict: 'ambiguous',
+            complete: true,
+            matched: null,
+            paramChecks: [],
+            checked: { endpoints: 1, models: 1 },
+            alternatives: [],
+            note: 'ambiguous: 2 operations share POST /sync; pass method=<name>',
+          }),
+        ),
+      );
+      await openAmbiguous();
+      expect(await screen.findByRole('note')).toHaveTextContent('pass method=<name>');
+      expect(screen.queryByRole('group', { name: 'Examples to pick' })).not.toBeInTheDocument();
+    });
+  });
+
   it('uses the public breadcrumb when signed out and the maintainer one when signed in', async () => {
     const { unmount } = renderApp('/apis/shopify/try');
     await screen.findByText('Build 2026-11-14 · live');
