@@ -88,3 +88,11 @@ async def test_errors_are_tool_errors(mcp_server: MCPServer) -> None:
         assert "unknown api" in str(r.content)
         r = await client.call_tool("list_builds", {"api": "nope"})
         assert r.is_error
+
+
+@pytest.mark.anyio
+async def test_compact_fields_name_their_model(mcp_server: MCPServer) -> None:
+    doc = await _call(mcp_server, "get_document", api="shopify", doc_id="model:customer")
+    by_name = {f["name"]: f for f in doc["fields"]}
+    assert by_name["default_address"]["model_id"] == "model:address"
+    assert "model_id" not in by_name["email"]  # only when there is one

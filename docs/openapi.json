@@ -2302,6 +2302,18 @@
             "title": "Location",
             "type": "string"
           },
+          "modelId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The model document the field's type is ($ref to a package model), e.g. model:orderlineitem; null when none.",
+            "title": "Modelid"
+          },
           "name": {
             "title": "Name",
             "type": "string"
