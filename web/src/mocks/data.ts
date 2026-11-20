@@ -525,6 +525,13 @@ export function sampleCheck(method: string, path: string, params: string[]): Che
       name,
       found: Boolean(found) && known.has(name),
       where: found && known.has(name) ? 'query' : null,
+      // a paging name the endpoint does not list but the API's paging guide uses: the server points to the guide
+      ...(found && name === 'cursor'
+        ? {
+            guideId: 'guide:pagination',
+            note: "Not in this endpoint's documented parameters. Paging for this API is described in guide:pagination (Pagination: Link header, URL lifespan and range searches); check it before using this name.",
+          }
+        : {}),
     })),
     checked: { endpoints: 137, models: 31 },
     // why a path that matches a template is not documented (another version of the same operation)

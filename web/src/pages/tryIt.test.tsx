@@ -350,3 +350,63 @@ describe('a hit the server added to an auth question (no snippet, no ranks)', ()
     expect(within(hit).queryByText(/Added to the results/)).not.toBeInTheDocument();
   });
 });
+
+describe('a parameter check that carries a note', () => {
+  async function checkWith(params: string) {
+    renderApp('/apis/shopify/try');
+    await userEvent.click(screen.getByRole('radio', { name: 'Check call' }));
+    const input = screen.getByLabelText('Parameters, comma separated');
+    await userEvent.clear(input);
+    await userEvent.type(input, params);
+    await userEvent.click(screen.getByRole('button', { name: 'Check' }));
+    await screen.findByText('Documented');
+  }
+
+  it('shows the note under the parameter as plain text, and links the guide it points to', async () => {
+    await checkWith('limit, cursor');
+    const item = screen.getByText('cursor').closest('li') as HTMLElement;
+    expect(within(item).getByText('missing')).toBeInTheDocument();
+    expect(
+      within(item).getByText(/Not in this endpoint's documented parameters/),
+    ).toBeInTheDocument();
+    const guides = within(item).getByRole('list', { name: 'Guide for cursor' });
+    const link = await within(guides).findByRole('link', {
+      name: 'Pagination: Link header, URL lifespan and range searches',
+    });
+    expect(link).toHaveAttribute(
+      'href',
+      `/apis/shopify/documents/${encodeURIComponent('guide:pagination')}`,
+    );
+    // a parameter without a note has none
+    const limit = screen.getByText('limit').closest('li') as HTMLElement;
+    expect(limit.querySelector('.param-note')).toBeNull();
+  });
+
+  it('shows just the note, no link and nothing parsed, when the server sends no guideId', async () => {
+    server.use(
+      http.post(`${TEST_API_BASE}/v1/apis/:id/check-call`, () =>
+        HttpResponse.json({
+          api: 'shopify',
+          build: 'b',
+          verdict: 'documented',
+          complete: true,
+          matched: { id: 'endpoint:GET~/orders.json', method: 'GET', path: '/orders.json' },
+          paramChecks: [
+            {
+              name: 'page_info',
+              found: false,
+              where: null,
+              note: 'Paging for this API is described in guide:pagination (Pagination); check it.',
+            },
+          ],
+          checked: { endpoints: 1, models: 1 },
+        }),
+      ),
+    );
+    await checkWith('page_info');
+    expect(
+      screen.getByText(/Paging for this API is described in guide:pagination/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: /Guide for/ })).not.toBeInTheDocument();
+  });
+});

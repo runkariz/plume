@@ -372,8 +372,18 @@
 }
 .checks li {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 4px 10px;
   align-items: center;
+}
+.param-note {
+  flex: 1 1 100%;
+}
+.param-note p {
+  margin: 0;
+}
+.param-guide {
+  margin: 2px 0 0;
 }
 .build-chip {
   padding: 5px 12px;
