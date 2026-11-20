@@ -16,7 +16,8 @@ Issue codes (stable; clients key on them):
   array-vs-single conversion.
 - ``ENUM_KEY_UNKNOWN``: an enum conversion maps a value the cited documents' enum does not have.
 - ``ENUM_MAP_INCOMPLETE``: an enum conversion leaves values of that enum neither mapped nor
-  listed in ``unmapped``.
+  listed in ``unmapped``. A standard code list is a ``code-system`` conversion instead (no map,
+  not checked value by value).
 - ``OPERATION_FIELD_NOT_FOUND``: an operation names a field its endpoint does not document.
 - ``QUOTE_TOO_SHORT``: the quote carries no information (fewer than 4 words and 20 letters),
   unless it is the field's whole own description of 2+ words.
@@ -290,6 +291,10 @@ def evidence_issues(path: str, api: str, src: FieldSource, oracle: Oracle) -> li
     return out
 
 
+ENUM_SHOWN = 40  # values named in an ENUM_MAP_INCOMPLETE refusal
+CODE_LIST_SIZE = 40  # an enum this long is likely a standard code list
+
+
 def _enum_issues(path: str, api: str, src: FieldSource, oracle: Oracle) -> list[Issue]:
     """An enum conversion against the enum the cited documents state for the path."""
     conv = src.conversion
@@ -311,9 +316,18 @@ def _enum_issues(path: str, api: str, src: FieldSource, oracle: Oracle) -> list[
         covered = set(keys) | {u.lower() for u in conv.unmapped}
         missing = [v for v in values if v.lower() not in covered]
         if missing:
+            shown = ", ".join(missing[:ENUM_SHOWN]) + (
+                f" and {len(missing) - ENUM_SHOWN} more" if len(missing) > ENUM_SHOWN else ""
+            )
+            hint = (
+                "; a standard code list (countries, currencies, languages) is a code-system "
+                'conversion with format, e.g. "ISO 3166-1 alpha-3 -> alpha-2"'
+                if len(values) > CODE_LIST_SIZE
+                else ""
+            )
             out.append(Issue("ENUM_MAP_INCOMPLETE", path, api,
-                             f"the enum map leaves {', '.join(missing)} of {p.path} unmapped: "
-                             "map them, or list them in conversion.unmapped"))  # fmt: skip
+                             f"the enum map leaves {shown} of {p.path} unmapped: map them, or "
+                             f"list them in conversion.unmapped{hint}"))  # fmt: skip
     return out
 
 
