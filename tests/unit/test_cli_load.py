@@ -94,4 +94,20 @@ def test_an_ad_hoc_eval_never_replaces_the_gate_eval(packages: Path, tmp_path: P
     assert json.loads(adhoc.stdout)["stored"] is False
     assert stack.evals.get(build) == gate  # the card still shows the gate eval
     own = runner.invoke(app, ["eval", "test-catalog-api", "--json"])
-    assert json.loads(own.stdout)["stored"] is True  # the API's own gold: stored as before
+    assert json.loads(own.stdout)["stored"] is True  # the gate's gold: stored as before
+    # the same gold by another path (coord/gold/<folder>.json) is the gate's gold: stored
+    copy = tmp_path / "coord-gold.json"
+    copy.write_bytes((gold_dir / "test-catalog-api.json").read_bytes())
+    again = runner.invoke(app, ["eval", "test-catalog-api", "--gold", str(copy), "--json"])
+    assert json.loads(again.stdout)["stored"] is True
+    # a PLUME_GOLD_DIRS file that differs from the load-time gold never replaces the card
+    edited = json.loads((gold_dir / "test-catalog-api.json").read_text())
+    edited["questions"] = edited["questions"][:1]
+    dirs = tmp_path / "dirs"
+    dirs.mkdir()
+    (dirs / "test-catalog-api.json").write_text(json.dumps(edited))
+    stack.gold = JsonGoldSource([dirs])
+    before = stack.evals.get(build)
+    other_default = runner.invoke(app, ["eval", "test-catalog-api", "--json"])
+    assert json.loads(other_default.stdout)["stored"] is False
+    assert stack.evals.get(build) == before
