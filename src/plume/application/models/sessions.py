@@ -31,7 +31,6 @@ from plume.application.ports.model_repo import ModelRepo, ModelSession
 from plume.application.ports.search_index import DocumentSummary, FactQuery, SearchIndex
 from plume.application.reader.resolve import BuildResolver
 from plume.domain.knowledge.document import (
-    FIELDS_BOUNDED_KEY,
     Document,
     DocumentKind,
     FieldLocation,
@@ -184,9 +183,6 @@ def _under_other_resource(path: str, main: tuple[str, ...]) -> bool:
         and concept_key(segs[i]) not in main
         for i in range(len(segs) - 2)
     )
-
-
-FIELD_BONUS_CAP = 60  # data fields beyond this do not make a model rank higher
 
 
 def _role_part(key: str, main: tuple[str, ...]) -> bool:
@@ -541,15 +537,14 @@ class ModelSessions:
         docs: list[DocumentSummary],
         main: tuple[str, ...],
         children: set[str],
-    ) -> dict[str, tuple[int, int, int, int]]:
-        """(tier, not a role part, bounded, -data fields capped) per document. Tier 0: own
-        list/get endpoints and the models they return (or named as the concept); 1: child
-        resources and sub-concepts; 2: other reads and models under the concept; 3: writes and
-        request models. Within a tier, size counts only up to FIELD_BONUS_CAP fields and a
-        schema bounded at the field limit goes last (Shopware's 1,900-field ordertag and
-        orderdeliveryposition above orderlineitem / orderaddress), and a part named by a role
-        (order + lineitem / address / delivery) first. Child and other models without data
-        fields are left out."""
+    ) -> dict[str, tuple[int, int, int]]:
+        """(tier, not a role part, -data fields) per document. Tier 0: own list/get endpoints
+        and the models they return (or named as the concept); 1: child resources and
+        sub-concepts; 2: other reads and models under the concept; 3: writes and request
+        models. Within a tier a part named by a role (order + lineitem / address / delivery:
+        orderlineitem, orderaddress) comes before other entities whose name starts the same
+        (Shopware's 1,900-field ordertag and orderdeliveryposition led by size). Child and
+        other models without data fields are left out."""
         own = {
             d.doc_id
             for d in docs
@@ -558,33 +553,31 @@ class ModelSessions:
             and concept_key(last_literal(d.path or "")) in main
             and not _under_other_resource(d.path or "", main)
         }
-        out: dict[str, tuple[int, int, int, int]] = {}
+        out: dict[str, tuple[int, int, int]] = {}
         for d in docs:
             if d.kind is DocumentKind.ENDPOINT:
                 key = concept_key(last_literal(d.path or ""))
                 if d.method != "GET":
-                    out[d.doc_id] = (3, 0, 0, 0)
+                    out[d.doc_id] = (3, 0, 0)
                 elif d.doc_id in own:
-                    out[d.doc_id] = (0, 0, 0, 0)
+                    out[d.doc_id] = (0, 0, 0)
                 else:
                     child = key in children or _child_of(key, main, children)
-                    out[d.doc_id] = (1 if child else 2, int(not _role_part(key, main)), 0, 0)
+                    out[d.doc_id] = (1 if child else 2, int(not _role_part(key, main)), 0)
                 continue
             full = self._documents.get_document(build, d.doc_id)
             returned = _returned_ids(full)
             key = concept_key(d.title.split(" / ")[-1])
             fields = sum(1 for f in full.fields if f.location in _DATA_LOCATIONS) if full else 0
-            bounded = int(bool(full and (full.raw or {}).get(FIELDS_BOUNDED_KEY)))
             if "request" in d.doc_id.lower() and not returned:
-                out[d.doc_id] = (3, 0, 0, 0)
+                out[d.doc_id] = (3, 0, 0)
             elif returned & own or (key in main and not returned):
-                out[d.doc_id] = (0, 0, 0, 0)  # returned by its own reads, or the concept's model
+                out[d.doc_id] = (0, 0, 0)  # returned by its own reads, or the concept's model
             elif fields:
                 out[d.doc_id] = (
                     1 if key in children else 2,
                     int(not _role_part(key, main)),
-                    bounded,
-                    -min(fields, FIELD_BONUS_CAP),
+                    -fields,
                 )
         return out
 

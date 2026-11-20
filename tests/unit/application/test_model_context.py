@@ -123,15 +123,14 @@ def test_kinds_of_the_concept_by_role_name_are_in_its_context(
 
 def test_size_does_not_beat_relevance() -> None:
     """order-g4 / customer-g4: Shopware's 1,900-field ordertag and orderdeliveryposition ranked
-    above orderlineitem / orderaddress; size now counts up to a cap and role parts lead."""
-    from plume.application.models.sessions import FIELD_BONUS_CAP, _role_part  # noqa: PLC0415
+    above orderlineitem / orderaddress; role parts now lead within a tier."""
+    from plume.application.models.sessions import _role_part  # noqa: PLC0415
 
     assert _role_part("orderlineitem", ("order",))
     assert _role_part("orderaddress", ("order",))
     assert _role_part("customeraddress", ("customer",))
     assert not _role_part("ordertag", ("order",))
     assert not _role_part("orderdeliveryposition", ("order",))
-    assert FIELD_BONUS_CAP == 60
 
 
 def test_a_sub_resource_of_another_resource_is_not_the_concepts_own_read() -> None:
