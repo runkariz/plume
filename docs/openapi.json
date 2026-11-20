@@ -1302,7 +1302,8 @@
           "verdict": {
             "enum": [
               "documented",
-              "not_documented"
+              "not_documented",
+              "ambiguous"
             ],
             "title": "Verdict",
             "type": "string"

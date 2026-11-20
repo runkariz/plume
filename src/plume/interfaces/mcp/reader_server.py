@@ -232,7 +232,10 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
         ["fields"]) against the documented endpoints and their parameters. params: names in
         any request location; query / body: names (not values) checked in that location. A
         parameter named by the API's pagination contract or guide counts (where:
-        "pagination"); a version segment other than the endpoint's fixed one does not."""
+        "pagination"); a version segment other than the endpoint's fixed one does not. An entry
+        "name=value" also gives a value: where several operations share METHOD + path and a
+        fixed parameter picks one (AliExpress POST /sync with method=...), pass it; without
+        it the verdict is "ambiguous" and the note says what to pass."""
         return await _run(
             lambda: payloads.check_call_payload(
                 deps.check_call().execute(
