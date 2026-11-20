@@ -1,10 +1,11 @@
 """``knowledge-export/`` v1 (``index.json`` schema ``plume.knowledge-export.v1``).
 
-Layout: ``index.json`` (pages, ``complete``), ``pages/*.md`` (YAML front matter: ``source`` URL
-and ``items`` [{id, kind, method, path, name, anchor}], then the cleaned page text),
-``rules.json`` (rules {id, scope: <endpoint id> | "resource", type, text, quote, anchor,
-sourceUrl, confidence, resource, endpointIds}), optionally ``gold-questions.json`` and
-``unit-links.json`` (``plume.unit-links.v1``: links [{unitId, endpointIds, linkBasis}], the
+Layout: ``index.json`` (pages, each may carry x-kariz-conflicts; ``complete``),
+``pages/*.md`` (YAML front matter: ``source`` URL and ``items`` [{id, kind, method, path, name,
+anchor}], then the cleaned page text), ``rules.json`` (rules {id, scope: <endpoint id> |
+"resource", type, text, quote, anchor, sourceUrl, confidence, resource, endpointIds,
+x-kariz-conflicts}), optionally ``gold-questions.json`` and ``unit-links.json``
+(``plume.unit-links.v1``: links [{unitId, endpointIds, linkBasis}], the
 page/slug links of knowledge units; read even without ``index.json``).
 
 The reader enriches each endpoint document with the page section its anchor points at and
@@ -19,6 +20,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+
+from plume.domain.knowledge.document import CONFLICTS_KEY
 
 SCHEMA_V1 = "plume.knowledge-export.v1"
 ZWSP = "\u200b"
@@ -44,6 +47,8 @@ class Rule:
     endpoint_ids: tuple[str, ...] = ()
     # A rule stated on several pages (stream merges repeats): the other pages' URLs.
     source_urls: tuple[str, ...] = ()
+    # x-kariz-conflicts on the rule (raw items): shown on every document the rule is shown on
+    conflicts: tuple[Any, ...] = ()
 
     @property
     def urls(self) -> tuple[str, ...]:
@@ -64,6 +69,7 @@ class ExportPage:
     intro: str
     sections: dict[str, tuple[str, str]] = field(default_factory=dict)  # item id -> (anchor, text)
     items: list[tuple[str, str]] = field(default_factory=list)  # (item id, "METHOD name")
+    conflicts: list[Any] = field(default_factory=list)  # the index entry's x-kariz-conflicts
 
     @property
     def split(self) -> bool:
@@ -186,11 +192,12 @@ def parse_page(path: Path) -> ExportPage:
 
 def load(root: Path) -> KnowledgeExport:
     index = json.loads((root / "index.json").read_text(encoding="utf-8"))
-    pages = [
-        parse_page(root / p["file"])
-        for p in index.get("pages", [])
-        if isinstance(p, dict) and (root / str(p.get("file", ""))).is_file()
-    ]
+    pages = []
+    for p in index.get("pages", []):
+        if isinstance(p, dict) and (root / str(p.get("file", ""))).is_file():
+            page = parse_page(root / p["file"])
+            page.conflicts = _conflicts(p)
+            pages.append(page)
     rules: list[Rule] = []
     rules_file = root / "rules.json"
     if rules_file.is_file():
@@ -214,6 +221,7 @@ def load(root: Path) -> KnowledgeExport:
                     resource=r.get("resource"),
                     endpoint_ids=_id_list(r.get("endpointIds")),
                     source_urls=_id_list(r.get("sourceUrls")),
+                    conflicts=tuple(_conflicts(r)),
                 )
             )
     gold = root / "gold-questions.json"
@@ -223,6 +231,12 @@ def load(root: Path) -> KnowledgeExport:
         rules=rules,
         gold_path=gold if gold.is_file() else None,
     )
+
+
+def _conflicts(entry: dict[str, Any]) -> list[Any]:
+    """An entry's x-kariz-conflicts items (raw; the reader skips malformed ones)."""
+    items = entry.get(CONFLICTS_KEY)
+    return [i for i in items if isinstance(i, dict)] if isinstance(items, list) else []
 
 
 def _id_list(value: Any) -> tuple[str, ...]:
