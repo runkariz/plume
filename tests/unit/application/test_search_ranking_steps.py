@@ -205,3 +205,17 @@ def test_batch1b_cdon_and_back_market_cases() -> None:
         [ours, "guide:context", "endpoint:GET~/x", "guide:environments"], 5
     )
     assert out.index("guide:environments") < out.index(ours)
+
+
+def test_a_push_question_leads_with_a_webhook_document() -> None:
+    """Magento "does Magento call my URL / send webhooks": the webhook endpoints were not in the
+    top 8; found among all endpoints."""
+    from plume.application.reader.ranking import push_first  # noqa: PLC0415
+
+    ranked = ["guide:resource-rules-api-6", "guide:workflow-gs-curl-constructing-endpoint-urls"]
+    every = ["endpoint:GET~/{version}/orders", "endpoint:POST~/{version}/webhooks/subscribe"]
+    assert (
+        push_first(ranked, 5, "does Magento call my URL or send webhooks", lambda: every)[0]
+        == "endpoint:POST~/{version}/webhooks/subscribe"
+    )
+    assert push_first(ranked, 5, "list orders", lambda: every) == ranked
