@@ -38,7 +38,7 @@ FACTS = SimpleNamespace(
     endpoints=lambda _b: ENDPOINTS,
     find=_find,
     for_owner=lambda _b, owner: [f for f in METHODS if f.owner_id == owner],
-    incomplete_owners=lambda *_a, **_k: [],
+    incomplete_owners=lambda *_a, **_k: ["model:orderresult"],
     bounded_owners=lambda *_a, **_k: {},
 )
 INDEX = SimpleNamespace(
@@ -65,6 +65,10 @@ def test_check_call_needs_the_method_value() -> None:
     assert vague.verdict == "ambiguous"
     assert vague.note is not None
     assert vague.note.startswith("ambiguous: 2 operations share POST /sync; pass method=<name>")
+    assert vague.pick_param == "method"
+    assert vague.pick_options == (
+        ("shop.order.get", "endpoint:POST~/sync@a"), ("shop.product.get", "endpoint:POST~/sync@b"),
+    )  # fmt: skip
     picked = check.execute("ali", "POST", "/sync", ["method=shop.product.get"])
     assert (picked.verdict, picked.matched_id) == ("documented", "endpoint:POST~/sync@b")
     as_query = check.execute("ali", "POST", "/sync", query=["method=SHOP.ORDER.GET"])
@@ -82,4 +86,7 @@ def test_find_fact_needs_the_method_value() -> None:
     assert vague.complete is False
     picked = find.execute("ali", "POST /sync?method=shop.order.get", kind="endpoint")
     assert [m.owner_id for m in picked.matches] == ["endpoint:POST~/sync@a"]
-    assert picked.reasons == ()
+    assert picked.reasons == ()  # an incomplete model does not bear on an endpoint
+    assert picked.complete is True
+    field = find.execute("ali", "method", kind="field")
+    assert field.reasons == ("model:orderresult is flagged incomplete by its source",)

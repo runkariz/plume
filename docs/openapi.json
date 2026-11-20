@@ -1168,6 +1168,45 @@
         "title": "BuildOut",
         "type": "object"
       },
+      "CallPick": {
+        "properties": {
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/CallPickOption"
+            },
+            "title": "Options",
+            "type": "array"
+          },
+          "param": {
+            "title": "Param",
+            "type": "string"
+          }
+        },
+        "required": [
+          "param",
+          "options"
+        ],
+        "title": "CallPick",
+        "type": "object"
+      },
+      "CallPickOption": {
+        "properties": {
+          "docId": {
+            "title": "Docid",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "docId"
+        ],
+        "title": "CallPickOption",
+        "type": "object"
+      },
       "CheckCallRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1298,6 +1337,17 @@
             },
             "title": "Paramchecks",
             "type": "array"
+          },
+          "pick": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CallPick"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ambiguous: the parameter whose value picks one of the operations sharing METHOD + path, and every value with its operation."
           },
           "verdict": {
             "enum": [

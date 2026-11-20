@@ -52,5 +52,6 @@ def test_an_absent_path_adds_no_doubt_of_its_own(stack: FakeStack) -> None:
     r = _find(stack, "GET /admin/api/{version}/nope.json")
     assert r.found is False
     assert not any("endpoint form" in x or "documented for" in x for x in r.reasons)
-    # (shopify-mini flags model:customer incomplete: that alone keeps complete false here)
-    assert r.reasons == ("model:customer is flagged incomplete by its source",)
+    # shopify-mini flags model:customer incomplete: no bearing on whether an endpoint exists
+    assert r.reasons == ()
+    assert r.complete is True
