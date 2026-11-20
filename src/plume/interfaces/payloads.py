@@ -181,6 +181,7 @@ def find_fact_payload(r: FindFactResult) -> Json:
                 "complete": m.complete,
                 "constraints": m.constraints,
                 "evidence": citation_payload(m.citation),
+                "note": m.note,
             }
             for m in r.matches
         ],

@@ -429,6 +429,11 @@ class FactMatch(Schema):
     complete: bool
     evidence: Citation
     constraints: dict[str, Any] | None = None
+    note: str | None = Field(
+        default=None,
+        description="How to read the evidence, e.g. the header is the OAuth 2.0 standard "
+        "(RFC 6750), not stated in the vendor's docs.",
+    )
 
 
 class FindFactResponse(Schema):
@@ -848,6 +853,18 @@ class AuthSchemeSummary(Schema):
     type: str | None = Field(description="authorizationType from the package, verbatim.")
     grant_type: str | None
     header_name: str | None
+    header_prefix: str | None = Field(default=None, description='e.g. "Bearer ".')
+    header_source: str | None = Field(
+        default=None,
+        description='"vendor" (the vendor states it: header_evidence) or "standard:rfc6750" '
+        "(the OAuth 2.0 standard, not the vendor's text); null: unknown.",
+    )
+    header_evidence: str | None = Field(
+        default=None, description="The vendor's quote (only when header_source is vendor)."
+    )
+    header_note: str | None = Field(
+        default=None, description="Label to show when the header is the standard's."
+    )
     query_param: str | None
     scopes: int
     variables: int
@@ -873,6 +890,16 @@ class AuthSchemeDetail(Schema):
     type: str | None
     grant_type: str | None
     header_name: str | None
+    header_prefix: str | None = None
+    header_source: str | None = Field(
+        default=None, description='"vendor" | "standard:rfc6750" | null (unknown).'
+    )
+    header_evidence: str | None = Field(
+        default=None, description="The vendor's quote (only when header_source is vendor)."
+    )
+    header_note: str | None = Field(
+        default=None, description="Label to show when the header is the standard's."
+    )
     query_param: str | None
     scopes: list[AuthScope]
     variables: list[AuthVariable]

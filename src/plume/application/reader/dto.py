@@ -75,6 +75,7 @@ class FactMatch:
     complete: bool
     citation: Citation
     constraints: dict[str, Any] | None = None
+    note: str | None = None  # e.g. the header is the OAuth 2.0 standard, not the vendor's text
 
 
 @dataclass(frozen=True, slots=True)

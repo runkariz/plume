@@ -31,7 +31,10 @@ from plume.domain.knowledge.api import ApiId, ApiInfo, Category
 from plume.domain.knowledge.asset import CONTENT_TYPES, ICON, MAX_ASSET_BYTES, Asset
 from plume.domain.knowledge.document import (
     FIELDS_BOUNDED_KEY,
+    HEADER_SOURCE_STANDARD,
+    HEADER_SOURCE_VENDOR,
     RULE_SOURCES_KEY,
+    STANDARD_HEADER_NOTE,
     TRIGGER_PAYLOAD_KEY,
     Document,
     DocumentKind,
@@ -347,6 +350,29 @@ def _fields_section(title: str, fields: list[FieldSpec], level: int | None = Non
             line += f": {f.description}"
         lines.append(f"- {line}")
     return "\n".join(lines)
+
+
+def _auth_header(data: Mapping[str, Any]) -> tuple[str | None, tuple[FieldSpec, ...]]:
+    """The auth unit's header line and, when its source is known, the header as a field: the
+    vendor's quote as its evidence (headerSource vendor), or no quote and the standard marked
+    (standard:rfc6750: never cited as vendor text). Unknown source: the line only, no field."""
+    name = _str(data.get("headerName"))
+    if not name:
+        return None, ()
+    prefix = data.get("headerPrefix") if isinstance(data.get("headerPrefix"), str) else None
+    source = _str(data.get("headerSource"))
+    line = f"Header: {name}" + (f' (value prefix "{prefix}")' if prefix else "")
+    if source == HEADER_SOURCE_STANDARD:
+        line += f": {STANDARD_HEADER_NOTE}"
+        return line, (FieldSpec(name, FieldLocation.HEADER, "string", pointer=source),)
+    evidence = _str(data.get("headerEvidence"))
+    if source == HEADER_SOURCE_VENDOR and evidence:
+        line += f'. From the docs: "{evidence}"'
+        return line, (
+            FieldSpec(name, FieldLocation.HEADER, "string", description=evidence,
+                      pointer="headerName"),
+        )  # fmt: skip
+    return line, ()
 
 
 def _webhook_document(api_name: str, hook: object) -> Document | None:
@@ -919,13 +945,12 @@ class StreamPackageSource:
         key = _str(data.get("id")) or path.stem
         title = _str(data.get("name")) or key
         parts = [f"# {title} (authentication)"]
-        for label, field_name in (
-            ("Type", "authorizationType"),
-            ("Grant", "grantType"),
-            ("Header", "headerName"),
-        ):
+        for label, field_name in (("Type", "authorizationType"), ("Grant", "grantType")):
             if _str(data.get(field_name)):
                 parts.append(f"{label}: {data[field_name]}")
+        header, header_fields = _auth_header(data)
+        if header:
+            parts.append(header)
         scopes: list[str] = []
         lines = []
         for entry in data.get("scopes", []) or []:
@@ -947,6 +972,7 @@ class StreamPackageSource:
             text="\n\n".join(parts),
             scopes=tuple(dict.fromkeys(scopes)),
             source_id=key,
+            fields=header_fields,
             raw={
                 "scheme": data,
                 "variables_schema": variables,

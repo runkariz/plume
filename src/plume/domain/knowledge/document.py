@@ -227,3 +227,9 @@ class Document:
             extra = json.dumps({"tags": list(self.tags), "raw": self.raw}, sort_keys=True)
             base = f"{base}\n{extra}"
         return content_hash(base)
+
+
+# OAuth2 auth units: where the header name / prefix comes from (auth/<id>.json headerSource)
+HEADER_SOURCE_VENDOR = "vendor"
+HEADER_SOURCE_STANDARD = "standard:rfc6750"
+STANDARD_HEADER_NOTE = "OAuth 2.0 standard (RFC 6750), not stated in the vendor's docs"

@@ -42,7 +42,9 @@ from plume.domain.knowledge.asset import ICON
 from plume.domain.knowledge.call_check import normalize_call_path, path_matches, specificity
 from plume.domain.knowledge.citation import Citation
 from plume.domain.knowledge.document import (
+    HEADER_SOURCE_STANDARD,
     HTTP_METHODS,
+    STANDARD_HEADER_NOTE,
     DocumentKind,
     FieldLocation,
     constraint_dict,
@@ -491,6 +493,7 @@ def _match(fact: Fact, titles: dict[str, str]) -> FactMatch:
         complete=fact.complete,
         citation=fact.evidence,
         constraints=constraint_dict(fact.constraints) or None,
+        note=STANDARD_HEADER_NOTE if fact.evidence.anchor == HEADER_SOURCE_STANDARD else None,
     )
 
 
