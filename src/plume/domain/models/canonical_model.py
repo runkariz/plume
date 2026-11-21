@@ -440,12 +440,25 @@ def _name_words(text: str) -> set[str]:
 _IDENTIFIER = re.compile(r"\b[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+\b|\b[a-z]+[A-Z][A-Za-z0-9]*\b")
 
 
+_NAME_TOKEN = re.compile(r"^(?:[A-Z][A-Za-z0-9]*|[a-z]+[A-Z][A-Za-z0-9]*)$")
+
+
+def _identifiers_only(quote: str) -> bool:
+    """Only identifiers and capitalised names after an optional leading "The" ("The SalesOrder
+    SalesOrderNumber", "The SalesOrderAddress State"): a generated restatement. Any prose word
+    ("Id of the VariationValue", "Id of the item.") makes it the vendor's label, a quote."""
+    tokens = [t.strip(".,;:!?()") for t in quote.split()]
+    if tokens and tokens[0].lower() == "the":
+        tokens = tokens[1:]
+    return bool(tokens) and all(_NAME_TOKEN.match(t) for t in tokens if t)
+
+
 def name_only(quote: str, names: list[str]) -> bool:
     """A quote that only restates identifiers: it holds one (SalesOrderNumber, firstName) and
     every word is a word of the field's path, the canonical field or the cited document's name
-    ("The SalesOrder SalesOrderNumber", "The firstName"). A vendor's short label ("Product
-    ID.", "City.") is the field's whole description and stays a quote."""
-    if not _IDENTIFIER.search(quote):
+    ("The SalesOrder SalesOrderNumber", "The firstName"), nothing but identifiers. A vendor's
+    short label ("Product ID.", "City.", "Id of the VariationValue") stays a quote."""
+    if not _IDENTIFIER.search(quote) or not _identifiers_only(quote):
         return False
     words = [w for w in _name_words(quote) if w not in _QUOTE_FILLER]
     allowed = set().union(*(_name_words(n) for n in names)) if names else set()
