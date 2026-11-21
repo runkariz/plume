@@ -99,3 +99,28 @@ def test_the_http_answer_carries_it(stack: FakeStack) -> None:
     assert r.status_code == 200, r.text
     assert r.json()["missingRequired"] == {"body": ["order_lines"]}
     assert r.json()["verdict"] == "documented"
+
+
+def test_headers_filled_from_auth_variables_are_not_asked_for() -> None:
+    """MyDeal 21c POST /orders/{id}/refund listed header SellerID / SellerToken: their default
+    is {{ auth?.oauth?.vars?.SellerID }}; the OAuth unit fills them."""
+
+    def header(name: str, default: str | None) -> Any:
+        return SimpleNamespace(
+            kind=FactKind.FIELD,
+            required=True,
+            location=FieldLocation.HEADER,
+            name=name,
+            constraints=f'{{"default": "{default}"}}' if default else None,
+        )
+
+    facts = [
+        header("Authorization", "Bearer {{ auth?.oauth?.token }}"),
+        header("SellerID", "{{ auth?.oauth?.vars?.SellerID }}"),
+        header("SellerToken", "{{ auth.oauth.vars.SellerToken }}"),
+        header("X-Request-Id", None),
+        header("Idempotency-Key", "{{ uuid }}"),
+    ]
+    stub: Any = SimpleNamespace(for_owner=lambda _b, _o: facts)
+    call = CheckCall(B, stub, B, None)
+    assert call._missing_required(B, "o", []) == (("header", ("Idempotency-Key", "X-Request-Id")),)
