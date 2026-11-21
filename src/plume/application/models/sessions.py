@@ -462,7 +462,10 @@ class ModelSessions:
         has_main = any(groups.get(k) for k in main) or any(
             d.kind is DocumentKind.ENDPOINT and d.path and _under(d.path, main) for d in summaries
         )
-        embedding = [] if has_main else self._embedding_docs(concept, build)
+        # only concepts that live inside other resources (a customer in the order); a part of a
+        # parent (a product image) is found under its parent by the fallback
+        embeds = any(m in EMBED_ROLES for m in main)
+        embedding = self._embedding_docs(concept, build) if embeds and not has_main else []
         if embedding:  # the models of those fields (bol billingdetails / shipmentdetails)
             roles = {r for m in main for r in EMBED_ROLES.get(m, ())} | set(role_keys(concept))
             keys = sorted({concept_key(r) for r in roles})
