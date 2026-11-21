@@ -142,3 +142,28 @@ def test_a_sub_resource_of_another_resource_is_not_the_concepts_own_read() -> No
     assert not _under_other_resource("/{version}/catalog/products/{product_id}", ("product",))
     assert not _under_other_resource("/api/{version}/orders/{id}", ("order",))
     assert not _under_other_resource("/admin/api/{version}/orders/{order_id}.json", ("order",))
+
+
+def test_an_api_without_the_concept_gets_the_models_that_embed_it() -> None:
+    """eBay Sell has no customer resource: its customer is the order's buyer and shipTo; the
+    context held policies and metrics. Reads embedding it (more role fields first) lead."""
+    from types import SimpleNamespace  # noqa: PLC0415
+
+    from plume.domain.knowledge.fact import FactKind  # noqa: PLC0415
+
+    def field(owner: str, name: str, type_: str | None = "object") -> Any:
+        return SimpleNamespace(owner_id=owner, name=name, type=type_, kind=FactKind.FIELD)
+
+    order, orders = "endpoint:GET~/order/{id}", "endpoint:GET~/order"
+    quote = "endpoint:POST~/shipping_quote"
+    found = {
+        "buyer": [field(order, "buyer"), field(orders, "orders[].buyer"), field(quote, "buyer")],
+        "shipto": [field(order, "fulfillment[].shippingStep.shipTo"), field(quote, "shipTo")],
+        "customer": [field("model:x", "customer", "string")],  # a scalar: not the concept
+    }
+    stub = SimpleNamespace(
+        _facts=SimpleNamespace(find=lambda b, n, kind=None: found.get(n.lower(), [])),
+        _index=SimpleNamespace(summaries=lambda b, ids: {i: _model(i) for i in ids}),
+    )
+    docs = sessions.ModelSessions._embedding_docs(stub, "Customer", None)  # type: ignore[arg-type]
+    assert [d.doc_id for d in docs] == [order, orders, quote]  # reads first, then the write
