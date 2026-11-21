@@ -50,3 +50,40 @@ for (const theme of THEMES) {
     });
   });
 }
+
+/**
+ * The same on a live package: Google Merchant (google-merchant-api-20261121b-extras, loaded as `google-merchant`),
+ * where productInputs:insert requires a dataSource query parameter and three body fields: PLUME_E2E_MERCHANT=true.
+ */
+const MERCHANT = process.env.PLUME_E2E_MERCHANT === 'true';
+const INSERT = '/products/v1/accounts/123/productInputs:insert';
+
+for (const theme of THEMES) {
+  test.describe(`missing required, Google Merchant (${theme})`, () => {
+    test.skip(!MERCHANT, 'needs google-merchant-api-20261121b-extras: PLUME_E2E_MERCHANT=true');
+    test.use({ theme, viewport: { width: 1280, height: 900 } });
+
+    test('query dataSource and the body fields are listed', async ({ page }) => {
+      await page.goto('/apis/google-merchant/try');
+      await page.getByRole('radio', { name: 'Check call' }).check({ force: true });
+      await page.getByLabel('HTTP method').selectOption('POST');
+      await page.getByLabel('Path').fill(INSERT);
+      await page.getByLabel('Parameters, comma separated').fill('');
+      await page.getByRole('button', { name: 'Check' }).click();
+      const missing = page.getByRole('group', { name: 'Required fields the call did not pass' });
+      await expect(missing).toContainText('dataSource');
+      for (const f of ['contentLanguage', 'feedLabel', 'offerId'])
+        await expect(missing).toContainText(f);
+      await expect(page.getByText('Documented', { exact: true })).toBeVisible();
+      await settle(page);
+      await expectNoSeriousA11y(page);
+      await shotOf(
+        page
+          .getByText('Documented', { exact: true })
+          .locator('xpath=ancestor::*[contains(@class,"card")][1]'),
+        'w50-real-merchant-missing-required',
+        theme,
+      );
+    });
+  });
+}
