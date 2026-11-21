@@ -48,7 +48,13 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from plume.domain.models.canonical_model import CanonicalField, Evidence, FieldSource, ModelDraft
+from plume.domain.models.canonical_model import (
+    CanonicalField,
+    Evidence,
+    FieldSource,
+    ModelDraft,
+    name_only,
+)
 
 _WS = re.compile(r"\s+")
 
@@ -259,7 +265,10 @@ def _quote_issue(
             listed = ", ".join(paths) or "the field"
             return Issue("NO_QUOTE_NOT_ALLOWED", path, api,
                          f"noQuote needs {e.doc_id} to list {listed}")  # fmt: skip
-        sentence = usable_sentence(own)
+        # a sentence that only restates the name is no usable one (the noQuote's own reason)
+        names = [*paths, e.doc_id.split(":", 1)[-1], path.rsplit(".", 1)[-1]]
+        own = [t for t in own if not name_only(t, names)]
+        sentence = usable_sentence(own) if own else None
         if sentence is not None:
             return Issue("NO_QUOTE_NOT_ALLOWED", path, api,
                          f"the field's own description has a usable sentence: quote it: "
