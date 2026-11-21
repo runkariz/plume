@@ -1123,6 +1123,10 @@ class ReportOut(Schema):
 
 class ReportList(Schema):
     reports: list[ReportOut]
+    enabled: bool = Field(
+        description="Whether readers can report questions on this server (PLUME_REPORTS). The "
+        "list and the status updates work either way."
+    )
 
 
 class ReportStatusUpdate(Schema):

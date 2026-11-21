@@ -20,8 +20,9 @@ def reports_router(reports: Callable[[], ReportedQuestions], tokens: tuple[str, 
     ) -> s.ReportList:
         """Reported questions, most reported first (readers' LLMs reported Plume could not
         answer them)."""
-        items = reports().list_reports(api, status)
-        return s.ReportList(reports=[s.ReportOut(**r) for r in items])
+        svc = reports()
+        items = svc.list_reports(api, status)
+        return s.ReportList(reports=[s.ReportOut(**r) for r in items], enabled=svc.enabled)
 
     @router.get("/v1/maintainer/reports/{report_id}", response_model=s.ReportOut)
     def get_report(report_id: str) -> s.ReportOut:
