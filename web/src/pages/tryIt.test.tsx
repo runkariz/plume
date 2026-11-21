@@ -437,3 +437,72 @@ describe('a call that carried the base path of a server', () => {
     expect(screen.queryByText(/via server/)).not.toBeInTheDocument();
   });
 });
+
+describe('a documented call that leaves out required parameters', () => {
+  async function checkInsert() {
+    renderApp('/apis/shopify/try');
+    await userEvent.click(screen.getByRole('radio', { name: 'Check call' }));
+    await userEvent.selectOptions(screen.getByLabelText('HTTP method'), 'POST');
+    const p = screen.getByLabelText('Path');
+    await userEvent.clear(p);
+    await userEvent.type(p, '/products/v1/productInputs:insert');
+    const params = screen.getByLabelText('Parameters, comma separated');
+    await userEvent.clear(params);
+    await userEvent.click(screen.getByRole('button', { name: 'Check' }));
+    await screen.findByText('Documented');
+  }
+
+  it('lists them by place, query first, and keeps the verdict "Documented"', async () => {
+    await checkInsert();
+    const group = screen.getByRole('group', { name: 'Required fields the call did not pass' });
+    expect(group).toHaveTextContent('Required, but not passed');
+    const rows = within(group).getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('query');
+    expect(rows[0]).toHaveTextContent('dataSource');
+    expect(rows[1]).toHaveTextContent('body');
+    expect(
+      within(rows[1] as HTMLElement).getAllByText(/contentLanguage|feedLabel|offerId/),
+    ).toHaveLength(3);
+    // the server's note is there too
+    expect(screen.getByRole('note')).toHaveTextContent(
+      'documented, but these required fields are missing',
+    );
+    expect(screen.queryByText(/Not documented in build/)).not.toBeInTheDocument();
+  });
+
+  it('shows nothing when none is missing, an empty object, or an older server', async () => {
+    renderApp('/apis/shopify/try');
+    await userEvent.click(screen.getByRole('radio', { name: 'Check call' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Check' }));
+    await screen.findByText('Documented');
+    expect(
+      screen.queryByRole('group', { name: 'Required fields the call did not pass' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('an empty place is not listed, and an unknown place follows the known ones', async () => {
+    server.use(
+      http.post(`${TEST_API_BASE}/v1/apis/:id/check-call`, () =>
+        HttpResponse.json({
+          api: 'shopify',
+          build: 'b',
+          verdict: 'documented',
+          complete: true,
+          matched: { id: 'endpoint:GET~/x', method: 'GET', path: '/x' },
+          paramChecks: [],
+          checked: { endpoints: 1, models: 1 },
+          missingRequired: { cookie: ['sid'], header: [], body: ['a'] },
+        }),
+      ),
+    );
+    renderApp('/apis/shopify/try');
+    await userEvent.click(screen.getByRole('radio', { name: 'Check call' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Check' }));
+    const group = await screen.findByRole('group', {
+      name: 'Required fields the call did not pass',
+    });
+    const rows = within(group).getAllByRole('listitem');
+    expect(rows.map((r) => r.textContent)).toEqual(['bodya', 'cookiesid']);
+  });
+});

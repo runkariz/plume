@@ -3171,3 +3171,22 @@ ul.plain {
     justify-content: flex-start;
   }
 }
+
+.missing-required {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--warn);
+  background: var(--warn-soft);
+  border-radius: 6px;
+}
+.missing-required p {
+  margin: 0 0 6px;
+}
+.missing-required ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.missing-place {
+  min-width: 48px;
+}

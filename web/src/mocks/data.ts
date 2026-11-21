@@ -463,6 +463,26 @@ const SYNC_OPERATIONS = [
 ];
 
 export function sampleCheck(method: string, path: string, params: string[]): CheckCallResponse {
+  // a documented call that leaves out required parameters (Google Merchant style): the verdict stays documented
+  if (method === 'POST' && path === '/products/v1/productInputs:insert')
+    return {
+      api: 'shopify',
+      build: '2026-11-14',
+      verdict: 'documented',
+      complete: true,
+      matched: {
+        id: 'endpoint:POST~/productInputs:insert',
+        method: 'POST',
+        path: '/productInputs:insert',
+      },
+      paramChecks: params.map((name) => ({ name, found: false, where: null })),
+      checked: { endpoints: 137, models: 31 },
+      missingRequired: {
+        body: ['contentLanguage', 'feedLabel', 'offerId'],
+        query: ['dataSource'],
+      },
+      note: 'documented, but these required fields are missing: query: dataSource; body: contentLanguage, feedLabel, offerId',
+    };
   // a call whose path carries the base path of a declared server: matched with the server named
   if (method === 'POST' && path === '/commerce/media/v1_beta/video')
     return {

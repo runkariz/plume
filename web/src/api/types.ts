@@ -265,6 +265,11 @@ export interface CheckCallResponse {
   note?: string | null;
   /** ambiguous: the parameter whose value picks an operation, and every value with its operation; null otherwise. */
   pick?: CallPick | null;
+  /**
+   * The documented required parameters the call did not pass, by place ("query", "body", "header"): only places with
+   * something missing, {} when nothing is. The verdict does not change. Absent on older servers.
+   */
+  missingRequired?: Record<string, string[]>;
 }
 
 export interface CallPick {
