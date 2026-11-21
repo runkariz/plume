@@ -20,6 +20,10 @@ import {
   type ModelJob,
   type ReleaseNotes,
   type ApiDisplayName,
+  type Report,
+  type ReportList,
+  type ReportQuery,
+  type ReportStatus,
   type ReleaseSummary,
   type ChangesPage,
   type ChangesQuery,
@@ -255,6 +259,16 @@ export interface PlumeApi {
   /** The notes of every build of an API that has some, newest first, with the review state and counts. */
   listReleaseNotes(api: string, signal?: AbortSignal): Promise<ReleaseSummary[]>;
   getReleaseNotes(api: string, build: string, signal?: AbortSignal): Promise<ReleaseNotes>;
+  /** Reported questions, most reported first (maintainer). `enabled` says whether readers can report on this server. */
+  listReports(q: ReportQuery, signal?: AbortSignal): Promise<ReportList>;
+  getReport(id: string, signal?: AbortSignal): Promise<Report>;
+  /** Triage: the status, with a reason (at most 1,000 characters; the reasons of answered and out-of-scope are public). */
+  setReportStatus(
+    id: string,
+    status: ReportStatus,
+    reason: string | null,
+    signal?: AbortSignal,
+  ): Promise<Report>;
   /** More of one report group (the notes carry only its first 50), `limit` at most 200. */
   getReportPage(
     api: string,
@@ -387,7 +401,7 @@ export function createApiClient(
   async function raw(
     path: string,
     init: {
-      method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+      method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
       body?: unknown;
       form?: FormData;
       signal?: AbortSignal;
@@ -733,6 +747,23 @@ export function createApiClient(
       });
       return r.items ?? [];
     },
+    listReports: async (q, signal) => {
+      const p = new URLSearchParams();
+      if (q.api) p.set('api', q.api);
+      if (q.status) p.set('status', q.status);
+      const qs = p.toString();
+      const r = await call<Partial<ReportList>>(`/v1/maintainer/reports${qs ? `?${qs}` : ''}`, {
+        signal,
+      });
+      return { reports: r.reports ?? [], enabled: r.enabled };
+    },
+    getReport: (id, signal) => call<Report>(`/v1/maintainer/reports/${enc(id)}`, { signal }),
+    setReportStatus: (id, status, reason, signal) =>
+      call<Report>(`/v1/maintainer/reports/${enc(id)}`, {
+        method: 'PATCH',
+        body: reason ? { status, reason } : { status },
+        signal,
+      }),
     getReleaseNotes: (api, build, signal) =>
       call<ReleaseNotes>(`/v1/apis/${enc(api)}/builds/${enc(build)}/release-notes`, { signal }),
     getReportPage: (api, build, rule, cursor, limit = 50, signal) =>
