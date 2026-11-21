@@ -567,6 +567,7 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 if r.pick_param
                 else None
             ),
+            missing_required={where: list(names) for where, names in r.missing_required},
         )
 
     @app.post(

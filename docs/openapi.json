@@ -1438,6 +1438,17 @@
               }
             ]
           },
+          "missingRequired": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "description": "Required parameters the endpoint documents that the call did not pass, per place (query, body, header). A nested field is listed only when its parent was passed. Extra information: the verdict does not change.",
+            "title": "Missingrequired",
+            "type": "object"
+          },
           "note": {
             "anyOf": [
               {
