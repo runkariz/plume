@@ -1,5 +1,6 @@
 """Reader use cases. Retrieval only: Claude writes the answers, Plume returns cited material."""
 
+import json
 import re
 import time
 from collections.abc import Callable, Sequence
@@ -1211,6 +1212,19 @@ _AUTH_HEADER = re.compile(  # fallback when the auth schemes name no header
 )
 
 
+_AUTH_TEMPLATE = re.compile(r"\{\{[^}]*\bauth\??\.", re.IGNORECASE)
+
+
+def _auth_default(f: Fact) -> bool:
+    """A header whose default is a template over the auth connection's variables (MyDeal
+    SellerID: "{{ auth?.oauth?.vars?.SellerID }}"): auth fills it, like an auth header."""
+    try:
+        default = json.loads(f.constraints or "{}").get("default")
+    except (ValueError, AttributeError):
+        return False
+    return isinstance(default, str) and bool(_AUTH_TEMPLATE.search(default))
+
+
 class CheckCall:
     """Is ``METHOD /path`` with these params documented? Matches templates like ``{id}``."""
 
@@ -1357,7 +1371,7 @@ class CheckCall:
             if f.kind is not FactKind.FIELD or not f.required or f.location not in _ASKED:
                 continue
             if f.location is FieldLocation.HEADER and (
-                f.name.lower() in auth or _AUTH_HEADER.search(f.name)
+                f.name.lower() in auth or _AUTH_HEADER.search(f.name) or _auth_default(f)
             ):
                 continue
             key = _param_key(f.name)
