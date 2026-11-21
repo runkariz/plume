@@ -1,5 +1,6 @@
 """Wires ports to adapters from the settings. Tests build their own container with fakes."""
 
+import secrets
 import uuid
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -32,6 +33,7 @@ from plume.application.models.relations import SuggestRelated
 from plume.application.models.sessions import ModelSessions
 from plume.application.ports.embedder import Embedder
 from plume.application.ports.job_events import JobEvents
+from plume.application.querylog.recorder import ExportQueryLog, PurgeQueryLog, QueryRecorder
 from plume.application.reader.resolve import BuildResolver
 from plume.application.reader.sections import PackageSections
 from plume.application.reader.use_cases import (
@@ -45,6 +47,7 @@ from plume.application.reader.use_cases import (
 from plume.application.system.migrate_schema import MigrateSchema
 from plume.domain.eval.gate import GatePolicy
 from plume.domain.models.model_eval import ModelGatePolicy
+from plume.domain.querylog.redact import RedactionPolicy
 from plume.infrastructure.clock import SystemClock
 from plume.infrastructure.db.alembic_migrator import AlembicMigrator
 from plume.infrastructure.db.archive import PostgresBuildImporter
@@ -58,6 +61,7 @@ from plume.infrastructure.db.repos.document_repo import PostgresDocumentRepo
 from plume.infrastructure.db.repos.eval_repo import PostgresEvalRepo
 from plume.infrastructure.db.repos.model_repo import PostgresModelJobRepo, PostgresModelRepo
 from plume.infrastructure.db.repos.model_set_repo import PostgresModelSetRepo
+from plume.infrastructure.db.repos.query_log_repo import PostgresQueryLogRepo
 from plume.infrastructure.db.repos.release_notes_repo import PostgresReleaseNotesRepo
 from plume.infrastructure.db.repos.tag_repo import PostgresTagRepo
 from plume.infrastructure.dumps.local_fs import LocalDumpStore
@@ -92,6 +96,34 @@ class Container:
     @cached_property
     def clock(self) -> SystemClock:
         return SystemClock()
+
+    @cached_property
+    def query_log_repo(self) -> PostgresQueryLogRepo:
+        return PostgresQueryLogRepo(self.engine)
+
+    @cached_property
+    def query_recorder(self) -> QueryRecorder:
+        s = self.settings
+        salt = s.query_log_salt.get_secret_value().encode() if s.query_log_salt else None
+        return QueryRecorder(
+            self.query_log_repo,
+            self.clock,
+            enabled=s.query_log,
+            salt=salt or secrets.token_bytes(32),
+            policy=RedactionPolicy(
+                keep_error_codes=s.query_log_keep_error_codes,
+                keep_rpc_method=s.query_log_keep_rpc_method,
+            ),
+            retention_days=s.query_log_retention_days,
+        )
+
+    def purge_query_log(self) -> PurgeQueryLog:
+        return PurgeQueryLog(
+            self.query_log_repo, self.clock, self.settings.query_log_retention_days
+        )
+
+    def export_query_log(self) -> ExportQueryLog:
+        return ExportQueryLog(self.query_log_repo)
 
     @cached_property
     def apis(self) -> PostgresApiRepo:

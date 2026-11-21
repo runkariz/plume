@@ -99,6 +99,28 @@ class Settings(BaseSettings):
         default=None,
         description="The web UI's public base URL; model share links are <this>/models/{id}.",
     )
+    query_log: bool = Field(
+        default=False,
+        description="PLUME_QUERY_LOG=on records every reader call (MCP and HTTP), redacted, in "
+        "query_events for search tuning; off by default (on in dev, prod only after the owner's "
+        "go and a privacy notice).",
+    )
+    query_log_retention_days: int = Field(default=90, ge=1, le=3650)
+    query_log_salt: SecretStr | None = Field(
+        default=None,
+        description="Key for the session-id hash; unset = random per process (sessions do not "
+        "link across restarts). Never logged.",
+    )
+    query_log_keep_error_codes: bool = Field(
+        default=False,
+        description="Keep 7-8 digit runs right after 'error' / 'code' / 'errorCode' in logged "
+        "questions (default: redacted like any long digit run).",
+    )
+    query_log_keep_rpc_method: bool = Field(
+        default=False,
+        description="Keep the value of the RPC selector `method` in logged check_call "
+        "parameters (default: parameter names only).",
+    )
     embed_model: str = "gemini-embedding-001"
     embed_prompt: Literal["none", "gemini"] = Field(
         default="none",
