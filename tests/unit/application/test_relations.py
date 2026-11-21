@@ -1,6 +1,5 @@
 """Relation candidates come only from documented evidence (docs/design/model-relations.md §2)."""
 
-import os
 from pathlib import Path
 
 import pytest
@@ -10,6 +9,7 @@ from plume.domain.models.validation import quote_in
 from plume.domain.shared.ids import BuildId
 from tests.fakes.knowledge import WordEmbedder
 from tests.fakes.stack import FakeStack
+from tests.real_packages import real_packages
 
 
 def _doc_text(d: Document) -> str:
@@ -59,9 +59,9 @@ def test_unknown_concept_and_paging(stack: FakeStack) -> None:
 
 # -- the real 1.2 renders (opt-in, like the suggest-v2 tests) -----------------------------------
 
-PATHS = [p for p in os.environ.get("PLUME_SUGGEST_PACKAGES", "").split(":") if p]
+PATHS = [str(p) for p in real_packages("suggest")]
 real = pytest.mark.skipif(
-    len(PATHS) != 3, reason="set PLUME_SUGGEST_PACKAGES=<shopify>:<woocommerce>:<mirakl>"
+    len(PATHS) != 3, reason="the pinned suggest packages (tests/real_packages.toml) are not there"
 )
 APIS = ["shopify", "woocommerce", "mirakl"]
 

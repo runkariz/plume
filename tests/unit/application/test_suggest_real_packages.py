@@ -1,19 +1,18 @@
 """Concept suggestions on the real Shopify / WooCommerce / Mirakl packages.
 
-Runs when PLUME_SUGGEST_PACKAGES lists the three package folders (colon-separated, in that
-order), e.g. the 1.2 renders; skipped otherwise (the packages are not in the repository).
+Runs on the pinned packages of tests/real_packages.toml (or PLUME_SUGGEST_PACKAGES: the three
+folders, os.pathsep-separated, in that order); skipped when they are not there.
 """
-
-import os
 
 import pytest
 
 from plume.application.models.concepts import SuggestFilter
 from tests.fakes.stack import FakeStack
+from tests.real_packages import real_packages
 
-PATHS = [p for p in os.environ.get("PLUME_SUGGEST_PACKAGES", "").split(":") if p]
+PATHS = [str(p) for p in real_packages("suggest")]
 pytestmark = pytest.mark.skipif(
-    len(PATHS) != 3, reason="set PLUME_SUGGEST_PACKAGES=<shopify>:<woocommerce>:<mirakl>"
+    len(PATHS) != 3, reason="the pinned suggest packages (tests/real_packages.toml) are not there"
 )
 APIS = ["shopify", "woocommerce", "mirakl"]
 

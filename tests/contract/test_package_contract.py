@@ -1,21 +1,22 @@
 """The input-package contract Plume reads (connector/package.json schemaVersion 1.x).
 
-Runs over the fixture packages, plus any package directories listed in
-PLUME_CONTRACT_PACKAGES (os.pathsep-separated), e.g. a new stream output to check before use.
+Runs over the fixture packages, plus the pinned real packages of tests/real_packages.toml (or
+the directories in PLUME_CONTRACT_PACKAGES, os.pathsep-separated, e.g. a new stream output to
+check before use).
 See docs/package-contract.md for what is read and what is ignored.
 """
 
 import json
-import os
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from plume.infrastructure.sources.stream_package import StreamPackageSource
+from tests.real_packages import real_packages
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "packages"
-EXTRA = [Path(p) for p in os.environ.get("PLUME_CONTRACT_PACKAGES", "").split(os.pathsep) if p]
+EXTRA = real_packages("contract")
 PACKAGES = sorted(p for p in FIXTURES.iterdir() if p.is_dir()) + EXTRA
 
 OPTIONAL_TYPES: dict[str, type | tuple[type, ...]] = {
