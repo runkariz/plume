@@ -24,6 +24,7 @@ from plume.application.models.concepts import (
     concept_parts,
     last_literal,
     resolve_apis,
+    role_keys,
 )
 from plume.application.models.oracle import PinnedLookups
 from plume.application.ports.document_repo import DocumentRepo
@@ -35,6 +36,7 @@ from plume.domain.knowledge.document import (
     DocumentKind,
     FieldLocation,
 )
+from plume.domain.knowledge.fact import FactKind
 from plume.domain.models.canonical_model import DraftFormatError, ModelDraft, parse_draft
 from plume.domain.models.release import GateFailure
 from plume.domain.models.snapshot import (
@@ -460,10 +462,16 @@ class ModelSessions:
         has_main = any(groups.get(k) for k in main) or any(
             d.kind is DocumentKind.ENDPOINT and d.path and _under(d.path, main) for d in summaries
         )
+        embedding = [] if has_main else self._embedding_docs(concept, build)
+        if embedding:  # the models of those fields (bol billingdetails / shipmentdetails)
+            roles = {r for m in main for r in EMBED_ROLES.get(m, ())} | set(role_keys(concept))
+            keys = sorted({concept_key(r) for r in roles})
+            embedding += [d for r in keys for d in groups.get(r, [])
+                          if d.kind is DocumentKind.MODEL]  # fmt: skip
         if not has_main and picked:  # only sub-concepts or children matched: the main first
             own = self._fallback_docs(concept, main, groups, build, max_docs)
             rest = [d for d in picked.values() if d.doc_id not in {o.doc_id for o in own}]
-            return [*own, *rest][:max_docs]
+            return _first(embedding, [*own, *rest], max_docs)
         docs = list(picked.values())
         if docs:
             ranks = self._tiers(build, docs, main, children)
@@ -479,8 +487,31 @@ class ModelSessions:
                     build, [h.doc_id for h in hits if h.doc_id not in have]
                 )
                 docs += list(extra.values())
-            return docs[:max_docs]
-        return self._fallback_docs(concept, main, groups, build, max_docs)
+            return _first(embedding, docs, max_docs)
+        return _first(
+            embedding, self._fallback_docs(concept, main, groups, build, max_docs), max_docs
+        )
+
+    def _embedding_docs(self, concept: str, build: BuildId) -> list[DocumentSummary]:
+        """The API has no document of its own for the concept: the models and reads that embed
+        it in a field named like it or a role of it (eBay Sell's customer is the order's
+        buyer and its shipTo), best first: reads before writes, more such fields, shallower."""
+        main, _ = concept_parts(concept)
+        names = {*role_keys(concept), *(r for m in main for r in EMBED_ROLES.get(m, ()))}
+        score: dict[str, list[int]] = {}
+        for name in sorted(names):
+            for f in self._facts.find(build, name, kind=FactKind.FIELD):
+                if (f.type or "object").lower() not in ("object", "array"):
+                    continue
+                depth = f.name.replace("[]", "").count(".")
+                s = score.setdefault(f.owner_id, [0, 99])
+                s[0] -= 1  # more role fields first
+                s[1] = min(s[1], depth)
+        if not score:
+            return []
+        owners = sorted(score, key=lambda o: (_write(o), score[o][0], score[o][1], o))
+        found = self._index.summaries(build, owners[:MAX_EMBEDDING_DOCS])
+        return [found[o] for o in owners[:MAX_EMBEDDING_DOCS] if o in found]
 
     def _fallback_docs(
         self,
@@ -1081,3 +1112,34 @@ def _concept_group(s: ModelSnapshot) -> tuple[str, frozenset[str]]:
 
 def _visible(maintainer: bool) -> tuple[str, ...]:
     return Visibility.ALL if maintainer else Visibility.PUBLIC
+
+
+# Field names a concept goes by when another resource embeds it (no document of its own).
+EMBED_ROLES: dict[str, tuple[str, ...]] = {
+    "customer": (
+        "buyer",
+        "purchaser",
+        "client",
+        "recipient",
+        "billing",
+        "billingdetails",
+        "shipmentdetails",
+        "shipto",
+        "customerdetails",
+    ),
+    "address": ("shipto", "billto", "shippingaddress", "billingaddress"),
+}
+MAX_EMBEDDING_DOCS = 8
+
+
+def _write(doc_id: str) -> bool:
+    """A write operation (reads and models first)."""
+    return doc_id.startswith(("endpoint:POST", "endpoint:PUT", "endpoint:PATCH", "endpoint:DELETE"))
+
+
+def _first(
+    lead: list[DocumentSummary], rest: list[DocumentSummary], limit: int
+) -> list[DocumentSummary]:
+    """``lead`` then ``rest`` without repeats, at most ``limit``."""
+    seen = {d.doc_id for d in lead}
+    return [*lead, *(d for d in rest if d.doc_id not in seen)][:limit]
