@@ -99,27 +99,37 @@ class Settings(BaseSettings):
         default=None,
         description="The web UI's public base URL; model share links are <this>/models/{id}.",
     )
-    query_log: bool = Field(
+    reports: bool = Field(
         default=False,
-        description="PLUME_QUERY_LOG=on records every reader call (MCP and HTTP), redacted, in "
-        "query_events for search tuning; off by default (on in dev, prod only after the owner's "
-        "go and a privacy notice).",
+        description="PLUME_REPORTS=on gives readers' LLMs the tools to report questions Plume "
+        "could not answer (find_reported_questions, report_question, add_to_report). Off by "
+        "default: on in dev; in prod only after the owner's go and a privacy notice.",
     )
-    query_log_retention_days: int = Field(default=90, ge=1, le=3650)
-    query_log_salt: SecretStr | None = Field(
+    reports_retention_days: int = Field(
+        default=90, ge=1, le=3650, description="Open reports untouched this long are purged."
+    )
+    reports_per_hour: int = Field(
+        default=10, ge=1, le=1000, description="Reports and notes per session per hour."
+    )
+    reports_duplicate_similarity: float = Field(
+        default=0.92,
+        ge=0.5,
+        le=1.0,
+        description="A new report this similar (cosine) to an existing one becomes a note on it.",
+    )
+    reports_salt: SecretStr | None = Field(
         default=None,
         description="Key for the session-id hash; unset = random per process (sessions do not "
         "link across restarts). Never logged.",
     )
-    query_log_keep_error_codes: bool = Field(
-        default=False,
-        description="Keep 7-8 digit runs right after 'error' / 'code' / 'errorCode' in logged "
-        "questions (default: redacted like any long digit run).",
+    reports_keep_error_codes: bool = Field(
+        default=True,
+        description="Keep 7-8 digit runs right after 'error' / 'code' / 'errorCode' in reports "
+        "(the owner's choice); off = redacted like any long digit run.",
     )
-    query_log_keep_rpc_method: bool = Field(
-        default=False,
-        description="Keep the value of the RPC selector `method` in logged check_call "
-        "parameters (default: parameter names only).",
+    reports_keep_rpc_method: bool = Field(
+        default=True,
+        description="Keep the value of an RPC selector `method=...` (the owner's choice).",
     )
     embed_model: str = "gemini-embedding-001"
     embed_prompt: Literal["none", "gemini"] = Field(

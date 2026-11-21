@@ -1,9 +1,11 @@
-"""Redaction of reader questions before they are logged (the raw text is never stored).
+"""Redaction of reported questions and notes before they are stored (the raw text never is).
 
 Rules, in order, each replacing the match with a fixed marker:
 1. URLs keep scheme, host and path; a query string or fragment becomes "?[query]".
 2. Credentials after Bearer / Basic / Token -> [token]; JWTs and known key prefixes -> [secret].
-3. The value of a secret-looking key (token=..., password: ...) -> [secret]; the key stays.
+3. The value of a secret-looking key -> [secret], the key stays: after "=" always; after ":" or
+   a space only when the value looks secret (6+ characters with a digit or symbol), so prose
+   such as "access token: how do I ..." stays.
 4. Emails -> [email]; IBAN-like account numbers -> [account]; IPv4 / IPv6 -> [ip].
 5. Any 24+ character run of key characters mixing letters and digits -> [secret].
 6. Phone / card-like digit groups (9+ digits with spaces or dashes) and plain runs of 9+ digits
@@ -77,7 +79,7 @@ def redact_text(text: str | None, policy: RedactionPolicy = STRICT) -> tuple[str
     s = _AUTH.sub(lambda m: f"{m.group(1)} [token]", s)
     s = _JWT.sub("[secret]", s)
     s = _PREFIXED.sub("[secret]", s)
-    s = _KEY_VALUE.sub(lambda m: f"{m.group(1)}{m.group(2)}[secret]", s)
+    s = _KEY_VALUE.sub(_key_value, s)
     s = _EMAIL.sub("[email]", s)
     s = _IBAN.sub("[account]", s)
     s = _IPV6.sub("[ip]", s)
@@ -95,6 +97,16 @@ def redact_text(text: str | None, policy: RedactionPolicy = STRICT) -> tuple[str
     s = _DIGITS.sub(digits, s)
     count = sum(s.count(mark) for mark in _MARKERS) - sum(text.count(mark) for mark in _MARKERS)
     return s[:MAX_TEXT], max(count, 0)
+
+
+def _key_value(m: re.Match[str]) -> str:
+    """key=value (code-like) always; key: value only when the value looks like a secret (has
+    a digit or symbol), so prose like "access token: how do I ..." stays."""
+    value = m.group(3).strip("\"'")
+    secretish = len(value) >= 6 and bool(re.search(r"[\d_./+=-]", value))
+    if "=" in m.group(2) or secretish:
+        return f"{m.group(1)}{m.group(2)}[secret]"
+    return m.group(0)
 
 
 def _grouped(m: re.Match[str]) -> str:

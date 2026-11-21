@@ -36,6 +36,7 @@ from plume.application.reader.use_cases import (
     ListApiOverviews,
     SearchDocs,
 )
+from plume.application.reports.service import ReportedQuestions
 from plume.domain.knowledge.api import ApiId
 from plume.domain.knowledge.package_warnings import AUTH, ENVIRONMENTS
 from plume.domain.shared.errors import DomainError
@@ -45,6 +46,8 @@ from plume.interfaces.mcp.apps.model_view import (
     model_view_html,
 )
 from plume.interfaces.mcp.model_tools import register_model_tools
+from plume.interfaces.mcp.report_tools import HINT as REPORT_HINT
+from plume.interfaces.mcp.report_tools import REPORTS_RULE, register_report_tools
 from plume.interfaces.mcp.set_tools import register_set_tools
 
 INSTRUCTIONS = """\
@@ -97,6 +100,7 @@ class McpReaderDependencies:
     public_changes: Callable[[], PublicChanges] | None = None
     model_impact: Callable[[], ModelImpact] | None = None
     mcp_app_html: str | None = None  # the model view bundle; None = the packaged file
+    reports: Callable[[], ReportedQuestions] | None = None  # set when PLUME_REPORTS is on
 
 
 logger = logging.getLogger(__name__)
@@ -130,13 +134,21 @@ def _forbid_unknown_arguments(server: MCPServer, name: str) -> None:
 
 
 def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
+    reporting = deps.reports is not None
     server = MCPServer(
         name="plume",
         title="Plume API docs",
-        instructions=INSTRUCTIONS,
+        instructions=INSTRUCTIONS + (REPORTS_RULE if reporting else ""),
         version=__version__,
         extensions=[model_view_apps(deps.mcp_app_html or model_view_html())],
     )
+
+    def _hint(out: dict[str, Any], missed: bool) -> dict[str, Any]:
+        """A one-line hint on an empty / not-documented answer, when reporting is on."""
+        return {**out, "report_hint": REPORT_HINT} if reporting and missed else out
+
+    if deps.reports is not None:
+        register_report_tools(server, deps.reports, _run)
 
     @server.tool(annotations=READ_ONLY, structured_output=True)
     async def list_apis() -> dict[str, Any]:
@@ -166,11 +178,14 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
         """Search one API's documentation (hybrid semantic + full text). Use it FIRST for any
         question about an API Plume indexes; then read the hits you use with get_document and
         answer only from them."""
-        return await _run(
-            lambda: payloads.search_payload(
+
+        def run() -> dict[str, Any]:
+            out = payloads.search_payload(
                 deps.search().execute(api, query, "hybrid", kind, top_k, version)
             )
-        )
+            return _hint(out, not out.get("results"))
+
+        return await _run(run)
 
     @server.tool(annotations=READ_ONLY, structured_output=True)
     async def get_document(
@@ -204,8 +219,9 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
         """Exact lookup: is this endpoint ("GET /orders"), field ("sku", "line_items[].sku") or
         scope ("read_orders") documented? Returns evidence, or what was checked and whether the
         sources were complete (absence is only proven when complete=true)."""
-        return await _run(
-            lambda: payloads.find_fact_payload(
+
+        def run() -> dict[str, Any]:
+            out = payloads.find_fact_payload(
                 deps.find_fact().execute(
                     api,
                     name,
@@ -216,7 +232,9 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
                     version=version,
                 )
             )
-        )
+            return _hint(out, out.get("found") is False)
+
+        return await _run(run)
 
     @server.tool(annotations=READ_ONLY, structured_output=True)
     async def check_call(
@@ -236,13 +254,16 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
         "name=value" also gives a value: where several operations share METHOD + path and a
         fixed parameter picks one (AliExpress POST /sync with method=...), pass it; without
         it the verdict is "ambiguous" and the note says what to pass."""
-        return await _run(
-            lambda: payloads.check_call_payload(
+
+        def run() -> dict[str, Any]:
+            out = payloads.check_call_payload(
                 deps.check_call().execute(
                     api, method, path, params or [], version, query or [], body or []
                 )
             )
-        )
+            return _hint(out, out.get("verdict") == "not_documented")
+
+        return await _run(run)
 
     _forbid_unknown_arguments(server, "check_call")  # `body` / `query` used to vanish silently
 

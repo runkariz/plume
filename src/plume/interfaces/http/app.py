@@ -45,6 +45,7 @@ from plume.application.reader.use_cases import (
     ReaderInputError,
     SearchDocs,
 )
+from plume.application.reports.service import ReportedQuestions, ReportRefusedError
 from plume.domain.eval.metrics import few_questions_note
 from plume.domain.knowledge import rate_limits
 from plume.domain.knowledge.api import ApiId
@@ -63,6 +64,7 @@ from plume.interfaces.http.rate_limit import (
     SecurityHeadersMiddleware,
 )
 from plume.interfaces.http.release_notes_routes import release_notes_router
+from plume.interfaces.http.reports_routes import reports_router
 from plume.interfaces.http.sections_routes import sections_router
 
 ApiPath = Annotated[str, Path(description="API id, e.g. shopify")]
@@ -102,6 +104,7 @@ class HttpDependencies:
     remove_api: Callable[[], RemoveApi] | None = None
     model_impact: Callable[[], ModelImpact] | None = None
     model_evaluation: Callable[[], ModelEvaluation] | None = None
+    reports: Callable[[], ReportedQuestions] | None = None
 
 
 MAX_RAW_BYTES = 256 * 1024
@@ -204,6 +207,10 @@ def create_app(deps: HttpDependencies) -> FastAPI:
     @app.exception_handler(ReaderInputError)
     async def bad_input(_: Request, exc: ReaderInputError) -> JSONResponse:
         return error(400, exc.code, str(exc))
+
+    @app.exception_handler(ReportRefusedError)
+    async def report_refused(_: Request, exc: ReportRefusedError) -> JSONResponse:
+        return error(400, "report_refused", str(exc))
 
     @app.exception_handler(SourcePackageError)
     async def bad_package(_: Request, exc: SourcePackageError) -> JSONResponse:
@@ -705,6 +712,8 @@ def create_app(deps: HttpDependencies) -> FastAPI:
         )
     if deps.release_notes is not None:
         app.include_router(release_notes_router(deps.release_notes, deps.maintainer_tokens))
+    if deps.reports is not None:
+        app.include_router(reports_router(deps.reports, deps.maintainer_tokens))
     if deps.api_display is not None:
         app.include_router(
             api_display_router(deps.api_display, deps.maintainer_tokens, deps.remove_api)

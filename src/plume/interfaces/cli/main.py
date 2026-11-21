@@ -4,6 +4,7 @@ import json
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -23,6 +24,7 @@ from plume.application.models.model_eval import ModelEvaluation
 from plume.application.ports.eval_repo import GoldSource
 from plume.application.ports.job_events import JobEvents
 from plume.application.reader.resolve import BuildResolver
+from plume.application.reports.service import ReportedQuestions
 from plume.application.system.migrate_schema import MigrateSchema
 from plume.domain.knowledge.api import ApiId
 from plume.domain.shared.errors import DomainError
@@ -61,6 +63,7 @@ class CliDependencies:
     model_evaluation: Callable[[], ModelEvaluation] | None = None
     # (tester markdown text, group, held out) -> a plume.model-gold.v1 document
     import_model_gold: Callable[[str, str | None, bool], dict[str, Any]] | None = None
+    reports: Callable[[], ReportedQuestions] | None = None
 
 
 def _gold_cells(fields: list[dict[str, Any]]) -> dict[str, int]:
@@ -583,5 +586,61 @@ def create_app(deps: CliDependencies) -> typer.Typer:
             typer.echo(f"wrote {out}")
         else:
             typer.echo(doc, nl=False)
+
+    reports_app = typer.Typer(
+        help="Reported questions (what readers' LLMs reported Plume could not answer).",
+        no_args_is_help=True,
+    )
+    app.add_typer(reports_app, name="reports")
+
+    @reports_app.command("export")
+    def reports_export(
+        api: Annotated[str | None, typer.Option(help="Only this API")] = None,
+        status: Annotated[str | None, typer.Option(help="open, answered, search-miss, …")] = None,
+        since: Annotated[
+            str | None, typer.Option(help="Updated on or after this date (YYYY-MM-DD)")
+        ] = None,
+        notes: Annotated[bool, typer.Option(help="Include each report's notes")] = True,
+        out: Annotated[Path | None, typer.Option(help="Write JSON lines here")] = None,
+    ) -> None:
+        """Reported questions as JSON lines, most reported first (maintainers)."""
+        try:
+            svc = _need(deps.reports, "reports")
+            after = datetime.fromisoformat(since).replace(tzinfo=UTC) if since else None
+            rows = [svc.get(r["id"]) if notes else r for r in svc.list_reports(api, status, after)]
+        except (ApplicationError, DomainError, ValueError) as exc:
+            raise fail(exc) from exc
+        text = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
+        if out is not None:
+            out.write_text(text, encoding="utf-8")
+            typer.echo(f"wrote {len(rows)} report(s) to {out}")
+        else:
+            typer.echo(text, nl=False)
+
+    @reports_app.command("set-status")
+    def reports_set_status(
+        report_id: Annotated[str, typer.Argument(help="rq-…")],
+        status: Annotated[str, typer.Argument(help="answered, search-miss, package-gap, …")],
+        reason: Annotated[str | None, typer.Option(help="A short reason")] = None,
+    ) -> None:
+        """Label a reported question (maintainers)."""
+        try:
+            r = _need(deps.reports, "reports").set_status(report_id, status, reason)
+        except (ApplicationError, DomainError) as exc:
+            raise fail(exc) from exc
+        typer.echo(f"{r['id']}: {r['status']}" + (f" ({r['reason']})" if r["reason"] else ""))
+
+    @reports_app.command("purge")
+    def reports_purge(
+        older_than: Annotated[
+            int | None, typer.Option(help="Days without activity (default: the retention)")
+        ] = None,
+    ) -> None:
+        """Delete open reports untouched for the retention period (triaged ones stay)."""
+        try:
+            n = _need(deps.reports, "reports").purge(older_than)
+        except (ApplicationError, DomainError) as exc:
+            raise fail(exc) from exc
+        typer.echo(f"purged {n} open report(s)")
 
     return app
