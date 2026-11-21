@@ -159,3 +159,10 @@ def test_a_quote_that_only_restates_the_name_is_no_evidence() -> None:
     label = _doc_with(("product_id", "Product ID."))
     codes, ev = _quoted_codes(label, "product_id", "Product ID.")
     assert ev.no_quote is None
+    # a label in prose stays a quote even with an identifier in it (JTL variationValueId)
+    prose = _doc_with(("variationValueId", "Id of the VariationValue"))
+    _, ev = _quoted_codes(prose, "variationValueId", "Id of the VariationValue")
+    assert ev.no_quote is None
+    otto = _doc_with(("firstName", "The firstName"))
+    _, ev = _quoted_codes(otto, "firstName", "The firstName")
+    assert ev.no_quote is not None
