@@ -79,5 +79,26 @@ for (const theme of THEMES) {
         theme,
       );
     });
+
+    test('a documented call that leaves out required fields lists them', async ({ page }) => {
+      await page.goto('/apis/shopify/try');
+      await page.getByRole('radio', { name: 'Check call' }).check({ force: true });
+      await page.getByLabel('HTTP method').selectOption('POST');
+      await page.getByLabel('Path').fill('/products/v1/productInputs:insert');
+      await page.getByLabel('Parameters, comma separated').fill('');
+      await page.getByRole('button', { name: 'Check' }).click();
+      const missing = page.getByRole('group', { name: 'Required fields the call did not pass' });
+      await expect(missing).toContainText('dataSource');
+      await expect(missing).toContainText('contentLanguage');
+      await settle(page);
+      await expectNoSeriousA11y(page);
+      await shotOf(
+        page
+          .getByText('Documented', { exact: true })
+          .locator('xpath=ancestor::*[contains(@class,"card")][1]'),
+        'w50-missing-required',
+        theme,
+      );
+    });
   });
 }

@@ -443,6 +443,49 @@ function PickList({
   );
 }
 
+/** The order the places are listed in; a place this app does not know follows, as written. */
+const PLACES = ['query', 'body', 'header'];
+
+/**
+ * The required parameters the call left out, by place. The call is still "Documented": this is what it would need to
+ * be complete. Nothing when none is missing (or on an older server).
+ */
+function MissingRequired({ missing }: { missing: Record<string, string[]> | undefined }) {
+  const entries = Object.entries(missing ?? {})
+    .filter(([, names]) => Array.isArray(names) && names.length > 0)
+    .sort(([a], [b]) => {
+      const ia = PLACES.indexOf(a);
+      const ib = PLACES.indexOf(b);
+      return (ia < 0 ? PLACES.length : ia) - (ib < 0 ? PLACES.length : ib) || a.localeCompare(b);
+    });
+  if (entries.length === 0) return null;
+  return (
+    <div
+      className="missing-required"
+      role="group"
+      aria-label="Required fields the call did not pass"
+    >
+      <p className="small">
+        <b>Required, but not passed</b>
+      </p>
+      <ul className="plain">
+        {entries.map(([place, names]) => (
+          <li key={place} className="row" style={{ gap: 8, alignItems: 'baseline' }}>
+            <span className="faint small missing-place">{place}</span>
+            <span className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+              {names.map((n) => (
+                <Chip key={n} tone="warn">
+                  <span className="mono">{n}</span>
+                </Chip>
+              ))}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function CheckTool({ apiId }: { apiId: string }) {
   const client = useApiClient();
   const [method, setMethod] = useState<HttpMethod>('GET');
@@ -576,6 +619,7 @@ function CheckTool({ apiId }: { apiId: string }) {
                     onPick={pick}
                   />
                 ) : null}
+                <MissingRequired missing={d.missingRequired} />
                 <ul className="checks">
                   {d.paramChecks.map((p) => (
                     <li key={p.name}>
