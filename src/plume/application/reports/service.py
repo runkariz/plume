@@ -9,6 +9,7 @@ purged (lazily, at most once a day); triaged ones stay.
 """
 
 import contextlib
+import threading
 import uuid
 from collections.abc import Iterator
 from datetime import datetime, timedelta
@@ -33,6 +34,7 @@ from plume.domain.reports.report import (
 from plume.domain.shared.clock import Clock
 
 MAX_SIMILAR = 5
+MAX_TRACKED = 10_000  # connections whose hourly writes are counted in memory
 PURGE_EVERY = timedelta(days=1)
 STATUS_SHOWN = {ReportStatus.ANSWERED, ReportStatus.OUT_OF_SCOPE}  # their reason is public
 
@@ -71,6 +73,8 @@ class ReportedQuestions:
         self._duplicate = duplicate_similarity
         self._policy = policy
         self._last_purge: datetime | None = None
+        self._recent: dict[str, list[datetime]] = {}  # connection key -> write times (memory)
+        self._lock = threading.Lock()
 
     @property
     def enabled(self) -> bool:
@@ -94,7 +98,10 @@ class ReportedQuestions:
         what_was_missing: str | None,
         client_name: str | None = None,
         session_id: str | None = None,
+        connection: str | None = None,
     ) -> dict[str, Any]:
+        """``connection``: the caller's address, only to count its hourly limit in memory when
+        there is no session id (stateless clients); never stored."""
         self._require()
         for name, value, required in (("question", question, True),
                                       ("what_was_tried", what_was_tried, False),
@@ -102,7 +109,7 @@ class ReportedQuestions:
             self._check(name, value, required)
         build = self._resolver.resolve(api).build.build_id.value
         sess = session_hash(session_id, self._salt)
-        self._limit(sess)
+        self._limit(sess, connection)
         q, n_q = safe_text(question, self._policy)
         if q is None:
             raise ReportRefusedError(
@@ -154,6 +161,7 @@ class ReportedQuestions:
         note: str,
         client_name: str | None = None,
         session_id: str | None = None,
+        connection: str | None = None,
     ) -> dict[str, Any]:
         self._require()
         self._check("note", note, True)
@@ -161,7 +169,7 @@ class ReportedQuestions:
         if existing is None:
             raise NotFoundError(f"reported question {report_id} not found")
         sess = session_hash(session_id, self._salt)
-        self._limit(sess)
+        self._limit(sess, connection)
         text, n = safe_text(note, self._policy)
         if text is None:
             raise ReportRefusedError(
@@ -219,9 +227,25 @@ class ReportedQuestions:
         except ReportTextError as exc:
             raise ReportRefusedError(str(exc)) from exc
 
-    def _limit(self, sess: str | None) -> None:
-        since = self._clock.now() - timedelta(hours=1)
-        if self._repo.writes_since(sess, since) >= self._per_hour:
+    def _limit(self, sess: str | None, connection: str | None) -> None:
+        """At most per_hour reports and notes an hour: per session (counted in the store) or,
+        without a session id, per connection (counted in memory under a keyed hash of the
+        address, never stored)."""
+        now = self._clock.now()
+        since = now - timedelta(hours=1)
+        if sess is None and connection:
+            key = session_hash(f"addr:{connection}", self._salt) or ""
+            with self._lock:
+                recent = [t for t in self._recent.get(key, []) if t >= since]
+                over = len(recent) >= self._per_hour
+                if not over:
+                    recent.append(now)
+                self._recent[key] = recent
+                if len(self._recent) > MAX_TRACKED:  # forget idle connections
+                    self._recent = {k: v for k, v in self._recent.items() if v and v[-1] >= since}
+        else:
+            over = self._repo.writes_since(sess, since) >= self._per_hour
+        if over:
             raise ReportRefusedError(
                 f"this session already sent {self._per_hour} reports and notes in the last hour; "
                 "please try again later"

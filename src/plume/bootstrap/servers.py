@@ -98,6 +98,7 @@ def reader_server(c: Container) -> MCPServer:
             web_public_url=c.settings.web_public_url,
             mcp_app_html=_app_html(c),
             reports=(lambda: c.reported_questions) if c.settings.reports else None,
+            trusted_proxy_hops=c.settings.trusted_proxy_hops,
         )
     )
 
