@@ -242,6 +242,7 @@ def check_call_payload(r: CheckCallResult) -> Json:
         "evidence": citation_payload(r.citation) if r.citation else None,
         "alternatives": list(r.alternatives),
         "note": r.note,
+        "missingRequired": {where: list(names) for where, names in r.missing_required},
         "pick": (
             {
                 "param": r.pick_param,

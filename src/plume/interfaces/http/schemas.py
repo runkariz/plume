@@ -416,6 +416,12 @@ class CheckCallResponse(Schema):
         description="ambiguous: the parameter whose value picks one of the operations sharing "
         "METHOD + path, and every value with its operation.",
     )
+    missing_required: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Required parameters the endpoint documents that the call did not pass, "
+        "per place (query, body, header). A nested field is listed only when its parent was "
+        "passed. Extra information: the verdict does not change.",
+    )
 
 
 class FindFactRequest(Schema):

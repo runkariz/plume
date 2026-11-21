@@ -4,7 +4,7 @@ import re
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import replace
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import parse_qsl, urlsplit
 
 from plume.application.errors import ApplicationError, NotFoundError
@@ -1204,6 +1204,13 @@ def _param_key(name: str) -> str:
     return name.strip().lower().replace("[]", "")
 
 
+# Places a call names its parameters in; headers that auth fills are not asked for.
+_ASKED = frozenset({FieldLocation.QUERY, FieldLocation.BODY, FieldLocation.HEADER})
+_AUTH_HEADER = re.compile(  # fallback when the auth schemes name no header
+    r"authorization|api[-_]?key|access[-_]?token|signature|secret|cookie|x-auth", re.IGNORECASE
+)
+
+
 class CheckCall:
     """Is ``METHOD /path`` with these params documented? Matches templates like ``{id}``."""
 
@@ -1305,6 +1312,11 @@ class CheckCall:
         alternatives = tuple(x[1] for x in scored[1:])
         complete = endpoint.complete
         verdict = "documented" if all(c.found for c in checks) else "not_documented"
+        missing = self._missing_required(build_id, endpoint.owner_id, [n for n, _ in names])
+        note = None
+        if missing and verdict == "documented":
+            listed = "; ".join(f"{where}: {', '.join(fields)}" for where, fields in missing)
+            note = f"documented, but these required fields are missing: {listed}"
         return CheckCallResult(
             _ref(r),
             method,
@@ -1319,10 +1331,44 @@ class CheckCall:
             endpoint.evidence,
             alternatives,
             self._real_path(r.build.build_id, endpoint.owner_id),
+            note=note,
             matched_server=(
                 servers[endpoint.owner_id].label if endpoint.owner_id in servers else None
             ),
+            missing_required=missing,
         )
+
+    def _missing_required(
+        self, build_id: BuildId, owner_id: str, passed: Sequence[str]
+    ) -> tuple[tuple[str, tuple[str, ...]], ...]:
+        """The documented required parameters the call did not pass, per place (query, body,
+        header; path parameters are in the path and auth headers are filled by auth). A nested
+        field counts only when it is top-level or its parent object was passed (a passed child
+        passes its parent too), so a flat list never asks for the inside of an object the call
+        leaves out."""
+        given = {_param_key(p) for p in passed}
+        auth = self._auth_headers(build_id)
+
+        def present(key: str) -> bool:
+            return key in given or any(g.startswith(key + ".") for g in given)
+
+        out: dict[str, list[str]] = {}
+        for f in self._facts.for_owner(build_id, owner_id):
+            if f.kind is not FactKind.FIELD or not f.required or f.location not in _ASKED:
+                continue
+            if f.location is FieldLocation.HEADER and (
+                f.name.lower() in auth or _AUTH_HEADER.search(f.name)
+            ):
+                continue
+            key = _param_key(f.name)
+            parent = key.rsplit(".", 1)[0] if "." in key else None
+            if present(key) or (parent is not None and not present(parent)):
+                continue
+            where = f.location.value if f.location else "body"
+            if f.name not in out.setdefault(where, []):
+                out[where].append(f.name)
+        order = ("query", "body", "header")
+        return tuple((w, tuple(sorted(out[w]))) for w in order if out.get(w))
 
     def _ambiguous(
         self,
@@ -1384,6 +1430,22 @@ class CheckCall:
                     call_paths[f.owner_id], servers[f.owner_id] = rest, base
                     break
         return candidates, call_paths, servers
+
+    def _auth_headers(self, build_id: BuildId) -> set[str]:
+        """The headers the API's auth schemes fill (their headerName), lower case."""
+        if self._documents is None:
+            return set()
+        out: set[str] = set()
+        schemes, _ = self._index.browse(build_id, (DocumentKind.AUTH,), None, 50, 0)
+        for d in schemes:
+            doc = self._documents.get_document(build_id, d.doc_id)
+            raw: dict[str, Any] = doc.raw if doc and isinstance(doc.raw, dict) else {}
+            nested = raw.get("scheme")
+            scheme: dict[str, Any] = nested if isinstance(nested, dict) else raw
+            name = scheme.get("headerName")
+            if isinstance(name, str) and name:
+                out.add(name.lower())
+        return out
 
     def _server_bases(self, build_id: BuildId) -> list[ServerBase]:
         """The API's servers with a base path, from the loader's environments guide."""

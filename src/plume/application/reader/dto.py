@@ -131,3 +131,5 @@ class CheckCallResult:
     pick_options: tuple[tuple[str, str], ...] = ()
     # the server whose base path the call carried ("api_3: https://apim.ebay.com/commerce/...")
     matched_server: str | None = None
+    # documented required parameters the call did not pass: (place, names) per place
+    missing_required: tuple[tuple[str, tuple[str, ...]], ...] = ()
