@@ -1089,3 +1089,42 @@ class RelationEditRequest(Schema):
         description="[{id, kind?, cardinality?, embed?, ref?, from?, to?, confirmed?}]: design "
         "changes for existing relations (their evidence stays).",
     )
+
+
+class ReportNoteOut(Schema):
+    id: str
+    kind: str = Field(description="note | duplicate (a near-duplicate report merged in)")
+    text: str
+    created_at: str
+    client_name: str | None = None
+    session_hash: str | None = None
+    build: str | None = None
+    redactions: int = 0
+
+
+class ReportOut(Schema):
+    id: str
+    api: str
+    build: str | None = None
+    question: str = Field(description="As reported, redacted.")
+    what_was_tried: str | None = None
+    what_was_missing: str | None = None
+    status: Literal["open", "answered", "search-miss", "package-gap", "out-of-scope"]
+    reason: str | None = None
+    report_count: int
+    note_count: int
+    created_at: str
+    updated_at: str
+    client_name: str | None = None
+    session_hash: str | None = Field(default=None, description="Keyed hash of the MCP session.")
+    redactions: int = 0
+    notes: list[ReportNoteOut] | None = None
+
+
+class ReportList(Schema):
+    reports: list[ReportOut]
+
+
+class ReportStatusUpdate(Schema):
+    status: Literal["open", "answered", "search-miss", "package-gap", "out-of-scope"]
+    reason: str | None = Field(default=None, max_length=1000)

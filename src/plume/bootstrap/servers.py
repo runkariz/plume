@@ -67,6 +67,7 @@ def http_app(c: Container) -> FastAPI:
             public_changes=c.public_changes,
             model_impact=c.model_impact,
             model_evaluation=c.model_evaluation,
+            reports=lambda: c.reported_questions,
         )
     )
 
@@ -96,6 +97,7 @@ def reader_server(c: Container) -> MCPServer:
             model_impact=c.model_impact,
             web_public_url=c.settings.web_public_url,
             mcp_app_html=_app_html(c),
+            reports=(lambda: c.reported_questions) if c.settings.reports else None,
         )
     )
 

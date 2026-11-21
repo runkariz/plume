@@ -3897,6 +3897,263 @@
         "title": "RemoveApiIn",
         "type": "object"
       },
+      "ReportList": {
+        "properties": {
+          "reports": {
+            "items": {
+              "$ref": "#/components/schemas/ReportOut"
+            },
+            "title": "Reports",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reports"
+        ],
+        "title": "ReportList",
+        "type": "object"
+      },
+      "ReportNoteOut": {
+        "properties": {
+          "build": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build"
+          },
+          "clientName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clientname"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "description": "note | duplicate (a near-duplicate report merged in)",
+            "title": "Kind",
+            "type": "string"
+          },
+          "redactions": {
+            "default": 0,
+            "title": "Redactions",
+            "type": "integer"
+          },
+          "sessionHash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessionhash"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "text",
+          "createdAt"
+        ],
+        "title": "ReportNoteOut",
+        "type": "object"
+      },
+      "ReportOut": {
+        "properties": {
+          "api": {
+            "title": "Api",
+            "type": "string"
+          },
+          "build": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build"
+          },
+          "clientName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clientname"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "noteCount": {
+            "title": "Notecount",
+            "type": "integer"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ReportNoteOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "question": {
+            "description": "As reported, redacted.",
+            "title": "Question",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "redactions": {
+            "default": 0,
+            "title": "Redactions",
+            "type": "integer"
+          },
+          "reportCount": {
+            "title": "Reportcount",
+            "type": "integer"
+          },
+          "sessionHash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Keyed hash of the MCP session.",
+            "title": "Sessionhash"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "answered",
+              "search-miss",
+              "package-gap",
+              "out-of-scope"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "updatedAt": {
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "whatWasMissing": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whatwasmissing"
+          },
+          "whatWasTried": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whatwastried"
+          }
+        },
+        "required": [
+          "id",
+          "api",
+          "question",
+          "status",
+          "reportCount",
+          "noteCount",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "ReportOut",
+        "type": "object"
+      },
+      "ReportStatusUpdate": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "answered",
+              "search-miss",
+              "package-gap",
+              "out-of-scope"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "ReportStatusUpdate",
+        "type": "object"
+      },
       "ReviewRequest": {
         "properties": {
           "apiId": {
@@ -8989,6 +9246,213 @@
           }
         },
         "summary": "Me",
+        "tags": [
+          "maintainer"
+        ]
+      }
+    },
+    "/v1/maintainer/reports": {
+      "get": {
+        "description": "Reported questions, most reported first (readers' LLMs reported Plume could not\nanswer them).",
+        "operationId": "list_reports_v1_maintainer_reports_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "api",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Reports",
+        "tags": [
+          "maintainer"
+        ]
+      }
+    },
+    "/v1/maintainer/reports/{report_id}": {
+      "get": {
+        "operationId": "get_report_v1_maintainer_reports__report_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Report",
+        "tags": [
+          "maintainer"
+        ]
+      },
+      "patch": {
+        "description": "Label a report: answered / search-miss / package-gap / out-of-scope (or open), with\na short reason (answered and out-of-scope reasons are shown to readers).",
+        "operationId": "set_report_status_v1_maintainer_reports__report_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportStatusUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Report Status",
         "tags": [
           "maintainer"
         ]

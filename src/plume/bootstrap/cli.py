@@ -87,6 +87,7 @@ def build_app(container: Container | None = None) -> typer.Typer:
             import_gold=import_gold,
             model_evaluation=lambda: c().model_evaluation(),
             import_model_gold=import_model_gold,
+            reports=lambda: c().reported_questions,
         )
     )
 
