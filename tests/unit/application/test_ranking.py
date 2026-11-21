@@ -156,3 +156,17 @@ def test_an_auth_question_leads_with_the_own_scheme_wherever_it_fused() -> None:
     # a vendor auth guide that leads stays
     led = ["guide:authentication", "app:cdon"]
     assert auth_first(led, 2, "how do I authenticate", own) == led
+
+
+def test_a_paging_endpoint_covers_a_page_size_question() -> None:
+    """Mirakl "what is the maximum page size": scoped-request-limits (OR13's 100 order lines)
+    was 2nd; the list endpoints document `max` (at most 100)."""
+    ranked = ["guide:context", "guide:scoped-request-limits", "endpoint:GET~/api/documents", "m:x"]
+    covers = lambda d, topic: d == "endpoint:GET~/api/documents" and topic == "request-limits"  # noqa: E731
+    out = scoped_last(ranked, 2, "what is the maximum page size", lambda d: frozenset(), covers)
+    assert out == [
+        "guide:context",
+        "endpoint:GET~/api/documents",
+        "m:x",
+        "guide:scoped-request-limits",
+    ]

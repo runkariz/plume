@@ -356,7 +356,13 @@ def rank_order(
     order = code_holder_first(
         order, k, query, lambda d, c: holds_code(documents, build_id, d, c), code_holders
     )
-    order = scoped_last(order, k, query, lambda d: scoped_parts(documents, build_id, d))
+    order = scoped_last(
+        order,
+        k,
+        query,
+        lambda d: scoped_parts(documents, build_id, d),
+        lambda d, topic: covers_topic(documents, build_id, d, topic),
+    )
     return keep_endpoints(order, k)
 
 
@@ -395,6 +401,23 @@ _GENERIC_WORDS = (
     "callback callbacks"
 )
 _GENERIC_PART = frozenset(_GENERIC_WORDS.split())
+
+
+# A documented paging parameter in an endpoint's parameter list ("- `max` (integer): ...").
+_PAGING_PARAM = re.compile(
+    r"^- `(max|limit|page_?size|per_?page|pagesize|perpage|size|page\[size\]|max_?results"
+    r"|maxresults|count)` \(",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def covers_topic(documents: DocumentRepo, build_id: BuildId, doc_id: str, topic: str) -> bool:
+    """Whether a result answers a scoped topic by its content: for request limits, an endpoint
+    that documents a paging parameter (its own maximum page size)."""
+    if topic != "request-limits" or not doc_id.startswith("endpoint:"):
+        return False
+    doc = documents.get_document(build_id, doc_id)
+    return doc is not None and bool(_PAGING_PARAM.search(doc.text))
 
 
 def scoped_parts(documents: DocumentRepo, build_id: BuildId, doc_id: str) -> frozenset[str]:
