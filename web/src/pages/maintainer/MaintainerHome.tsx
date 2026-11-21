@@ -20,9 +20,14 @@ export function MaintainerHome() {
       <Crumbs items={[{ label: 'Maintainer' }]} />
       <div className="titlerow">
         <h1 className="h1-sm">Maintainer</h1>
-        <Link className="btn primary" to="/maintainer/apis/new/update">
-          Add an API
-        </Link>
+        <div className="row">
+          <Link className="btn" to="/maintainer/reports">
+            Reported questions
+          </Link>
+          <Link className="btn primary" to="/maintainer/apis/new/update">
+            Add an API
+          </Link>
+        </div>
       </div>
       {removed ? <RemovedNotice result={removed} onDismiss={() => setRemoved(null)} /> : null}
       {state.status === 'loading' ? <LoadingState label="Loading APIs" /> : null}

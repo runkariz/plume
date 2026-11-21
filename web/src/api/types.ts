@@ -1632,3 +1632,56 @@ export interface ChangesQuery {
   cursor?: number | null;
   limit?: number;
 }
+
+// ---- maintainer: reported questions (reader LLMs report what Plume did not give them) ----
+
+export type ReportStatus = 'open' | 'answered' | 'search-miss' | 'package-gap' | 'out-of-scope';
+
+/** A note on a report (or a near-duplicate report merged into it). The text is redacted by the server: markers like [token] stay. */
+export interface ReportNote {
+  id: string;
+  /** "note", or "duplicate" (a near-duplicate report merged in). */
+  kind: string;
+  text: string;
+  createdAt: string;
+  clientName?: string | null;
+  sessionHash?: string | null;
+  build?: string | null;
+  redactions?: number;
+}
+
+export interface Report {
+  /** "rq-..." */
+  id: string;
+  api: string;
+  build?: string | null;
+  /** Redacted by the server. */
+  question: string;
+  whatWasTried?: string | null;
+  whatWasMissing?: string | null;
+  status: ReportStatus;
+  /** Why it has this status; for answered and out-of-scope it is shown to readers. */
+  reason?: string | null;
+  /** 1 + merged duplicates + notes. */
+  reportCount: number;
+  noteCount: number;
+  createdAt: string;
+  updatedAt: string;
+  clientName?: string | null;
+  /** A keyed hash that groups one MCP session. */
+  sessionHash?: string | null;
+  redactions?: number;
+  /** Only on the single report. */
+  notes?: ReportNote[] | null;
+}
+
+export interface ReportQuery {
+  api?: string;
+  status?: ReportStatus;
+}
+
+/** GET /v1/maintainer/reports: `enabled` is whether readers can report on this server (PLUME_REPORTS); absent on older servers. */
+export interface ReportList {
+  reports: Report[];
+  enabled?: boolean;
+}

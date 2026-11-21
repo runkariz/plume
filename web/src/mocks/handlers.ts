@@ -63,6 +63,7 @@ import {
   type MockSession,
   type StoredModel,
 } from './modelStore';
+import { isStatus, listReports, seedReports } from './reportsStore';
 import {
   authDetailFor,
   authFor,
@@ -293,6 +294,8 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
   >();
   /** Release notes: the builds of some APIs with the notes and review state of each (maintainer routes). */
   const releases = seedReleases();
+  /** Reported questions of the mock server (maintainer). */
+  const reports = seedReports();
   // a maintainer's display names (per API, in memory like the rest of the mock)
   const displayNames = new Map<string, string>();
   /** APIs a maintainer removed in this mock session. */
@@ -1631,6 +1634,32 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
           }),
       }),
     ),
+    // reported questions (maintainer)
+    http.get(`${base}/v1/maintainer/reports`, ({ request }) => {
+      if (!isMaintainer(request)) return unauthorized();
+      const u = new URL(request.url);
+      return HttpResponse.json({
+        reports: listReports(reports, u.searchParams.get('api'), u.searchParams.get('status')),
+        enabled: true,
+      });
+    }),
+    http.get(`${base}/v1/maintainer/reports/:id`, ({ params, request }) => {
+      if (!isMaintainer(request)) return unauthorized();
+      const r = reports.find((x) => x.id === String(params.id));
+      return r ? HttpResponse.json(r) : notFound();
+    }),
+    http.patch(`${base}/v1/maintainer/reports/:id`, async ({ params, request }) => {
+      if (!isMaintainer(request)) return unauthorized();
+      const r = reports.find((x) => x.id === String(params.id));
+      if (!r) return notFound();
+      const body = (await request.json()) as { status?: unknown; reason?: string | null };
+      if (!isStatus(body.status) || (body.reason ?? '').length > 1000)
+        return HttpResponse.json({ detail: 'invalid status or reason' }, { status: 422 });
+      r.status = body.status;
+      r.reason = body.reason ?? null;
+      r.updatedAt = new Date().toISOString();
+      return HttpResponse.json(r);
+    }),
     http.put(`${base}/v1/apis/:id/display`, async ({ params, request }) => {
       if (!isMaintainer(request)) return unauthorized();
       const id = String(params.id);
