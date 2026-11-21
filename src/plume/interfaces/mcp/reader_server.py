@@ -101,6 +101,7 @@ class McpReaderDependencies:
     model_impact: Callable[[], ModelImpact] | None = None
     mcp_app_html: str | None = None  # the model view bundle; None = the packaged file
     reports: Callable[[], ReportedQuestions] | None = None  # set when PLUME_REPORTS is on
+    trusted_proxy_hops: int = 0  # for the reports' per-connection limit (stateless clients)
 
 
 logger = logging.getLogger(__name__)
@@ -148,7 +149,7 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
         return {**out, "report_hint": REPORT_HINT} if reporting and missed else out
 
     if deps.reports is not None:
-        register_report_tools(server, deps.reports, _run)
+        register_report_tools(server, deps.reports, _run, deps.trusted_proxy_hops)
 
     @server.tool(annotations=READ_ONLY, structured_output=True)
     async def list_apis() -> dict[str, Any]:
