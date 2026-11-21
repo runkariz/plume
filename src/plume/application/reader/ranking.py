@@ -779,14 +779,20 @@ def _topic_pattern(doc: str) -> re.Pattern[str]:
 
 
 def scoped_last(
-    ranked: Sequence[str], k: int, query: str, parts: Callable[[str], frozenset[str]]
+    ranked: Sequence[str],
+    k: int,
+    query: str,
+    parts: Callable[[str], frozenset[str]],
+    covers: Callable[[str, str], bool] = lambda d, topic: False,
 ) -> list[str]:
     """A scoped-<topic> guide (stream: quotes for one part of the API, NOT the whole-API
     answer) gives way to every other result of the top 2k, unless the question names the part
     its quotes are about (one of `parts`: words of its quotes and its endpoints' paths). It
     rated 1st for whole-API questions (BigCommerce's 8 MB image quote for an import size).
     When the question is about its topic and no other result of the top 2k is (TEC's 1000/min
-    is only there), it stays near the top: right behind a leading endpoint, else 2nd."""
+    is only there), it stays near the top: right behind a leading endpoint, else 2nd. A result
+    also covers a topic by its content (``covers``: a list endpoint documenting its paging
+    parameter answers a page-size question, Mirakl's ``max``)."""
     asked = {_singular(w) for w in re.findall(r"[a-z0-9]+", query.lower())}
     order = list(ranked)
     window = 2 * k
@@ -794,7 +800,10 @@ def scoped_last(
         topic = _topic_pattern(doc)
         others = [d for d in order[:window] if d != doc and not d.startswith(SCOPED_PREFIX)]
         # the question is about its topic and nothing else here is: it is the only statement
-        alone = bool(topic.search(query)) and not any(topic.search(d) for d in others)
+        name = doc.removeprefix(SCOPED_PREFIX)
+        alone = bool(topic.search(query)) and not any(
+            topic.search(d) or covers(d, name) for d in others
+        )
         if not alone and asked & parts(doc):
             continue  # the question names its part: it keeps its place
         order.remove(doc)
