@@ -5,6 +5,7 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from typing import Literal
+from urllib.parse import parse_qsl, urlsplit
 
 from plume.application.errors import ApplicationError, NotFoundError
 from plume.application.ports.api_repo import ApiRepo
@@ -1125,6 +1126,13 @@ RPC_PARAMS = ("method", "action", "operation", "op", "command", "cmd", "function
 MAX_AMBIGUOUS_MATCHES = 10
 
 
+def path_query(path: str) -> list[str]:
+    """The query string of a call path as "name=value" entries (``/sync?method=a.b&x`` ->
+    ["method=a.b", "x"])."""
+    pairs = parse_qsl(urlsplit(path.strip()).query, keep_blank_values=True)
+    return [f"{k}={v}" if v else k for k, v in pairs]
+
+
 def split_values(entries: Sequence[str]) -> tuple[list[str], dict[str, str]]:
     """``["method=aliexpress.x.get", "fields"]`` -> the names, and {name: value} where a
     value is given."""
@@ -1229,7 +1237,9 @@ class CheckCall:
         if method not in HTTP_METHODS:
             raise ReaderInputError(f"unknown HTTP method {method!r}")
         params, given = split_values(params)  # "method=aliexpress.x.get": a name and a value
-        query, given_q = split_values(query)
+        # a query string in the path counts as query parameters (POST /sync?method=aliexpress.x)
+        in_path = [q for q in path_query(path) if q not in query]
+        query, given_q = split_values([*query, *in_path])
         given |= given_q
         if not path.strip():
             raise ReaderInputError("path is empty")

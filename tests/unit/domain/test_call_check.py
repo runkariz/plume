@@ -110,3 +110,19 @@ def test_a_templated_base_segment_or_host_matches_any_value() -> None:
         "/V1/orders"
     ]
     assert [r for _, r in _rests("/rest/default/V1/orders", magento)] == ["/V1/orders"]
+
+
+def test_a_query_string_in_the_path_is_read_as_query_parameters() -> None:
+    """AliExpress: POST /sync?method=aliexpress.x.y answered "ambiguous … pass method=<name>"
+    while method=… in params resolved."""
+    from plume.application.reader.use_cases import path_query  # noqa: PLC0415
+
+    assert path_query("/sync?method=aliexpress.solution.order.get") == [
+        "method=aliexpress.solution.order.get"
+    ]
+    assert path_query("https://api-sg.aliexpress.com/sync?method=a.b&app_key=1&flag") == [
+        "method=a.b",
+        "app_key=1",
+        "flag",
+    ]
+    assert path_query("/orders/{id}") == []
