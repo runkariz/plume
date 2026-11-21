@@ -167,3 +167,19 @@ def test_an_api_without_the_concept_gets_the_models_that_embed_it() -> None:
     )
     docs = sessions.ModelSessions._embedding_docs(stub, "Customer", None)  # type: ignore[arg-type]
     assert [d.doc_id for d in docs] == [order, orders, quote]  # reads first, then the write
+
+
+def test_kinds_count_as_the_concept_when_it_has_no_documents_of_its_own() -> None:
+    """Google Merchant Inventory: localinventory / regionalinventory were left out (only names
+    starting with "inventory" counted)."""
+    from plume.application.models.sessions import _kinds  # noqa: PLC0415
+
+    groups = {k: [_model(f"model:{k}")] for k in (
+        "localinventory", "regionalinventory", "lfpinventory", "instock",
+        "inventoryloyaltyprogram", "listlocalinventoriesresponse")}  # fmt: skip
+    assert _kinds(("inventory", "stock"), groups) == [
+        "lfpinventory",
+        "localinventory",
+        "regionalinventory",
+    ]  # "in" is no qualifier; a response wrapper is no kind
+    assert _kinds(("inventory",), {**groups, "inventory": [_model("model:inventory")]}) == []
