@@ -12,6 +12,7 @@ from plume.domain.knowledge.api import ApiId
 from plume.domain.knowledge.tag import TagName
 from tests.fakes.knowledge import WordEmbedder
 from tests.fakes.stack import FakeStack
+from tests.real_packages import real_packages
 
 API = "test-catalog-api"
 
@@ -121,13 +122,12 @@ def test_issues_text_and_notes_survive_a_dump(
     assert dst.notes_repo.get_meta(second) == s.notes_repo.get_meta(second)
 
 
-NOTES_PAIR = [p for p in __import__("os").environ.get("PLUME_NOTES_PACKAGES", "").split(":") if p]
+NOTES_PAIR = [str(p) for p in real_packages("notes")]
 
 
 @pytest.mark.skipif(
     len(NOTES_PAIR) != 2,
-    reason="set PLUME_NOTES_PACKAGES=<old shopify package>:<new shopify package> "
-    "(e.g. the frozen shopify-20261115-v12-extras:shopify-20261115-v12b-extras)",
+    reason="the pinned notes packages (tests/real_packages.toml) are not there",
 )
 def test_real_shopify_truncations_are_caught_as_suspects() -> None:
     """The real v12 -> v12b pair: Order truncated a-l and ProductVariant cut to 12 properties

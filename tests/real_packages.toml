@@ -1,0 +1,25 @@
+# Real (stream) packages the gate's opt-in tests read: frozen copies in plume-data that the
+# archive never touches (listed in plume-data/coord/PINNED). Change a folder here only together
+# with PINNED. The data directory is ~/source/repos/plume-data unless PLUME_DATA_DIR says
+# otherwise; PLUME_SUGGEST_PACKAGES / PLUME_NOTES_PACKAGES / PLUME_CONTRACT_PACKAGES still
+# override a role with explicit paths (os.pathsep-separated).
+
+# Concept suggestions and relations: Shopify, WooCommerce, Mirakl, in this order.
+suggest = [
+    "shopify-20261115-v12-extras",
+    "woocommerce-v3-20261115-v12-extras",
+    "mirakl-20261115-v12-extras",
+]
+
+# Release notes on a real pair: old, new.
+notes = ["shopify-20261115-v12-extras", "shopify-20261115-v12b-extras"]
+
+# The input-package contract, beyond the repository fixtures.
+contract = [
+    "shopify-20261115-v12-extras",
+    "woocommerce-v3-20261115-v12-extras",
+    "mirakl-20261115-v12-extras",
+    "zalando-20261116-r4-extras",
+    "amazon-sp-seller-20261116-r3-extras",
+    "amazon-sp-vendor-20261116-r13-extras",
+]
