@@ -9,6 +9,7 @@ from plume.application.reader.ranking import (
     query_code,
     scoped_last,
     stale_version_guides_last,
+    topic_docs_give_way,
     triggers_after_endpoints,
 )
 
@@ -170,3 +171,19 @@ def test_a_paging_endpoint_covers_a_page_size_question() -> None:
         "m:x",
         "guide:scoped-request-limits",
     ]
+
+
+def test_a_topic_document_leads_only_for_its_topic_and_its_nouns() -> None:
+    """idealo topic-request-limits (only the 395 KB message size) led "what is the maximum page
+    size"; Newegg topic-rate-limits led "what changed in the API recently"."""
+    held = {
+        "guide:topic-request-limits": frozenset({"size", "message", "pws", "kb"}),
+        "guide:topic-rate-limits": frozenset({"rate", "limits", "minute", "requests"}),
+    }.get
+    words = lambda d: held(d, frozenset())  # noqa: E731
+    ranked = ["guide:topic-request-limits", "guide:page-docs", "endpoint:GET~/offers", "m:x"]
+    assert topic_docs_give_way(ranked, 2, "what is the maximum page size", words)[-1] == ranked[0]
+    assert topic_docs_give_way(ranked, 2, "what is the maximum message size", words) == ranked
+    rate = ["guide:topic-rate-limits", "guide:x", "m:y", "m:z"]
+    assert topic_docs_give_way(rate, 2, "what changed in the API recently", words)[0] == "guide:x"
+    assert topic_docs_give_way(rate, 2, "what happens when I exceed the rate limit", words) == rate

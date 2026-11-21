@@ -815,3 +815,143 @@ def scoped_last(
         first = next((i for i, d in enumerate(order[:2]) if d.startswith("endpoint:")), None)
         order.insert(min(first + 1 if first is not None else 1, len(order)), doc)
     return order
+
+
+TOPIC_PREFIX = "guide:topic-"
+# Question wording that names no specific thing (limits, sizes, how / what).
+_TOPIC_STOP = frozenset(
+    [
+        "a",
+        "an",
+        "the",
+        "is",
+        "are",
+        "was",
+        "be",
+        "do",
+        "does",
+        "did",
+        "can",
+        "could",
+        "should",
+        "would",
+        "will",
+        "i",
+        "my",
+        "me",
+        "we",
+        "our",
+        "you",
+        "your",
+        "to",
+        "of",
+        "in",
+        "on",
+        "for",
+        "at",
+        "by",
+        "with",
+        "from",
+        "per",
+        "and",
+        "or",
+        "how",
+        "what",
+        "whats",
+        "which",
+        "when",
+        "where",
+        "why",
+        "there",
+        "any",
+        "much",
+        "many",
+        "maximum",
+        "max",
+        "minimum",
+        "min",
+        "limit",
+        "limits",
+        "limited",
+        "size",
+        "sizes",
+        "number",
+        "large",
+        "largest",
+        "big",
+        "long",
+        "api",
+        "apis",
+        "allowed",
+        "allow",
+        "get",
+        "one",
+        "each",
+        "happen",
+        "happens",
+        "happened",
+        "exceed",
+        "exceeds",
+        "exceeded",
+        "reach",
+        "reached",
+        "hit",
+        "go",
+        "goes",
+        "over",
+    ]
+)
+
+
+# A topic's own vocabulary: words that ask about the topic, not about a specific thing in it.
+def _words(text: str) -> frozenset[str]:
+    return frozenset(text.split())
+
+
+_TOPIC_OWN: dict[str, frozenset[str]] = {
+    "rate-limits": _words(
+        "rate rates throttle throttled throttling quota quotas request requests second minute "
+        "hour day"
+    ),
+    "request-limits": _words("request requests payload call calls"),
+    "import-limits": _words("import imports upload uploads file files"),
+    "token-lifetime": _words(
+        "token tokens access valid validity expire expires expiry expiration lifetime refresh"
+    ),
+    "webhooks": _words("webhook webhooks event events notification notifications"),
+    "state-transitions": _words("state states status statuses transition transitions"),
+    "error-format": _words("error errors response responses format code codes"),
+    "sandbox": _words("sandbox test testing environment environments url base"),
+}
+
+
+def _noun_forms(word: str) -> set[str]:
+    forms = {word, _singular(word)}
+    if word.endswith("ed") and len(word) > 4:  # paged -> page, pag
+        forms |= {word[:-1], word[:-2]}
+    return forms
+
+
+def topic_docs_give_way(
+    ranked: Sequence[str], k: int, query: str, quote_words: Callable[[str], frozenset[str]]
+) -> list[str]:
+    """An API-wide topic-<topic> document (stream's quotes for a whole-API question) leads only
+    when the question is about its topic and a quote holds the question's specific nouns
+    (idealo topic-request-limits, only the 395 KB message size, led \"what is the maximum page
+    size\"; Newegg topic-rate-limits led \"what changed in the API recently\"); otherwise it
+    gives way to every other result of the top 2k."""
+    words = [w for w in re.findall(r"[a-z][a-z0-9]+", query.lower()) if w not in _TOPIC_STOP]
+    order = list(ranked)
+    window = 2 * k
+    for doc in [d for d in order[:window] if d.startswith(TOPIC_PREFIX)]:
+        name = doc.removeprefix(TOPIC_PREFIX)
+        pattern = _topic_pattern(SCOPED_PREFIX + name)
+        held = quote_words(doc)
+        own = _TOPIC_OWN.get(name, frozenset(name.split("-")))
+        nouns = [w for w in words if not _noun_forms(w) & own]  # the topic's own words aside
+        specific = all(_noun_forms(w) & held for w in nouns)
+        if pattern.search(query) and specific:
+            continue
+        order.remove(doc)
+        order.insert(min(window - 1, len(order)), doc)
+    return order

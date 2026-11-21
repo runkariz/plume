@@ -51,6 +51,7 @@ from plume.application.reader.ranking import (
     stale_version_guides_last,
     state_change_first,
     synthesized_after_vendor,
+    topic_docs_give_way,
     triggers_after_endpoints,
 )
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
@@ -356,6 +357,7 @@ def rank_order(
     order = code_holder_first(
         order, k, query, lambda d, c: holds_code(documents, build_id, d, c), code_holders
     )
+    order = topic_docs_give_way(order, k, query, lambda d: quote_words(documents, build_id, d))
     order = scoped_last(
         order,
         k,
@@ -418,6 +420,18 @@ def covers_topic(documents: DocumentRepo, build_id: BuildId, doc_id: str, topic:
         return False
     doc = documents.get_document(build_id, doc_id)
     return doc is not None and bool(_PAGING_PARAM.search(doc.text))
+
+
+def quote_words(documents: DocumentRepo, build_id: BuildId, doc_id: str) -> frozenset[str]:
+    """The words of a topic / scoped document's quote lines ("> ...", not Scope / Source), in
+    singular and as written."""
+    doc = documents.get_document(build_id, doc_id)
+    if doc is None:
+        return frozenset()
+    quotes = [ln[1:] for ln in doc.text.splitlines() if ln.startswith(">")
+              and not re.match(r">\s*(Scope|Source):", ln)]  # fmt: skip
+    words = re.findall(r"[a-z][a-z0-9]+", " ".join(quotes).lower())
+    return frozenset(words) | frozenset(singular(w) for w in words)
 
 
 def scoped_parts(documents: DocumentRepo, build_id: BuildId, doc_id: str) -> frozenset[str]:
