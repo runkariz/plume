@@ -134,7 +134,9 @@ returns their fields page by page (follow next_cursor). Rules (refused otherwise
 - State every conversion the value needs in `conversion` {kind, map?, format?, note?}. Kinds:
   money-minor (integer cents), money-decimal, money-decimal-string, currency-separate, enum
   (map: {API value: canonical value} covering every value of the API's enum, or list the ones
-  without a target in "unmapped"), code-system (a standard code list such as countries,
+  without a target in "unmapped"; when the field has several source paths with different enums,
+  e.g. local vs regional availability, give each its own: byPath: {"<path>": {map, unmapped?}}),
+  code-system (a standard code list such as countries,
   currencies or languages, mapped between two code systems; format: e.g. "ISO 3166-1 alpha-3
   -> alpha-2"; no map needed), datetime (format: e.g. "ISO 8601 UTC", "local, no tz"),
   id-type (string vs number), array-vs-single, cardinality (e.g. one variant synthesized from
@@ -448,6 +450,7 @@ class ModelSessions:
         main, subs = concept_parts(concept)
         summaries, _ = self._index.browse(build, (), None, 100_000, 0)
         groups = concept_docs(summaries)
+        main = (*main, *_kinds(main, groups))
         children = {k for k in groups for m in main if k != m and k.startswith(m)} | set(subs)
         children |= {  # roles that are kinds of it: billingaddress / shippingaddress of Address
             r for m in main for r in ROLE_SYNONYMS.get(m, ()) if r != m and r.endswith(m)
@@ -1146,3 +1149,21 @@ def _first(
     """``lead`` then ``rest`` without repeats, at most ``limit``."""
     seen = {d.doc_id for d in lead}
     return [*lead, *(d for d in rest if d.doc_id not in seen)][:limit]
+
+
+MAX_KIND_QUALIFIER = 10  # "local", "regional", "lfp": a short word before the concept's name
+
+
+def _kinds(main: tuple[str, ...], groups: dict[str, list[DocumentSummary]]) -> list[str]:
+    """Kinds of the concept named by a qualifier before it (Google Merchant's localinventory and
+    regionalinventory for Inventory), when the API has nothing named for the concept itself:
+    they are its own documents then. Not when it has (Shopify's inventory stays the inventory;
+    a purchaseorder never becomes an Order where orders exist)."""
+    if any(groups.get(m) for m in main):
+        return []
+    return sorted(
+        k
+        for k in groups
+        for m in main
+        if k != m and k.endswith(m) and 3 <= len(k) - len(m) <= MAX_KIND_QUALIFIER
+    )

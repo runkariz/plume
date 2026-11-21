@@ -18,10 +18,16 @@ SHAPES = {
     "country_iso_code": (frozenset({"string"}), ()),
     "tax_exempt_category": (frozenset({"string"}), ()),
     "taxes_included": (frozenset({"boolean"}), ()),
+    "local.availability": (frozenset({"string"}), ()),
+    "regional.availability": (frozenset({"string"}), ()),
 }
 COUNTRIES = tuple(f"C{i:03d}" for i in range(250))  # Mirakl: ~250 ISO alpha-3 codes
 ENUMS = {"status": ("pending", "processing", "completed", "cancelled"),
-         "country_iso_code": COUNTRIES}  # fmt: skip
+         "country_iso_code": COUNTRIES,
+         # Google Merchant: local and regional availability have different value sets
+         "local.availability": ("IN_STOCK", "OUT_OF_STOCK", "LIMITED_AVAILABILITY",
+                                "ON_DISPLAY_TO_ORDER"),
+         "regional.availability": ("IN_STOCK", "OUT_OF_STOCK")}  # fmt: skip
 FETCH = {"GET /orders/{id}": frozenset({"order.id", "order.status", "order.tags"})}
 
 
@@ -129,3 +135,29 @@ def test_a_boolean_from_a_code_needs_a_conversion() -> None:
     mapped = _codes("tax_exempt", "boolean", "tax_exempt_category", conversion=enum)
     assert "TYPE_MISMATCH" not in [c for c, _ in mapped]
     assert _codes("taxes_included", "boolean", "taxes_included") == []
+
+
+def test_one_field_from_two_enums_with_different_values() -> None:
+    """Google Merchant gate: availability from local and regional inventory was refused
+    (ENUM_KEY_UNKNOWN) for every key missing from either enum."""
+    paths = ["local.availability", "regional.availability"]
+    both = {"IN_STOCK": "in_stock", "OUT_OF_STOCK": "out_of_stock",
+            "LIMITED_AVAILABILITY": "limited", "ON_DISPLAY_TO_ORDER": "preorder"}  # fmt: skip
+    assert _codes("availability", "string", paths[0], paths=paths,
+                  conversion={"kind": "enum", "map": both}) == []  # fmt: skip
+    wrong = {"kind": "enum", "map": {**both, "BACKORDER": "preorder"}}
+    issues = _codes("availability", "string", paths[0], paths=paths, conversion=wrong)
+    assert [c for c, _ in issues] == ["ENUM_KEY_UNKNOWN", "ENUM_KEY_UNKNOWN"]  # once per path
+    assert all("BACKORDER" in m for _, m in issues)
+    per_path = {"kind": "enum", "byPath": {
+        "local.availability": {"map": both},
+        "regional.availability": {"map": {"IN_STOCK": "in_stock", "OUT_OF_STOCK": "out_of_stock"}},
+    }}  # fmt: skip
+    assert _codes("availability", "string", paths[0], paths=paths, conversion=per_path) == []
+    leaky = {"kind": "enum", "byPath": {
+        "local.availability": {"map": both},
+        "regional.availability": {"map": both},  # its own enum has no LIMITED / ON_DISPLAY
+    }}  # fmt: skip
+    codes = [c for c, _ in _codes("availability", "string", paths[0], paths=paths,
+                                  conversion=leaky)]  # fmt: skip
+    assert codes == ["ENUM_KEY_UNKNOWN"]

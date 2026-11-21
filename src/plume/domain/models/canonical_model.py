@@ -68,6 +68,16 @@ class Conversion:
     enum_map: tuple[tuple[str, str], ...] = ()  # (API value, canonical value)
     format: str | None = None  # datetime format / time zone, meta key, ...
     unmapped: tuple[str, ...] = ()  # enum: API values deliberately left without a target
+    # enum with several source paths of different value sets (Google Merchant local vs regional
+    # availability): (path, map, unmapped) per path, each checked against its own enum
+    by_path: tuple[tuple[str, tuple[tuple[str, str], ...], tuple[str, ...]], ...] = ()
+
+    def path_map(self, path: str) -> tuple[tuple[tuple[str, str], ...], tuple[str, ...]]:
+        """The (map, unmapped) for one source path: its own when given, else the shared one."""
+        for p, mapping, unmapped in self.by_path:
+            if p == path:
+                return mapping, unmapped
+        return self.enum_map, self.unmapped
 
 
 def parse_conversion(raw: Any, where: str) -> Conversion | None:
@@ -97,12 +107,27 @@ def parse_conversion(raw: Any, where: str) -> Conversion | None:
     unmapped = raw.get("unmapped") or []
     if not isinstance(unmapped, list):
         raise DraftFormatError(f"{where}.conversion.unmapped must be a list")
+    by_path_raw = raw.get("byPath") or {}
+    if not isinstance(by_path_raw, dict):
+        raise DraftFormatError(f"{where}.conversion.byPath must be an object {{path: {{map}}}}")
+    by_path = []
+    for path, entry in by_path_raw.items():
+        if not isinstance(entry, dict) or not isinstance(entry.get("map") or {}, dict):
+            raise DraftFormatError(
+                f"{where}.conversion.byPath[{path!r}] must be {{map: {{...}}, unmapped?: [...]}}"
+            )
+        sub = entry.get("unmapped") or []
+        if not isinstance(sub, list):
+            raise DraftFormatError(f"{where}.conversion.byPath[{path!r}].unmapped must be a list")
+        pairs = tuple((str(k), str(v)) for k, v in (entry.get("map") or {}).items())
+        by_path.append((str(path), pairs, tuple(str(u) for u in sub)))
     return Conversion(
         kind,
         text("note"),
         tuple((str(k), str(v)) for k, v in mapping.items()),
         text("format"),
         tuple(str(u) for u in unmapped),
+        tuple(by_path),
     )
 
 
@@ -114,6 +139,10 @@ def conversion_json(c: Conversion) -> dict[str, Any]:
         out["format"] = c.format
     if c.unmapped:
         out["unmapped"] = list(c.unmapped)
+    if c.by_path:
+        out["byPath"] = {
+            p: {"map": dict(m), **({"unmapped": list(u)} if u else {})} for p, m, u in c.by_path
+        }
     if c.note:
         out["note"] = c.note
     return out

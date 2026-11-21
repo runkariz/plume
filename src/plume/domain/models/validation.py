@@ -16,7 +16,8 @@ Issue codes (stable; clients key on them):
   conversion (which values mean true).
 - ``SINGLE_FOR_ARRAY``: a list canonical field maps a scalar API field, without a cardinality /
   array-vs-single conversion.
-- ``ENUM_KEY_UNKNOWN``: an enum conversion maps a value the cited documents' enum does not have.
+- ``ENUM_KEY_UNKNOWN``: an enum conversion maps a value the cited documents' enum does not have
+  (a map shared by several source paths: none of their enums; a byPath map: its own path's).
 - ``ENUM_MAP_INCOMPLETE``: an enum conversion leaves values of that enum neither mapped nor
   listed in ``unmapped``. A standard code list is a ``code-system`` conversion instead (no map,
   not checked value by value).
@@ -316,18 +317,24 @@ def _enum_issues(path: str, api: str, src: FieldSource, oracle: Oracle) -> list[
         return []
     cited = tuple(dict.fromkeys(e.doc_id for e in src.evidence))
     out: list[Issue] = []
+    enums = {p.path: oracle.path_enum(api, p.path, cited) for p in src.paths}
+    # a shared map over several paths (local + regional availability) may hold keys of either
+    # enum: a key is unknown only when no path has it; byPath maps answer to their own enum
+    every = {v.lower() for vs in enums.values() for v in vs or ()}
+    own = {path for path, _, _ in conv.by_path}
     for p in src.paths:
-        values = oracle.path_enum(api, p.path, cited)
+        values = enums[p.path]
         if not values:
             continue
-        known = {v.lower() for v in values}
-        keys = {k.lower(): k for k, _ in conv.enum_map}
+        mapping, unmapped = conv.path_map(p.path)
+        known = {v.lower() for v in values} if p.path in own else every
+        keys = {k.lower(): k for k, _ in mapping}
         unknown = [k for low, k in keys.items() if low not in known]
         if unknown:
             out.append(Issue("ENUM_KEY_UNKNOWN", path, api,
                              f"{p.path} has no value {', '.join(unknown)} in {api} (its values: "
                              f"{', '.join(values)})"))  # fmt: skip
-        covered = set(keys) | {u.lower() for u in conv.unmapped}
+        covered = set(keys) | {u.lower() for u in unmapped}
         missing = [v for v in values if v.lower() not in covered]
         if missing:
             shown = ", ".join(missing[:ENUM_SHOWN]) + (
