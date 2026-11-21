@@ -164,6 +164,12 @@ def test_maintainers_list_read_and_label_reports(stack: FakeStack) -> None:
     auth = {"Authorization": f"Bearer {TOKEN}"}
     listed = client.get("/v1/maintainer/reports", params={"api": API}, headers=auth).json()
     assert [r["id"] for r in listed["reports"]] == [rid]
+    assert listed["enabled"] is True
+    preflight = client.options(
+        f"/v1/maintainer/reports/{rid}",
+        headers={"Origin": "http://127.0.0.1:18473", "Access-Control-Request-Method": "PATCH"},
+    )
+    assert "PATCH" in preflight.headers.get("access-control-allow-methods", "")
     one = client.get(f"/v1/maintainer/reports/{rid}", headers=auth).json()
     assert one["notes"][0]["text"] == "also needed the header name"
     done = client.patch(f"/v1/maintainer/reports/{rid}", headers=auth,

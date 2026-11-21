@@ -3899,6 +3899,11 @@
       },
       "ReportList": {
         "properties": {
+          "enabled": {
+            "description": "Whether readers can report questions on this server (PLUME_REPORTS). The list and the status updates work either way.",
+            "title": "Enabled",
+            "type": "boolean"
+          },
           "reports": {
             "items": {
               "$ref": "#/components/schemas/ReportOut"
@@ -3908,7 +3913,8 @@
           }
         },
         "required": [
-          "reports"
+          "reports",
+          "enabled"
         ],
         "title": "ReportList",
         "type": "object"
