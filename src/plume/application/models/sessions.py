@@ -37,7 +37,12 @@ from plume.domain.knowledge.document import (
     FieldLocation,
 )
 from plume.domain.knowledge.fact import FactKind
-from plume.domain.models.canonical_model import DraftFormatError, ModelDraft, parse_draft
+from plume.domain.models.canonical_model import (
+    DraftFormatError,
+    ModelDraft,
+    name_only_as_no_quote,
+    parse_draft,
+)
 from plume.domain.models.release import GateFailure
 from plume.domain.models.snapshot import (
     ModelSnapshot,
@@ -450,7 +455,10 @@ class ModelSessions:
         main, subs = concept_parts(concept)
         summaries, _ = self._index.browse(build, (), None, 100_000, 0)
         groups = concept_docs(summaries)
-        main = (*main, *_kinds(main, groups))
+        main = (*main, *_kinds(main, groups), *_synonyms(main, groups, summaries))
+        subs = (*subs, *(r for sub in subs for r in ROLE_SYNONYMS.get(sub, ()) if r not in subs))
+        if any(groups.get(m) for m in main):  # related resources only beside its own documents
+            subs = (*subs, *(r for m in main for r in CONCEPT_RELATED.get(m, ()) if r not in subs))
         children = {k for k in groups for m in main if k != m and k.startswith(m)} | set(subs)
         children |= {  # roles that are kinds of it: billingaddress / shippingaddress of Address
             r for m in main for r in ROLE_SYNONYMS.get(m, ()) if r != m and r.endswith(m)
@@ -756,7 +764,7 @@ class ModelSessions:
                 [Issue("INVALID_FORMAT", "", None, f"draft over {MAX_DRAFT_CHARS} characters")]
             )
         try:
-            draft = parse_draft(raw)
+            draft = name_only_as_no_quote(parse_draft(raw))
         except DraftFormatError as exc:
             raise ModelDraftRefusedError([Issue("INVALID_FORMAT", "", None, str(exc))]) from exc
         apis = frozenset(p.api for p in session.inputs)
@@ -1167,3 +1175,50 @@ def _kinds(main: tuple[str, ...], groups: dict[str, list[DocumentSummary]]) -> l
         for m in main
         if k != m and k.endswith(m) and 3 <= len(k) - len(m) <= MAX_KIND_QUALIFIER
     )
+
+
+# Other names APIs give a concept's own resource (JTL-Wawi: products are "items"; Inventory's
+# stock is kept per warehouse).
+CONCEPT_SYNONYMS: dict[str, tuple[str, ...]] = {
+    "product": ("item", "article"),
+    "order": ("salesorder",),
+    "inventory": ("stock",),
+    "stock": ("inventory",),
+}
+# Resources that belong with a concept without being it (stock is kept per warehouse): they join
+# as sub-concepts, after the concept's own documents.
+CONCEPT_RELATED: dict[str, tuple[str, ...]] = {"inventory": ("warehouse",), "stock": ("warehouse",)}
+
+
+def _synonyms(
+    main: tuple[str, ...],
+    groups: dict[str, list[DocumentSummary]],
+    summaries: list[DocumentSummary],
+) -> list[str]:
+    """The synonyms of each main key the API has nothing named for, when the API has them: the
+    concept's own documents then (JTL's items for Product). Never next to the concept's own
+    name (eBay's inventory items stay out of Product where products exist). A synonym that is
+    a noise word elsewhere ("item") gets its group here: the endpoints whose resource or last
+    path word it is, and the models named so."""
+    out: list[str] = []
+    for m in main:
+        if groups.get(m):
+            continue
+        for syn in CONCEPT_SYNONYMS.get(m, ()):
+            if syn in main or syn in out:
+                continue
+            if not groups.get(syn):
+                found = [d for d in summaries if _named(d, syn)]
+                if found:
+                    groups[syn] = found
+            if groups.get(syn):
+                out.append(syn)
+    return out
+
+
+def _named(d: DocumentSummary, key: str) -> bool:
+    if d.kind is DocumentKind.ENDPOINT:
+        return concept_key(d.resource or "") == key or (
+            bool(d.path) and concept_key(last_literal(d.path or "")) == key
+        )
+    return d.kind is DocumentKind.MODEL and concept_key(d.title.split(" / ")[-1]) == key

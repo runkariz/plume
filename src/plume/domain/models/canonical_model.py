@@ -6,7 +6,7 @@ pinned builds.
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from plume.domain.shared.errors import DomainError
@@ -424,3 +424,51 @@ def _operations(raw: list[Any]) -> tuple[Operation, ...]:
             )
         out.append(Operation((_str(op, "name", where) or "").strip(), kind, tuple(sources)))
     return tuple(out)
+
+
+NAME_ONLY_REASON = "the description only restates the field name"
+_QUOTE_FILLER = frozenset({"the", "a", "an", "of", "for", "this", "its"})
+
+
+def _name_words(text: str) -> set[str]:
+    """Words of a name, camelCase / snake_case / dotted split, lower case."""
+    spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
+    return {w for w in re.findall(r"[a-z0-9]+", spaced.lower()) if w}
+
+
+# An identifier written in prose: SalesOrderNumber, firstName (not a label like "Product ID").
+_IDENTIFIER = re.compile(r"\b[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+\b|\b[a-z]+[A-Z][A-Za-z0-9]*\b")
+
+
+def name_only(quote: str, names: list[str]) -> bool:
+    """A quote that only restates identifiers: it holds one (SalesOrderNumber, firstName) and
+    every word is a word of the field's path, the canonical field or the cited document's name
+    ("The SalesOrder SalesOrderNumber", "The firstName"). A vendor's short label ("Product
+    ID.", "City.") is the field's whole description and stays a quote."""
+    if not _IDENTIFIER.search(quote):
+        return False
+    words = [w for w in _name_words(quote) if w not in _QUOTE_FILLER]
+    allowed = set().union(*(_name_words(n) for n in names)) if names else set()
+    return bool(words) and set(words) <= allowed
+
+
+def name_only_as_no_quote(draft: "ModelDraft") -> "ModelDraft":
+    """Citations whose quote only restates the field's name become noQuote citations, so a
+    mapping resting on them is not shown as evidenced (JTL-Wawi: "The SalesOrder
+    SalesOrderNumber"); validation then applies the noQuote rules (a usable sentence elsewhere
+    in the field's own texts must be quoted instead)."""
+
+    def fix(f: CanonicalField) -> CanonicalField:
+        sources = []
+        for api, src in f.sources:
+            names = [f.name, *(p.path for p in src.paths)]
+            evidence = tuple(
+                replace(e, quote="", no_quote=NAME_ONLY_REASON)
+                if not e.no_quote and name_only(e.quote, [*names, e.doc_id.split(":", 1)[-1]])
+                else e
+                for e in src.evidence
+            )
+            sources.append((api, replace(src, evidence=evidence)))
+        return replace(f, sources=tuple(sources), fields=tuple(fix(sub) for sub in f.fields))
+
+    return replace(draft, fields=tuple(fix(f) for f in draft.fields))

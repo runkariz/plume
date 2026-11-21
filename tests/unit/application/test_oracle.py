@@ -1,6 +1,7 @@
 """PinnedLookups: a call names the most specific endpoint (count.json is not {id}.json)."""
 
 from types import SimpleNamespace
+from typing import Any
 
 from plume.application.models.oracle import PinnedLookups
 from plume.domain.knowledge.document import Document, DocumentKind, FieldLocation, FieldSpec
@@ -117,3 +118,44 @@ def test_no_quote_is_judged_by_the_exact_path_not_its_parent_or_a_namesake() -> 
                         ("lineItems[].quantity", "quantity"))  # fmt: skip
     assert _no_quote_codes(allegro, "lineItems[].quantity") == []
     assert _no_quote_codes(allegro, "reconciliation.quantity") == ["NO_QUOTE_NOT_ALLOWED"]
+
+
+def _quoted_codes(doc: Document, path: str, quote: str) -> tuple[list[str], Any]:
+    from plume.domain.models.canonical_model import (  # noqa: PLC0415
+        name_only_as_no_quote,
+        parse_draft,
+    )
+    from plume.domain.models.validation import validate  # noqa: PLC0415
+
+    lookups = PinnedLookups(
+        {"a": BuildId("b-" + "0" * 32)},
+        SimpleNamespace(
+            field_names=lambda _b: [f.name for f in doc.fields],
+            field_types=lambda _b: [(f.name, "string") for f in doc.fields],
+            endpoints=lambda _b: [],
+        ),
+        SimpleNamespace(get_document=lambda _b, _d: doc),
+    )  # fmt: skip
+    ev = {"doc_id": "model:x", "quote": quote}
+    field = {"name": "number", "type": "string", "description": "d",
+             "sources": {"a": {"paths": [path], "evidence": [ev]}}}  # fmt: skip
+    draft = name_only_as_no_quote(parse_draft({"name": "M", "description": "d", "fields": [field]}))
+    codes = [i.code for i in validate(draft, frozenset({"a"}), lookups.oracle())]
+    return codes, draft.fields[0].sources[0][1].evidence[0]
+
+
+def test_a_quote_that_only_restates_the_name_is_no_evidence() -> None:
+    """JTL-Wawi: "The SalesOrder SalesOrderNumber" was accepted as a quote. It becomes a noQuote
+    citation (not shown as evidenced); a real sentence elsewhere must be quoted instead."""
+    jtl = _doc_with(("salesOrderNumber", "The SalesOrder SalesOrderNumber"))
+    codes, ev = _quoted_codes(jtl, "salesOrderNumber", "The SalesOrder SalesOrderNumber")
+    assert codes == []
+    assert (ev.quote, ev.no_quote) == ("", "the description only restates the field name")
+    richer = _doc_with(("salesOrderNumber", "The SalesOrder SalesOrderNumber. The number "
+                        "printed on the invoice and the delivery note."))  # fmt: skip
+    codes, _ = _quoted_codes(richer, "salesOrderNumber", "The SalesOrder SalesOrderNumber")
+    assert codes == ["NO_QUOTE_NOT_ALLOWED"]
+    # a vendor's short label is the field's whole description: it stays a quote
+    label = _doc_with(("product_id", "Product ID."))
+    codes, ev = _quoted_codes(label, "product_id", "Product ID.")
+    assert ev.no_quote is None

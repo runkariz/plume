@@ -183,3 +183,17 @@ def test_kinds_count_as_the_concept_when_it_has_no_documents_of_its_own() -> Non
         "regionalinventory",
     ]  # "in" is no qualifier; a response wrapper is no kind
     assert _kinds(("inventory",), {**groups, "inventory": [_model("model:inventory")]}) == []
+
+
+def test_a_concept_synonym_counts_only_when_the_api_lacks_the_concept_name() -> None:
+    """JTL-Wawi calls products "items" (a noise word elsewhere, so it has no group): Product's
+    context missed GET /items. Where products exist, items stay out."""
+    from plume.application.models.sessions import _synonyms  # noqa: PLC0415
+
+    items = DocumentSummary("endpoint:GET~/items", DocumentKind.ENDPOINT, "Items", "Item",
+                            "GET", "/{version}/items", False)  # fmt: skip
+    groups: dict[str, list[DocumentSummary]] = {"offer": [_model("model:offer")]}
+    assert _synonyms(("product", "offer"), groups, [items]) == ["item"]
+    assert groups["item"] == [items]  # its group built on the spot
+    with_products = {"product": [_model("model:product")]}
+    assert _synonyms(("product",), with_products, [items]) == []
