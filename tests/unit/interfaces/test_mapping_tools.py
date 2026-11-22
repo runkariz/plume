@@ -183,6 +183,10 @@ def test_maintainers_list_read_accept_and_see_verified_mappings(stack: FakeStack
                         json={"action": "accept", "reason": "matches the docs"}).json()  # fmt: skip
     assert done["status"] == "accepted"
     assert done["verified"]["suspended"] is False
+    by_name = client.get(
+        "/v1/maintainer/verified-mappings", params={"concept": "Orders"}, headers=auth
+    ).json()
+    assert [m["reportId"] for m in by_name["mappings"]] == [rid]  # a model's concept name works
     vm = client.get("/v1/maintainer/verified-mappings", params={"api": API}, headers=auth).json()
     assert [(m["canonicalField"], m["paths"], m["reportId"]) for m in vm["mappings"]] == [
         ("grandTotal", ["total"], rid)
