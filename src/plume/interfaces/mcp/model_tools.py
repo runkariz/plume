@@ -119,7 +119,8 @@ def model_text(model: dict[str, Any], full: bool = False) -> str:
             + ". WRITE_ONLY_SOURCE: the mapping cites only a request/write; check whether the "
             "docs have a read source. DIFFERS_FROM_VERIFIED: a maintainer verified another "
             "mapping (see verified_mappings in get_model_context); use it unless the user "
-            "says otherwise."
+            "says otherwise. UNTYPED_SOURCE: the API states no type for the source field; tell "
+            "the user the conversion is unverified."
         )
     if link:
         lines.append(f"Link: {link}")

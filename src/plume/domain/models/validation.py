@@ -41,6 +41,8 @@ Warning codes (stored with the model, never a refusal):
 - ``DIFFERS_FROM_VERIFIED`` (added by model sessions, not here): a field maps an API
   differently from a maintainer-verified mapping (an accepted user report), or maps a field
   verified as not available there.
+- ``UNTYPED_SOURCE``: a typed canonical field maps a source field whose type the API never
+  states (a Postman example whose value was null): the conversion is unverified.
 - ``NO_COVERAGE``: an input API is not mapped by any field. Server generation sends it back
   for repair on every round and stores the model with the warning only after the last one; a
   Claude or pasted draft is stored with the warning.
@@ -455,6 +457,7 @@ def warnings(draft: ModelDraft, apis: frozenset[str], oracle: Oracle) -> list[Is
         for api, src in f.sources:
             if api not in apis or not src.evidence:
                 continue
+            out.extend(_untyped(path, f.type, api, src, oracle) if not f.fields else [])
             fetch_read = (src.fetch or "").strip().upper().startswith("GET ")
             if not fetch_read and all(oracle.write_only(api, e.doc_id) for e in src.evidence):
                 cited = ", ".join(sorted({e.doc_id for e in src.evidence}))
@@ -467,4 +470,23 @@ def warnings(draft: ModelDraft, apis: frozenset[str], oracle: Oracle) -> list[Is
                         "prefer a model or a GET response field when the docs have one",
                     )
                 )
+    return out
+
+
+_UNTYPED_CANONICAL = frozenset({"", "any", "unknown", "mixed", "json"})
+
+
+def _untyped(path: str, ftype: str, api: str, src: FieldSource, oracle: Oracle) -> list[Issue]:
+    """UNTYPED_SOURCE: a typed canonical field from a source field with no stated type."""
+    if oracle.path_shape is None or ftype.strip().lower() in _UNTYPED_CANONICAL:
+        return []
+    out = []
+    for p in src.paths:
+        if {t.lower() for t in oracle.path_shape(api, p.path)[0]} - {"null"}:
+            continue
+        why = (
+            f"source field {p.path} has no documented type in {api} (e.g. its example value "
+            f"was null); the conversion to {ftype} is unverified"
+        )
+        out.append(Issue("UNTYPED_SOURCE", path, api, why))
     return out
