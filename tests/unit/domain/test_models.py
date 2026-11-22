@@ -118,3 +118,35 @@ def test_snapshot_support_coverage_and_id() -> None:
     assert a == snapshot_id_for(tuple(reversed(inputs)), "Order", draft)
     assert a != snapshot_id_for((PinnedInput("test-catalog-api", "b-9"), inputs[1]), "Order", draft)
     assert a.startswith("m-")
+
+
+def test_an_untyped_source_in_a_typed_field_is_a_warning() -> None:
+    """OnBuy's Postman examples: cancelled_at was null, so the API states no type for it."""
+    from dataclasses import replace  # noqa: PLC0415
+
+    from plume.domain.models.canonical_model import parse_draft  # noqa: PLC0415
+    from plume.domain.models.validation import warnings  # noqa: PLC0415
+
+    quote = "The time the order was cancelled by the seller."
+    ev = [{"doc_id": "model:order", "quote": quote}]
+    raw = {"name": "Order", "description": "An order.", "fields": [
+        {"name": "cancelledAt", "type": "datetime", "description": "When cancelled.",
+         "sources": {"onbuy": {"paths": ["cancelled_at"], "evidence": ev}}},
+        {"name": "status", "type": "string", "description": "Status.",
+         "sources": {"onbuy": {"paths": ["status"], "evidence": ev}}},
+        {"name": "extra", "type": "any", "description": "Anything.",
+         "sources": {"onbuy": {"paths": ["shipped_at"], "evidence": ev}}},
+    ]}  # fmt: skip
+    types = {"cancelled_at": frozenset({"null"}), "status": frozenset({"string"}),
+             "shipped_at": frozenset()}  # fmt: skip
+    oracle = replace(
+        _oracle({("onbuy", "model:order"): quote}, set(), set()),
+        path_shape=lambda api, path: (types.get(path, frozenset()), ()),
+    )
+    found = [w for w in warnings(parse_draft(raw), frozenset({"onbuy"}), oracle)
+             if w.code == "UNTYPED_SOURCE"]  # fmt: skip
+    assert [(w.field, w.api) for w in found] == [("cancelledAt", "onbuy")]
+    assert found[0].message == (
+        "source field cancelled_at has no documented type in onbuy (e.g. its example value was "
+        "null); the conversion to datetime is unverified"
+    )
