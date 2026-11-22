@@ -82,7 +82,7 @@ from plume.domain.knowledge.document import (
     constraint_dict,
 )
 from plume.domain.knowledge.fact import Fact, FactKind
-from plume.domain.knowledge.ranking import Fusion, reciprocal_rank_fusion
+from plume.domain.knowledge.ranking import Fusion, expand_text_query, reciprocal_rank_fusion
 from plume.domain.shared.ids import BuildId
 
 DEFAULT_FUSION = Fusion()
@@ -695,7 +695,12 @@ class SearchDocs:
                 trace,
                 "postgres",
                 "full-text search",
-                lambda: self._index.text(build_id, query, pool, kinds),
+                lambda: self._index.text(
+                    build_id,
+                    expand_text_query(query, lambda w: bool(self._index.text(build_id, w, 1))),
+                    pool,
+                    kinds,
+                ),
             )
         # The order is computed as the eval gate computes it (the first RANK_POOL hits of each
         # list, the rules over the top RANK_K), whatever top_k asks for; a longer list only

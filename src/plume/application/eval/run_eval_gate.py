@@ -31,7 +31,7 @@ from plume.domain.eval.gate import GateDecision, GatePolicy, decide
 from plume.domain.eval.gold import GoldKind, GoldSet
 from plume.domain.eval.metrics import K, QuestionOutcome, score
 from plume.domain.knowledge.document import DocumentKind
-from plume.domain.knowledge.ranking import Fusion
+from plume.domain.knowledge.ranking import Fusion, expand_text_query
 from plume.domain.knowledge.tag import LATEST, TagName
 from plume.domain.shared.clock import Clock
 from plume.domain.shared.ids import BuildId
@@ -103,7 +103,10 @@ class RunEvalGate:
             if q.kind is GoldKind.SEARCH:
                 vector = self._embedder.embed_query(q.question)
                 dense = self._index.dense(build_id, vector, POOL)
-                text = self._index.text(build_id, q.question, POOL)
+                asked = expand_text_query(
+                    q.question, lambda w: bool(self._index.text(build_id, w, 1))
+                )
+                text = self._index.text(build_id, asked, POOL)
                 fused = [h.doc_id for h in fuse_hits(dense, text, q.question, POOL, self._fusion)]
                 wider = partial(self._endpoints_for, build_id, vector)
                 own = partial(

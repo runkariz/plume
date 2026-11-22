@@ -74,3 +74,17 @@ def test_semantic_fusion_keeps_a_clear_dense_winner_that_text_misses() -> None:
     assert semantic.index("sibling") < semantic.index("x")  # text still counts
     with pytest.raises(ValueError, match="fusion"):
         Fusion(k=0)
+
+
+def test_environment_words_expand_only_where_the_api_lacks_them() -> None:
+    """Shopware has no sandbox, but documents a staging instance: "does Shopware have a
+    sandbox" also searches staging. An API that names its sandbox keeps the question."""
+    from plume.domain.knowledge.ranking import expand_text_query  # noqa: PLC0415
+
+    q = "does Shopware have a sandbox environment for testing"
+    expanded = expand_text_query(q, lambda w: w != "sandbox")
+    assert expanded.startswith(q)
+    assert "staging" in expanded
+    assert "test account" in expanded
+    assert expand_text_query(q, lambda _w: True) == q  # the API documents its sandbox
+    assert expand_text_query("list orders", lambda _w: False) == "list orders"
