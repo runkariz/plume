@@ -17,6 +17,8 @@ import { MaintainerEntry } from '@/pages/maintainer/MaintainerEntry';
 import { PublishStep } from '@/pages/maintainer/PublishStep';
 import { BuildsPage } from '@/pages/maintainer/release/BuildsPage';
 import { ReleaseReview } from '@/pages/maintainer/release/ReleaseReview';
+import { MappingReportPage } from '@/pages/maintainer/reports/MappingReportPage';
+import { MappingReportsPage } from '@/pages/maintainer/reports/MappingReportsPage';
 import { ReportPage } from '@/pages/maintainer/reports/ReportPage';
 import { ReportsPage } from '@/pages/maintainer/reports/ReportsPage';
 import { ReviewStep } from '@/pages/maintainer/ReviewStep';
@@ -49,6 +51,8 @@ export const routes: RouteObject[] = [
               { path: 'maintainer/jobs/:jobId/publish', element: <PublishStep /> },
               { path: 'maintainer/reports', element: <ReportsPage /> },
               { path: 'maintainer/reports/:reportId', element: <ReportPage /> },
+              { path: 'maintainer/mapping-reports', element: <MappingReportsPage /> },
+              { path: 'maintainer/mapping-reports/:reportId', element: <MappingReportPage /> },
               { path: 'maintainer/apis/:apiId/builds', element: <BuildsPage /> },
               {
                 path: 'maintainer/apis/:apiId/builds/:buildId/notes',

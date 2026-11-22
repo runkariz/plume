@@ -3190,3 +3190,97 @@ ul.plain {
 .missing-place {
   min-width: 48px;
 }
+
+/* maintainer: mapping reports */
+.reports-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+.reports-tabs a {
+  padding: 8px 14px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 14px;
+  text-decoration: none;
+}
+.reports-tabs a.on {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+.reports-tabs a:hover {
+  color: var(--ink);
+}
+.report-problem {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.map-compare {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 8px;
+}
+.map-col-title {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 0 0 6px;
+}
+.map-evidence {
+  margin-top: 16px;
+}
+.map-citation {
+  margin: 0 0 12px;
+}
+.map-quote {
+  margin: 6px 0 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--line);
+  background: var(--surface-2);
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+.map-quote mark {
+  background: var(--warn-soft);
+  color: inherit;
+  border-bottom: 2px solid var(--warn);
+  padding: 0 1px;
+}
+.map-validator {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line2);
+}
+.map-reason {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+.map-actions {
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  align-items: center;
+}
+.map-route {
+  gap: 6px;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.map-route select {
+  max-width: 100%;
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  .map-compare {
+    grid-template-columns: 1fr;
+  }
+}
+
+.map-absence {
+  margin: 0 0 6px;
+}

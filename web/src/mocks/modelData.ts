@@ -555,6 +555,8 @@ export const inventorySnapshot: ModelSnapshot = {
   impact: { status: 'updated_unaffected', affectedCount: 0, breakingCount: 0 },
   id: 'snap_8f3a21',
   name: 'Inventory',
+  // the concept key (maintainers match verified mappings by it)
+  concept: 'inventory/stock',
   description: 'Stock per SKU and location, stock management and backorder behavior.',
   status: 'generated_unverified',
   generatedAt: '2026-11-14T14:20:00Z',

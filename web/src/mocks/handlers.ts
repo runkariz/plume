@@ -63,6 +63,7 @@ import {
   type MockSession,
   type StoredModel,
 } from './modelStore';
+import { listMappingReports, seedMappingReports, verifiedOf } from './mappingReportsStore';
 import { isStatus, listReports, seedReports } from './reportsStore';
 import {
   authDetailFor,
@@ -296,6 +297,8 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
   const releases = seedReleases();
   /** Reported questions of the mock server (maintainer). */
   const reports = seedReports();
+  /** Mapping reports of the mock server (maintainer). */
+  const mappingReports = seedMappingReports();
   // a maintainer's display names (per API, in memory like the rest of the mock)
   const displayNames = new Map<string, string>();
   /** APIs a maintainer removed in this mock session. */
@@ -1634,6 +1637,81 @@ export function createHandlers(base: string = apiBaseUrl(), opts: MockOptions = 
           }),
       }),
     ),
+    // mapping reports (maintainer)
+    http.get(`${base}/v1/maintainer/mapping-reports`, ({ request }) => {
+      if (!isMaintainer(request)) return unauthorized();
+      const q = new URL(request.url).searchParams;
+      return HttpResponse.json({
+        reports: listMappingReports(mappingReports, {
+          api: q.get('api'),
+          concept: q.get('concept'),
+          status: q.get('status'),
+          kind: q.get('kind'),
+        }),
+        enabled: true,
+      });
+    }),
+    http.get(`${base}/v1/maintainer/mapping-reports/:id`, ({ params, request }) => {
+      if (!isMaintainer(request)) return unauthorized();
+      const r = mappingReports.find((x) => x.id === String(params.id));
+      return r ? HttpResponse.json(r) : notFound();
+    }),
+    http.patch(`${base}/v1/maintainer/mapping-reports/:id`, async ({ params, request }) => {
+      if (!isMaintainer(request)) return unauthorized();
+      const r = mappingReports.find((x) => x.id === String(params.id));
+      if (!r) return notFound();
+      const body = (await request.json()) as { action?: string; reason?: string; route?: string };
+      const reason = (body.reason ?? '').trim();
+      if (body.action === 'accept') {
+        if (!r.validation?.ok || !r.suggestion)
+          return HttpResponse.json(
+            {
+              error: 'refused',
+              code: 'report_refused',
+              message: 'Only a suggestion that passed the validator can be accepted.',
+            },
+            { status: 400 },
+          );
+        r.status = 'accepted';
+        r.reason = reason;
+        r.verified = {
+          id: `vm-${r.id.slice(3)}`,
+          reportId: r.id,
+          build: r.build ?? null,
+          validatedAt: new Date().toISOString(),
+          suspended: false,
+          suspendedReason: null,
+        };
+      } else if (body.action === 'reject') {
+        r.status = 'rejected';
+        r.reason = reason;
+      } else if (body.action === 'route') {
+        if (body.route !== 'plume' && body.route !== 'stream' && body.route !== 'owner')
+          return HttpResponse.json(
+            { detail: 'route needs plume, stream or owner' },
+            { status: 422 },
+          );
+        r.status = 'routed';
+        r.route = body.route;
+        r.reason = reason;
+      } else if (body.action === 'reopen') {
+        r.status = 'open';
+        r.route = null;
+      } else return HttpResponse.json({ detail: 'unknown action' }, { status: 422 });
+      r.updatedAt = new Date().toISOString();
+      return HttpResponse.json(r);
+    }),
+    http.get(`${base}/v1/maintainer/verified-mappings`, ({ request }) => {
+      if (!isMaintainer(request)) return unauthorized();
+      const q = new URL(request.url).searchParams;
+      return HttpResponse.json({
+        mappings: verifiedOf(mappingReports).filter(
+          (m) =>
+            (!q.get('concept') || m.concept === q.get('concept')) &&
+            (!q.get('api') || m.api === q.get('api')),
+        ),
+      });
+    }),
     // reported questions (maintainer)
     http.get(`${base}/v1/maintainer/reports`, ({ request }) => {
       if (!isMaintainer(request)) return unauthorized();
