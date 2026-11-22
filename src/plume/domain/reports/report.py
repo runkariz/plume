@@ -3,6 +3,7 @@
 import hashlib
 import hmac
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
@@ -74,15 +75,20 @@ def session_hash(session_id: str | None, salt: bytes) -> str | None:
 
 
 _STILL_UNSAFE = (_JWT, _PREFIXED, _EMAIL, re.compile(r"\d{9,}"))
-_MARKER = re.compile(r"\[(?:token|secret|email|account|ip|number|query|company|id)\]")
+_MARKER = re.compile(r"\[(?:token|secret|email|account|ip|number|query|company|id|name|url)\]")
 
 
-def safe_text(text: str | None, policy: RedactionPolicy = REPORT_POLICY) -> tuple[str | None, int]:
+def safe_text(
+    text: str | None,
+    policy: RedactionPolicy = REPORT_POLICY,
+    hosts: Callable[[str], str | None] | None = None,
+) -> tuple[str | None, int]:
     """The field as it may be stored: redacted, or None when the rules cannot make it safe
-    (something secret-looking survives, or it is mostly redaction markers)."""
+    (something secret-looking survives, or it is mostly redaction markers). ``hosts``: see
+    ``redact_text``."""
     if text is None or not text.strip():
         return None, 0
-    red, n = redact_text(text.strip(), policy)
+    red, n = redact_text(text.strip(), policy, hosts)
     if any(p.search(red) for p in _STILL_UNSAFE) or any(
         _LONG_KEYLIKE.fullmatch(w) and any(c.isdigit() for c in w) for w in red.split()
     ):

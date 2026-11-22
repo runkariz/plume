@@ -55,3 +55,60 @@ def test_prose_field_names_and_standards_stay(text: str) -> None:
 )
 def test_companies_and_cued_ids(text: str, expected: str) -> None:
     assert redact_text(text, REPORT_POLICY)[0] == expected
+
+
+def _hosts(host: str) -> str | None:
+    return {"shopify.dev": "shopify.dev"}.get(host)
+
+
+def test_the_second_round_of_leaks() -> None:
+    raw = (
+        "Contact Anja Kowalski, [email], [number]. Token [token], endpoint "
+        "https://erp.nordlicht-elektro.example/api, IBAN [account], customer number [id]."
+    )
+    assert redact_text(raw, REPORT_POLICY, _hosts)[0] == (
+        "Contact [name], [email], [number]. Token [token], endpoint [url], IBAN [account], "
+        "customer number [id]."
+    )
+    assert safe_text(raw, REPORT_POLICY, _hosts) == (None, 2)  # mostly markers: refused
+    current, n = safe_text(
+        "filled by hand for the warehouse Lager Bremerhaven Sued, shelf B-17", REPORT_POLICY
+    )
+    assert current == "filled by hand for the warehouse [id], shelf [id]"
+    assert n == 2
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "the warehouse stock levels are wrong",
+        "Contact support via the docs",
+        "contact the seller about the order",
+        "which store Settings field holds it; the location ID",
+        "sorted by Created Date from Shopify Admin",
+        "see https://shopify.dev/docs/api for the bin code",
+    ],
+)
+def test_second_round_non_matches(text: str) -> None:
+    assert redact_text(text, REPORT_POLICY, _hosts) == (text, 0)
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("regards, Max Mustermann", "regards, [name]"),
+        ("Ansprechpartnerin: Jana Weiß-Berg", "Ansprechpartnerin: [name]"),
+        ("stock in our store Köln Mitte is wrong", "stock in our store [id] is wrong"),
+        ("rack 12, aisle C3, bin A-4-2", "rack [id], aisle [id], bin [id]"),
+        ("https://other.example.com/orders/1.", "[url]."),
+    ],
+)
+def test_names_places_bins_and_foreign_urls(text: str, expected: str) -> None:
+    assert redact_text(text, REPORT_POLICY, _hosts)[0] == expected
+
+
+def test_without_a_host_rule_urls_keep_their_host() -> None:
+    assert (
+        redact_text("https://other.example.com/orders/1")[0]
+        == "https://other.example.com/orders/{}"
+    )

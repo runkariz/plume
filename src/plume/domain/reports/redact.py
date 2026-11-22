@@ -8,7 +8,13 @@ Rules, in order, each replacing the match with a fixed marker:
    such as "access token: how do I ..." stays.
 4. Emails -> [email]; IBAN-like account numbers -> [account]; IPv4 / IPv6 -> [ip].
 5. Any 24+ character run of key characters mixing letters and digits -> [secret].
-5a. A company name: capitalised words before a legal form (GmbH, AG, Ltd, LLC, Inc, SAS, BV,
+1a. With ``hosts`` (the API's own hosts, from its documents): a URL on another host -> [url];
+   a host matching a documented template ({shop}.myshopify.com) is written as the template.
+5a. A person's name (2-3 capitalised words) after a contact cue (contact, Ansprechpartner,
+   attn, name, signed by, regards, cc) -> [name]; "contact support" stays.
+5a'. A place name (1-4 capitalised words) after a place cue (warehouse, Lager, store,
+   location, shop, branch, depot, with an optional the / our / my) -> [id].
+5a''. A company name: capitalised words before a legal form (GmbH, AG, Ltd, LLC, Inc, SAS, BV,
    SRL, ...) -> [company].
 5b. An identifier after a cue word (customer / company / shop / seller / merchant / tenant /
    warehouse / location / store / account / order / vendor / supplier / client / user, with an
@@ -28,6 +34,7 @@ operation name such as aliexpress.solution.order.get).
 """
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from urllib.parse import parse_qsl, urlsplit
 
@@ -74,7 +81,19 @@ _COMPANY = re.compile(
 )
 _CUES = (
     r"customer|company|shop|seller|merchant|tenant|warehouse|location|store|account|order|"
-    r"vendor|supplier|client|user|kunde|lager"
+    r"vendor|supplier|client|user|kunde|lager|shelf|bin|rack|aisle|fach|regal|slot|branch|depot"
+)
+_CAP = r"[A-ZÄÖÜ][a-zäöüßà-ÿ]+(?:-[A-ZÄÖÜ][a-zäöüßà-ÿ]+)?"
+_PERSON = re.compile(
+    r"\b((?i:contact(?:ed)?|ansprechpartner(?:in)?|kontakt|attn\.?|name|signed(?: by)?|"
+    rf"regards|cc)[:,]?\s+)({_CAP}(?:\s+{_CAP}){{1,2}})\b"
+)
+_NOT_A_PLACE = frozenset({"Id", "Name", "Number", "Code", "Type", "Status", "Level", "Levels",
+                          "Data", "Field", "Fields", "Object", "Endpoint", "Settings", "List",
+                          "Stock", "Inventory", "Address", "Details"})  # fmt: skip
+_PLACE = re.compile(
+    r"\b((?i:warehouse|lager|store|location|shop|branch|depot|filiale)\s+"
+    rf"(?:(?i:the|our|my)\s+)?)({_CAP}(?:\s+{_CAP}){{0,3}})\b"
 )
 _CUE_ID = re.compile(
     rf"\b((?:{_CUES})(?:\s+(?:number|no\.?|nr\.?|id|code|name|#))?\s*[:#=]?\s*)"
@@ -86,7 +105,7 @@ _STANDARDS = frozenset({"ISO", "RFC", "EN", "DIN", "SHA", "UTF", "HTTP", "TLS", 
 _CODE = re.compile(r"\b([A-Z]{1,4})-\d{4,}\b")
 _MARKERS = (
     "[token]", "[secret]", "[email]", "[account]", "[ip]", "[number]", "?[query]", "[company]",
-    "[id]",
+    "[id]", "[name]", "[url]",
 )  # fmt: skip
 
 
@@ -108,15 +127,39 @@ def _mixed(s: str) -> bool:
 STRICT = RedactionPolicy()
 
 
-def redact_text(text: str | None, policy: RedactionPolicy = STRICT) -> tuple[str, int]:
-    """The text with every rule applied, and how many markers it now holds."""
+def _place(m: re.Match[str]) -> str:
+    words = m.group(2).split()
+    if words[0] in _NOT_A_PLACE:
+        return m.group(0)
+    return f"{m.group(1)}[id]"
+
+
+def redact_text(
+    text: str | None,
+    policy: RedactionPolicy = STRICT,
+    hosts: Callable[[str], str | None] | None = None,
+) -> tuple[str, int]:
+    """The text with every rule applied, and how many markers it now holds. ``hosts`` maps a
+    URL host to how it may be written (the API's own host or its template), None: not the
+    API's, the URL becomes [url]; without it every host stays."""
     if not text:
         return "", 0
 
     def url(m: re.Match[str]) -> str:
-        parts = urlsplit(m.group(0))
+        whole = m.group(0)
+        found = whole.rstrip(".,;:!?)")
+        return _url(found) + whole[len(found) :]  # sentence punctuation stays outside
+
+    def _url(found: str) -> str:
+        parts = urlsplit(found)
+        host = parts.netloc
+        if hosts is not None:
+            known = hosts(parts.hostname or "")
+            if known is None:
+                return "[url]"
+            host = known + (f":{parts.port}" if parts.port else "")
         rest = "?[query]" if parts.query or parts.fragment else ""
-        return f"{parts.scheme}://{parts.netloc}{template_path(parts.path)[0]}{rest}"
+        return f"{parts.scheme}://{host}{template_path(parts.path)[0]}{rest}"
 
     s = _URL.sub(url, text)
     s = _AUTH.sub(lambda m: f"{m.group(1)} [token]", s)
@@ -128,6 +171,8 @@ def redact_text(text: str | None, policy: RedactionPolicy = STRICT) -> tuple[str
     s = _IPV6.sub("[ip]", s)
     s = _IPV4.sub("[ip]", s)
     s = _COMPANY.sub("[company]", s)
+    s = _PERSON.sub(lambda m: f"{m.group(1)}[name]", s)
+    s = _PLACE.sub(_place, s)
     s = _CUE_ID.sub(_cue_id, s)
     s = _CODE.sub(lambda m: m.group(0) if m.group(1) in _STANDARDS else "[id]", s)
     s = _LONG_KEYLIKE.sub(lambda m: "[secret]" if _mixed(m.group(0)) else m.group(0), s)

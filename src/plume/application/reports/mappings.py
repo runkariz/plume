@@ -13,6 +13,7 @@ import contextlib
 import json
 import threading
 import uuid
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import datetime, timedelta
 from typing import Any
@@ -25,6 +26,7 @@ from plume.application.ports.mapping_repo import MappingRepo
 from plume.application.ports.model_repo import ModelRepo
 from plume.application.ports.search_index import FactQuery
 from plume.application.reader.resolve import BuildResolver
+from plume.application.reports.hosts import ApiHosts
 from plume.application.reports.service import ReportRefusedError, ReportsDisabledError
 from plume.domain.models.canonical_model import (
     DraftFormatError,
@@ -98,7 +100,9 @@ class MappingReports:
         per_hour: int = 10,
         retention_days: int = 90,
         policy: RedactionPolicy = REPORT_POLICY,
+        hosts: ApiHosts | None = None,
     ) -> None:
+        self._hosts = hosts  # the API's own URL hosts (others are redacted); None: all stay
         self._repo = repo
         self._resolver = resolver
         self._models = models
@@ -117,6 +121,9 @@ class MappingReports:
     @property
     def enabled(self) -> bool:
         return self._enabled
+
+    def _host_rule(self, api: str) -> Callable[[str], str | None] | None:
+        return self._hosts.of(api) if self._hosts is not None else None
 
     # -- reader tools ---------------------------------------------------------------------------
 
@@ -159,13 +166,14 @@ class MappingReports:
         build = self._resolver.resolve(api).build.build_id.value
         sess = session_hash(session_id, self._salt)
         self._limit(sess, connection)
-        text, n_p = safe_text(problem, self._policy)
+        rule = self._host_rule(api)
+        text, n_p = safe_text(problem, self._policy, rule)
         if text is None:
             raise ReportRefusedError(
                 "the problem could not be stored safely: describe it in general terms, without "
                 "user data (ids, order numbers, tokens, names, emails), and report again"
             )
-        current, n_c = safe_text(current_mapping, self._policy)
+        current, n_c = safe_text(current_mapping, self._policy, rule)
         field_name = redact_text(canonical_field.strip(), self._policy)[0][:200]
         client, _ = safe_text(client_name[:64] if client_name else None, self._policy)
         suggestion, reason = (None, None)
@@ -271,7 +279,7 @@ class MappingReports:
             raise NotFoundError(f"mapping report {report_id} not found")
         sess = session_hash(session_id, self._salt)
         self._limit(sess, connection)
-        text, n = safe_text(note, self._policy)
+        text, n = safe_text(note, self._policy, self._host_rule(existing.api))
         if text is None:
             raise ReportRefusedError(
                 "the note could not be stored safely: write it without user data and try again"
