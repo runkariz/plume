@@ -431,6 +431,10 @@ class FindFactRequest(Schema):
     resource: str | None = None
     location: Literal["path", "query", "header", "body", "response", "model"] | None = None
     version: str | None = None
+    limit: int = Field(default=50, ge=1, le=50, description="Matches per page (at most 50).")
+    cursor: str | None = Field(
+        default=None, max_length=2000, description="next_cursor of the previous page."
+    )
 
 
 class FactMatch(Schema):
@@ -465,6 +469,11 @@ class FindFactResponse(Schema):
     incomplete_reasons: list[str] = Field(default_factory=list)
     text_mentions: list[SearchHit]
     wording: str
+    total: int = Field(default=0, description="Every match, across pages.")
+    next_cursor: str | None = Field(
+        default=None, description="Set when more matches follow: pass it as cursor."
+    )
+    hint: str | None = Field(default=None, description="How to narrow a capped lookup.")
 
 
 class FieldOut(Schema):

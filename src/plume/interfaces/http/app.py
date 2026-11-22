@@ -587,6 +587,8 @@ def create_app(deps: HttpDependencies) -> FastAPI:
             resource=body.resource,
             location=body.location,
             version=body.version,
+            limit=body.limit,
+            cursor=body.cursor,
         )
         p = payloads.find_fact_payload(r)
         return s.FindFactResponse(
@@ -619,6 +621,9 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 for h in r.text_mentions
             ],
             wording=r.wording,
+            total=r.total,
+            next_cursor=r.next_cursor,
+            hint=r.hint,
         )
 
     @app.get(

@@ -1,5 +1,7 @@
 """Reader use cases. Retrieval only: Claude writes the answers, Plume returns cited material."""
 
+import base64
+import dataclasses
 import json
 import re
 import time
@@ -15,7 +17,15 @@ from plume.application.ports.build_repo import BuildRepo
 from plume.application.ports.document_repo import DocumentRepo
 from plume.application.ports.embedder import Embedder, Vector
 from plume.application.ports.eval_repo import EvalRepo
-from plume.application.ports.search_index import ChunkHit, DocumentSummary, FactQuery, SearchIndex
+from plume.application.ports.search_index import (
+    ChunkHit,
+    DocumentSummary,
+    FactKey,
+    FactQuery,
+    QueryTooBroadError,
+    SearchIndex,
+    fact_key,
+)
 from plume.application.ports.tag_repo import TagRepo
 from plume.application.reader.dto import (
     ApiOverview,
@@ -906,6 +916,30 @@ _ENDPOINT_FORM = re.compile(
 )
 
 
+FIND_FACT_LIMIT = 50  # matches per call (Shopware "id": 25k facts in 844 documents)
+FIND_FACT_MAX_BYTES = 200_000  # a backstop on one page's matches
+
+
+def _cursor(key: FactKey) -> str:
+    return base64.urlsafe_b64encode(json.dumps(list(key)).encode()).decode().rstrip("=")
+
+
+def _after(cursor: str | None) -> FactKey | None:
+    if not cursor:
+        return None
+    try:
+        raw = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
+    except (ValueError, TypeError) as exc:
+        raise ReaderInputError("cursor is not one find_fact returned") from exc
+    if not (isinstance(raw, list) and len(raw) == 4 and all(isinstance(x, str) for x in raw)):
+        raise ReaderInputError("cursor is not one find_fact returned")
+    return (raw[0], raw[1], raw[2], raw[3])
+
+
+def _match_bytes(m: FactMatch) -> int:
+    return len(json.dumps(dataclasses.asdict(m), default=str))
+
+
 class FindFact:
     """Presence/absence of an endpoint, field or scope, with evidence and a completeness flag."""
 
@@ -923,12 +957,18 @@ class FindFact:
         self._index = index
         self._documents = documents
 
-    def _conflict_note(self, build_id: BuildId, fact: Fact) -> str | None:
+    def _conflict_note(
+        self, build_id: BuildId, fact: Fact, docs: dict[str, Any] | None = None
+    ) -> str | None:
         """x-kariz-conflicts of the fact's document that concern it: the endpoint itself, or a
-        statement about this parameter (param:<name>). Every statement, never one picked."""
+        statement about this parameter (param:<name>). Every statement, never one picked.
+        ``docs``: the call's cache of owner documents (one load per owner)."""
         if self._documents is None:
             return None
-        doc = self._documents.get_document(build_id, fact.owner_id)
+        cache = docs if docs is not None else {}
+        if fact.owner_id not in cache:
+            cache[fact.owner_id] = self._documents.get_document(build_id, fact.owner_id)
+        doc = cache[fact.owner_id]
         conflicts = conflicts_of(doc.raw) if doc is not None else ()
         name = fact.name.lower()
         hits = [
@@ -938,8 +978,10 @@ class FindFact:
         ]  # fmt: skip
         return "\n".join(c.text for c in hits) or None
 
-    def _with_conflicts(self, build_id: BuildId, m: FactMatch, fact: Fact) -> FactMatch:
-        conflict = self._conflict_note(build_id, fact)
+    def _with_conflicts(
+        self, build_id: BuildId, m: FactMatch, fact: Fact, docs: dict[str, Any] | None = None
+    ) -> FactMatch:
+        conflict = self._conflict_note(build_id, fact, docs)
         return replace(m, note="\n".join(x for x in (m.note, conflict) if x)) if conflict else m
 
     def _mentions(self, build_id: BuildId, name: str) -> list[ChunkHit]:
@@ -1036,6 +1078,75 @@ class FindFact:
             f'(e.g. "{hits[0].name}?{key}={example}"); {MAX_AMBIGUOUS_MATCHES} shown'
         ]
 
+    def _fetch(
+        self,
+        api: str,
+        build_id: BuildId,
+        name: str,
+        fact_kind: FactKind | None,
+        owner: str | None,
+        resource: str | None,
+        loc: FieldLocation | None,
+        limit: int,
+        after: FactKey | None,
+    ) -> tuple[list[Fact], int, bool, list[str]]:
+        """One page of matches (the database bounds it), the total, whether more follow, and
+        the reasons an endpoint form gives."""
+        try:
+            found, total = self._facts.find_page(
+                build_id, name, kind=fact_kind, owner_id=owner, resource=resource, location=loc,
+                limit=limit + 1, after=after,
+            )  # fmt: skip
+        except QueryTooBroadError as exc:
+            raise ReaderInputError(
+                f"too broad: looking up {name!r} in {api} took too long; narrow it with "
+                'owner= (an endpoint such as "GET /orders" or a document id), kind=, '
+                "location= or resource="
+            ) from exc
+        more = len(found) > limit
+        found = found[:limit]
+        endpoint_reasons: list[str] = []
+        if not found and after is None and fact_kind in (None, FactKind.ENDPOINT):
+            found, endpoint_reasons = self._endpoint_forms(build_id, name, fact_kind)
+            total, more = len(found), False
+        elif (
+            after is None
+            and len(found) > 1
+            and all(f.kind is FactKind.ENDPOINT for f in found)
+            and len({f.name for f in found}) == 1
+        ):  # "POST /sync" itself: 156 AliExpress operations, a method value picks one
+            same = self._facts.find(build_id, name, kind=FactKind.ENDPOINT, owner_id=owner)
+            found, endpoint_reasons = self._by_value(build_id, same, {})
+            total, more = len(found), False
+            found = found[:limit]
+        return found, total, more, endpoint_reasons
+
+    def _page(
+        self, build_id: BuildId, found: list[Fact], titles: dict[str, str], total: int,
+        more: bool,
+    ) -> tuple[list[FactMatch], str | None, str | None]:  # fmt: skip
+        """The page's matches under the byte backstop, the next cursor and the hint."""
+        docs: dict[str, Any] = {}
+        matches: list[FactMatch] = []
+        size = 0
+        for f in found:
+            m = self._with_conflicts(build_id, _match(f, titles), f, docs)
+            size += _match_bytes(m)
+            if matches and size > FIND_FACT_MAX_BYTES:  # the rest on the next page
+                more = True
+                break
+            matches.append(m)
+        kept = found[: len(matches)]
+        next_cursor = _cursor(fact_key(kept[-1])) if more and kept else None
+        hint = None
+        if next_cursor is not None:
+            hint = (
+                f"{max(total, len(found))} matches; {len(matches)} shown. Narrow it with owner= "
+                '(an endpoint such as "GET /orders" or a document id), kind=, location= or '
+                "resource=, or pass cursor for the next page."
+            )
+        return matches, next_cursor, hint
+
     def execute(
         self,
         api: str,
@@ -1046,8 +1157,14 @@ class FindFact:
         resource: str | None = None,
         location: str | None = None,
         version: str | None = None,
+        limit: int = FIND_FACT_LIMIT,
+        cursor: str | None = None,
     ) -> FindFactResult:
+        """At most ``limit`` matches (≤ FIND_FACT_LIMIT, and ≤ FIND_FACT_MAX_BYTES), paged by
+        ``cursor``; the total counts every match."""
         name = name.strip()
+        limit = max(1, min(limit, FIND_FACT_LIMIT))
+        after = _after(cursor)
         if not name:
             raise ReaderInputError("name is empty")
         try:
@@ -1058,18 +1175,9 @@ class FindFact:
         r = self._resolver.resolve(api, version)
         build_id = r.build.build_id
         owner = self._owner_id(build_id, owner)
-        found = self._facts.find(
-            build_id, name, kind=fact_kind, owner_id=owner, resource=resource, location=loc
+        found, total, more, endpoint_reasons = self._fetch(
+            api, build_id, name, fact_kind, owner, resource, loc, limit, after
         )
-        endpoint_reasons: list[str] = []
-        if not found and fact_kind in (None, FactKind.ENDPOINT):
-            found, endpoint_reasons = self._endpoint_forms(build_id, name, fact_kind)
-        elif (
-            len(found) > 1
-            and all(f.kind is FactKind.ENDPOINT for f in found)
-            and len({f.name for f in found}) == 1
-        ):  # "POST /sync" itself: 156 AliExpress operations, a method value picks one
-            found, endpoint_reasons = self._by_value(build_id, found, {})
         titles = {
             k: s.title
             for k, s in self._index.summaries(build_id, [f.owner_id for f in found]).items()
@@ -1137,14 +1245,19 @@ class FindFact:
                 )
                 for i, h in enumerate(hits)
             )
+        matches, next_cursor, hint = self._page(build_id, found, titles, total, more)
         wording = _fact_wording(
-            r.build.build_id.value, len(found), complete, checked, reasons, bool(mentions)
-        )
+            r.build.build_id.value, max(total, len(found)), complete, checked, reasons,
+            bool(mentions),
+        )  # fmt: skip
         return FindFactResult(
             ref=_ref(r),
             name=name,
             found=bool(found),
-            matches=tuple(self._with_conflicts(build_id, _match(f, titles), f) for f in found),
+            total=max(total, len(found)),
+            next_cursor=next_cursor,
+            hint=hint,
+            matches=tuple(matches),
             complete=complete,
             checked=checked,
             text_mentions=mentions,

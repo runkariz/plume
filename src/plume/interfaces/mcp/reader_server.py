@@ -228,10 +228,13 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
         resource: str | None = None,
         location: Literal["path", "query", "header", "body", "response", "model"] | None = None,
         version: str | None = None,
+        cursor: str | None = None,
     ) -> dict[str, Any]:
         """Exact lookup: is this endpoint ("GET /orders"), field ("sku", "line_items[].sku") or
         scope ("read_orders") documented? Returns evidence, or what was checked and whether the
-        sources were complete (absence is only proven when complete=true)."""
+        sources were complete (absence is only proven when complete=true). At most 50 matches
+        per call: total counts them all; when next_cursor is set, narrow the lookup (owner=,
+        kind=, location=, resource=) or pass cursor for the next page."""
 
         def run() -> dict[str, Any]:
             out = payloads.find_fact_payload(
@@ -243,6 +246,7 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
                     resource=resource,
                     location=location,
                     version=version,
+                    cursor=cursor,
                 )
             )
             return _hint(out, out.get("found") is False)
