@@ -325,7 +325,9 @@ class ModelSessions:
         clock: Clock,
         collections: Collections | None = None,
         release_gate: Callable[[ModelSnapshot], list[GateFailure]] | None = None,
+        verified: Callable[[str, str], list[dict[str, Any]]] | None = None,
     ) -> None:
+        self._verified = verified  # (concept, api) -> verified mappings (mapping reports)
         self._collections = collections
         self._release_gate = release_gate
         self._resolver = resolver
@@ -655,6 +657,9 @@ class ModelSessions:
                     }
                 )
             entry: dict[str, Any] = {"api": pin.api, "build": pin.build, "documents": items}
+            verified = self._verified(session.concept, pin.api) if self._verified else []
+            if verified:  # maintainer-accepted user reports: use these first
+                entry["verified_mappings"] = verified
             if not self._own_resource(session.name_in(pin.api), build):
                 entry["note"] = (
                     f"{pin.api} has no {session.name_in(pin.api)} resource of its own: the "

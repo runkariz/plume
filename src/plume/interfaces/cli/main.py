@@ -24,6 +24,7 @@ from plume.application.models.model_eval import ModelEvaluation
 from plume.application.ports.eval_repo import GoldSource
 from plume.application.ports.job_events import JobEvents
 from plume.application.reader.resolve import BuildResolver
+from plume.application.reports.mappings import MappingReports
 from plume.application.reports.service import ReportedQuestions
 from plume.application.system.migrate_schema import MigrateSchema
 from plume.domain.knowledge.api import ApiId
@@ -64,6 +65,7 @@ class CliDependencies:
     # (tester markdown text, group, held out) -> a plume.model-gold.v1 document
     import_model_gold: Callable[[str, str | None, bool], dict[str, Any]] | None = None
     reports: Callable[[], ReportedQuestions] | None = None
+    mapping_reports: Callable[[], MappingReports] | None = None
 
 
 def _gold_cells(fields: list[dict[str, Any]]) -> dict[str, int]:
@@ -642,5 +644,69 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         except (ApplicationError, DomainError) as exc:
             raise fail(exc) from exc
         typer.echo(f"purged {n} open report(s)")
+
+    mapping_app = typer.Typer(help="Canonical-model mapping reports and verified mappings.")
+    app.add_typer(mapping_app, name="mapping-reports")
+
+    @mapping_app.command("export")
+    def mapping_export(
+        api: Annotated[str | None, typer.Option(help="Only this API")] = None,
+        concept: Annotated[str | None, typer.Option(help='e.g. "inventory/stock"')] = None,
+        status: Annotated[str | None, typer.Option(help="open, accepted, rejected, routed")] = None,
+        kind: Annotated[
+            str | None, typer.Option(help="wrong, missing, model-field-missing")
+        ] = None,
+        notes: Annotated[bool, typer.Option(help="Include each report's notes")] = True,
+        out: Annotated[Path | None, typer.Option(help="Write JSON lines here")] = None,
+    ) -> None:
+        """Mapping reports as JSON lines, most reported first (maintainers)."""
+        try:
+            svc = _need(deps.mapping_reports, "mapping reports")
+            listed = svc.list_reports(api, concept, status, kind)
+            rows = [svc.get(r["id"]) if notes else r for r in listed]
+        except (ApplicationError, DomainError, ValueError) as exc:
+            raise fail(exc) from exc
+        text = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
+        if out is not None:
+            out.write_text(text, encoding="utf-8")
+            typer.echo(f"wrote {len(rows)} mapping report(s) to {out}")
+        else:
+            typer.echo(text, nl=False)
+
+    @mapping_app.command("act")
+    def mapping_act(
+        report_id: Annotated[str, typer.Argument(help="mr-…")],
+        action: Annotated[str, typer.Argument(help="accept, reject, route, reopen")],
+        reason: Annotated[str | None, typer.Option(help="Required except for reopen")] = None,
+        route: Annotated[str | None, typer.Option(help="plume, stream or owner")] = None,
+    ) -> None:
+        """Accept (into a verified mapping), reject, route or reopen a mapping report."""
+        try:
+            r = _need(deps.mapping_reports, "mapping reports").act(report_id, action, reason, route)
+        except (ApplicationError, DomainError) as exc:
+            raise fail(exc) from exc
+        typer.echo(f"{r['id']}: {r['status']}" + (f" ({r['reason']})" if r["reason"] else ""))
+
+    @mapping_app.command("revalidate")
+    def mapping_revalidate(api: Annotated[str, typer.Argument(help="API id")]) -> None:
+        """Re-validate an API's verified mappings against its current build."""
+        try:
+            n = _need(deps.mapping_reports, "mapping reports").revalidate(api)
+        except (ApplicationError, DomainError) as exc:
+            raise fail(exc) from exc
+        typer.echo(", ".join(f"{k} {v}" for k, v in n.items()))
+
+    @mapping_app.command("purge")
+    def mapping_purge(
+        older_than: Annotated[
+            int | None, typer.Option(help="Days without activity (default: the retention)")
+        ] = None,
+    ) -> None:
+        """Delete open mapping reports untouched for the retention period."""
+        try:
+            n = _need(deps.mapping_reports, "mapping reports").purge(older_than)
+        except (ApplicationError, DomainError) as exc:
+            raise fail(exc) from exc
+        typer.echo(f"purged {n} open mapping report(s)")
 
     return app

@@ -36,6 +36,7 @@ from plume.application.reader.use_cases import (
     ListApiOverviews,
     SearchDocs,
 )
+from plume.application.reports.mappings import MappingReports
 from plume.application.reports.service import ReportedQuestions
 from plume.domain.knowledge.api import ApiId
 from plume.domain.knowledge.package_warnings import AUTH, ENVIRONMENTS
@@ -47,7 +48,12 @@ from plume.interfaces.mcp.apps.model_view import (
 )
 from plume.interfaces.mcp.model_tools import register_model_tools
 from plume.interfaces.mcp.report_tools import HINT as REPORT_HINT
-from plume.interfaces.mcp.report_tools import REPORTS_RULE, register_report_tools
+from plume.interfaces.mcp.report_tools import (
+    MAPPINGS_RULE,
+    REPORTS_RULE,
+    register_mapping_tools,
+    register_report_tools,
+)
 from plume.interfaces.mcp.set_tools import register_set_tools
 
 INSTRUCTIONS = """\
@@ -101,6 +107,7 @@ class McpReaderDependencies:
     model_impact: Callable[[], ModelImpact] | None = None
     mcp_app_html: str | None = None  # the model view bundle; None = the packaged file
     reports: Callable[[], ReportedQuestions] | None = None  # set when PLUME_REPORTS is on
+    mapping_reports: Callable[[], MappingReports] | None = None  # likewise (model tools only)
     trusted_proxy_hops: int = 0  # for the reports' per-connection limit (stateless clients)
 
 
@@ -136,10 +143,13 @@ def _forbid_unknown_arguments(server: MCPServer, name: str) -> None:
 
 def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
     reporting = deps.reports is not None
+    mapping_reports = deps.mapping_reports is not None and deps.models is not None
     server = MCPServer(
         name="plume",
         title="Plume API docs",
-        instructions=INSTRUCTIONS + (REPORTS_RULE if reporting else ""),
+        instructions=INSTRUCTIONS
+        + (REPORTS_RULE if reporting else "")
+        + (MAPPINGS_RULE if mapping_reports else ""),
         version=__version__,
         extensions=[model_view_apps(deps.mcp_app_html or model_view_html())],
     )
@@ -150,6 +160,8 @@ def create_reader_server(deps: McpReaderDependencies) -> MCPServer:
 
     if deps.reports is not None:
         register_report_tools(server, deps.reports, _run, deps.trusted_proxy_hops)
+    if mapping_reports and deps.mapping_reports is not None:
+        register_mapping_tools(server, deps.mapping_reports, _run, deps.trusted_proxy_hops)
 
     @server.tool(annotations=READ_ONLY, structured_output=True)
     async def list_apis() -> dict[str, Any]:

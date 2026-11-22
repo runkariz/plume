@@ -1138,3 +1138,97 @@ class ReportList(Schema):
 class ReportStatusUpdate(Schema):
     status: Literal["open", "answered", "search-miss", "package-gap", "out-of-scope"]
     reason: str | None = Field(default=None, max_length=1000)
+
+
+class EvidenceOut(Schema):
+    doc_id: str
+    quote: str | None = Field(default=None, description="Exact text of the cited document.")
+    no_quote: str | None = None
+
+
+class SuggestionOut(Schema):
+    paths: list[str]
+    fetch: str | None = None
+    evidence: list[EvidenceOut]
+
+
+class ValidationOut(Schema):
+    ok: bool
+    reason: str | None = Field(
+        default=None, description="The validator's finding when not ok (CODE: message)."
+    )
+
+
+class VerifiedMarkOut(Schema):
+    id: str
+    report_id: str
+    build: str
+    validated_at: str
+    suspended: bool
+    suspended_reason: str | None = None
+
+
+class MappingReportOut(Schema):
+    id: str
+    concept: str = Field(description='The concept key, e.g. "inventory/stock".')
+    concept_name: str
+    model_id: str | None = None
+    api: str
+    build: str | None = None
+    canonical_field: str
+    kind: Literal["wrong", "missing", "model-field-missing"]
+    status: Literal["open", "accepted", "rejected", "routed"]
+    route: Literal["plume", "stream", "owner"] | None = None
+    reason: str | None = None
+    problem: str = Field(description="As reported, redacted.")
+    current_mapping: str | None = None
+    suggestion: SuggestionOut | None = Field(
+        default=None, description="Stored only when it passed the model-draft validator."
+    )
+    validation: ValidationOut | None = Field(
+        default=None, description="null when no suggestion was given."
+    )
+    verified: VerifiedMarkOut | None = None
+    report_count: int
+    note_count: int
+    created_at: str
+    updated_at: str
+    client_name: str | None = None
+    session_hash: str | None = None
+    redactions: int = 0
+    notes: list[ReportNoteOut] | None = None
+
+
+class MappingReportList(Schema):
+    reports: list[MappingReportOut]
+    enabled: bool = Field(description="Whether readers can report mappings (PLUME_REPORTS).")
+
+
+class MappingReportAction(Schema):
+    action: Literal["accept", "reject", "route", "reopen"]
+    reason: str | None = Field(
+        default=None, max_length=1000, description="Required except for reopen."
+    )
+    route: Literal["plume", "stream", "owner"] | None = Field(
+        default=None, description="Required for route."
+    )
+
+
+class VerifiedMappingOut(Schema):
+    id: str
+    concept: str
+    canonical_field: str
+    api: str
+    paths: list[str]
+    fetch: str | None = None
+    evidence: list[EvidenceOut]
+    build: str = Field(description="The build it was last validated on.")
+    report_id: str
+    suspended: bool
+    suspended_reason: str | None = None
+    accepted_at: str
+    validated_at: str
+
+
+class VerifiedMappingList(Schema):
+    mappings: list[VerifiedMappingOut]

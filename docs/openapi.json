@@ -2375,6 +2375,42 @@
         "title": "ErrorBody",
         "type": "object"
       },
+      "EvidenceOut": {
+        "properties": {
+          "docId": {
+            "title": "Docid",
+            "type": "string"
+          },
+          "noQuote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Noquote"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Exact text of the cited document.",
+            "title": "Quote"
+          }
+        },
+        "required": [
+          "docId"
+        ],
+        "title": "EvidenceOut",
+        "type": "object"
+      },
       "FactMatch": {
         "properties": {
           "complete": {
@@ -3103,6 +3139,291 @@
           "color"
         ],
         "title": "Logo",
+        "type": "object"
+      },
+      "MappingReportAction": {
+        "properties": {
+          "action": {
+            "enum": [
+              "accept",
+              "reject",
+              "route",
+              "reopen"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required except for reopen.",
+            "title": "Reason"
+          },
+          "route": {
+            "anyOf": [
+              {
+                "enum": [
+                  "plume",
+                  "stream",
+                  "owner"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for route.",
+            "title": "Route"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "MappingReportAction",
+        "type": "object"
+      },
+      "MappingReportList": {
+        "properties": {
+          "enabled": {
+            "description": "Whether readers can report mappings (PLUME_REPORTS).",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "reports": {
+            "items": {
+              "$ref": "#/components/schemas/MappingReportOut"
+            },
+            "title": "Reports",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reports",
+          "enabled"
+        ],
+        "title": "MappingReportList",
+        "type": "object"
+      },
+      "MappingReportOut": {
+        "properties": {
+          "api": {
+            "title": "Api",
+            "type": "string"
+          },
+          "build": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Build"
+          },
+          "canonicalField": {
+            "title": "Canonicalfield",
+            "type": "string"
+          },
+          "clientName": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clientname"
+          },
+          "concept": {
+            "description": "The concept key, e.g. \"inventory/stock\".",
+            "title": "Concept",
+            "type": "string"
+          },
+          "conceptName": {
+            "title": "Conceptname",
+            "type": "string"
+          },
+          "createdAt": {
+            "title": "Createdat",
+            "type": "string"
+          },
+          "currentMapping": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currentmapping"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "wrong",
+              "missing",
+              "model-field-missing"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "modelId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modelid"
+          },
+          "noteCount": {
+            "title": "Notecount",
+            "type": "integer"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ReportNoteOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "problem": {
+            "description": "As reported, redacted.",
+            "title": "Problem",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "redactions": {
+            "default": 0,
+            "title": "Redactions",
+            "type": "integer"
+          },
+          "reportCount": {
+            "title": "Reportcount",
+            "type": "integer"
+          },
+          "route": {
+            "anyOf": [
+              {
+                "enum": [
+                  "plume",
+                  "stream",
+                  "owner"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route"
+          },
+          "sessionHash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sessionhash"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "accepted",
+              "rejected",
+              "routed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "suggestion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SuggestionOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stored only when it passed the model-draft validator."
+          },
+          "updatedAt": {
+            "title": "Updatedat",
+            "type": "string"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null when no suggestion was given."
+          },
+          "verified": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VerifiedMarkOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "concept",
+          "conceptName",
+          "api",
+          "canonicalField",
+          "kind",
+          "status",
+          "problem",
+          "reportCount",
+          "noteCount",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "MappingReportOut",
         "type": "object"
       },
       "MatchedEndpoint": {
@@ -4991,6 +5312,41 @@
         "title": "SuggestResponse",
         "type": "object"
       },
+      "SuggestionOut": {
+        "properties": {
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceOut"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "fetch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetch"
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Paths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "paths",
+          "evidence"
+        ],
+        "title": "SuggestionOut",
+        "type": "object"
+      },
       "TraceStep": {
         "properties": {
           "label": {
@@ -5392,6 +5748,183 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "ValidationOut": {
+        "properties": {
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The validator's finding when not ok (CODE: message).",
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "ValidationOut",
+        "type": "object"
+      },
+      "VerifiedMappingList": {
+        "properties": {
+          "mappings": {
+            "items": {
+              "$ref": "#/components/schemas/VerifiedMappingOut"
+            },
+            "title": "Mappings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "mappings"
+        ],
+        "title": "VerifiedMappingList",
+        "type": "object"
+      },
+      "VerifiedMappingOut": {
+        "properties": {
+          "acceptedAt": {
+            "title": "Acceptedat",
+            "type": "string"
+          },
+          "api": {
+            "title": "Api",
+            "type": "string"
+          },
+          "build": {
+            "description": "The build it was last validated on.",
+            "title": "Build",
+            "type": "string"
+          },
+          "canonicalField": {
+            "title": "Canonicalfield",
+            "type": "string"
+          },
+          "concept": {
+            "title": "Concept",
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceOut"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "fetch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetch"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "paths": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Paths",
+            "type": "array"
+          },
+          "reportId": {
+            "title": "Reportid",
+            "type": "string"
+          },
+          "suspended": {
+            "title": "Suspended",
+            "type": "boolean"
+          },
+          "suspendedReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suspendedreason"
+          },
+          "validatedAt": {
+            "title": "Validatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "concept",
+          "canonicalField",
+          "api",
+          "paths",
+          "evidence",
+          "build",
+          "reportId",
+          "suspended",
+          "acceptedAt",
+          "validatedAt"
+        ],
+        "title": "VerifiedMappingOut",
+        "type": "object"
+      },
+      "VerifiedMarkOut": {
+        "properties": {
+          "build": {
+            "title": "Build",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "reportId": {
+            "title": "Reportid",
+            "type": "string"
+          },
+          "suspended": {
+            "title": "Suspended",
+            "type": "boolean"
+          },
+          "suspendedReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Suspendedreason"
+          },
+          "validatedAt": {
+            "title": "Validatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "reportId",
+          "build",
+          "validatedAt",
+          "suspended"
+        ],
+        "title": "VerifiedMarkOut",
         "type": "object"
       }
     }
@@ -9189,6 +9722,247 @@
         ]
       }
     },
+    "/v1/maintainer/mapping-reports": {
+      "get": {
+        "description": "Canonical-model mapping reports, most reported first.",
+        "operationId": "list_mapping_reports_v1_maintainer_mapping_reports_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "api",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api"
+            }
+          },
+          {
+            "description": "e.g. \"inventory/stock\"",
+            "in": "query",
+            "name": "concept",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "e.g. \"inventory/stock\"",
+              "title": "Concept"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingReportList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Mapping Reports",
+        "tags": [
+          "maintainer"
+        ]
+      }
+    },
+    "/v1/maintainer/mapping-reports/{report_id}": {
+      "get": {
+        "operationId": "get_mapping_report_v1_maintainer_mapping_reports__report_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingReportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Mapping Report",
+        "tags": [
+          "maintainer"
+        ]
+      },
+      "patch": {
+        "description": "accept (a validated suggestion becomes the verified mapping, re-validated first),\nreject (the reason is shown to readers), route (plume / stream / owner) or reopen.",
+        "operationId": "act_on_mapping_report_v1_maintainer_mapping_reports__report_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "title": "Report Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MappingReportAction"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingReportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Act On Mapping Report",
+        "tags": [
+          "maintainer"
+        ]
+      }
+    },
     "/v1/maintainer/me": {
       "get": {
         "operationId": "me_v1_maintainer_me_get",
@@ -9470,6 +10244,106 @@
           }
         },
         "summary": "Set Report Status",
+        "tags": [
+          "maintainer"
+        ]
+      }
+    },
+    "/v1/maintainer/verified-mappings": {
+      "get": {
+        "description": "Verified mappings (re-validated against each API's current build first).",
+        "operationId": "list_verified_mappings_v1_maintainer_verified_mappings_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "api",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Api"
+            }
+          },
+          {
+            "in": "query",
+            "name": "concept",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Concept"
+            }
+          },
+          {
+            "description": "active | suspended",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "active | suspended",
+              "title": "Status"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifiedMappingList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Verified Mappings",
         "tags": [
           "maintainer"
         ]
