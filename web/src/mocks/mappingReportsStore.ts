@@ -14,8 +14,18 @@ const note = (id: string, kind: string, text: string, day: number, client: strin
   redactions: 0,
 });
 
+// how the user agreed, by report (null: stored before consent existed)
+const CONSENT: MappingReport['consentMethod'][] = [
+  'elicitation',
+  'llm_attested',
+  'elicitation',
+  null,
+  'llm_attested',
+  'elicitation',
+];
+
 export function seedMappingReports(): MappingReport[] {
-  return [
+  return withConsent([
     {
       id: 'mr-1a2b3c4d5e',
       concept: 'inventory/stock',
@@ -214,7 +224,18 @@ export function seedMappingReports(): MappingReport[] {
       redactions: 0,
       notes: [],
     },
-  ];
+  ]);
+}
+
+function withConsent(reports: MappingReport[]): MappingReport[] {
+  return reports.map((r, i) => ({
+    ...r,
+    consentMethod: CONSENT[i] ?? null,
+    notes: r.notes?.map((n, j) => ({
+      ...n,
+      consentMethod: j % 2 ? 'llm_attested' : 'elicitation',
+    })),
+  }));
 }
 
 const ORDER = (a: MappingReport, b: MappingReport) =>

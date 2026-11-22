@@ -24,6 +24,7 @@ import {
   mappingStatusTone,
   routeShort,
 } from './mappingLabels';
+import { ConsentChip, CONSENT_FILTERS, isConsentFilter, matchesConsent } from './consent';
 import { ReportsTabs } from './ReportsTabs';
 
 type StatusFilter = MappingReportStatus | 'all';
@@ -82,6 +83,7 @@ function Row({ r }: { r: MappingReport }) {
           {mappingStatusLabel(r.status)}
           {r.status === 'routed' && r.route ? `: ${routeShort(r.route)}` : ''}
         </Chip>
+        <ConsentChip method={r.consentMethod} />
       </div>
     </li>
   );
@@ -100,6 +102,8 @@ export function MappingReportsPage() {
   const kindParam = params.get('kind');
   const status: StatusFilter = isStatus(statusParam) ? statusParam : 'all';
   const kind = isKind(kindParam) ? kindParam : '';
+  const consentParam = params.get('consent');
+  const consent = isConsentFilter(consentParam) ? consentParam : 'all';
   const [conceptText, setConceptText] = useState(concept);
 
   const loadApis = useCallback((signal: AbortSignal) => client.listApis(signal), [client]);
@@ -129,7 +133,9 @@ export function MappingReportsPage() {
       },
       { replace: true },
     );
-  const reports = state.status === 'ready' ? state.data.reports : null;
+  // the server has no consent filter: it is applied to the list it sent
+  const reports =
+    state.status === 'ready' ? state.data.reports.filter((r) => matchesConsent(r, consent)) : null;
   const off = state.status === 'ready' && state.data.enabled === false;
 
   function applyConcept() {
@@ -183,6 +189,21 @@ export function MappingReportsPage() {
             </option>
           ))}
         </select>
+        <label className="sr-only" htmlFor="mreports-consent">
+          Consent
+        </label>
+        <select
+          id="mreports-consent"
+          className="input"
+          value={consent}
+          onChange={(e) => set('consent', e.target.value === 'all' ? '' : e.target.value)}
+        >
+          {CONSENT_FILTERS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
         <div role="search" className="row" style={{ gap: 6 }}>
           <label className="sr-only" htmlFor="mreports-concept">
             Concept
@@ -225,7 +246,7 @@ export function MappingReportsPage() {
       ) : null}
       {reports && reports.length === 0 ? (
         <EmptyState title="No mapping reports">
-          {api || concept || kind || status !== 'all'
+          {api || concept || kind || consent !== 'all' || status !== 'all'
             ? 'No report matches this filter.'
             : 'No mapping has been reported yet.'}
         </EmptyState>
