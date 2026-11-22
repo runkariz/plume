@@ -246,7 +246,8 @@ read what was already reported (`find_reported_questions`, `find_mapping_reports
   client's name, a keyed hash of the MCP session id and how the user consented. Never the chat,
   never any other tool call, no IP address and no identity.
 - **Consent per report:** nothing is stored without the user's yes. When the MCP client
-  supports elicitation, Plume shows the user the exact text it would store (after redaction)
+  supports elicitation (and tells Plume so: on the stateless reader server that takes MCP
+  protocol 2026-07-28, where every request carries the client's capabilities), Plume shows the user the exact text it would store (after redaction)
   and asks; decline or cancel stores nothing, and the user may edit the text first. Otherwise
   the assistant must show the text, ask, and send `user_consent: "asked_and_approved"`; without
   it the call is refused. Each row records `consent_method` (`elicitation` or `llm_attested`).
