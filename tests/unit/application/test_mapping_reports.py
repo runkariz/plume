@@ -270,3 +270,35 @@ def test_a_draft_that_contradicts_a_verified_mapping_is_stored_with_a_warning(
     assert [(w.field, w.api) for w in warned if w.code == "DIFFERS_FROM_VERIFIED"] == [
         ("number", API)
     ]
+
+
+def test_another_field_mapping_a_verified_path_is_warned(stack: FakeStack) -> None:
+    svc, _ = _service(stack)
+    sid = stack.models().start(APIS, "Order").session_id
+    total = svc.report(sid, API, "total", "wrong", "total is the order's own total", None, GOOD)[
+        "id"
+    ]
+    number = svc.report(
+        sid, API, "trackingCode", "wrong", "number is no tracking code", None, ABSENT
+    )["id"]
+    for rid in (total, number):
+        svc.act(rid, "accept", "checked")
+    fresh = _sessions(stack, svc)
+    new = fresh.start(APIS, "Order").session_id
+    draft = json.loads(DRAFT.read_text())
+    fields = {f["name"]: f for f in draft["fields"]}
+    fields["total"]["name"] = "grandAmount"  # another name, mapping the verified path
+    fields["total"]["sources"][API]["paths"] = [{"path": "total", "type": "string"}]
+    fields["total"]["sources"][API]["evidence"] = GOOD["evidence"]
+    fields["number"]["name"] = "trackingCode"[::-1]  # another field mapping the notFrom path
+    warned = {(w.field, w.api): w.message for w in fresh.check(new, draft)
+              if w.code == "DIFFERS_FROM_VERIFIED"}  # fmt: skip
+    assert warned[("grandAmount", API)] == (
+        f"total is verified for `total` (verified mapping {svc.get(total)['verified']['id']} "
+        f"(user report {total}))"
+    )
+    assert warned[("edoCgnikcart", API)].startswith(
+        "number is verified as not being `trackingCode`"
+    )
+    # the verified field itself is now unmapped on that API: no draft field named "total"
+    assert set(warned) == {("grandAmount", API), ("edoCgnikcart", API)}

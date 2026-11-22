@@ -781,10 +781,12 @@ class ModelSessions:
         return draft, warnings(draft, apis, oracle) + self._verified_warnings(session, draft)
 
     def _verified_warnings(self, session: ModelSession, draft: ModelDraft) -> list[Issue]:
-        """DIFFERS_FROM_VERIFIED (a warning, never a refusal): a field whose canonical name has
-        a verified mapping on an API (from an accepted user report; names compared ignoring
-        case, [] and separators) maps other paths there, maps nothing, or maps a source where
-        the verified mapping says the field is not available."""
+        """DIFFERS_FROM_VERIFIED (a warning, never a refusal), per API with verified mappings
+        (accepted user reports; field names compared ignoring case, [] and separators):
+        - a field with a verified mapping maps other paths there, or nothing, or maps a source
+          where the field is verified as not available;
+        - another field maps a verified path (the path is verified for that field), or a path
+          a verified absence names in notFrom (verified as not being that field)."""
         if self._verified is None:
             return []
         out: list[Issue] = []
@@ -794,22 +796,15 @@ class ModelSessions:
             if not verified:
                 continue
             for path, f in draft.walk():
-                v = verified.get(field_key(path))
-                if v is None:
-                    continue
                 src = dict(f.sources).get(pin.api)
                 mapped = sorted(p.path for p in src.paths) if src else []
-                which = f"verified mapping {v['id']} (user report {v['report_id']})"
-                if v.get("notAvailable"):
-                    if mapped:
-                        out.append(Issue("DIFFERS_FROM_VERIFIED", path, pin.api,
-                                         f"maps {', '.join(mapped)} but {which} says the field "
-                                         f"is not available on {pin.api}"))  # fmt: skip
-                elif mapped != sorted(v["paths"]) and not (f.fields and not mapped):
-                    out.append(Issue("DIFFERS_FROM_VERIFIED", path, pin.api,
-                                     f"differs from {which}: {', '.join(v['paths'])}"
-                                     + (f" (the draft maps {', '.join(mapped)})" if mapped
-                                        else " (the draft maps nothing)")))  # fmt: skip
+                key = field_key(path)
+                own = verified.get(key)
+                if own is not None:
+                    out.extend(_own_conflict(path, pin.api, own, mapped, bool(f.fields)))
+                for other_key, v in verified.items():
+                    if other_key != key and mapped:
+                        out.extend(_path_conflict(path, pin.api, v, mapped))
         return out
 
     def check(self, session_id: str, raw: Any) -> list[Issue]:
@@ -1260,3 +1255,41 @@ def _named(d: DocumentSummary, key: str) -> bool:
             bool(d.path) and concept_key(last_literal(d.path or "")) == key
         )
     return d.kind is DocumentKind.MODEL and concept_key(d.title.split(" / ")[-1]) == key
+
+
+def _which(v: dict[str, Any]) -> str:
+    return f"verified mapping {v['id']} (user report {v['report_id']})"
+
+
+def _own_conflict(
+    path: str, api: str, v: dict[str, Any], mapped: list[str], container: bool
+) -> list[Issue]:
+    """The field itself against its verified mapping or absence."""
+    if v.get("notAvailable"):
+        if not mapped:
+            return []
+        return [Issue("DIFFERS_FROM_VERIFIED", path, api,
+                      f"maps {', '.join(mapped)} but {_which(v)} says the field is not "
+                      f"available on {api}")]  # fmt: skip
+    if mapped == sorted(v["paths"]) or (container and not mapped):
+        return []
+    drafted = f"the draft maps {', '.join(mapped)}" if mapped else "the draft maps nothing"
+    return [Issue("DIFFERS_FROM_VERIFIED", path, api,
+                  f"differs from {_which(v)}: {', '.join(v['paths'])} ({drafted})")]  # fmt: skip
+
+
+def _path_conflict(path: str, api: str, v: dict[str, Any], mapped: list[str]) -> list[Issue]:
+    """Another field's verified paths (or a verified absence's notFrom paths) mapped here."""
+    if v.get("notAvailable"):
+        shared = sorted(set(mapped) & set(v.get("notFrom") or ()))
+        if not shared:
+            return []
+        return [Issue("DIFFERS_FROM_VERIFIED", path, api,
+                      f"{', '.join(shared)} is verified as not being `{v['canonical_field']}` "
+                      f"({_which(v)}): check this field is not the same one")]  # fmt: skip
+    shared = sorted(set(mapped) & set(v["paths"]))
+    if not shared:
+        return []
+    return [Issue("DIFFERS_FROM_VERIFIED", path, api,
+                  f"{', '.join(shared)} is verified for `{v['canonical_field']}` "
+                  f"({_which(v)})")]  # fmt: skip
