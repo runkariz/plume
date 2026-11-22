@@ -1,6 +1,7 @@
 """Reciprocal rank fusion of ranked lists (hybrid search)."""
 
-from collections.abc import Sequence
+import re
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 RRF_K = 60
@@ -57,3 +58,25 @@ def reciprocal_rank_fusion(
         fused,
         key=lambda f: (-f.score, min(r for r in f.ranks if r is not None), f.key),
     )
+
+
+# Words for a non-production environment, which APIs name differently (Shopware has no
+# sandbox, but documents a staging instance). Used only to expand the full-text query.
+_ENV_TERMS = ("sandbox", "staging", "test environment", "test account", "test mode", "test shop")
+_ENV_QUERY = re.compile(
+    r"\b(sandbox(es)?|staging|test(ing)? (environment|account|mode|shop|store|instance))\b",
+    re.IGNORECASE,
+)
+
+
+def expand_text_query(query: str, documented: Callable[[str], bool] = lambda _w: True) -> str:
+    """The full-text query with the environment synonyms a question does not already use,
+    when it asks about one the API's documents never mention (``documented``): "does
+    Shopware have a sandbox" also matches "staging". An API that names its sandbox keeps the
+    question as asked."""
+    m = _ENV_QUERY.search(query)
+    if m is None or documented(m.group(0).lower()):
+        return query
+    low = query.lower()
+    extra = [t for t in _ENV_TERMS if t not in low]
+    return f"{query} {' '.join(extra)}" if extra else query
