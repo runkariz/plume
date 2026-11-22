@@ -53,3 +53,15 @@ def test_add_find_note_label_and_purge(repo: PostgresReportRepo) -> None:
     assert repo.get("rq-a") is None
     assert repo.notes("rq-a") == []
     assert repo.get("rq-b") is not None
+
+
+def test_consent_method_round_trips(repo: PostgresReportRepo) -> None:
+    from dataclasses import replace  # noqa: PLC0415
+
+    repo.add(replace(_report("rq-c", "how do I page orders", T0), consent_method="elicitation"),
+             "how do i page orders", None, "m")  # fmt: skip
+    repo.add_note(ReportNote("rn-c", "rq-c", "also", T0, consent_method="llm_attested"))
+    got = repo.get("rq-c")
+    assert got is not None
+    assert got.consent_method == "elicitation"
+    assert [n.consent_method for n in repo.notes("rq-c")] == ["llm_attested"]

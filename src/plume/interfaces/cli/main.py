@@ -615,9 +615,10 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         text = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
         if out is not None:
             out.write_text(text, encoding="utf-8")
-            typer.echo(f"wrote {len(rows)} report(s) to {out}")
+            typer.echo(f"wrote {len(rows)} report(s) to {out}; {_consent_counts(rows)}")
         else:
             typer.echo(text, nl=False)
+            typer.echo(_consent_counts(rows), err=True)
 
     @reports_app.command("set-status")
     def reports_set_status(
@@ -669,9 +670,10 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         text = "".join(json.dumps(r, ensure_ascii=False) + "\n" for r in rows)
         if out is not None:
             out.write_text(text, encoding="utf-8")
-            typer.echo(f"wrote {len(rows)} mapping report(s) to {out}")
+            typer.echo(f"wrote {len(rows)} mapping report(s) to {out}; {_consent_counts(rows)}")
         else:
             typer.echo(text, nl=False)
+            typer.echo(_consent_counts(rows), err=True)
 
     @mapping_app.command("act")
     def mapping_act(
@@ -710,3 +712,13 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         typer.echo(f"purged {n} open mapping report(s)")
 
     return app
+
+
+def _consent_counts(rows: list[dict[str, Any]]) -> str:
+    """How the users agreed, over the exported reports and their notes."""
+    counts: dict[str, int] = {}
+    for r in rows:
+        for item in [r, *(r.get("notes") or [])]:
+            key = item.get("consent_method") or "none (before consent)"
+            counts[key] = counts.get(key, 0) + 1
+    return "consent: " + (", ".join(f"{k} {v}" for k, v in sorted(counts.items())) or "nothing")

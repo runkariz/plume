@@ -99,12 +99,16 @@ async def test_the_redaction_corpus_through_all_three_tools(stack: FakeStack) ->
         rid = None
         for i, (_, text) in enumerate(CORPUS.items()):
             general = f"case {i}: why does this request fail"
-            out = await _call(client, "report_question", {
+            out = await _call(client, "report_question", {"user_consent": "asked_and_approved",
                 "api": API, "question": f"{general} when {text}",
                 "what_was_tried": f"search_docs '{text}'", "what_was_missing": text,
             })  # fmt: skip
             rid = rid or out["id"]
-            await _call(client, "add_to_report", {"id": rid, "note": f"also: {text}"})
+            await _call(
+                client,
+                "add_to_report",
+                {"user_consent": "asked_and_approved", "id": rid, "note": f"also: {text}"},
+            )
             await _call(client, "find_reported_questions", {"api": API, "question": text})
     stored = _stored_text(repo)
     assert repo.reports, "the reports were stored"
@@ -151,12 +155,12 @@ async def test_a_near_duplicate_is_merged_and_said_so(stack: FakeStack) -> None:
     repo = InMemoryReports()
     async with Client(_server(stack, _reports(stack, repo))) as client:
         first = await _call(client, "report_question",
-                            {"api": API, "question": "how do I refresh an access token"})  # fmt: skip
+                            {"user_consent": "asked_and_approved", "api": API, "question": "how do I refresh an access token"})  # fmt: skip
         found = await _call(client, "find_reported_questions",
                             {"api": API, "question": "refresh an access token"})  # fmt: skip
         assert found["similar"][0]["id"] == first["id"]
         again = await _call(client, "report_question",
-                            {"api": API, "question": "How do I refresh an access token?"})  # fmt: skip
+                            {"user_consent": "asked_and_approved", "api": API, "question": "How do I refresh an access token?"})  # fmt: skip
         assert again["merged"] is True
         assert again["id"] == first["id"]
     assert len(repo.reports) == 1

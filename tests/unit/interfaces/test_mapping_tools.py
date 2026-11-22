@@ -78,13 +78,17 @@ async def test_the_redaction_corpus_through_all_three_tools(stack: FakeStack) ->
     async with Client(_server(stack, _svc(stack, repo))) as client:
         rid = None
         for i, (_, text) in enumerate(CORPUS.items()):
-            out = await _call(client, "report_mapping", {
+            out = await _call(client, "report_mapping", {"user_consent": "asked_and_approved",
                 "model": sid, "api": API, "canonical_field": f"field{i}", "kind": "wrong",
                 "problem": f"case {i}: the mapping is wrong when {text}",
                 "current_mapping": f"maps {text}",
             })  # fmt: skip
             rid = rid or out["id"]
-            await _call(client, "add_to_mapping_report", {"id": rid, "note": f"also: {text}"})
+            await _call(
+                client,
+                "add_to_mapping_report",
+                {"user_consent": "asked_and_approved", "id": rid, "note": f"also: {text}"},
+            )
             await _call(
                 client, "find_mapping_reports", {"model": sid, "api": API, "field": f"field{i}"}
             )
@@ -123,7 +127,7 @@ async def test_tools_and_rule_only_when_on(stack: FakeStack) -> None:
         sid = (await _call(client, "start_model_session", {"apis": APIS, "concept": "Order"}))[
             "model_session"
         ]
-        refused = await _call(client, "report_mapping", {
+        refused = await _call(client, "report_mapping", {"user_consent": "asked_and_approved",
             "model": sid, "api": API, "canonical_field": "total", "kind": "missing",
             "problem": "no mapping for the total", "suggested_mapping": {**GOOD, "paths": ["nope_xyz"]},
         })  # fmt: skip

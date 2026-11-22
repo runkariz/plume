@@ -233,6 +233,37 @@ Compose host ports: `PLUME_PG_HOST_PORT` (18432), `PLUME_API_HOST_PORT` (18480),
 
 Security notes and known limits: [docs/security.md](docs/security.md).
 
+## Reporting (opt-in)
+
+Off by default (`PLUME_REPORTS=off`): the reporting tools are not even registered. With
+`PLUME_REPORTS=on`, the reader MCP server offers tools that let the user's assistant tell the
+maintainers what Plume could not answer (`report_question`, `add_to_report`) or which
+canonical-model mapping was wrong or missing (`report_mapping`, `add_to_mapping_report`), and
+read what was already reported (`find_reported_questions`, `find_mapping_reports`).
+
+- **What is stored:** only the text sent to those tools (the question, what was tried and what
+  was missing; the mapping problem; a note), the API, the Plume build, the time, the MCP
+  client's name, a keyed hash of the MCP session id and how the user consented. Never the chat,
+  never any other tool call, no IP address and no identity.
+- **Consent per report:** nothing is stored without the user's yes. When the MCP client
+  supports elicitation, Plume shows the user the exact text it would store (after redaction)
+  and asks; decline or cancel stores nothing, and the user may edit the text first. Otherwise
+  the assistant must show the text, ask, and send `user_consent: "asked_and_approved"`; without
+  it the call is refused. Each row records `consent_method` (`elicitation` or `llm_attested`).
+- **Redaction before storage:** tokens, keys, emails, phone / card / account numbers, IPs,
+  person and company names, ids after words like customer / shop / warehouse, and URLs on
+  hosts that are not the API's own become markers such as `[email]` or `[id]`; text that cannot
+  be made safe is refused.
+- **Kept:** open reports untouched for 90 days are deleted (`PLUME_REPORTS_RETENTION_DAYS`);
+  reports a maintainer has triaged stay, holding only the redacted text.
+- **Who reads it:** maintainers only, through the maintainer API and CLI (`plume reports
+  export`, `plume mapping-reports export`). Reader tools return only the redacted text,
+  status and counts of similar reports.
+- **Limits:** 10 reports and notes per session per hour, 1,000 characters per field.
+
+To switch it on, set `PLUME_REPORTS=on` (and a stable `PLUME_REPORTS_SALT` so session hashes
+survive restarts), and tell your users in your privacy notice.
+
 ## Release notes (maintainers)
 
 Each load compares the new build with the build `latest` pointed to, field by field, and

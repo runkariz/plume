@@ -96,26 +96,16 @@ class ReportedQuestions:
         similar = self._similar(api, text, MAX_SIMILAR)
         return {"api": api, "similar": [self._public(r, score) for r, score in similar]}
 
-    def report(
-        self,
-        api: str,
-        question: str,
-        what_was_tried: str | None,
-        what_was_missing: str | None,
-        client_name: str | None = None,
-        session_id: str | None = None,
-        connection: str | None = None,
-    ) -> dict[str, Any]:
-        """``connection``: the caller's address, only to count its hourly limit in memory when
-        there is no session id (stateless clients); never stored."""
+    def _texts(
+        self, api: str, question: str, what_was_tried: str | None, what_was_missing: str | None
+    ) -> tuple[str, str | None, str | None, int]:
+        """The texts as they would be stored (checked, redacted) and their redaction count."""
         self._require()
         for name, value, required in (("question", question, True),
                                       ("what_was_tried", what_was_tried, False),
                                       ("what_was_missing", what_was_missing, False)):  # fmt: skip
             self._check(name, value, required)
-        build = self._resolver.resolve(api).build.build_id.value
-        sess = session_hash(session_id, self._salt)
-        self._limit(sess, connection)
+        self._resolver.resolve(api)
         rule = self._host_rule(api)
         q, n_q = safe_text(question, self._policy, rule)
         if q is None:
@@ -125,6 +115,53 @@ class ReportedQuestions:
             )
         tried, n_t = safe_text(what_was_tried, self._policy, rule)
         missing, n_m = safe_text(what_was_missing, self._policy, rule)
+        return q, tried, missing, n_q + n_t + n_m
+
+    def preview(
+        self, api: str, question: str, what_was_tried: str | None, what_was_missing: str | None
+    ) -> dict[str, Any]:
+        """Exactly what ``report`` would store, for the user's consent; stores nothing."""
+        q, tried, missing, _ = self._texts(api, question, what_was_tried, what_was_missing)
+        return {"api": api, "question": q, "what_was_tried": tried, "what_was_missing": missing}
+
+    def preview_note(self, report_id: str, note: str) -> dict[str, Any]:
+        """Exactly what ``add_note`` would store; stores nothing."""
+        existing, text, _ = self._note_text(report_id, note)
+        return {"api": existing.api, "report_id": report_id, "note": text}
+
+    def _note_text(self, report_id: str, note: str) -> tuple[Report, str, int]:
+        self._require()
+        self._check("note", note, True)
+        existing = self._repo.get(report_id)
+        if existing is None:
+            raise NotFoundError(f"reported question {report_id} not found")
+        text, n = safe_text(note, self._policy, self._host_rule(existing.api))
+        if text is None:
+            raise ReportRefusedError(
+                "the note could not be stored safely: write it without user data and try again"
+            )
+        return existing, text, n
+
+    def report(
+        self,
+        api: str,
+        question: str,
+        what_was_tried: str | None,
+        what_was_missing: str | None,
+        client_name: str | None = None,
+        session_id: str | None = None,
+        connection: str | None = None,
+        *,
+        consent_method: str | None = None,
+    ) -> dict[str, Any]:
+        """``connection``: the caller's address, only to count its hourly limit in memory when
+        there is no session id (stateless clients); never stored. ``consent_method``: how the
+        user agreed (elicitation | llm_attested)."""
+        q, tried, missing, n_texts = self._texts(api, question, what_was_tried, what_was_missing)
+        build = self._resolver.resolve(api).build.build_id.value
+        sess = session_hash(session_id, self._salt)
+        self._limit(sess, connection)
+        n_q, n_t, n_m = n_texts, 0, 0
         client, n_c = safe_text(client_name[:64] if client_name else None, self._policy)
         now = self._clock.now()
         self._maybe_purge(now)
@@ -142,6 +179,7 @@ class ReportedQuestions:
                 note_id=f"rn-{uuid.uuid4().hex[:12]}", report_id=existing.report_id,
                 text="\n".join(parts), created_at=now, kind="duplicate", client_name=client,
                 session_hash=sess, build_id=build, redactions=n_q + n_t + n_m + n_c,
+                consent_method=consent_method,
             ))  # fmt: skip
             merged = self._repo.get(existing.report_id) or existing
             return {
@@ -155,7 +193,7 @@ class ReportedQuestions:
             report_id=f"rq-{uuid.uuid4().hex[:12]}", api=api, question=q,
             status=ReportStatus.OPEN, created_at=now, updated_at=now, build_id=build,
             what_was_tried=tried, what_was_missing=missing, client_name=client,
-            session_hash=sess, redactions=n_q + n_t + n_m + n_c,
+            session_hash=sess, redactions=n_q + n_t + n_m + n_c, consent_method=consent_method,
         )  # fmt: skip
         self._repo.add(report, duplicate_key(q), vector, self._embedder.model)
         return {"id": report.report_id, "merged": False,
@@ -169,25 +207,18 @@ class ReportedQuestions:
         client_name: str | None = None,
         session_id: str | None = None,
         connection: str | None = None,
+        *,
+        consent_method: str | None = None,
     ) -> dict[str, Any]:
-        self._require()
-        self._check("note", note, True)
-        existing = self._repo.get(report_id)
-        if existing is None:
-            raise NotFoundError(f"reported question {report_id} not found")
+        existing, text, n = self._note_text(report_id, note)
         sess = session_hash(session_id, self._salt)
         self._limit(sess, connection)
-        text, n = safe_text(note, self._policy, self._host_rule(existing.api))
-        if text is None:
-            raise ReportRefusedError(
-                "the note could not be stored safely: write it without user data and try again"
-            )
         client, n_c = safe_text(client_name[:64] if client_name else None, self._policy)
         now = self._clock.now()
         self._repo.add_note(ReportNote(
             note_id=f"rn-{uuid.uuid4().hex[:12]}", report_id=report_id, text=text,
             created_at=now, client_name=client, session_hash=sess, build_id=existing.build_id,
-            redactions=n + n_c,
+            redactions=n + n_c, consent_method=consent_method,
         ))  # fmt: skip
         updated = self._repo.get(report_id) or existing
         return {"id": report_id, "message": "Note added.", "report": self._public(updated, None)}
@@ -302,6 +333,7 @@ class ReportedQuestions:
             "note_count": r.note_count, "created_at": r.created_at.isoformat(),
             "updated_at": r.updated_at.isoformat(), "client_name": r.client_name,
             "session_hash": r.session_hash, "redactions": r.redactions,
+            "consent_method": r.consent_method,
         }  # fmt: skip
         if with_notes:
             out["notes"] = [
@@ -314,6 +346,7 @@ class ReportedQuestions:
                     "session_hash": n.session_hash,
                     "build": n.build_id,
                     "redactions": n.redactions,
+                    "consent_method": n.consent_method,
                 }
                 for n in self._repo.notes(r.report_id)
             ]

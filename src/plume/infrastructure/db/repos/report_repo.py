@@ -9,7 +9,8 @@ from plume.infrastructure.db.repos._codec import vector_literal
 
 _REPORT_COLS = (
     "report_id, api, build_id, question, what_was_tried, what_was_missing, status, reason, "
-    "report_count, note_count, created_at, updated_at, client_name, session_hash, redactions"
+    "report_count, note_count, created_at, updated_at, client_name, session_hash, redactions, "
+    "consent_method"
 )
 
 
@@ -20,6 +21,7 @@ def _report(r: Any) -> Report:
         status=ReportStatus(r.status), reason=r.reason, report_count=r.report_count,
         note_count=r.note_count, created_at=r.created_at, updated_at=r.updated_at,
         client_name=r.client_name, session_hash=r.session_hash, redactions=r.redactions,
+        consent_method=r.consent_method,
     )  # fmt: skip
 
 
@@ -61,7 +63,7 @@ class PostgresReportRepo:
                     "embed_model, embedding) VALUES (:report_id, :api, :build_id, :question, "
                     ":what_was_tried, :what_was_missing, :status, :reason, :report_count, "
                     ":note_count, :created_at, :updated_at, :client_name, :session_hash, "
-                    ":redactions, :key, :model, CAST(:v AS halfvec))"
+                    ":redactions, :consent_method, :key, :model, CAST(:v AS halfvec))"
                 ),
                 {
                     "report_id": report.report_id,
@@ -79,6 +81,7 @@ class PostgresReportRepo:
                     "client_name": report.client_name,
                     "session_hash": report.session_hash,
                     "redactions": report.redactions,
+                    "consent_method": report.consent_method,
                     "key": key,
                     "model": model if vector is not None else None,
                     "v": vector_literal(vector) if vector is not None else None,
@@ -90,8 +93,8 @@ class PostgresReportRepo:
             conn.execute(
                 text(
                     "INSERT INTO report_notes (note_id, report_id, kind, text, created_at, "
-                    "client_name, session_hash, build_id, redactions) VALUES (:i, :r, :k, :t, "
-                    ":c, :cl, :s, :b, :red)"
+                    "client_name, session_hash, build_id, redactions, consent_method) VALUES "
+                    "(:i, :r, :k, :t, :c, :cl, :s, :b, :red, :cm)"
                 ),
                 {
                     "i": note.note_id,
@@ -103,6 +106,7 @@ class PostgresReportRepo:
                     "s": note.session_hash,
                     "b": note.build_id,
                     "red": note.redactions,
+                    "cm": note.consent_method,
                 },
             )
             conn.execute(
@@ -126,7 +130,7 @@ class PostgresReportRepo:
             rows = conn.execute(
                 text(
                     "SELECT note_id, report_id, kind, text, created_at, client_name, "
-                    "session_hash, build_id, redactions FROM report_notes "
+                    "session_hash, build_id, redactions, consent_method FROM report_notes "
                     "WHERE report_id = :r ORDER BY created_at, note_id"
                 ),
                 {"r": report_id},
@@ -142,6 +146,7 @@ class PostgresReportRepo:
                 session_hash=n.session_hash,
                 build_id=n.build_id,
                 redactions=n.redactions,
+                consent_method=n.consent_method,
             )
             for n in rows
         ]

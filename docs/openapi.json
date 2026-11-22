@@ -3253,6 +3253,22 @@
             "title": "Conceptname",
             "type": "string"
           },
+          "consentMethod": {
+            "anyOf": [
+              {
+                "enum": [
+                  "elicitation",
+                  "llm_attested"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the user agreed: elicitation (Plume asked through the MCP client) or llm_attested (the client's LLM showed the text and asked); null before consent existed.",
+            "title": "Consentmethod"
+          },
           "createdAt": {
             "title": "Createdat",
             "type": "string"
@@ -4275,6 +4291,22 @@
             ],
             "title": "Clientname"
           },
+          "consentMethod": {
+            "anyOf": [
+              {
+                "enum": [
+                  "elicitation",
+                  "llm_attested"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the user agreed: elicitation (Plume asked through the MCP client) or llm_attested (the client's LLM showed the text and asked); null before consent existed.",
+            "title": "Consentmethod"
+          },
           "createdAt": {
             "title": "Createdat",
             "type": "string"
@@ -4345,6 +4377,22 @@
               }
             ],
             "title": "Clientname"
+          },
+          "consentMethod": {
+            "anyOf": [
+              {
+                "enum": [
+                  "elicitation",
+                  "llm_attested"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the user agreed: elicitation (Plume asked through the MCP client) or llm_attested (the client's LLM showed the text and asked); null before consent existed.",
+            "title": "Consentmethod"
           },
           "createdAt": {
             "title": "Createdat",

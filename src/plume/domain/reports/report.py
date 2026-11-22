@@ -42,6 +42,10 @@ class ReportNote:
     session_hash: str | None = None
     build_id: str | None = None
     redactions: int = 0
+    consent_method: str | None = None  # elicitation | llm_attested (None: before consent)
+
+
+CONSENT_METHODS = ("elicitation", "llm_attested")
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,6 +65,7 @@ class Report:
     client_name: str | None = None
     session_hash: str | None = None
     redactions: int = 0
+    consent_method: str | None = None
 
 
 class ReportTextError(ValueError):
