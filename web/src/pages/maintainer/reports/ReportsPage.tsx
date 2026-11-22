@@ -14,6 +14,7 @@ import {
   Segmented,
 } from '@/components';
 import { formatDate, shortBuild } from '@/lib/format';
+import { ConsentChip, CONSENT_FILTERS, isConsentFilter, matchesConsent } from './consent';
 import { ReportsTabs } from './ReportsTabs';
 import { STATUS_LABEL, STATUSES, shortSession, statusLabel, statusTone } from './labels';
 
@@ -54,6 +55,7 @@ function ReportRow({ r }: { r: Report }) {
           {r.reportCount} report{r.reportCount === 1 ? '' : 's'}
         </Chip>
         <Chip tone={statusTone(r.status)}>{statusLabel(r.status)}</Chip>
+        <ConsentChip method={r.consentMethod} />
       </div>
     </li>
   );
@@ -69,6 +71,8 @@ export function ReportsPage() {
   const api = params.get('api') ?? '';
   const statusParam = params.get('status');
   const status: Filter = isStatus(statusParam) ? statusParam : 'all';
+  const consentParam = params.get('consent');
+  const consent = isConsentFilter(consentParam) ? consentParam : 'all';
 
   const loadApis = useCallback((signal: AbortSignal) => client.listApis(signal), [client]);
   const { state: apis } = useAsync(loadApis);
@@ -93,7 +97,9 @@ export function ReportsPage() {
       { replace: true },
     );
 
-  const reports = state.status === 'ready' ? state.data.reports : null;
+  // the server has no consent filter: it is applied to the list it sent
+  const reports =
+    state.status === 'ready' ? state.data.reports.filter((r) => matchesConsent(r, consent)) : null;
   // reporting is off on this server: reports made earlier are still listed and can be triaged
   const off = state.status === 'ready' && state.data.enabled === false;
   return (
@@ -128,6 +134,21 @@ export function ReportsPage() {
               ))
             : null}
         </select>
+        <label className="sr-only" htmlFor="reports-consent">
+          Consent
+        </label>
+        <select
+          id="reports-consent"
+          className="input"
+          value={consent}
+          onChange={(e) => set('consent', e.target.value === 'all' ? '' : e.target.value)}
+        >
+          {CONSENT_FILTERS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
         <Segmented
           variant="pills"
           label="Status"
@@ -152,7 +173,7 @@ export function ReportsPage() {
       ) : null}
       {reports && reports.length === 0 ? (
         <EmptyState title="No reports">
-          {api || status !== 'all'
+          {api || status !== 'all' || consent !== 'all'
             ? 'No report matches this filter.'
             : 'Nothing has been reported yet.'}
         </EmptyState>

@@ -5,6 +5,7 @@ import { useAsync } from '@/api/useAsync';
 import { ApiError, type Report, type ReportNote, type ReportStatus } from '@/api/types';
 import { Button, Card, Chip, Crumbs, ErrorState, LoadingState } from '@/components';
 import { formatDate, shortBuild } from '@/lib/format';
+import { ConsentChip } from './consent';
 import {
   PUBLIC_REASON,
   REASON_MAX,
@@ -34,6 +35,7 @@ function Note({ n }: { n: ReportNote }) {
         <Chip tone={n.kind === 'duplicate' ? 'info' : 'neutral'}>
           {n.kind === 'duplicate' ? 'duplicate report' : n.kind}
         </Chip>
+        <ConsentChip method={n.consentMethod} />
         <span className="faint small">
           {formatDate(n.createdAt)}
           {n.clientName ? <> · {n.clientName}</> : null}
@@ -200,6 +202,7 @@ export function ReportPage() {
             <Chip tone={report.reportCount > 1 ? 'acc' : 'neutral'}>
               {report.reportCount} report{report.reportCount === 1 ? '' : 's'}
             </Chip>
+            <ConsentChip method={report.consentMethod} />
             <span className="faint small mono">{report.id}</span>
           </div>
         </div>

@@ -88,6 +88,7 @@ async function seed(request: APIRequestContext) {
   ).json()) as { sessionId: string };
   // a suggestion that validates: a real field of the products endpoint and a quote from its document
   await mcp(request, 'report_mapping', {
+    user_consent: 'asked_and_approved',
     model: session.sessionId,
     api: 'shopify',
     canonical_field: 'title',
@@ -101,6 +102,7 @@ async function seed(request: APIRequestContext) {
   });
   // the same field and kind from another session: a note on the first report (count 2)
   await mcp(request, 'report_mapping', {
+    user_consent: 'asked_and_approved',
     model: session.sessionId,
     api: 'shopify',
     canonical_field: 'title',
@@ -109,6 +111,7 @@ async function seed(request: APIRequestContext) {
   });
   // a suggestion that fails the validator: the field is not in the package
   await mcp(request, 'report_mapping', {
+    user_consent: 'asked_and_approved',
     model: session.sessionId,
     api: 'shopify',
     canonical_field: 'sku',
@@ -121,6 +124,7 @@ async function seed(request: APIRequestContext) {
   });
   // an absence: the field is not available on the API, and must not be mapped from body_html
   await mcp(request, 'report_mapping', {
+    user_consent: 'asked_and_approved',
     model: session.sessionId,
     api: 'shopify',
     canonical_field: 'subtitle',
@@ -161,6 +165,7 @@ for (const theme of THEMES) {
       await seed(request);
       const list = await reports(request);
       expect(list.enabled).toBe(true);
+      expect((list.reports[0] as { consentMethod?: string }).consentMethod).toBe('llm_attested');
       expect(list.reports[0]?.canonicalField).toBe('title'); // most reported first
       expect(list.reports[0]?.reportCount).toBe(2);
       const bad = list.reports.find((r) => r.canonicalField === 'sku');
@@ -171,6 +176,7 @@ for (const theme of THEMES) {
       await expect(rows).toHaveCount(3);
       await expect(rows.first()).toContainText('title');
       await expect(rows.first()).toContainText('2 reports');
+      await expect(rows.first()).toContainText('consent: assistant attested');
       await expect(rows.first()).toContainText('suggestion valid');
       await expect(rows.filter({ hasText: 'sku' })).toContainText('suggestion failed');
       await settle(page);

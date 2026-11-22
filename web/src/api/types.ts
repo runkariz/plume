@@ -1642,6 +1642,9 @@ export interface ChangesQuery {
 
 export type ReportStatus = 'open' | 'answered' | 'search-miss' | 'package-gap' | 'out-of-scope';
 
+/** How the user agreed to the report: elicitation (Plume asked through the MCP client) or llm_attested (the user's assistant showed the text and asked); null: stored before consent existed. */
+export type ConsentMethod = 'elicitation' | 'llm_attested';
+
 /** A note on a report (or a near-duplicate report merged into it). The text is redacted by the server: markers like [token] stay. */
 export interface ReportNote {
   id: string;
@@ -1653,6 +1656,7 @@ export interface ReportNote {
   sessionHash?: string | null;
   build?: string | null;
   redactions?: number;
+  consentMethod?: ConsentMethod | null;
 }
 
 export interface Report {
@@ -1676,6 +1680,7 @@ export interface Report {
   /** A keyed hash that groups one MCP session. */
   sessionHash?: string | null;
   redactions?: number;
+  consentMethod?: ConsentMethod | null;
   /** Only on the single report. */
   notes?: ReportNote[] | null;
 }
@@ -1769,6 +1774,7 @@ export interface MappingReport {
   clientName?: string | null;
   sessionHash?: string | null;
   redactions?: number;
+  consentMethod?: ConsentMethod | null;
   /** Only on the single report. */
   notes?: ReportNote[] | null;
 }

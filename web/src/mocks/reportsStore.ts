@@ -22,8 +22,11 @@ const note = (
   redactions,
 });
 
+// how the user agreed, by report: Plume asked (elicitation), the assistant attested, or stored before consent existed
+const CONSENT: Report['consentMethod'][] = ['elicitation', 'llm_attested', null, 'elicitation'];
+
 export function seedReports(): Report[] {
-  return [
+  return withConsent([
     {
       id: 'rq-1a2b3c4d5e',
       api: 'shopify',
@@ -125,7 +128,18 @@ export function seedReports(): Report[] {
       redactions: 0,
       notes: [],
     },
-  ];
+  ]);
+}
+
+function withConsent(reports: Report[]): Report[] {
+  return reports.map((r, i) => ({
+    ...r,
+    consentMethod: CONSENT[i] ?? null,
+    notes: r.notes?.map((n, j) => ({
+      ...n,
+      consentMethod: j % 2 ? 'llm_attested' : 'elicitation',
+    })),
+  }));
 }
 
 const ORDER = (a: Report, b: Report) =>

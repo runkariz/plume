@@ -20,6 +20,7 @@ import {
   mappingStatusTone,
   routeShort,
 } from './mappingLabels';
+import { ConsentChip } from './consent';
 import { Citation } from './QuoteInDoc';
 import { ReportsTabs } from './ReportsTabs';
 
@@ -32,6 +33,7 @@ function Note({ n }: { n: NonNullable<MappingReport['notes']>[number] }) {
         <Chip tone={n.kind === 'duplicate' ? 'info' : 'neutral'}>
           {n.kind === 'duplicate' ? 'duplicate report' : n.kind}
         </Chip>
+        <ConsentChip method={n.consentMethod} />
         <span className="faint small">
           {formatDate(n.createdAt)}
           {n.clientName ? <> · {n.clientName}</> : null}
@@ -332,6 +334,7 @@ export function MappingReportPage() {
             <Chip tone={r.reportCount > 1 ? 'acc' : 'neutral'}>
               {r.reportCount} report{r.reportCount === 1 ? '' : 's'}
             </Chip>
+            <ConsentChip method={r.consentMethod} />
             <span className="faint small mono">{r.id}</span>
           </div>
         </div>

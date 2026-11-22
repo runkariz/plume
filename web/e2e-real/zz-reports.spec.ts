@@ -84,18 +84,29 @@ for (const theme of THEMES) {
       if (!(await reports(request)).reports.some((r) => r.question === Q1)) {
         // the same question from two sessions: one report, a note on it
         await mcp(request, 'report_question', {
+          user_consent: 'asked_and_approved',
           api: 'shopify',
           question: Q1,
           what_was_tried: 'search_docs and check_call with page_info',
           what_was_missing: 'which filters work with page_info',
         });
-        await mcp(request, 'report_question', { api: 'shopify', question: Q1 });
-        await mcp(request, 'report_question', { api: 'shopify', question: Q2 });
+        await mcp(request, 'report_question', {
+          user_consent: 'asked_and_approved',
+          api: 'shopify',
+          question: Q1,
+        });
+        await mcp(request, 'report_question', {
+          user_consent: 'asked_and_approved',
+          api: 'shopify',
+          question: Q2,
+        });
       }
       const list = await reports(request);
       expect(list.enabled).toBe(true);
       const first = list.reports[0];
       expect(first?.question).toBe(Q1); // most reported first
+      // the user agreed through the assistant (no elicitation over this raw MCP client)
+      expect((list.reports[0] as { consentMethod?: string }).consentMethod).toBe('llm_attested');
       expect(first?.reportCount).toBeGreaterThan(1);
 
       await page.goto('/maintainer');
@@ -106,6 +117,7 @@ for (const theme of THEMES) {
       const rows = page.getByRole('list', { name: 'Reports' }).getByRole('listitem');
       await expect(rows.first()).toContainText(Q1);
       await expect(rows.first()).toContainText(`${first?.reportCount} reports`);
+      await expect(rows.first()).toContainText('consent: assistant attested');
       await expect(page.getByText('Reported questions are off on this server')).toHaveCount(0);
       await settle(page);
       await expectNoSeriousA11y(page);
