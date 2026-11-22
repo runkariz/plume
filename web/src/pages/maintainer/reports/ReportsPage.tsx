@@ -14,6 +14,7 @@ import {
   Segmented,
 } from '@/components';
 import { formatDate, shortBuild } from '@/lib/format';
+import { ReportsTabs } from './ReportsTabs';
 import { STATUS_LABEL, STATUSES, shortSession, statusLabel, statusTone } from './labels';
 
 type Filter = ReportStatus | 'all';
@@ -103,6 +104,7 @@ export function ReportsPage() {
       <div className="titlerow">
         <h1 className="h1-sm">Reported questions</h1>
       </div>
+      <ReportsTabs />
       <p className="muted">
         What readers&apos; LLMs reported when Plume did not give them what they needed. The text is
         redacted by the server; most reported first.

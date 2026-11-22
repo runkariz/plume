@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useApiClient } from '@/api/context';
+import { useIsMaintainer } from '@/app/authStore';
 import { useAsync } from '@/api/useAsync';
 import { ApiError, type CollectionRef, type ModelSnapshot } from '@/api/types';
 import {
@@ -16,6 +17,7 @@ import {
 } from '@/components';
 import { shortBuild } from '@/lib/format';
 import { Operations } from './Operations';
+import { VerifiedMappings } from './VerifiedMappings';
 import { apiLabel } from '@/lib/names';
 import { richText } from '@/lib/richText';
 import { docHref } from '@/lib/docHref';
@@ -68,6 +70,7 @@ export const BIG_MODEL = 12;
 
 export function ModelView() {
   const { snapshotId = '' } = useParams();
+  const maintainer = useIsMaintainer();
   const client = useApiClient();
   const load = useCallback(
     (signal: AbortSignal) => client.getSnapshot(snapshotId, signal),
@@ -321,6 +324,7 @@ export function ModelView() {
         snap={snap}
         endpointLink={(apiId, docId, label) => <Link to={docHref(apiId, docId)}>{label}</Link>}
       />
+      {maintainer ? <VerifiedMappings concept={snap.concept} /> : null}
       <div className={`model-cols${view === 'table' ? ' two-up' : ''}`}>
         <ShareCard snap={snap} />
         <ReviseCard snap={snap} />

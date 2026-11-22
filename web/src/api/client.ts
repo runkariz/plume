@@ -20,11 +20,18 @@ import {
   type ModelJob,
   type ReleaseNotes,
   type ApiDisplayName,
+  type MappingReport,
+  type MappingReportAction,
+  type MappingReportList,
+  type MappingReportQuery,
+  type MappingRoute,
   type Report,
   type ReportList,
   type ReportQuery,
   type ReportStatus,
   type ReleaseSummary,
+  type VerifiedMapping,
+  type VerifiedMappingQuery,
   type ChangesPage,
   type ChangesQuery,
   type ModelImpact,
@@ -262,6 +269,20 @@ export interface PlumeApi {
   /** Reported questions, most reported first (maintainer). `enabled` says whether readers can report on this server. */
   listReports(q: ReportQuery, signal?: AbortSignal): Promise<ReportList>;
   getReport(id: string, signal?: AbortSignal): Promise<Report>;
+  /** Mapping reports of canonical models, most reported first (maintainer). */
+  listMappingReports(q: MappingReportQuery, signal?: AbortSignal): Promise<MappingReportList>;
+  getMappingReport(id: string, signal?: AbortSignal): Promise<MappingReport>;
+  /**
+   * Accept (needs a suggestion that passed the validator; it becomes a verified mapping), reject (the reason is shown to
+   * readers), route (to plume, stream or the owner) or reopen. A reason of at most 1,000 characters, required but for reopen.
+   */
+  actOnMappingReport(
+    id: string,
+    act: { action: MappingReportAction; reason?: string; route?: MappingRoute },
+    signal?: AbortSignal,
+  ): Promise<MappingReport>;
+  /** The verified mappings (maintainer): accepted reports that are in force or suspended. */
+  listVerifiedMappings(q: VerifiedMappingQuery, signal?: AbortSignal): Promise<VerifiedMapping[]>;
   /** Triage: the status, with a reason (at most 1,000 characters; the reasons of answered and out-of-scope are public). */
   setReportStatus(
     id: string,
@@ -758,6 +779,38 @@ export function createApiClient(
       return { reports: r.reports ?? [], enabled: r.enabled };
     },
     getReport: (id, signal) => call<Report>(`/v1/maintainer/reports/${enc(id)}`, { signal }),
+    listMappingReports: async (q, signal) => {
+      const p = new URLSearchParams();
+      for (const k of ['api', 'concept', 'status', 'kind'] as const) if (q[k]) p.set(k, q[k]);
+      const qs = p.toString();
+      const r = await call<Partial<MappingReportList>>(
+        `/v1/maintainer/mapping-reports${qs ? `?${qs}` : ''}`,
+        { signal },
+      );
+      return { reports: r.reports ?? [], enabled: r.enabled };
+    },
+    getMappingReport: (id, signal) =>
+      call<MappingReport>(`/v1/maintainer/mapping-reports/${enc(id)}`, { signal }),
+    actOnMappingReport: (id, act, signal) =>
+      call<MappingReport>(`/v1/maintainer/mapping-reports/${enc(id)}`, {
+        method: 'PATCH',
+        body: {
+          action: act.action,
+          ...(act.reason ? { reason: act.reason } : {}),
+          ...(act.route ? { route: act.route } : {}),
+        },
+        signal,
+      }),
+    listVerifiedMappings: async (q, signal) => {
+      const p = new URLSearchParams();
+      for (const k of ['api', 'concept', 'status'] as const) if (q[k]) p.set(k, q[k]);
+      const qs = p.toString();
+      const r = await call<{ mappings?: VerifiedMapping[] }>(
+        `/v1/maintainer/verified-mappings${qs ? `?${qs}` : ''}`,
+        { signal },
+      );
+      return r.mappings ?? [];
+    },
     setReportStatus: (id, status, reason, signal) =>
       call<Report>(`/v1/maintainer/reports/${enc(id)}`, {
         method: 'PATCH',

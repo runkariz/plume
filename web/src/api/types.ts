@@ -1690,3 +1690,129 @@ export interface ReportList {
   reports: Report[];
   enabled?: boolean;
 }
+
+// ---- maintainer: mapping reports (a reader's LLM reports a wrong or missing mapping of a canonical model) ----
+
+export type MappingReportKind = 'wrong' | 'missing' | 'model-field-missing';
+export type MappingReportStatus = 'open' | 'accepted' | 'rejected' | 'routed';
+/** Where a routed report goes: plume (the context missed the document), stream (the field is not in the package), owner. */
+export type MappingRoute = 'plume' | 'stream' | 'owner';
+
+/** One citation of a suggested mapping: the cited document and the exact quote from it (or why there is none). */
+export interface MappingEvidence {
+  docId: string;
+  quote?: string | null;
+  noQuote?: string | null;
+}
+
+/** The mapping a reader's LLM suggests: the source path on the API (and where to fetch it) with its citations. */
+export interface MappingSuggestion {
+  /** Empty when `notAvailable`. */
+  paths: string[];
+  fetch?: string | null;
+  /** The field is not available on this API (a verified absence); `evidence` quotes the `notFrom` field's own description. */
+  notAvailable?: boolean;
+  /** Documented paths the field must NOT be mapped from. */
+  notFrom?: string[];
+  evidence: MappingEvidence[];
+}
+
+/** The verified mapping an accepted report became. */
+export interface MappingReportVerified {
+  id: string;
+  reportId?: string;
+  build?: string | null;
+  validatedAt?: string | null;
+  /** True when a new build dropped the field or the quote: the report is reopened with the reason. */
+  suspended: boolean;
+  suspendedReason?: string | null;
+}
+
+/** The validator's answer to a suggestion (the same validator as submit_model_draft). */
+export interface MappingValidation {
+  ok: boolean;
+  /** Why it failed, e.g. "FIELD_NOT_FOUND: ..." or "QUOTE_NOT_FOUND: ..."; a failed suggestion is never stored. */
+  reason?: string | null;
+}
+
+export interface MappingReport {
+  /** "mr-..." */
+  id: string;
+  /** The concept key ("inventory/stock"). */
+  concept: string;
+  /** The concept as it was named in the session or model. */
+  conceptName?: string | null;
+  /** null when the report was made against a session, not a stored model. */
+  modelId?: string | null;
+  api: string;
+  build?: string | null;
+  /** The canonical field, as a dotted path. A user's own field names may be private: maintainers only see this. */
+  canonicalField: string;
+  kind: MappingReportKind;
+  status: MappingReportStatus;
+  route?: MappingRoute | null;
+  /** The maintainer's reason; for a rejected report readers see it. */
+  reason?: string | null;
+  /** Redacted text. */
+  problem: string;
+  /** What the reader's LLM said the current mapping is, in words (redacted); null when the field has none. */
+  currentMapping?: string | null;
+  /** null when none was given, or when it failed validation (an invalid one is never stored). */
+  suggestion?: MappingSuggestion | null;
+  /** null: no suggestion was given. */
+  validation?: MappingValidation | null;
+  verified?: MappingReportVerified | null;
+  reportCount: number;
+  noteCount: number;
+  createdAt: string;
+  updatedAt: string;
+  clientName?: string | null;
+  sessionHash?: string | null;
+  redactions?: number;
+  /** Only on the single report. */
+  notes?: ReportNote[] | null;
+}
+
+export interface MappingReportQuery {
+  api?: string;
+  concept?: string;
+  status?: MappingReportStatus;
+  kind?: MappingReportKind;
+}
+
+export interface MappingReportList {
+  reports: MappingReport[];
+  /** Whether readers can report on this server (PLUME_REPORTS). */
+  enabled?: boolean;
+}
+
+/** reopen needs no reason; route needs a target. */
+export type MappingReportAction = 'accept' | 'reject' | 'route' | 'reopen';
+
+/** A mapping a maintainer accepted: it is shown first in sessions, marked "verified (user report #id)". */
+export interface VerifiedMapping {
+  /** "vm-..." */
+  id: string;
+  concept: string;
+  canonicalField: string;
+  api: string;
+  paths: string[];
+  fetch?: string | null;
+  /** A verified absence: the field is not available on this API. */
+  notAvailable?: boolean;
+  notFrom?: string[];
+  evidence: MappingEvidence[];
+  /** The build it was validated on. */
+  build?: string | null;
+  reportId: string;
+  suspended: boolean;
+  suspendedReason?: string | null;
+  acceptedAt?: string | null;
+  validatedAt?: string | null;
+}
+
+export interface VerifiedMappingQuery {
+  api?: string;
+  concept?: string;
+  status?: 'active' | 'suspended';
+}
