@@ -335,7 +335,7 @@ class MappingReports:
         r = self._repo.get(report_id)
         if r is None:
             raise NotFoundError(f"mapping report {report_id} not found")
-        verified = next(iter(self._repo.verified_for(r.concept, r.api, [r.canonical_field])), None)
+        verified = _exact(self._repo.verified_for(r.concept, r.api, [r.canonical_field]), r.concept)
         return self._full(r, verified, True)
 
     def act(
@@ -357,8 +357,8 @@ class MappingReports:
             problem = self._validate(r.concept_name, r.canonical_field, r.api, build, r.suggestion)
             if problem is not None:
                 raise ReportRefusedError(f"the suggestion no longer validates: {problem}")
-            current = next(
-                iter(self._repo.verified_for(r.concept, r.api, [r.canonical_field])), None
+            current = _exact(
+                self._repo.verified_for(r.concept, r.api, [r.canonical_field]), r.concept
             )
             self._repo.put_verified(
                 VerifiedMapping(
@@ -511,7 +511,10 @@ class MappingReports:
         if any(m.build_id != build for m in mappings):
             self.revalidate(api)
             mappings = self._repo.verified_for(concept, api, [])
-        return mappings
+        best: dict[str, VerifiedMapping] = {}  # per field, the concept's own mapping first
+        for m in sorted(mappings, key=lambda m: m.concept == concept):
+            best[field_key(m.canonical_field)] = m
+        return list(best.values())
 
     def _limit(self, sess: str | None, connection: str | None) -> None:
         now = self._clock.now()
@@ -647,6 +650,10 @@ class MappingReports:
                 for n in self._repo.notes(r.report_id)
             ]
         return out
+
+
+def _exact(mappings: list[VerifiedMapping], concept: str) -> VerifiedMapping | None:
+    return next((m for m in mappings if m.concept == concept), None)
 
 
 def _concept_filter(concept: str | None) -> str | None:

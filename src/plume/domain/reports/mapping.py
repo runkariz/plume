@@ -111,6 +111,12 @@ def concept_key(main: tuple[str, ...]) -> str:
     return "/".join(main)
 
 
+def same_concept(a: str, b: str) -> bool:
+    """One concept key is the other or its main part: product ~ product/offer, inventory ~
+    inventory/stock (siblings such as inventory/stock and inventory/level are not)."""
+    return a == b or a.startswith(f"{b}/") or b.startswith(f"{a}/")
+
+
 def field_key(name: str) -> str:
     """A canonical field compared loosely: case, list marks and separators ignored."""
     return re.sub(r"[^a-z0-9.]", "", name.lower().replace("[]", ""))
