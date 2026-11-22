@@ -10,6 +10,7 @@ from plume.domain.reports.mapping import (
     MappingStatus,
     VerifiedMapping,
     field_key,
+    same_concept,
 )
 from plume.domain.reports.report import ReportNote
 
@@ -21,7 +22,7 @@ class InMemoryMappings:
         self.mappings: dict[tuple[str, str, str], VerifiedMapping] = {}
 
     def find(self, concept: str, api: str, field: str | None, limit: int) -> list[MappingReport]:
-        rows = [r for r in self.reports.values() if r.concept == concept and r.api == api
+        rows = [r for r in self.reports.values() if same_concept(r.concept, concept) and r.api == api
                 and (field is None or field_key(r.canonical_field) == field_key(field))]  # fmt: skip
         return sorted(rows, key=lambda r: -r.report_count)[:limit]
 
@@ -49,7 +50,7 @@ class InMemoryMappings:
     def list_reports(self, api: str | None, concept: str | None, status: MappingStatus | None,
              kind: str | None) -> list[MappingReport]:  # fmt: skip
         rows = [r for r in self.reports.values() if (api is None or r.api == api)
-                and (concept is None or r.concept == concept)
+                and (concept is None or same_concept(r.concept, concept))
                 and (status is None or r.status == status)
                 and (kind is None or r.kind.value == kind)]  # fmt: skip
         return sorted(rows, key=lambda r: (-r.report_count, -r.updated_at.timestamp()))
@@ -73,7 +74,7 @@ class InMemoryMappings:
 
     def verified(self, concept: str | None, api: str | None,
                  status: str | None = None) -> list[VerifiedMapping]:  # fmt: skip
-        return [m for m in self.mappings.values() if (concept is None or m.concept == concept)
+        return [m for m in self.mappings.values() if (concept is None or same_concept(m.concept, concept))
                 and (api is None or m.api == api)
                 and (status is None or m.status.value == status)]  # fmt: skip
 
@@ -84,4 +85,4 @@ class InMemoryMappings:
     def verified_for(self, concept: str, api: str, fields: Sequence[str]) -> list[VerifiedMapping]:
         keys = {field_key(f) for f in fields}
         return [m for (c, f, a), m in self.mappings.items()
-                if c == concept and a == api and (not keys or f in keys)]  # fmt: skip
+                if same_concept(c, concept) and a == api and (not keys or f in keys)]  # fmt: skip

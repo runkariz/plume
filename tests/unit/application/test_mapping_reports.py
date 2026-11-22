@@ -302,3 +302,33 @@ def test_another_field_mapping_a_verified_path_is_warned(stack: FakeStack) -> No
     )
     # the verified field itself is now unmapped on that API: no draft field named "total"
     assert set(warned) == {("grandAmount", API), ("edoCgnikcart", API)}
+
+
+def test_a_compound_concept_shares_its_main_concept(stack: FakeStack) -> None:
+    """A mapping verified in an "Order / Line" session reaches plain "Order" sessions and the
+    other way round; a sibling compound ("Order / Note") does not get it."""
+    svc, repo = _service(stack)
+    sid = stack.models().start(APIS, "Order / Line").session_id
+    rid = svc.report(sid, API, "grandTotal", "missing", "the total has no mapping", None, GOOD)[
+        "id"
+    ]
+    assert repo.get(rid).concept == "order/line"  # type: ignore[union-attr]
+    svc.act(rid, "accept", "checked")
+    fresh = _sessions(stack, svc)
+    for concept, expected in (("Order", ["grandTotal"]), ("Order / Line", ["grandTotal"]),
+                              ("Order / Note", [])):  # fmt: skip
+        ctx = {a["api"]: a for a in fresh.context(fresh.start(APIS, concept).session_id)["apis"]}
+        assert [v["canonical_field"] for v in ctx[API].get("verified_mappings", [])] == expected, (
+            concept
+        )
+    assert [m["report_id"] for m in svc.verified_list("Order")] == [rid]
+    assert [r["id"] for r in svc.list_reports(concept="Order")] == [rid]
+    # the plain concept's own mapping wins over the compound's for the same field
+    plain = stack.models().start(APIS, "Order").session_id
+    own = svc.report(plain, API, "grandTotal", "wrong", "use the order's total", None,
+                     {**GOOD, "paths": ["orders[].total"]})["id"]  # fmt: skip
+    svc.act(own, "accept", "checked")
+    (v,) = svc.for_session("Order", API)
+    assert (v["report_id"], v["paths"]) == (own, ["orders[].total"])
+    (w,) = svc.for_session("Order / Line", API)
+    assert w["report_id"] == rid

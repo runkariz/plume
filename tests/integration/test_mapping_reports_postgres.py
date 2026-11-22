@@ -100,3 +100,16 @@ def test_an_absence_round_trips(repo: PostgresMappingRepo) -> None:
                                       "mr-x", VerifiedStatus.ACTIVE, T0, T0))  # fmt: skip
     (m,) = repo.verified("product", "jtl")
     assert m.suggestion == absent
+
+
+def test_a_compound_concept_shares_its_main_concept(repo: PostgresMappingRepo) -> None:
+    m = VerifiedMapping("vm-3", "product/offer", "variants[].id", "jtl", SUGGESTION, "b-1",
+                        "mr-y", VerifiedStatus.ACTIVE, T0, T0)  # fmt: skip
+    repo.put_verified(m)
+    assert [v.mapping_id for v in repo.verified("product", None)] == ["vm-3"]
+    assert [v.mapping_id for v in repo.verified("product/offer/x", None)] == ["vm-3"]
+    assert repo.verified("product/image", None) == []
+    assert repo.verified("productline", None) == []
+    repo.add(replace(_report("mr-c", "sku", MappingKind.WRONG, T0), concept="product/offer"), "sku")
+    assert [r.report_id for r in repo.list_reports(None, "product", None, None)] == ["mr-c"]
+    assert [r.report_id for r in repo.find("product", "shopify", None, 5)] == ["mr-c"]

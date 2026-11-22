@@ -28,6 +28,14 @@ _VCOLS = (
 )
 
 
+# the concept, or one whose main part it is, or its own main part (product ~ product/offer)
+_SAME_CONCEPT = "(concept = :c OR concept LIKE :cp OR :c LIKE concept || '/%')"
+
+
+def _concept_where(concept: str | None) -> dict[str, Any]:
+    return {} if concept is None else {"c": concept, "cp": f"{concept}/%"}
+
+
 def _suggestion(raw: Any) -> Suggestion | None:
     if not raw:
         return None
@@ -128,10 +136,10 @@ class PostgresMappingRepo:
         return [_report(r) for r in rows]
 
     def find(self, concept: str, api: str, field: str | None, limit: int) -> list[MappingReport]:
-        where = "concept = :c AND api = :a" + (" AND field_key = :f" if field else "")
+        where = f"{_SAME_CONCEPT} AND api = :a" + (" AND field_key = :f" if field else "")
         return self._reports(
             where,
-            {"c": concept, "a": api, "f": field_key(field or ""), "n": limit},
+            {"c": concept, "cp": f"{concept}/%", "a": api, "f": field_key(field or ""), "n": limit},
             "ORDER BY report_count DESC, updated_at DESC LIMIT :n",
         )
 
@@ -219,10 +227,11 @@ class PostgresMappingRepo:
         status: MappingStatus | None,
         kind: str | None,
     ) -> list[MappingReport]:
-        where, params = ["TRUE"], {}
+        where, params = ["TRUE"], _concept_where(concept)
+        if concept is not None:
+            where.append(_SAME_CONCEPT)
         for col, value in (
             ("api", api),
-            ("concept", concept),
             ("status", status.value if status else None),
             ("kind", kind),
         ):
@@ -270,8 +279,10 @@ class PostgresMappingRepo:
     def verified(
         self, concept: str | None, api: str | None, status: str | None = None
     ) -> list[VerifiedMapping]:
-        where, params = ["TRUE"], {}
-        for col, value in (("concept", concept), ("api", api), ("status", status)):
+        where, params = ["TRUE"], _concept_where(concept)
+        if concept is not None:
+            where.append(_SAME_CONCEPT)
+        for col, value in (("api", api), ("status", status)):
             if value is not None:
                 where.append(f"{col} = :{col}")
                 params[col] = value
