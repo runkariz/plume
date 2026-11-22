@@ -320,6 +320,7 @@ class MappingReports:
         status: str | None = None,
         kind: str | None = None,
     ) -> list[dict[str, Any]]:
+        concept = _concept_filter(concept)
         st = MappingStatus(status) if status else None
         verified = {
             (m.concept, field_key(m.canonical_field), m.api): m
@@ -390,6 +391,7 @@ class MappingReports:
     def verified_list(
         self, concept: str | None = None, api: str | None = None, status: str | None = None
     ) -> list[dict[str, Any]]:
+        concept = _concept_filter(concept)
         apis = {m.api for m in self._repo.verified(concept, api)}
         for a in apis:
             self.revalidate(a)
@@ -645,6 +647,11 @@ class MappingReports:
                 for n in self._repo.notes(r.report_id)
             ]
         return out
+
+
+def _concept_filter(concept: str | None) -> str | None:
+    """A concept filter given as a key ("inventory/stock") or a name ("Order", "products")."""
+    return concept_key(concept_parts(concept)[0]) if concept and concept.strip() else None
 
 
 def _described(suggestion: Suggestion) -> str:
