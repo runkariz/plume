@@ -35,6 +35,7 @@ from plume.application.reader.ranking import (
     code_holder_first,
     context_after_named_endpoint,
     endpoint_before_its_model,
+    endpoints_before_returned_models,
     error_codes_after_endpoint,
     is_page,
     keep_endpoints,
@@ -349,6 +350,9 @@ def rank_order(
     order = path_only_after_endpoints(order, k)
     order = rate_limit_guide_first(order, k, query)
     order = endpoint_before_its_model(order, k)
+    order = endpoints_before_returned_models(
+        order, k, query, lambda m, pool: returning_endpoints(documents, build_id, m, pool)
+    )
     order = push_first(order, k, query, all_endpoints)
     order = context_after_named_endpoint(order, k, query)
     order = error_codes_after_endpoint(order, k, query, error_codes)
@@ -620,6 +624,39 @@ def trigger_resource(documents: DocumentRepo, build_id: BuildId, doc_id: str) ->
     doc = documents.get_document(build_id, doc_id)
     raw = doc.raw if doc is not None and isinstance(doc.raw, dict) else {}
     return str(raw["resource"]) if isinstance(raw.get("resource"), str) else None
+
+
+def returning_endpoints(
+    documents: DocumentRepo, build_id: BuildId, model_id: str, candidates: Sequence[str]
+) -> list[str]:
+    """The candidate endpoints that return a model: named by the package (x-plume-returned-by),
+    or the vendor requests the model was built from (x-vendor-requests, a Postman folder's
+    "Categories: Browse") equal to an endpoint's summary or name."""
+    doc = documents.get_document(build_id, model_id)
+    raw = doc.raw if doc is not None and isinstance(doc.raw, dict) else {}
+    named = raw.get("x-plume-returned-by")
+    out = (
+        [e for e in named if isinstance(e, str) and e in candidates]
+        if isinstance(named, list)
+        else []
+    )
+    requests = raw.get("x-vendor-requests")
+    wanted = (
+        {r.strip().lower() for r in requests if isinstance(r, str)}
+        if isinstance(requests, list)
+        else set()
+    )
+    if not wanted:
+        return out
+    for e in candidates:
+        if e in out:
+            continue
+        edoc = documents.get_document(build_id, e)
+        eraw = edoc.raw if edoc is not None and isinstance(edoc.raw, dict) else {}
+        names = {str(eraw.get(n, "")).strip().lower() for n in ("summary", "name")}
+        if names & wanted:
+            out.append(e)
+    return out
 
 
 def unit_endpoints(documents: DocumentRepo, build_id: BuildId, doc_id: str) -> list[str]:
