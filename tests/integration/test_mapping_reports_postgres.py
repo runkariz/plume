@@ -113,3 +113,13 @@ def test_a_compound_concept_shares_its_main_concept(repo: PostgresMappingRepo) -
     repo.add(replace(_report("mr-c", "sku", MappingKind.WRONG, T0), concept="product/offer"), "sku")
     assert [r.report_id for r in repo.list_reports(None, "product", None, None)] == ["mr-c"]
     assert [r.report_id for r in repo.find("product", "shopify", None, 5)] == ["mr-c"]
+
+
+def test_mapping_consent_method_round_trips(repo: PostgresMappingRepo) -> None:
+    r = replace(_report("mr-cm", "sku", MappingKind.WRONG, T0), consent_method="llm_attested")
+    repo.add(r, "sku")
+    repo.add_note(ReportNote("mn-cm", "mr-cm", "x", T0, consent_method="elicitation"))
+    got = repo.get("mr-cm")
+    assert got is not None
+    assert got.consent_method == "llm_attested"
+    assert [n.consent_method for n in repo.notes("mr-cm")] == ["elicitation"]

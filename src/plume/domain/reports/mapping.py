@@ -81,6 +81,7 @@ class MappingReport:
     client_name: str | None = None
     session_hash: str | None = None
     redactions: int = 0
+    consent_method: str | None = None  # elicitation | llm_attested
 
 
 ROUTES = ("plume", "stream", "owner")

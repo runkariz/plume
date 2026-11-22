@@ -20,7 +20,8 @@ from plume.domain.reports.report import ReportNote
 _COLS = (
     "report_id, concept, concept_name, model_id, api, build_id, canonical_field, kind, problem, "
     "current_mapping, suggestion, suggestion_status, validator_reason, status, reason, route, "
-    "report_count, note_count, created_at, updated_at, client_name, session_hash, redactions"
+    "report_count, note_count, created_at, updated_at, client_name, session_hash, redactions, "
+    "consent_method"
 )
 _VCOLS = (
     "mapping_id, concept, canonical_field, api, suggestion, build_id, report_id, status, "
@@ -74,6 +75,7 @@ def _report(r: Any) -> MappingReport:
         client_name=r.client_name,
         session_hash=r.session_hash,
         redactions=r.redactions,
+        consent_method=r.consent_method,
     )
 
 
@@ -120,6 +122,7 @@ def _params(r: MappingReport) -> dict[str, Any]:
         "client_name": r.client_name,
         "session_hash": r.session_hash,
         "redactions": r.redactions,
+        "consent_method": r.consent_method,
     }
 
 
@@ -168,8 +171,8 @@ class PostgresMappingRepo:
             conn.execute(
                 text(
                     "INSERT INTO mapping_report_notes (note_id, report_id, kind, text, "
-                    "created_at, client_name, session_hash, build_id, redactions) VALUES (:i, "
-                    ":r, :k, :t, :c, :cl, :s, :b, :red)"
+                    "created_at, client_name, session_hash, build_id, redactions, consent_method) "
+                    "VALUES (:i, :r, :k, :t, :c, :cl, :s, :b, :red, :cm)"
                 ),
                 {
                     "i": note.note_id,
@@ -181,6 +184,7 @@ class PostgresMappingRepo:
                     "s": note.session_hash,
                     "b": note.build_id,
                     "red": note.redactions,
+                    "cm": note.consent_method,
                 },
             )
             conn.execute(
@@ -200,7 +204,7 @@ class PostgresMappingRepo:
             rows = conn.execute(
                 text(
                     "SELECT note_id, report_id, kind, text, created_at, client_name, "
-                    "session_hash, build_id, redactions FROM mapping_report_notes "
+                    "session_hash, build_id, redactions, consent_method FROM mapping_report_notes "
                     "WHERE report_id = :r ORDER BY created_at, note_id"
                 ),
                 {"r": report_id},
@@ -216,6 +220,7 @@ class PostgresMappingRepo:
                 session_hash=n.session_hash,
                 build_id=n.build_id,
                 redactions=n.redactions,
+                consent_method=n.consent_method,
             )
             for n in rows
         ]

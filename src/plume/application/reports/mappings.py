@@ -14,7 +14,7 @@ import json
 import threading
 import uuid
 from collections.abc import Callable
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -159,34 +159,23 @@ class MappingReports:
         client_name: str | None = None,
         session_id: str | None = None,
         connection: str | None = None,
+        *,
+        consent_method: str | None = None,
     ) -> dict[str, Any]:
-        self._require()
-        k = _checked_inputs(kind, canonical_field, problem, current_mapping, suggested_mapping)
-        concept, concept_name, model_id = self._concept(model)
-        build = self._resolver.resolve(api).build.build_id.value
+        p = self._prepared(model, api, canonical_field, kind, problem, current_mapping,
+                           suggested_mapping)  # fmt: skip
+        k, concept, concept_name, model_id, build = (
+            p.kind,
+            p.concept,
+            p.concept_name,
+            p.model_id,
+            p.build,
+        )
+        text, current, field_name = p.problem, p.current, p.field
+        suggestion, reason, status, n_p, n_c = p.suggestion, p.reason, p.status, p.redactions, 0
         sess = session_hash(session_id, self._salt)
         self._limit(sess, connection)
-        rule = self._host_rule(api)
-        text, n_p = safe_text(problem, self._policy, rule)
-        if text is None:
-            raise ReportRefusedError(
-                "the problem could not be stored safely: describe it in general terms, without "
-                "user data (ids, order numbers, tokens, names, emails), and report again"
-            )
-        current, n_c = safe_text(current_mapping, self._policy, rule)
-        field_name = redact_text(canonical_field.strip(), self._policy)[0][:200]
         client, _ = safe_text(client_name[:64] if client_name else None, self._policy)
-        suggestion, reason = (None, None)
-        if suggested_mapping is not None:
-            suggestion, reason = self._check(
-                concept_name, field_name, api, build, suggested_mapping
-            )
-        if suggested_mapping is None:
-            status = SuggestionStatus.NONE
-        elif suggestion is not None:
-            status = SuggestionStatus.VALID
-        else:
-            status = SuggestionStatus.INVALID
         now = self._clock.now()
         self._maybe_purge(now)
         existing = self._repo.by_key(concept, api, field_name, k.value)
@@ -210,6 +199,7 @@ class MappingReports:
                     session_hash=sess,
                     build_id=build,
                     redactions=n_p + n_c,
+                    consent_method=consent_method,
                 )
             )
             merged = self._repo.get(existing.report_id) or existing
@@ -250,6 +240,7 @@ class MappingReports:
             client_name=client,
             session_hash=sess,
             redactions=n_p + n_c,
+            consent_method=consent_method,
         )
         self._repo.add(report, field_key(field_name))
         message = "Reported. Thank you: maintainers review mapping reports."
@@ -270,20 +261,12 @@ class MappingReports:
         client_name: str | None = None,
         session_id: str | None = None,
         connection: str | None = None,
+        *,
+        consent_method: str | None = None,
     ) -> dict[str, Any]:
-        self._require()
-        if not note.strip() or len(note) > MAX_FIELD:
-            raise ReportRefusedError(f"note must be 1..{MAX_FIELD} characters")
-        existing = self._repo.get(report_id)
-        if existing is None:
-            raise NotFoundError(f"mapping report {report_id} not found")
+        existing, text, n = self._note_text(report_id, note)
         sess = session_hash(session_id, self._salt)
         self._limit(sess, connection)
-        text, n = safe_text(note, self._policy, self._host_rule(existing.api))
-        if text is None:
-            raise ReportRefusedError(
-                "the note could not be stored safely: write it without user data and try again"
-            )
         client, _ = safe_text(client_name[:64] if client_name else None, self._policy)
         self._repo.add_note(
             ReportNote(
@@ -295,10 +278,86 @@ class MappingReports:
                 session_hash=sess,
                 build_id=existing.build_id,
                 redactions=n,
+                consent_method=consent_method,
             )
         )
         updated = self._repo.get(report_id) or existing
         return {"id": report_id, "message": "Note added.", "report": self._public(updated, None)}
+
+    def _prepared(
+        self,
+        model: str,
+        api: str,
+        canonical_field: str,
+        kind: str,
+        problem: str,
+        current_mapping: str | None,
+        suggested_mapping: dict[str, Any] | None,
+    ) -> "_Prepared":
+        """The report as it would be stored: checked, redacted, the suggestion validated."""
+        self._require()
+        k = _checked_inputs(kind, canonical_field, problem, current_mapping, suggested_mapping)
+        concept, concept_name, model_id = self._concept(model)
+        build = self._resolver.resolve(api).build.build_id.value
+        rule = self._host_rule(api)
+        text, n_p = safe_text(problem, self._policy, rule)
+        if text is None:
+            raise ReportRefusedError(
+                "the problem could not be stored safely: describe it in general terms, without "
+                "user data (ids, order numbers, tokens, names, emails), and report again"
+            )
+        current, n_c = safe_text(current_mapping, self._policy, rule)
+        field_name = redact_text(canonical_field.strip(), self._policy)[0][:200]
+        suggestion, reason = (None, None)
+        if suggested_mapping is not None:
+            suggestion, reason = self._check(
+                concept_name, field_name, api, build, suggested_mapping
+            )
+        if suggested_mapping is None:
+            status = SuggestionStatus.NONE
+        elif suggestion is not None:
+            status = SuggestionStatus.VALID
+        else:
+            status = SuggestionStatus.INVALID
+        return _Prepared(k, concept, concept_name, model_id, build, text, current, field_name,
+                         suggestion, reason, status, n_p + n_c)  # fmt: skip
+
+    def preview(
+        self,
+        model: str,
+        api: str,
+        canonical_field: str,
+        kind: str,
+        problem: str,
+        current_mapping: str | None = None,
+        suggested_mapping: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Exactly what ``report`` would store, for the user's consent; stores nothing."""
+        p = self._prepared(model, api, canonical_field, kind, problem, current_mapping,
+                           suggested_mapping)  # fmt: skip
+        return {"api": api, "concept": p.concept_name, "canonical_field": p.field,
+                "kind": p.kind.value, "problem": p.problem, "current_mapping": p.current,
+                "suggested_mapping": _described(p.suggestion) if p.suggestion else None,
+                "validation": self._validation(p.status, p.reason)}  # fmt: skip
+
+    def preview_note(self, report_id: str, note: str) -> dict[str, Any]:
+        """Exactly what ``add_note`` would store; stores nothing."""
+        existing, text, _ = self._note_text(report_id, note)
+        return {"api": existing.api, "report_id": report_id, "note": text}
+
+    def _note_text(self, report_id: str, note: str) -> tuple[MappingReport, str, int]:
+        self._require()
+        if not note.strip() or len(note) > MAX_FIELD:
+            raise ReportRefusedError(f"note must be 1..{MAX_FIELD} characters")
+        existing = self._repo.get(report_id)
+        if existing is None:
+            raise NotFoundError(f"mapping report {report_id} not found")
+        text, n = safe_text(note, self._policy, self._host_rule(existing.api))
+        if text is None:
+            raise ReportRefusedError(
+                "the note could not be stored safely: write it without user data and try again"
+            )
+        return existing, text, n
 
     # -- sessions -------------------------------------------------------------------------------
 
@@ -634,6 +693,7 @@ class MappingReports:
             "client_name": r.client_name,
             "session_hash": r.session_hash,
             "redactions": r.redactions,
+            "consent_method": r.consent_method,
         }
         if with_notes:
             out["notes"] = [
@@ -646,6 +706,7 @@ class MappingReports:
                     "session_hash": n.session_hash,
                     "build": n.build_id,
                     "redactions": n.redactions,
+                    "consent_method": n.consent_method,
                 }
                 for n in self._repo.notes(r.report_id)
             ]
@@ -784,3 +845,19 @@ def _suggestion(raw: dict[str, Any]) -> Suggestion:
         absent,
         tuple(str(p).strip() for p in not_from),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class _Prepared:
+    kind: MappingKind
+    concept: str
+    concept_name: str
+    model_id: str | None
+    build: str
+    problem: str
+    current: str | None
+    field: str
+    suggestion: Suggestion | None
+    reason: str | None
+    status: SuggestionStatus
+    redactions: int

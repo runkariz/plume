@@ -13,6 +13,8 @@ x-plume-env: &plume-env
   # Maintainer API tokens as a JSON list; empty = maintainer API answers 503.
   PLUME_MAINTAINER_TOKENS: ${PLUME_MAINTAINER_TOKENS:-[]}
   PLUME_GOLD_DIRS: '["/gold"]'
+  # Reporting (opt-in, see README "Reporting (opt-in)"): off unless you switch it on.
+  PLUME_REPORTS: ${PLUME_REPORTS:-off}
   PLUME_DATA_DIR: /data
 
 services:

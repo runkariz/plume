@@ -83,13 +83,16 @@ async def test_client_name_and_the_hourly_limit_over_the_real_transport(
     info = Implementation(name="coord-probe", version="1")
     async with Client(url, client_info=info, mode=mode) as client:
         one = await client.call_tool("report_question",
-                                     {"api": API, "question": "how are list results paged"})  # fmt: skip
+                                     {"api": API, "question": "how are list results paged",
+                                      "user_consent": "asked_and_approved"})  # fmt: skip
         assert not one.is_error, one.content
         two = await client.call_tool("add_to_report",
-                                     {"id": one.structured_content["id"], "note": "also needed"})  # fmt: skip
+                                     {"id": one.structured_content["id"], "note": "also needed",
+                                      "user_consent": "asked_and_approved"})  # fmt: skip
         assert not two.is_error, two.content
         three = await client.call_tool("report_question",
-                                       {"api": API, "question": "what is the rate limit"})  # fmt: skip
+                                       {"api": API, "question": "what is the rate limit",
+                                        "user_consent": "asked_and_approved"})  # fmt: skip
         assert three.is_error
         assert "in the last hour" in str(three.content)
     [report] = repo.reports.values()
@@ -114,3 +117,44 @@ def test_a_session_id_header_is_the_session(packages: Path) -> None:
     )  # fmt: skip
     assert client_of(SimpleNamespace(request_context=old)).client_name == "old-client"  # type: ignore[arg-type]
     assert client_of(None).client_name is None
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("mode", ["auto", "legacy"])
+async def test_elicitation_over_the_real_stateless_transport(
+    served: tuple[str, InMemoryReports], mode: str
+) -> None:
+    """The reader server is stateless: on 2026-07-28 Plume asks through input_required rounds
+    (every request carries the client's capabilities); on the handshake protocol the
+    capabilities stay with the initialize request, so Plume falls back to user_consent."""
+    from mcp.types import ElicitRequestParams, ElicitResult  # noqa: PLC0415
+
+    url, repo = served
+    asked: list[str] = []
+
+    async def elicit(_ctx: Any, params: ElicitRequestParams) -> ElicitResult:
+        asked.append(params.message)
+        action = "decline" if "decline me" in params.message else "accept"
+        return ElicitResult(action=action, content={"edit": ""} if action == "accept" else None)
+
+    async with Client(url, mode=mode, elicitation_callback=elicit) as client:  # type: ignore[arg-type]
+        yes = await client.call_tool(
+            "report_question", {"api": API, "question": "how are refunds paged"}
+        )
+        if mode == "legacy":
+            # a stateless server keeps no handshake: the call carries no client capabilities,
+            # so Plume cannot know it may ask; the LLM must attest instead, nothing is stored
+            assert yes.is_error
+            assert "ConsentRequiredError" in str(yes.content)
+            assert asked == []
+            assert repo.reports == {}
+            return
+        assert not yes.is_error, yes.content
+        no = await client.call_tool(
+            "report_question", {"api": API, "question": "decline me please"}
+        )
+        assert not no.is_error, no.content
+        assert (no.structured_content or {}).get("sent") is False
+    assert len(asked) == 2
+    [report] = repo.reports.values()
+    assert (report.question, report.consent_method) == ("how are refunds paged", "elicitation")

@@ -3,13 +3,17 @@
 import contextlib
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Annotated, Any, Literal
 
+from mcp.server.elicitation import AcceptedElicitation, ElicitationResult
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.context import Context
+from mcp.server.mcpserver.resolve import Elicit, Resolve
 from mcp.types import ToolAnnotations
+from pydantic import BaseModel, Field
 from starlette.requests import Request
 
+from plume.application.errors import ApplicationError
 from plume.application.reports.mappings import MappingReports
 from plume.application.reports.service import ReportedQuestions
 from plume.interfaces.http.rate_limit import client_address
@@ -24,13 +28,17 @@ REPORTS_RULE = """\
    if one of them is your question, add_to_report(id, note); otherwise report_question(api,
    question, what_was_tried, what_was_missing). Write the question in general terms with no
    user data (no shop ids, order numbers, tokens, names or emails): "how do I refresh an
-   expired Shopee access token", not the user's values.
+   expired Shopee access token", not the user's values. ASK THE USER FIRST: these tools store
+   text. When Plume asks the user itself (your client supports elicitation), just call the tool.
+   Otherwise show the user the exact text you will send and that "Plume's maintainers use this
+   to improve results; kept up to 90 days; only maintainers can read it", ask whether to send
+   it, and only on a yes call the tool with user_consent="asked_and_approved".
 """
 
 HINT = (
     "If you needed this, you can report the question so maintainers can fix it: "
     "find_reported_questions(api, question), then report_question or add_to_report "
-    "(general terms, no user data)."
+    "(general terms, no user data; ask the user before sending)."
 )
 
 
@@ -71,6 +79,107 @@ def client_of(ctx: Context | None, trusted_proxy_hops: int = 0) -> Caller:
     return Caller(name if isinstance(name, str) else None, session, address)
 
 
+CONSENT_LINE = (
+    "Plume's maintainers use this to improve results; kept up to 90 days; only maintainers can "
+    "read it."
+)
+APPROVED = "asked_and_approved"
+NOT_SENT = "not sent (the user declined)"
+Consent = Literal["asked_and_approved"] | None
+_CONSENT_DOC = (
+    'user_consent: "asked_and_approved" only after you showed the user the exact text and they '
+    "said yes; not needed when Plume asks the user itself (elicitation)."
+)
+
+
+class ConsentForm(BaseModel):
+    """What the user may change before the report is sent."""
+
+    edit: str = Field(
+        default="",
+        max_length=1000,
+        description="Optional: a corrected text for the main field shown above (the question, "
+        "problem or note); leave empty to send it as shown. It is checked again before sending.",
+    )
+
+
+class _NoAsk:
+    """The resolver's answer when Plume cannot ask the user (no elicitation, or the text is
+    refused anyway: the tool body then reports the refusal and stores nothing)."""
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+
+
+def _can_elicit(ctx: Context) -> bool:
+    """The client declared form elicitation (a bare `elicitation: {}` counts as form)."""
+    try:
+        caps = ctx.client_capabilities
+    except Exception:
+        return False
+    e = caps.elicitation if caps is not None else None
+    return e is not None and (e.form is not None or e.url is None)
+
+
+def _ask(ctx: Context, preview: Callable[[], dict[str, Any]], labels: dict[str, str]) -> Any:
+    """Elicit the user's consent over the exact text to store, or _NoAsk."""
+    if not _can_elicit(ctx):
+        return _NoAsk("no_elicitation")
+    try:
+        shown = preview()
+    except ApplicationError as exc:
+        return _NoAsk(str(exc))
+    lines = [f"Plume would store this report about {shown['api']}:", ""]
+    lines += [f"{label}: {shown[key]}" for key, label in labels.items() if shown.get(key)]
+    lines += ["", CONSENT_LINE, "Accept to send it; decline to send nothing."]
+    return Elicit("\n".join(lines), ConsentForm)
+
+
+async def _with_consent(
+    outcome: ElicitationResult[ConsentForm],
+    user_consent: str | None,
+    run: Callable[[Callable[[], dict[str, Any]]], Awaitable[dict[str, Any]]],
+    preview: Callable[[], dict[str, Any]],
+    store: Callable[[str | None, str], dict[str, Any]],
+) -> dict[str, Any]:
+    """Store only with the user's yes: elicited (accept; an edit replaces the main text), or,
+    when Plume cannot ask, attested by the LLM (user_consent). Otherwise nothing is stored."""
+    if not isinstance(outcome, AcceptedElicitation):
+        return {"sent": False, "message": NOT_SENT}
+    data = outcome.data
+    if isinstance(data, _NoAsk):
+        if data.reason != "no_elicitation":
+            return await run(preview)  # the same refusal the store would give; nothing stored
+        if user_consent != APPROVED:
+
+            def refuse() -> dict[str, Any]:
+                shown = preview()
+                raise ConsentRequiredError(shown)
+
+            return await run(refuse)
+        return await run(lambda: {"sent": True, **store(None, "llm_attested")})
+    edit = data.edit.strip() if isinstance(data, ConsentForm) else ""
+    return await run(lambda: {"sent": True, **store(edit or None, "elicitation")})
+
+
+class ConsentRequiredError(ApplicationError):
+    def __init__(self, shown: dict[str, Any]) -> None:
+        text = "; ".join(f"{k}: {v}" for k, v in shown.items() if v and k != "api")
+        super().__init__(
+            "Not sent: ask the user first. Show them exactly what Plume would store "
+            f"({text}) and say: {CONSENT_LINE} Only if they say yes, call again with "
+            f'user_consent="{APPROVED}".'
+        )
+
+
+_QUESTION_LABELS = {"question": "Question", "what_was_tried": "Tried",
+                    "what_was_missing": "Missing"}  # fmt: skip
+_NOTE_LABELS = {"report_id": "Report", "note": "Note"}
+_MAPPING_LABELS = {"concept": "Model", "canonical_field": "Field", "kind": "Kind",
+                   "problem": "Problem", "current_mapping": "Current mapping",
+                   "suggested_mapping": "Suggested mapping"}  # fmt: skip
+
+
 def register_report_tools(
     server: MCPServer,
     reports: Callable[[], ReportedQuestions],
@@ -85,35 +194,67 @@ def register_report_tools(
         Call it before report_question; if one is your question, use add_to_report."""
         return await run(lambda: reports().find(api, question))
 
+    def ask_question(
+        ctx: Context, api: str, question: str, what_was_tried: str | None,
+        what_was_missing: str | None,
+    ) -> Any:  # fmt: skip
+        return _ask(ctx, lambda: reports().preview(api, question, what_was_tried,
+                                                   what_was_missing), _QUESTION_LABELS)  # fmt: skip
+
     @server.tool(annotations=WRITE, structured_output=True)
     async def report_question(
         ctx: Context,
         api: str,
         question: str,
+        consent: Annotated[ElicitationResult[ConsentForm], Resolve(ask_question)],
         what_was_tried: str | None = None,
         what_was_missing: str | None = None,
+        user_consent: Consent = None,
     ) -> dict[str, Any]:
         """Report a question Plume could not answer, so maintainers fix the search or the
-        package. question: the question in GENERAL terms, without user data (no ids, order
-        numbers, tokens, names, emails). what_was_tried: the Plume tools and queries you used.
+        package. Stores text: the user must agree first (Plume asks them itself when the
+        client supports it; otherwise show them the exact text and pass user_consent).
+        question: the question in GENERAL terms, without user data (no ids, order numbers,
+        tokens, names, emails). what_was_tried: the Plume tools and queries you used.
         what_was_missing: what you expected but did not find. At most 1,000 characters each.
-        A near-duplicate of an existing report is added to it as a note (the answer says so)."""
+        A near-duplicate of an existing report is added to it as a note (the answer says so).
+        """
         who = client_of(ctx, trusted_proxy_hops)
-        return await run(
-            lambda: reports().report(
-                api, question, what_was_tried, what_was_missing,
-                who.client_name, who.session_id, who.address,
-            )
+
+        def store(edit: str | None, method: str) -> dict[str, Any]:
+            return reports().report(
+                api, edit or question, what_was_tried, what_was_missing, who.client_name,
+                who.session_id, who.address, consent_method=method,
+            )  # fmt: skip
+
+        return await _with_consent(
+            consent, user_consent, run,
+            lambda: reports().preview(api, question, what_was_tried, what_was_missing), store,
         )  # fmt: skip
 
+    def ask_note(ctx: Context, id: str, note: str) -> Any:
+        return _ask(ctx, lambda: reports().preview_note(id, note), _NOTE_LABELS)
+
     @server.tool(annotations=WRITE, structured_output=True)
-    async def add_to_report(ctx: Context, id: str, note: str) -> dict[str, Any]:
+    async def add_to_report(
+        ctx: Context,
+        id: str,
+        note: str,
+        consent: Annotated[ElicitationResult[ConsentForm], Resolve(ask_note)],
+        user_consent: Consent = None,
+    ) -> dict[str, Any]:
         """Add a note to a reported question (from find_reported_questions): "also needed
         this", a suggestion, or what else was missing. Raises its report count. No user data;
-        at most 1,000 characters."""
+        at most 1,000 characters. Stores text: the user must agree first (as report_question).
+        """
         who = client_of(ctx, trusted_proxy_hops)
-        return await run(
-            lambda: reports().add_note(id, note, who.client_name, who.session_id, who.address)
+
+        def store(edit: str | None, method: str) -> dict[str, Any]:
+            return reports().add_note(id, edit or note, who.client_name, who.session_id,
+                                      who.address, consent_method=method)  # fmt: skip
+
+        return await _with_consent(
+            consent, user_consent, run, lambda: reports().preview_note(id, note), store
         )
 
 
@@ -125,6 +266,7 @@ MAPPINGS_RULE = """\
    suggested_mapping is checked like a draft (the path must exist in that API, the quote must
    be in the cited document); one that fails is kept only as the problem. General terms, no
    user data. verified_mappings in get_model_context come from accepted reports: use them first.
+   These tools store text too: ask the user first, as in rule 8 (user_consent).
 """
 
 
@@ -144,6 +286,14 @@ def register_mapping_tools(
         verified mappings maintainers accepted. Call it before report_mapping."""
         return await run(lambda: mappings().find(model, api, field))
 
+    def ask_mapping(
+        ctx: Context, model: str, api: str, canonical_field: str, kind: str, problem: str,
+        current_mapping: str | None, suggested_mapping: dict[str, Any] | None,
+    ) -> Any:  # fmt: skip
+        return _ask(ctx, lambda: mappings().preview(model, api, canonical_field, kind, problem,
+                                                    current_mapping, suggested_mapping),
+                    _MAPPING_LABELS)  # fmt: skip
+
     @server.tool(annotations=WRITE, structured_output=True)
     async def report_mapping(
         ctx: Context,
@@ -152,8 +302,10 @@ def register_mapping_tools(
         canonical_field: str,
         kind: str,
         problem: str,
+        consent: Annotated[ElicitationResult[ConsentForm], Resolve(ask_mapping)],
         current_mapping: str | None = None,
         suggested_mapping: dict[str, Any] | None = None,
+        user_consent: Consent = None,
     ) -> dict[str, Any]:
         """Report a wrong or missing canonical-model mapping. model: the model session id or
         model id. kind: wrong | missing | model-field-missing (the model lacks a field the APIs
@@ -164,20 +316,43 @@ def register_mapping_tools(
         true, "notFrom": ["the wrong path"], "evidence": [{"doc_id": "...", "quote": "what that
         path really is"}]}; Plume validates it like submit_model_draft and keeps it only when it
         passes (else the answer gives the validator's reason). The same field and kind already
-        reported adds your report as a note. At most 1,000 characters per text field."""
+        reported adds your report as a note. At most 1,000 characters per text field. Stores
+        text: the user must agree first (as report_question)."""
         who = client_of(ctx, trusted_proxy_hops)
-        return await run(
-            lambda: mappings().report(
-                model, api, canonical_field, kind, problem, current_mapping, suggested_mapping,
-                who.client_name, who.session_id, who.address,
-            )
+
+        def store(edit: str | None, method: str) -> dict[str, Any]:
+            return mappings().report(
+                model, api, canonical_field, kind, edit or problem, current_mapping,
+                suggested_mapping, who.client_name, who.session_id, who.address,
+                consent_method=method,
+            )  # fmt: skip
+
+        return await _with_consent(
+            consent, user_consent, run,
+            lambda: mappings().preview(model, api, canonical_field, kind, problem,
+                                       current_mapping, suggested_mapping), store,
         )  # fmt: skip
 
+    def ask_mapping_note(ctx: Context, id: str, note: str) -> Any:
+        return _ask(ctx, lambda: mappings().preview_note(id, note), _NOTE_LABELS)
+
     @server.tool(annotations=WRITE, structured_output=True)
-    async def add_to_mapping_report(ctx: Context, id: str, note: str) -> dict[str, Any]:
+    async def add_to_mapping_report(
+        ctx: Context,
+        id: str,
+        note: str,
+        consent: Annotated[ElicitationResult[ConsentForm], Resolve(ask_mapping_note)],
+        user_consent: Consent = None,
+    ) -> dict[str, Any]:
         """Add a note (+1) to a mapping report from find_mapping_reports: "also wrong for us",
-        or what the mapping should be. No user data; at most 1,000 characters."""
+        or what the mapping should be. No user data; at most 1,000 characters. Stores text:
+        the user must agree first (as report_question)."""
         who = client_of(ctx, trusted_proxy_hops)
-        return await run(
-            lambda: mappings().add_note(id, note, who.client_name, who.session_id, who.address)
+
+        def store(edit: str | None, method: str) -> dict[str, Any]:
+            return mappings().add_note(id, edit or note, who.client_name, who.session_id,
+                                       who.address, consent_method=method)  # fmt: skip
+
+        return await _with_consent(
+            consent, user_consent, run, lambda: mappings().preview_note(id, note), store
         )

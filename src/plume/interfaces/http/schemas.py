@@ -1106,6 +1106,11 @@ class ReportNoteOut(Schema):
     session_hash: str | None = None
     build: str | None = None
     redactions: int = 0
+    consent_method: Literal["elicitation", "llm_attested"] | None = Field(
+        default=None,
+        description="How the user agreed: elicitation (Plume asked through the MCP client) or "
+        "llm_attested (the client's LLM showed the text and asked); null before consent existed.",
+    )
 
 
 class ReportOut(Schema):
@@ -1124,6 +1129,11 @@ class ReportOut(Schema):
     client_name: str | None = None
     session_hash: str | None = Field(default=None, description="Keyed hash of the MCP session.")
     redactions: int = 0
+    consent_method: Literal["elicitation", "llm_attested"] | None = Field(
+        default=None,
+        description="How the user agreed: elicitation (Plume asked through the MCP client) or "
+        "llm_attested (the client's LLM showed the text and asked); null before consent existed.",
+    )
     notes: list[ReportNoteOut] | None = None
 
 
@@ -1202,6 +1212,11 @@ class MappingReportOut(Schema):
     client_name: str | None = None
     session_hash: str | None = None
     redactions: int = 0
+    consent_method: Literal["elicitation", "llm_attested"] | None = Field(
+        default=None,
+        description="How the user agreed: elicitation (Plume asked through the MCP client) or "
+        "llm_attested (the client's LLM showed the text and asked); null before consent existed.",
+    )
     notes: list[ReportNoteOut] | None = None
 
 
