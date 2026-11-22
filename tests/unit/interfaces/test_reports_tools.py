@@ -38,6 +38,13 @@ CORPUS = {
     "SECRETVALUE9": "GET https://shop.example.com/orders?access_token=SECRETVALUE9 fails",
     "abcdefghijklmnop12345": "Authorization: Bearer abcdefghijklmnop12345 gives 401",
     "4567890": "my shop 4567890 cannot list orders",  # 7 digits, no error / code before
+    # company names, ids after cue words, customer / warehouse codes (tester, mr-f27160f6c5d5)
+    "ACME Handels GmbH": "Our shop ACME Handels GmbH has no low stock mapping",
+    "id 4711": "the company id 4711 sees no stock",
+    "KD-004711": "customer number KD-004711 has no orders",
+    "WH-Hamburg-Nord": "set by hand for warehouse WH-Hamburg-Nord",
+    "Nordwind Trading Ltd": "Nordwind Trading Ltd cannot sync stock",
+    "AB-77821": "the reference AB-77821 fails",
 }
 
 

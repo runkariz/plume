@@ -38,6 +38,9 @@ Warning codes (stored with the model, never a refusal):
 - ``WRITE_ONLY_SOURCE``: a mapping cites only write operations (a request body, or what a
   POST/PUT/PATCH/DELETE echoes); a model or a GET response says what the API returns. When the
   docs have no read source, it is the only evidence and stays.
+- ``DIFFERS_FROM_VERIFIED`` (added by model sessions, not here): a field maps an API
+  differently from a maintainer-verified mapping (an accepted user report), or maps a field
+  verified as not available there.
 - ``NO_COVERAGE``: an input API is not mapped by any field. Server generation sends it back
   for repair on every round and stores the model with the warning only after the last one; a
   Claude or pasted draft is stored with the warning.

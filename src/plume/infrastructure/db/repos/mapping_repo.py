@@ -33,7 +33,11 @@ def _suggestion(raw: Any) -> Suggestion | None:
         return None
     data = raw if isinstance(raw, dict) else json.loads(raw)
     return Suggestion(
-        tuple(data.get("paths") or ()), tuple(data.get("evidence") or ()), data.get("fetch")
+        tuple(data.get("paths") or ()),
+        tuple(data.get("evidence") or ()),
+        data.get("fetch"),
+        data.get("notAvailable") is True,
+        tuple(data.get("notFrom") or ()),
     )
 
 

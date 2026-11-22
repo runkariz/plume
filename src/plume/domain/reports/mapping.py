@@ -29,14 +29,19 @@ class SuggestionStatus(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Suggestion:
-    """A suggested source on one API, in a draft mapping's shape (paths + citations)."""
+    """A suggested source on one API, in a draft mapping's shape (paths + citations), or a
+    documented absence: the field is not available on that API (``not_from``: documented paths
+    it must not be mapped from, which the quote describes as something else)."""
 
     paths: tuple[str, ...]
     evidence: tuple[dict[str, Any], ...]  # {docId, quote | None, noQuote | None}
     fetch: str | None = None
+    not_available: bool = False
+    not_from: tuple[str, ...] = ()
 
     def as_json(self) -> dict[str, Any]:
-        return {"paths": list(self.paths), "fetch": self.fetch, "evidence": list(self.evidence)}
+        return {"paths": list(self.paths), "fetch": self.fetch, "evidence": list(self.evidence),
+                "notAvailable": self.not_available, "notFrom": list(self.not_from)}  # fmt: skip
 
     def draft_source(self) -> dict[str, Any]:
         """The source as submit_model_draft takes it."""

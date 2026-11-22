@@ -198,3 +198,75 @@ def test_redaction_limits_and_the_switch(stack: FakeStack) -> None:
     object.__setattr__(off, "_enabled", False)
     with pytest.raises(ReportsDisabledError):
         off.report(sid, API, "x", "wrong", "y")
+
+
+ABSENT: dict[str, Any] = {
+    "notAvailable": True,
+    "notFrom": ["number"],
+    "evidence": [{"doc_id": "model:order",
+                  "quote": "Human-readable reference or tracking number for the order."}],
+}  # fmt: skip
+DRAFT = PACKAGES.parent / "drafts" / "catalog-order-good.json"
+
+
+def test_a_documented_absence_is_validated_accepted_and_shown(stack: FakeStack) -> None:
+    svc, _ = _service(stack)
+    sid = stack.models().start(APIS, "Order").session_id
+    ok = svc.report(sid, API, "trackingCode", "wrong", "number is not the tracking code",
+                    "number", ABSENT)  # fmt: skip
+    assert ok["validation"] == {"ok": True, "reason": None}
+    refused = {
+        "an unknown notFrom path": ({**ABSENT, "notFrom": ["nope_xyz"]}, "FIELD_NOT_FOUND"),
+        "noQuote": ({**ABSENT, "evidence": [{"doc_id": "model:order", "noQuote": "absent"}]},
+                    "NO_QUOTE_NOT_ALLOWED"),
+        "a quote about another field": ({**ABSENT, "evidence": [{"doc_id": "model:order",
+                    "quote": "Three-letter currency code for the order total."}]}, "QUOTE_NOT_ON_FIELD"),
+        "no citation": ({**ABSENT, "evidence": []}, "MISSING_CITATION"),
+        "paths and absence": ({**ABSENT, "paths": ["number"]}, "INVALID_FORMAT"),
+    }  # fmt: skip
+    for i, (why, (raw, code)) in enumerate(refused.items()):
+        out = svc.report(sid, API, f"f{i}", "wrong", "x is wrong", None, raw)
+        assert out["validation"]["reason"].split(":")[0] == code, why
+    svc.act(ok["id"], "accept", "number is the order reference")
+    fresh = _sessions(stack, svc)
+    ctx = {a["api"]: a for a in fresh.context(fresh.start(APIS, "Order").session_id)["apis"]}
+    (v,) = ctx[API]["verified_mappings"]
+    assert (v["notAvailable"], v["notFrom"], v["paths"]) == (True, ["number"], [])
+    assert "Not available on this API" in v["note"]
+
+
+def test_a_draft_that_contradicts_a_verified_mapping_is_stored_with_a_warning(
+    stack: FakeStack,
+) -> None:
+    svc, _ = _service(stack)
+    sid = stack.models().start(APIS, "Order").session_id
+    # the good draft maps total <- orders[].total and number <- number on test-catalog-api
+    total = svc.report(
+        sid, API, "total", "wrong", "total is the order's own total", "orders[].total", GOOD
+    )["id"]
+    number = svc.report(sid, API, "Number", "wrong", "number is not available", "number", ABSENT)[
+        "id"
+    ]
+    for rid in (total, number):
+        svc.act(rid, "accept", "checked")
+    fresh = _sessions(stack, svc)
+    new = fresh.start(APIS, "Order").session_id
+    result = fresh.submit(new, json.loads(DRAFT.read_text()))  # accepted: warnings only
+    found = {
+        (w.field, w.api): w.message
+        for w in result.snapshot.warnings
+        if w.code == "DIFFERS_FROM_VERIFIED"
+    }
+    assert set(found) == {("total", API), ("number", API)}
+    assert found[("total", API)].startswith("differs from verified mapping vm-")
+    assert f"(user report {total}): total (the draft maps orders[].total)" in found[("total", API)]
+    assert "not available on test-catalog-api" in found[("number", API)]
+    # the same mapping as the verified one: no warning
+    draft = json.loads(DRAFT.read_text())
+    field = next(f for f in draft["fields"] if f["name"] == "total")
+    field["sources"][API]["paths"] = [{"path": "total", "type": "string"}]
+    field["sources"][API]["evidence"] = GOOD["evidence"]
+    warned = fresh.check(new, draft)
+    assert [(w.field, w.api) for w in warned if w.code == "DIFFERS_FROM_VERIFIED"] == [
+        ("number", API)
+    ]

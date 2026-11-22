@@ -8,6 +8,14 @@ Rules, in order, each replacing the match with a fixed marker:
    such as "access token: how do I ..." stays.
 4. Emails -> [email]; IBAN-like account numbers -> [account]; IPv4 / IPv6 -> [ip].
 5. Any 24+ character run of key characters mixing letters and digits -> [secret].
+5a. A company name: capitalised words before a legal form (GmbH, AG, Ltd, LLC, Inc, SAS, BV,
+   SRL, ...) -> [company].
+5b. An identifier after a cue word (customer / company / shop / seller / merchant / tenant /
+   warehouse / location / store / account / order / vendor / supplier / client / user, with an
+   optional number / no / nr / id / code / name) -> [id] when it holds a digit or is a code
+   (letters joined by "-" or "_" with a capital: WH-Hamburg-Nord); prose words stay. A
+   standalone code of a few capitals, a dash and 4+ digits (KD-004711) -> [id], except
+   standards (ISO-8601, RFC-3339, SHA-256, UTF-8, ...).
 6. Phone / card-like digit groups (9+ digits with spaces or dashes) and plain runs of 9+ digits
    -> [number]; runs of 7-8 digits too, unless ``keep_error_codes`` and the run follows
    "error", "code" or "errorCode" (an API's error code, not a person's number).
@@ -55,7 +63,42 @@ _LONG_KEYLIKE = re.compile(r"(?<![A-Za-z0-9_+/=.-])[A-Za-z0-9_+/=.-]{24,}(?![A-Z
 _GROUPED_DIGITS = re.compile(r"\+?\d[\d\s-]{7,}\d")
 _DIGITS = re.compile(r"\d{7,}")
 _CODE_BEFORE = re.compile(r"(?:error|code|errorcode)[\s:#=_-]*$", re.IGNORECASE)
-_MARKERS = ("[token]", "[secret]", "[email]", "[account]", "[ip]", "[number]", "?[query]")
+_LEGAL_FORMS = (
+    r"GmbH|AG|KG|OHG|UG|KGaA|SE|e\.K\.|Ltd\.?|Limited|LLC|LLP|PLC|Inc\.?|Corp\.?|Co\.|SAS|"
+    r"SARL|S\.A\.|SA|S\.p\.A\.|SpA|S\.r\.l\.|SRL|B\.V\.|BV|N\.V\.|NV|Oy|AB|ApS|A/S|AS|"
+    r"Sp\. z o\.o\.|s\.r\.o\.|Pty"
+)
+# 1-4 capitalised words (or "&"), then the legal form; "& Co. KG" chains
+_COMPANY = re.compile(
+    rf"\b(?:[A-Z][\w'.-]*\s+(?:&\s+)?){{1,4}}(?:(?:{_LEGAL_FORMS})\s+)?(?:{_LEGAL_FORMS})(?![\w])"
+)
+_CUES = (
+    r"customer|company|shop|seller|merchant|tenant|warehouse|location|store|account|order|"
+    r"vendor|supplier|client|user|kunde|lager"
+)
+_CUE_ID = re.compile(
+    rf"\b((?:{_CUES})(?:\s+(?:number|no\.?|nr\.?|id|code|name|#))?\s*[:#=]?\s*)"
+    r"([A-Za-z0-9][A-Za-z0-9_./-]*)",
+    re.IGNORECASE,
+)
+_STANDARDS = frozenset({"ISO", "RFC", "EN", "DIN", "SHA", "UTF", "HTTP", "TLS", "IEC", "ECMA",
+                        "ISBN", "EAN", "GTIN", "UPC", "CVE", "PCI"})  # fmt: skip
+_CODE = re.compile(r"\b([A-Z]{1,4})-\d{4,}\b")
+_MARKERS = (
+    "[token]", "[secret]", "[email]", "[account]", "[ip]", "[number]", "?[query]", "[company]",
+    "[id]",
+)  # fmt: skip
+
+
+def _cue_id(m: re.Match[str]) -> str:
+    """The identifier after a cue word, when it is one: a digit, or a code ("-"/"_" joining
+    letters with a capital); prose ("for warehouse stock levels") stays."""
+    value = m.group(2).rstrip(".")
+    rest = m.group(2)[len(value) :]
+    coded = bool(re.search(r"[-_]", value)) and any(c.isupper() for c in value)
+    if any(c.isdigit() for c in value) or coded:
+        return f"{m.group(1)}[id]{rest}"
+    return m.group(0)
 
 
 def _mixed(s: str) -> bool:
@@ -84,6 +127,9 @@ def redact_text(text: str | None, policy: RedactionPolicy = STRICT) -> tuple[str
     s = _IBAN.sub("[account]", s)
     s = _IPV6.sub("[ip]", s)
     s = _IPV4.sub("[ip]", s)
+    s = _COMPANY.sub("[company]", s)
+    s = _CUE_ID.sub(_cue_id, s)
+    s = _CODE.sub(lambda m: m.group(0) if m.group(1) in _STANDARDS else "[id]", s)
     s = _LONG_KEYLIKE.sub(lambda m: "[secret]" if _mixed(m.group(0)) else m.group(0), s)
     s = _GROUPED_DIGITS.sub(_grouped, s)
     current = s

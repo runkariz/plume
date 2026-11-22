@@ -1150,6 +1150,12 @@ class SuggestionOut(Schema):
     paths: list[str]
     fetch: str | None = None
     evidence: list[EvidenceOut]
+    not_available: bool = Field(
+        default=False, description="A documented absence: the field is not on that API."
+    )
+    not_from: list[str] = Field(
+        default_factory=list, description="Documented paths it must not be mapped from."
+    )
 
 
 class ValidationOut(Schema):
@@ -1222,6 +1228,8 @@ class VerifiedMappingOut(Schema):
     paths: list[str]
     fetch: str | None = None
     evidence: list[EvidenceOut]
+    not_available: bool = False
+    not_from: list[str] = Field(default_factory=list)
     build: str = Field(description="The build it was last validated on.")
     report_id: str
     suspended: bool
