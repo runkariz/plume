@@ -517,6 +517,50 @@ def endpoint_before_its_model(ranked: Sequence[str], k: int) -> list[str]:
     return order
 
 
+_STRUCTURE_QUERY = re.compile(
+    r"\b(fields?|schemas?|shape|structure|properties|attributes|data model|payload|"
+    r"response body|json|format of|what does .{1,40} (contain|look like)|which values)\b",
+    re.IGNORECASE,
+)
+
+
+def endpoints_before_returned_models(
+    ranked: Sequence[str],
+    k: int,
+    query: str,
+    returns: Callable[[str, Sequence[str]], Sequence[str]],
+) -> list[str]:
+    """A model in the top k that an endpoint in the pool returns (the package's
+    x-plume-returned-by, or the vendor request the model came from) gives way to that endpoint
+    on a task question: the endpoints of a run of adjacent models go first, in their own order
+    (OnBuy model:categoryview, model:categorybrowse above GET /categories). A question about the
+    structure (fields / schema / shape) keeps the model first."""
+    if _STRUCTURE_QUERY.search(query):
+        return list(ranked)
+    order = list(ranked)
+    pool = [d for d in order if d.startswith("endpoint:")]
+    i = 0
+    while i < min(k, len(order)):
+        if not order[i].startswith("model:"):
+            i += 1
+            continue
+        j = i
+        while j < len(order) and order[j].startswith("model:"):
+            j += 1
+        run = order[i:j]
+        below = set(order[j:])  # an endpoint already above its model stays where it is
+        lifted = {e for m in run for e in returns(m, pool) if e in below}
+        ahead = [d for d in order if d in lifted]  # their own order
+        if not ahead:
+            i = j
+            continue
+        rest = [d for d in order if d not in lifted]
+        at = rest.index(run[0])
+        order = rest[:at] + ahead + rest[at:]
+        i = at + len(ahead) + len(run)
+    return order
+
+
 _PUSH_QUERY = re.compile(
     r"\b(webhooks?|call(s)? my (url|endpoint|server)|notif(y|ies) me|push notifications?|"
     r"callback urls?|subscribe to (events?|notifications?)|event notifications?)\b",

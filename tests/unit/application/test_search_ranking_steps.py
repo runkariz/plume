@@ -236,3 +236,41 @@ def test_push_lead_leaves_verification_and_context_cases() -> None:
     ranked = ["guide:context", "guide:y", brands]
     assert context_after_named_endpoint(ranked, 5, "metadata for brands")[0] == brands
     assert context_after_named_endpoint(ranked, 5, "how does paging work") == ranked
+
+
+def test_endpoints_go_before_the_models_they_return_on_task_questions() -> None:
+    from plume.application.reader.ranking import endpoints_before_returned_models  # noqa: PLC0415
+
+    returns = {"model:categoryview": ["endpoint:GET~/categories/{id}"],
+               "model:categorybrowse": ["endpoint:GET~/categories"]}  # fmt: skip
+    ranked = ["model:categoryview", "model:categorybrowse", "endpoint:GET~/categories",
+              "endpoint:GET~/categories/{id}", "guide:x"]  # fmt: skip
+
+    def lookup(model: str, pool: object) -> list[str]:
+        return returns.get(model, [])
+
+    task = endpoints_before_returned_models(
+        ranked, 5, "how can I see the category mappings", lookup
+    )
+    assert task == ["endpoint:GET~/categories", "endpoint:GET~/categories/{id}",
+                    "model:categoryview", "model:categorybrowse", "guide:x"]  # fmt: skip
+    shape = endpoints_before_returned_models(ranked, 5, "what fields does a category have", lookup)
+    assert shape == ranked
+    deep = ["guide:a", "model:categorybrowse", "guide:b", "endpoint:GET~/categories"]
+    assert endpoints_before_returned_models(deep, 2, "browse categories", lookup) == [
+        "guide:a", "endpoint:GET~/categories", "model:categorybrowse", "guide:b"]  # fmt: skip
+    assert endpoints_before_returned_models(["model:x", "guide:y"], 2, "q", lookup) == [
+        "model:x",
+        "guide:y",
+    ]
+
+
+def test_an_endpoint_already_above_its_model_stays() -> None:
+    from plume.application.reader.ranking import endpoints_before_returned_models  # noqa: PLC0415
+
+    def lookup(model: str, pool: object) -> list[str]:
+        return ["endpoint:GET~/logs", "endpoint:GET~/lines"] if model == "model:tl02" else []
+
+    above = ["endpoint:GET~/logs", "model:tl02", "endpoint:GET~/lines", "guide:a"]
+    assert endpoints_before_returned_models(above, 5, "max page size of logs", lookup) == [
+        "endpoint:GET~/logs", "endpoint:GET~/lines", "model:tl02", "guide:a"]  # fmt: skip
