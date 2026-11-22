@@ -11,7 +11,7 @@ purged (lazily, at most once a day); triaged ones stay.
 import contextlib
 import threading
 import uuid
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -19,6 +19,7 @@ from plume.application.errors import ApplicationError, NotFoundError
 from plume.application.ports.embedder import Embedder
 from plume.application.ports.report_repo import ReportRepo
 from plume.application.reader.resolve import BuildResolver
+from plume.application.reports.hosts import ApiHosts
 from plume.domain.reports.redact import RedactionPolicy, redact_text
 from plume.domain.reports.report import (
     REPORT_POLICY,
@@ -61,7 +62,9 @@ class ReportedQuestions:
         retention_days: int = 90,
         duplicate_similarity: float = 0.92,
         policy: RedactionPolicy = REPORT_POLICY,
+        hosts: ApiHosts | None = None,
     ) -> None:
+        self._hosts = hosts  # the API's own URL hosts (others are redacted); None: all stay
         self._repo = repo
         self._embedder = embedder
         self._resolver = resolver
@@ -79,6 +82,9 @@ class ReportedQuestions:
     @property
     def enabled(self) -> bool:
         return self._enabled
+
+    def _host_rule(self, api: str) -> Callable[[str], str | None] | None:
+        return self._hosts.of(api) if self._hosts is not None else None
 
     # -- reader tools ---------------------------------------------------------------------------
 
@@ -110,14 +116,15 @@ class ReportedQuestions:
         build = self._resolver.resolve(api).build.build_id.value
         sess = session_hash(session_id, self._salt)
         self._limit(sess, connection)
-        q, n_q = safe_text(question, self._policy)
+        rule = self._host_rule(api)
+        q, n_q = safe_text(question, self._policy, rule)
         if q is None:
             raise ReportRefusedError(
                 "the question could not be stored safely: write it in general terms, without "
                 "user data (ids, order numbers, tokens, names, emails), and report again"
             )
-        tried, n_t = safe_text(what_was_tried, self._policy)
-        missing, n_m = safe_text(what_was_missing, self._policy)
+        tried, n_t = safe_text(what_was_tried, self._policy, rule)
+        missing, n_m = safe_text(what_was_missing, self._policy, rule)
         client, n_c = safe_text(client_name[:64] if client_name else None, self._policy)
         now = self._clock.now()
         self._maybe_purge(now)
@@ -170,7 +177,7 @@ class ReportedQuestions:
             raise NotFoundError(f"reported question {report_id} not found")
         sess = session_hash(session_id, self._salt)
         self._limit(sess, connection)
-        text, n = safe_text(note, self._policy)
+        text, n = safe_text(note, self._policy, self._host_rule(existing.api))
         if text is None:
             raise ReportRefusedError(
                 "the note could not be stored safely: write it without user data and try again"

@@ -15,6 +15,7 @@ from mcp import Client
 
 from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
+from plume.application.reports.hosts import ApiHosts
 from plume.application.reports.mappings import MappingReports
 from plume.interfaces.http.app import HttpDependencies, create_app
 from plume.interfaces.mcp.reader_server import McpReaderDependencies, create_reader_server
@@ -41,7 +42,8 @@ def stack(packages: Path) -> FakeStack:
 def _svc(stack: FakeStack, repo: InMemoryMappings) -> MappingReports:
     return MappingReports(repo, stack.resolver(), stack.models_repo, stack.fact_query,
                           stack.documents, FakeClock(step=timedelta(seconds=1)), enabled=True,
-                          salt=b"k", per_hour=1000)  # fmt: skip
+                          salt=b"k", per_hour=1000,
+                          hosts=ApiHosts(stack.resolver(), stack.documents))  # fmt: skip
 
 
 def _stored(repo: InMemoryMappings) -> str:

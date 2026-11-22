@@ -43,6 +43,7 @@ from plume.application.reader.use_cases import (
     ListApiOverviews,
     SearchDocs,
 )
+from plume.application.reports.hosts import ApiHosts
 from plume.application.reports.mappings import MappingReports
 from plume.application.reports.service import ReportedQuestions
 from plume.application.system.migrate_schema import MigrateSchema
@@ -106,6 +107,10 @@ class Container:
         return salt.get_secret_value().encode() if salt else secrets.token_bytes(32)
 
     @cached_property
+    def api_hosts(self) -> ApiHosts:
+        return ApiHosts(self.resolver(), self.documents)
+
+    @cached_property
     def report_repo(self) -> PostgresReportRepo:
         return PostgresReportRepo(self.engine)
 
@@ -122,6 +127,7 @@ class Container:
             per_hour=s.reports_per_hour,
             retention_days=s.reports_retention_days,
             duplicate_similarity=s.reports_duplicate_similarity,
+            hosts=self.api_hosts,
             policy=RedactionPolicy(
                 keep_error_codes=s.reports_keep_error_codes,
                 keep_rpc_method=s.reports_keep_rpc_method,
@@ -146,6 +152,7 @@ class Container:
             salt=self.reports_salt,
             per_hour=s.reports_per_hour,
             retention_days=s.reports_retention_days,
+            hosts=self.api_hosts,
             policy=RedactionPolicy(
                 keep_error_codes=s.reports_keep_error_codes,
                 keep_rpc_method=s.reports_keep_rpc_method,

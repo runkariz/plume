@@ -13,6 +13,7 @@ from mcp import Client
 
 from plume.application.knowledge.diff_builds import DiffBuilds
 from plume.application.knowledge.list_builds import ListBuilds
+from plume.application.reports.hosts import ApiHosts
 from plume.application.reports.service import ReportedQuestions
 from plume.interfaces.http.app import HttpDependencies, create_app
 from plume.interfaces.mcp.reader_server import McpReaderDependencies, create_reader_server
@@ -45,6 +46,11 @@ CORPUS = {
     "WH-Hamburg-Nord": "set by hand for warehouse WH-Hamburg-Nord",
     "Nordwind Trading Ltd": "Nordwind Trading Ltd cannot sync stock",
     "AB-77821": "the reference AB-77821 fails",
+    # second round (mr-c2253667fd89): a contact person, a foreign host, a place name, a bin
+    "Anja Kowalski": "Contact Anja Kowalski about it",
+    "nordlicht-elektro": "endpoint https://erp.nordlicht-elektro.example/api, fails",
+    "Bremerhaven": "for the warehouse Lager Bremerhaven Sued nothing syncs",
+    "B-17": "stored on shelf B-17 by hand",
 }
 
 
@@ -64,7 +70,8 @@ def stack(packages: Path) -> FakeStack:
 
 def _reports(stack: FakeStack, repo: InMemoryReports) -> ReportedQuestions:
     return ReportedQuestions(repo, stack.embedder, stack.resolver(), FakeClock(), enabled=True,
-                             salt=b"k", per_hour=1000)  # fmt: skip
+                             salt=b"k", per_hour=1000,
+                             hosts=ApiHosts(stack.resolver(), stack.documents))  # fmt: skip
 
 
 def _server(stack: FakeStack, reports: ReportedQuestions | None) -> Any:
