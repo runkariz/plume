@@ -43,6 +43,7 @@ from plume.application.reader.use_cases import (
     ListApiOverviews,
     SearchDocs,
 )
+from plume.application.reports.mappings import MappingReports
 from plume.application.reports.service import ReportedQuestions
 from plume.application.system.migrate_schema import MigrateSchema
 from plume.domain.eval.gate import GatePolicy
@@ -59,6 +60,7 @@ from plume.infrastructure.db.repos.build_repo import PostgresBuildRepo
 from plume.infrastructure.db.repos.collection_repo import PostgresCollectionRepo
 from plume.infrastructure.db.repos.document_repo import PostgresDocumentRepo
 from plume.infrastructure.db.repos.eval_repo import PostgresEvalRepo
+from plume.infrastructure.db.repos.mapping_repo import PostgresMappingRepo
 from plume.infrastructure.db.repos.model_repo import PostgresModelJobRepo, PostgresModelRepo
 from plume.infrastructure.db.repos.model_set_repo import PostgresModelSetRepo
 from plume.infrastructure.db.repos.release_notes_repo import PostgresReleaseNotesRepo
@@ -98,23 +100,52 @@ class Container:
         return SystemClock()
 
     @cached_property
+    def reports_salt(self) -> bytes:
+        """The session-hash key of both report kinds (random per process when not set)."""
+        salt = self.settings.reports_salt
+        return salt.get_secret_value().encode() if salt else secrets.token_bytes(32)
+
+    @cached_property
     def report_repo(self) -> PostgresReportRepo:
         return PostgresReportRepo(self.engine)
 
     @cached_property
     def reported_questions(self) -> ReportedQuestions:
         s = self.settings
-        salt = s.reports_salt.get_secret_value().encode() if s.reports_salt else None
         return ReportedQuestions(
             self.report_repo,
             self.embedder,
             self.resolver(),
             self.clock,
             enabled=s.reports,
-            salt=salt or secrets.token_bytes(32),
+            salt=self.reports_salt,
             per_hour=s.reports_per_hour,
             retention_days=s.reports_retention_days,
             duplicate_similarity=s.reports_duplicate_similarity,
+            policy=RedactionPolicy(
+                keep_error_codes=s.reports_keep_error_codes,
+                keep_rpc_method=s.reports_keep_rpc_method,
+            ),
+        )
+
+    @cached_property
+    def mapping_repo(self) -> PostgresMappingRepo:
+        return PostgresMappingRepo(self.engine)
+
+    @cached_property
+    def mapping_reports(self) -> MappingReports:
+        s = self.settings
+        return MappingReports(
+            self.mapping_repo,
+            self.resolver(),
+            self.models_repo,
+            self.fact_query,
+            self.documents,
+            self.clock,
+            enabled=s.reports,
+            salt=self.reports_salt,
+            per_hour=s.reports_per_hour,
+            retention_days=s.reports_retention_days,
             policy=RedactionPolicy(
                 keep_error_codes=s.reports_keep_error_codes,
                 keep_rpc_method=s.reports_keep_rpc_method,
@@ -271,6 +302,7 @@ class Container:
             self.clock,
             self.collections(),
             release_gate=lambda snap: self.model_evaluation().gate(snap),
+            verified=self.mapping_reports.for_session if self.settings.reports else None,
         )
 
     @cached_property

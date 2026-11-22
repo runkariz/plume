@@ -68,6 +68,7 @@ def http_app(c: Container) -> FastAPI:
             model_impact=c.model_impact,
             model_evaluation=c.model_evaluation,
             reports=lambda: c.reported_questions,
+            mapping_reports=lambda: c.mapping_reports,
         )
     )
 
@@ -98,6 +99,7 @@ def reader_server(c: Container) -> MCPServer:
             web_public_url=c.settings.web_public_url,
             mcp_app_html=_app_html(c),
             reports=(lambda: c.reported_questions) if c.settings.reports else None,
+            mapping_reports=(lambda: c.mapping_reports) if c.settings.reports else None,
             trusted_proxy_hops=c.settings.trusted_proxy_hops,
         )
     )

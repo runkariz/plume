@@ -10,6 +10,7 @@ from mcp.server.mcpserver.context import Context
 from mcp.types import ToolAnnotations
 from starlette.requests import Request
 
+from plume.application.reports.mappings import MappingReports
 from plume.application.reports.service import ReportedQuestions
 from plume.interfaces.http.rate_limit import client_address
 
@@ -113,4 +114,68 @@ def register_report_tools(
         who = client_of(ctx, trusted_proxy_hops)
         return await run(
             lambda: reports().add_note(id, note, who.client_name, who.session_id, who.address)
+        )
+
+
+MAPPINGS_RULE = """\
+9. Canonical models: when the user says a suggested mapping is wrong, had to map a field by
+   hand, found in the docs a source for a canonical field that has none, or the model lacks a
+   field all the selected APIs have, report it: find_mapping_reports(model, api, field) first;
+   if one matches, add_to_mapping_report(id, note); otherwise report_mapping(...). A
+   suggested_mapping is checked like a draft (the path must exist in that API, the quote must
+   be in the cited document); one that fails is kept only as the problem. General terms, no
+   user data. verified_mappings in get_model_context come from accepted reports: use them first.
+"""
+
+
+def register_mapping_tools(
+    server: MCPServer,
+    mappings: Callable[[], MappingReports],
+    run: Callable[[Callable[[], dict[str, Any]]], Awaitable[dict[str, Any]]],
+    trusted_proxy_hops: int = 0,
+) -> None:
+    @server.tool(annotations=READ_ONLY, structured_output=True)
+    async def find_mapping_reports(
+        model: str, api: str, field: str | None = None
+    ) -> dict[str, Any]:
+        """Mapping reports users' assistants already sent for a canonical model's concept on one
+        API (model: a model session id or a model id; field: a canonical field, optional): up
+        to 5, each with id, kind, status (with the reason once decided) and count, plus the
+        verified mappings maintainers accepted. Call it before report_mapping."""
+        return await run(lambda: mappings().find(model, api, field))
+
+    @server.tool(annotations=WRITE, structured_output=True)
+    async def report_mapping(
+        ctx: Context,
+        model: str,
+        api: str,
+        canonical_field: str,
+        kind: str,
+        problem: str,
+        current_mapping: str | None = None,
+        suggested_mapping: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Report a wrong or missing canonical-model mapping. model: the model session id or
+        model id. kind: wrong | missing | model-field-missing (the model lacks a field the APIs
+        have). problem: what is wrong, in GENERAL terms (no user data). current_mapping: the
+        mapping as it is now, in words. suggested_mapping (optional): the source on that API as
+        in a draft: {"paths": ["..."], "evidence": [{"doc_id": "...", "quote": "..."}],
+        "fetch"?: "..."}; Plume validates it like submit_model_draft and keeps it only when it
+        passes (else the answer gives the validator's reason). The same field and kind already
+        reported adds your report as a note. At most 1,000 characters per text field."""
+        who = client_of(ctx, trusted_proxy_hops)
+        return await run(
+            lambda: mappings().report(
+                model, api, canonical_field, kind, problem, current_mapping, suggested_mapping,
+                who.client_name, who.session_id, who.address,
+            )
+        )  # fmt: skip
+
+    @server.tool(annotations=WRITE, structured_output=True)
+    async def add_to_mapping_report(ctx: Context, id: str, note: str) -> dict[str, Any]:
+        """Add a note (+1) to a mapping report from find_mapping_reports: "also wrong for us",
+        or what the mapping should be. No user data; at most 1,000 characters."""
+        who = client_of(ctx, trusted_proxy_hops)
+        return await run(
+            lambda: mappings().add_note(id, note, who.client_name, who.session_id, who.address)
         )
