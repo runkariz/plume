@@ -92,3 +92,11 @@ def test_verified_mappings_upsert_per_concept_field_and_api(repo: PostgresMappin
     assert only.suggestion == SUGGESTION
     assert repo.verified_for("order", "shopify", ["GrandTotal"]) == [only]
     assert repo.verified("order", "shopify", "active") == []
+
+
+def test_an_absence_round_trips(repo: PostgresMappingRepo) -> None:
+    absent = Suggestion((), SUGGESTION.evidence, None, True, ("variationValueId",))
+    repo.put_verified(VerifiedMapping("vm-2", "product", "variants[].id", "jtl", absent, "b-1",
+                                      "mr-x", VerifiedStatus.ACTIVE, T0, T0))  # fmt: skip
+    (m,) = repo.verified("product", "jtl")
+    assert m.suggestion == absent

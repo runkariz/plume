@@ -5332,6 +5332,20 @@
             ],
             "title": "Fetch"
           },
+          "notAvailable": {
+            "default": false,
+            "description": "A documented absence: the field is not on that API.",
+            "title": "Notavailable",
+            "type": "boolean"
+          },
+          "notFrom": {
+            "description": "Documented paths it must not be mapped from.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Notfrom",
+            "type": "array"
+          },
           "paths": {
             "items": {
               "type": "string"
@@ -5835,6 +5849,18 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "notAvailable": {
+            "default": false,
+            "title": "Notavailable",
+            "type": "boolean"
+          },
+          "notFrom": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notfrom",
+            "type": "array"
           },
           "paths": {
             "items": {

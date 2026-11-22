@@ -31,7 +31,13 @@ from plume.domain.models.canonical_model import (
     name_only_as_no_quote,
     parse_draft,
 )
-from plume.domain.models.validation import validate
+from plume.domain.models.validation import (
+    Oracle,
+    quote_in,
+    quote_on_field,
+    substantive,
+    validate,
+)
 from plume.domain.reports.mapping import (
     ROUTES,
     MappingKind,
@@ -181,7 +187,7 @@ class MappingReports:
             parts += [f"Current: {current}"] if current else []
             if suggested_mapping is not None:
                 parts.append(
-                    f"Suggested: {', '.join(suggestion.paths)}"
+                    f"Suggested: {_described(suggestion)}"
                     if suggestion
                     else f"Suggested mapping refused: {reason}"
                 )
@@ -461,7 +467,10 @@ class MappingReports:
         self, concept_name: str, field: str, api: str, build: str, suggestion: Suggestion
     ) -> str | None:
         """The same validator as submit_model_draft, on a one-field draft: the first finding
-        about the suggestion's path or citation, or None."""
+        about the suggestion's path or citation, or None. An absence: see ``_absence``."""
+        if suggestion.not_available:
+            oracle = PinnedLookups({api: BuildId(build)}, self._facts, self._documents).oracle()
+            return _absence(api, suggestion, oracle)
         name = field.rsplit(".", maxsplit=1)[-1].replace("[]", "") or "field"
         raw = {
             "name": concept_name,
@@ -528,13 +537,20 @@ class MappingReports:
 
     @staticmethod
     def _verified_view(m: VerifiedMapping) -> dict[str, Any]:
-        return {
+        out = {
+            "id": m.mapping_id,
             "canonical_field": m.canonical_field,
             **m.suggestion.as_json(),
             "label": VERIFIED_LABEL.format(id=m.report_id),
             "report_id": m.report_id,
             "build": m.build_id,
         }
+        if m.suggestion.not_available:
+            avoid = ", ".join(m.suggestion.not_from)
+            out["note"] = "Not available on this API: map no source for it here" + (
+                f" (not {avoid})" if avoid else ""
+            )
+        return out
 
     @staticmethod
     def _verified_full(m: VerifiedMapping) -> dict[str, Any]:
@@ -623,6 +639,56 @@ class MappingReports:
         return out
 
 
+def _described(suggestion: Suggestion) -> str:
+    if suggestion.not_available:
+        avoid = ", ".join(suggestion.not_from)
+        return "not available" + (f" (not {avoid})" if avoid else "")
+    return ", ".join(suggestion.paths)
+
+
+def _absence(api: str, suggestion: Suggestion, oracle: Oracle) -> str | None:
+    """A documented absence, checked as citations are: at least one quote, each in its
+    document and carrying information (noQuote cannot prove an absence); each notFrom path a
+    documented field, and then a quote about one of them (its own description says what it is)."""
+    if not suggestion.evidence:
+        return "MISSING_CITATION: an absence needs a quote saying what the API has instead"
+    for p in suggestion.not_from:
+        if not oracle.field_exists(api, p):
+            return f"FIELD_NOT_FOUND: {p} is not a documented field of {api}"
+    about = False
+    for e in suggestion.evidence:
+        problem = _citation_problem(api, e, oracle)
+        if problem is not None:
+            return problem
+        quote = e.get("quote") or ""
+        about = (
+            about
+            or not suggestion.not_from
+            or quote_on_field(quote, list(suggestion.not_from), api, e["docId"], oracle)
+        )
+    if not about:
+        return (
+            "QUOTE_NOT_ON_FIELD: quote the own description of "
+            f"{', '.join(suggestion.not_from)} (what it is instead)"
+        )
+    return None
+
+
+def _citation_problem(api: str, e: dict[str, Any], oracle: Oracle) -> str | None:
+    """One citation of an absence: in the build, quoted (not noQuote), in it, informative."""
+    text = oracle.doc_text(api, e["docId"])
+    quote = e.get("quote") or ""
+    if text is None:
+        return f"DOC_NOT_FOUND: {e['docId']} is not in the build"
+    if not quote:
+        return "NO_QUOTE_NOT_ALLOWED: an absence needs a quote, not noQuote"
+    if not quote_in(quote, text):
+        return f"QUOTE_NOT_FOUND: the quote is not in {e['docId']}: {quote[:80]!r}"
+    if not substantive(quote):
+        return f"QUOTE_TOO_SHORT: the quote carries no information ({quote[:40]!r})"
+    return None
+
+
 def _checked_inputs(
     kind: str,
     canonical_field: str,
@@ -652,13 +718,25 @@ def _checked_inputs(
 
 def _suggestion(raw: dict[str, Any]) -> Suggestion:
     """A suggested mapping as a draft source: {paths | path, evidence: [{doc_id | docId,
-    quote | noQuote}], fetch?}."""
+    quote | noQuote}], fetch?}, or an absence: {notAvailable: true, notFrom?: [paths],
+    evidence: [{doc_id, quote}]}."""
     if not isinstance(raw, dict):
         raise TypeError("suggested_mapping must be an object")
     listed = raw.get("paths") or ([raw["path"]] if isinstance(raw.get("path"), str) else [])
     paths = [p.get("path") if isinstance(p, dict) else p for p in listed]  # draft path objects
-    if not paths or not all(isinstance(p, str) and p.strip() for p in paths):
-        raise ValueError("suggested_mapping needs paths: the source field path(s) on that API")
+    absent = raw.get("notAvailable") is True or raw.get("not_available") is True
+    not_from = raw.get("notFrom") or raw.get("not_from") or []
+    if isinstance(not_from, str):
+        not_from = [not_from]
+    if absent and paths:
+        raise ValueError("a notAvailable suggestion has no paths (name wrong ones in notFrom)")
+    if not absent and (not paths or not all(isinstance(p, str) and p.strip() for p in paths)):
+        raise ValueError(
+            "suggested_mapping needs paths: the source field path(s) on that API, or "
+            '"notAvailable": true with a quote'
+        )
+    if not all(isinstance(p, str) and p.strip() for p in not_from):
+        raise ValueError("notFrom lists source field paths (strings)")
     evidence = raw.get("evidence") or []
     if isinstance(evidence, dict):
         evidence = [evidence]
@@ -677,4 +755,10 @@ def _suggestion(raw: dict[str, Any]) -> Suggestion:
             }
         )
     fetch = raw.get("fetch") if isinstance(raw.get("fetch"), str) else None
-    return Suggestion(tuple(str(p).strip() for p in paths), tuple(out), fetch)
+    return Suggestion(
+        tuple(str(p).strip() for p in paths),
+        tuple(out),
+        None if absent else fetch,
+        absent,
+        tuple(str(p).strip() for p in not_from),
+    )

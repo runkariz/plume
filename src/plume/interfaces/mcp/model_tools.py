@@ -117,7 +117,9 @@ def model_text(model: dict[str, Any], full: bool = False) -> str:
             + "; ".join(f"{w['field']} ({w['api']}): {w['code']}" for w in warned[:10])
             + (" …" if len(warned) > 10 else "")
             + ". WRITE_ONLY_SOURCE: the mapping cites only a request/write; check whether the "
-            "docs have a read source."
+            "docs have a read source. DIFFERS_FROM_VERIFIED: a maintainer verified another "
+            "mapping (see verified_mappings in get_model_context); use it unless the user "
+            "says otherwise."
         )
     if link:
         lines.append(f"Link: {link}")

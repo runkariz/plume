@@ -74,7 +74,7 @@ def session_hash(session_id: str | None, salt: bytes) -> str | None:
 
 
 _STILL_UNSAFE = (_JWT, _PREFIXED, _EMAIL, re.compile(r"\d{9,}"))
-_MARKER = re.compile(r"\[(?:token|secret|email|account|ip|number|query)\]")
+_MARKER = re.compile(r"\[(?:token|secret|email|account|ip|number|query|company|id)\]")
 
 
 def safe_text(text: str | None, policy: RedactionPolicy = REPORT_POLICY) -> tuple[str | None, int]:

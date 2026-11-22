@@ -160,7 +160,9 @@ def register_mapping_tools(
         have). problem: what is wrong, in GENERAL terms (no user data). current_mapping: the
         mapping as it is now, in words. suggested_mapping (optional): the source on that API as
         in a draft: {"paths": ["..."], "evidence": [{"doc_id": "...", "quote": "..."}],
-        "fetch"?: "..."}; Plume validates it like submit_model_draft and keeps it only when it
+        "fetch"?: "..."}, or, when the field is NOT available on that API, {"notAvailable":
+        true, "notFrom": ["the wrong path"], "evidence": [{"doc_id": "...", "quote": "what that
+        path really is"}]}; Plume validates it like submit_model_draft and keeps it only when it
         passes (else the answer gives the validator's reason). The same field and kind already
         reported adds your report as a note. At most 1,000 characters per text field."""
         who = client_of(ctx, trusted_proxy_hops)

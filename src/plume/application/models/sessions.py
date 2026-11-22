@@ -53,6 +53,7 @@ from plume.domain.models.snapshot import (
     snapshot_id_for,
 )
 from plume.domain.models.validation import Issue, Oracle, validate, warnings
+from plume.domain.reports.mapping import field_key
 from plume.domain.shared.clock import Clock
 from plume.domain.shared.ids import BuildId
 
@@ -777,7 +778,39 @@ class ModelSessions:
         issues = validate(draft, apis, oracle)
         if issues:
             raise ModelDraftRefusedError(issues)
-        return draft, warnings(draft, apis, oracle)
+        return draft, warnings(draft, apis, oracle) + self._verified_warnings(session, draft)
+
+    def _verified_warnings(self, session: ModelSession, draft: ModelDraft) -> list[Issue]:
+        """DIFFERS_FROM_VERIFIED (a warning, never a refusal): a field whose canonical name has
+        a verified mapping on an API (from an accepted user report; names compared ignoring
+        case, [] and separators) maps other paths there, maps nothing, or maps a source where
+        the verified mapping says the field is not available."""
+        if self._verified is None:
+            return []
+        out: list[Issue] = []
+        for pin in session.inputs:
+            verified = {field_key(v["canonical_field"]): v
+                        for v in self._verified(session.concept, pin.api)}  # fmt: skip
+            if not verified:
+                continue
+            for path, f in draft.walk():
+                v = verified.get(field_key(path))
+                if v is None:
+                    continue
+                src = dict(f.sources).get(pin.api)
+                mapped = sorted(p.path for p in src.paths) if src else []
+                which = f"verified mapping {v['id']} (user report {v['report_id']})"
+                if v.get("notAvailable"):
+                    if mapped:
+                        out.append(Issue("DIFFERS_FROM_VERIFIED", path, pin.api,
+                                         f"maps {', '.join(mapped)} but {which} says the field "
+                                         f"is not available on {pin.api}"))  # fmt: skip
+                elif mapped != sorted(v["paths"]) and not (f.fields and not mapped):
+                    out.append(Issue("DIFFERS_FROM_VERIFIED", path, pin.api,
+                                     f"differs from {which}: {', '.join(v['paths'])}"
+                                     + (f" (the draft maps {', '.join(mapped)})" if mapped
+                                        else " (the draft maps nothing)")))  # fmt: skip
+        return out
 
     def check(self, session_id: str, raw: Any) -> list[Issue]:
         """Validate without storing: raises on refusal, returns the warnings."""
