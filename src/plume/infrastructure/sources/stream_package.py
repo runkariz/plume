@@ -519,7 +519,29 @@ def _with_package_warnings(documents: list[Document], produced: object) -> list[
         and scheme.get("headerSource") == HEADER_SOURCE_STANDARD
         and not standard_header(scheme)
     ]
-    warnings = [*(produced if isinstance(produced, list) else []), *misused]
+    unknown = [
+        f"{SECRET_SOURCE_UNKNOWN}: webhook {h.get('id')} secretSource "
+        f"{h['verification']['secretSource']!r} is not one of {', '.join(SECRET_SOURCES)}"
+        for d in documents
+        if d.kind is DocumentKind.APP
+        for h in (d.raw or {}).get("webhooks") or []
+        if isinstance(h, dict) and isinstance(h.get("verification"), dict)
+        and h["verification"].get("secretSource") is not None
+        and h["verification"]["secretSource"] not in SECRET_SOURCES
+    ]  # fmt: skip
+    not_template = [
+        f"{SIGNED_PAYLOAD_NOT_TEMPLATE}: webhook {h.get('id')} signedPayload "
+        f"{h['verification']['signedPayload']!r} names no {{body}} / {{timestamp}} placeholder "
+        "(Core signs it literally); not shown"
+        for d in documents
+        if d.kind is DocumentKind.APP
+        for h in (d.raw or {}).get("webhooks") or []
+        if isinstance(h, dict) and isinstance(h.get("verification"), dict)
+        and isinstance(h["verification"].get("signedPayload"), str)
+        and not _is_template(h["verification"]["signedPayload"])
+    ]  # fmt: skip
+    warnings = [*(produced if isinstance(produced, list) else []), *misused, *unknown,
+                *not_template]  # fmt: skip
     if not warnings:
         return documents
     app_index = next(i for i, d in enumerate(documents) if d.kind is DocumentKind.APP)
@@ -529,6 +551,35 @@ def _with_package_warnings(documents: list[Document], produced: object) -> list[
 
 
 NO_VERIFICATION = "The package states no signature verification for this mechanism."
+# Core's contract: where the signing key comes from (any other value: not shown, a warning)
+SECRET_SOURCES = {
+    "subscribeResponse": "the secret returned when you subscribe",
+    "subscribeRequest": "the secret you send when you subscribe",
+    "userProvided": "a secret you set",
+    "keysEndpoint": "a key fetched from the vendor's keys endpoint",
+}
+SECRET_SOURCE_UNKNOWN = "plume-secret-source-unknown"  # noqa: S105 - a warning code
+_PLACEHOLDERS = {
+    "{body}": "{body} is the raw request body",
+    "{timestamp}": "{timestamp} is the delivery timestamp",
+}
+
+
+SIGNED_PAYLOAD_NOT_TEMPLATE = "plume-signed-payload-not-template"
+
+
+def _is_template(payload: str) -> bool:
+    """A Core template names what is signed ({body} / {timestamp}); "body" or "raw request
+    body" (older packages) would read as signing those literal words, so it is not shown."""
+    return any(key in payload for key in _PLACEHOLDERS)
+
+
+def _signed_string(template: str) -> str:
+    """verification.signedPayload is a template Core evaluates: {timestamp} and {body} are
+    replaced, every other character is signed literally."""
+    parts = [text for key, text in _PLACEHOLDERS.items() if key in template]
+    where = f", where {' and '.join(parts)}" if parts else ""
+    return f"The signed string is `{template}`{where}."
 
 
 def _webhook_document(api_name: str, hook: object, several: bool = False) -> Document | None:
@@ -561,15 +612,16 @@ def _webhook_document(api_name: str, hook: object, several: bool = False) -> Doc
         how = " ".join(
             x for x in (
                 f"{kind}-{algorithm.upper()}" if kind and algorithm else kind or None,
-                f"over the {payload}" if payload else None,
                 f"{encoding}-encoded" if encoding else None,
                 f"in the `{header}` header" if header else None,
             ) if x
         )  # fmt: skip
-        secret = _str(verification.get("secretSource"))
         lines = ["## Verifying a delivery", f"Each delivery is signed: {how}."]
+        if payload and _is_template(payload):
+            lines.append(_signed_string(payload))
+        secret = SECRET_SOURCES.get(_str(verification.get("secretSource")) or "")
         if secret:
-            lines.append(f"The key is a secret you provide ({secret}).")
+            lines.append(f"The key is {secret}.")
         parts.append("\n".join(lines))
         if header:
             fields.append(FieldSpec(header, FieldLocation.HEADER, "string",
