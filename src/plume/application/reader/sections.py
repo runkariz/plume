@@ -246,6 +246,8 @@ class PackageSections:
             "versioning": app.get("apiVersioning"),
             "base_urls": app.get("baseUrls"),
             "variables_schema": raw.get("environment_variables_schema"),
+            # endpoints per server ({{app_env.servers.<key>}} in their url), from the loader
+            "server_endpoints": raw.get("server_endpoints"),
         }
 
     def has_icon(self, api: str, version: str | None = None) -> bool:

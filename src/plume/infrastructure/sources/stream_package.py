@@ -30,6 +30,7 @@ from plume.application.ports.package_source import SourcePackage
 from plume.domain.knowledge import rate_limits
 from plume.domain.knowledge.api import ApiId, ApiInfo, Category
 from plume.domain.knowledge.asset import CONTENT_TYPES, ICON, MAX_ASSET_BYTES, Asset
+from plume.domain.knowledge.call_check import endpoint_server
 from plume.domain.knowledge.document import (
     CONFLICTS_KEY,
     ENVIRONMENTS_DOC_ID,
@@ -514,6 +515,41 @@ def _environments_document(api_name: str, app: Mapping[str, Any]) -> Document | 
     )
 
 
+def _with_endpoint_servers(documents: list[Document], app: Mapping[str, Any]) -> list[Document]:
+    """Which server each endpoint is on, from its url's {{app_env.servers.<key>}} prefix. With
+    several API servers (Meta: graph, ads-api, mcp), each endpoint says so ("Server: api_2
+    (https://ads-api.facebook.com)", the default environment's URL); the app counts the
+    endpoints per server for get_environments. auth* servers are OAuth hosts, not API servers."""
+    envs = [e for e in app.get("environments") or [] if isinstance(e, dict)]
+    default = next((e for e in envs if e.get("isDefault") is True), envs[0] if envs else {})
+    servers = {k: v for k, v in _obj(default.get("servers")).items() if _str(v)}
+    base = _str(default.get("baseUrl"))
+    api_urls = {v for k, v in servers.items() if not k.startswith("auth")} | (
+        {base} if base else set()
+    )
+    several = len(api_urls) > 1
+    counts: dict[str, int] = {}
+    out: list[Document] = []
+    for d in documents:
+        url = (
+            d.raw.get("url")
+            if d.kind is DocumentKind.ENDPOINT and isinstance(d.raw, dict)
+            else None
+        )
+        key = endpoint_server(url) if isinstance(url, str) else None
+        if key is None:
+            out.append(d)
+            continue
+        counts[key] = counts.get(key, 0) + 1
+        where = servers.get(key) or base
+        shown = several and where
+        out.append(replace(d, text=f"{d.text}\n\nServer: {key} ({where})") if shown else d)
+    if not counts:
+        return out
+    return [replace(d, raw={**(d.raw or {}), "server_endpoints": dict(sorted(counts.items()))})
+            if d.kind is DocumentKind.APP else d for d in out]  # fmt: skip
+
+
 def _with_package_warnings(documents: list[Document], produced: object) -> list[Document]:
     """The producer's manifest warnings, plus Plume's own maintainer-only ones (a
     headerSource standard:rfc6750 on a header that is not Authorization: Bearer), on the app."""
@@ -953,6 +989,7 @@ class StreamPackageSource:
             )
         documents = _link_documents(documents, warnings, info.versions)
         documents = _flag_unresolved_includes(documents, warnings)
+        documents = _with_endpoint_servers(documents, app)
         manifest = _opt_json(package_root / "manifest.json") or {}
         produced = manifest.get("warnings")
         documents = _with_package_warnings(documents, produced)

@@ -116,6 +116,7 @@ def sections_router(sections: Callable[[], PackageSections]) -> APIRouter:
             environments=[e for e in envs if isinstance(e, dict)],
             versioning=env["versioning"] if isinstance(env["versioning"], dict) else None,
             base_urls=env["base_urls"] if isinstance(env["base_urls"], list) else None,
+            server_endpoints=env.get("server_endpoints"),
             variables_schema=env["variables_schema"],
             notices=[s.Notice(**n) for n in sections().notices(api, ENVIRONMENTS, version)],
         )
