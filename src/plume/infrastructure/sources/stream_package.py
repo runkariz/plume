@@ -456,18 +456,29 @@ def _with_package_warnings(documents: list[Document], produced: object) -> list[
             *documents[app_index + 1 :]]  # fmt: skip
 
 
-def _webhook_document(api_name: str, hook: object) -> Document | None:
+NO_VERIFICATION = "The package states no signature verification for this mechanism."
+
+
+def _webhook_document(api_name: str, hook: object, several: bool = False) -> Document | None:
     """A webhook delivery mechanism (connector/triggers/webhooks/*.json) as a searchable guide:
-    how a delivery is verified (HMAC header, algorithm, encoding, signed payload), the
-    delivery-id header for duplicates, the handshake, and the package's quoted evidence. Its
-    headers are fields, so find_fact finds them (X-Shopify-Hmac-SHA256 was only reachable
-    through list_triggers)."""
+    how a delivery is verified (HMAC header, algorithm, encoding, signed payload) or that the
+    package states no verification, the delivery-id header for duplicates, the handshake, its
+    events, the package's quoted evidence and its x-kariz-conflicts. Every mechanism gets one
+    (Sendcloud's event subscriptions state no signature: without its own guide, "how do I
+    verify event-subscription deliveries" found only the other mechanism's HMAC). Its headers
+    are fields, so find_fact finds them. ``several``: the package has more than one mechanism,
+    so the title names this one."""
     if not isinstance(hook, dict) or not _str(hook.get("id")):
         return None
     verification, delivery = _obj(hook.get("verification")), _obj(hook.get("deliveryIdFrom"))
     handshake = _obj(hook.get("handshake"))
     provenance = _obj(hook.get("provenance"))
-    parts = [f"# {api_name} webhooks: delivery and verification"]
+    mode = _str(hook.get("mode"))
+    which = (
+        f" ({hook['id']}{f', {mode}' if mode and mode != hook['id'] else ''})" if several else ""
+    )
+    title = f"{api_name} webhooks{which}: delivery and verification"
+    parts = [f"# {title}"]
     fields: list[FieldSpec] = []
     header = _str(verification.get("header"))
     if verification:
@@ -491,6 +502,8 @@ def _webhook_document(api_name: str, hook: object) -> Document | None:
         if header:
             fields.append(FieldSpec(header, FieldLocation.HEADER, "string",
                                     description=f"Webhook signature: {how}."))  # fmt: skip
+    else:
+        parts.append(f"## Verifying a delivery\n{NO_VERIFICATION}")
     delivery_header = _str(delivery.get("name"))
     if delivery_header:
         parts.append(
@@ -502,18 +515,21 @@ def _webhook_document(api_name: str, hook: object) -> Document | None:
                                 description="Webhook delivery id (for duplicates)."))  # fmt: skip
     if _str(handshake.get("kind")):
         parts.append(f"Subscription handshake: {handshake['kind']}.")
+    events = [e for e in hook.get("eventsAvailable") or [] if _str(e)]
+    if events:
+        parts.append("## Events delivered this way\n" + "\n".join(f"- {e}" for e in events))
     evidence = [e for e in provenance.get("evidence") or [] if _str(e)]
     if evidence:
         parts.append("## From the docs\n" + "\n".join(f"- {e}" for e in evidence))
-    if len(parts) == 1:
-        return None
+    conflicts = [c for c in hook.get(CONFLICTS_KEY) or [] if isinstance(c, dict)]
     return Document(
         doc_id=slug_doc_id(DocumentKind.GUIDE, "webhook-delivery-" + _slug(hook["id"])),
         kind=DocumentKind.GUIDE,
-        title=f"{api_name} webhooks: delivery and verification",
+        title=title,
         text="\n\n".join(parts),
         source_url=_str(provenance.get("evidenceUrl")),
         fields=tuple(fields),
+        raw={CONFLICTS_KEY: conflicts} if conflicts else None,
     )
 
 
@@ -742,7 +758,7 @@ class StreamPackageSource:
         documents: list[Document] = [
             app_doc,  # then the environments and each webhook mechanism as searchable guides
             *([env] if (env := _environments_document(info.name, app)) else []),
-            *(d for h in hooks if (d := _webhook_document(info.name, h))),
+            *(d for h in hooks if (d := _webhook_document(info.name, h, len(hooks) > 1))),
         ]
         seen: set[str] = {d.doc_id for d in documents}
 
