@@ -67,6 +67,7 @@ from plume.infrastructure.db.repos.model_set_repo import PostgresModelSetRepo
 from plume.infrastructure.db.repos.release_notes_repo import PostgresReleaseNotesRepo
 from plume.infrastructure.db.repos.report_repo import PostgresReportRepo
 from plume.infrastructure.db.repos.tag_repo import PostgresTagRepo
+from plume.infrastructure.db.table_stats import PostgresTableStats
 from plume.infrastructure.dumps.local_fs import LocalDumpStore
 from plume.infrastructure.embeddings.gemini import GeminiEmbedder, uses_content_api
 from plume.infrastructure.embeddings.hash_embedder import HashEmbedder
@@ -419,6 +420,7 @@ class Container:
             gold=self.gold,
             notes=self.release_notes(),
             package_meta=StreamPackageMetaReader(),
+            stats=PostgresTableStats(self.engine),
         )
 
     @cached_property
@@ -491,7 +493,7 @@ class Container:
         )
 
     def restore_dump(self) -> RestoreDump:
-        return RestoreDump(self.dumps, self.importer)
+        return RestoreDump(self.dumps, self.importer, PostgresTableStats(self.engine))
 
     # -- reader -------------------------------------------------------------------------------
 

@@ -20,6 +20,7 @@ from plume.application.knowledge.tag_build import TagBuild
 from plume.application.ports.eval_repo import GoldSource
 from plume.application.ports.job_events import EventStatus, JobEvent, JobEvents
 from plume.application.ports.release_notes_repo import PackageMetaReader
+from plume.application.ports.table_stats import TableStats
 from plume.domain.knowledge.api import ApiId
 from plume.domain.shared.ids import BuildId
 
@@ -40,7 +41,9 @@ class BuildPipeline:
         gold: GoldSource | None = None,
         notes: ReleaseNotes | None = None,
         package_meta: PackageMetaReader | None = None,
+        stats: TableStats | None = None,
     ) -> None:
+        self._stats = stats  # planner statistics refreshed after the rows are written
         self._notes = notes
         self._package_meta = package_meta
         self._import = import_package
@@ -143,6 +146,9 @@ class BuildPipeline:
                 job_id, "facts", lambda: self._facts.execute(build_id), source="postgres"
             )
             self._step(job_id, "seal", lambda: self._seal.execute(build_id), source="postgres")
+            if self._stats is not None:  # before the eval gate's searches and the tag
+                stats = self._stats
+                self._step(job_id, "analyze", stats.refresh, source="postgres")
         gate: GateSummary | None = None
         gold_ref = gold_ref or (self._gold.for_api(imported.api_id.value) if self._gold else None)
         evaluate = self._evaluate

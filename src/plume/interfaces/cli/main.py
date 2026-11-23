@@ -552,7 +552,9 @@ def create_app(deps: CliDependencies) -> typer.Typer:
         typer.echo(
             f"{r.api}: {r.build} {state} ({r.documents} documents, {r.chunks} chunks, "
             f"{r.facts} facts){' tags ' + ','.join(r.tags) if r.tags else ''}"
-        )
+            + (f"; statistics refreshed in {r.analyzed_seconds:.2f} s"
+               if r.analyzed_seconds is not None else "")
+        )  # fmt: skip
 
     @app.command()
     def serve(
