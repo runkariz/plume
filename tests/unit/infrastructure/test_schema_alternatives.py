@@ -1,6 +1,7 @@
 # ruff: noqa: E501
 """oneOf / anyOf members are flattened (Sendcloud POST /shipments: to_address ->
-$defs.ToAddress -> oneOf [Address Object] gave only "to_address"); allOf is not walked."""
+$defs.ToAddress -> oneOf [Address Object] gave only "to_address"); allOf only through inline
+members, two levels deep."""
 
 from typing import Any
 
@@ -89,6 +90,53 @@ def test_a_member_repeating_a_parent_property_adds_nothing() -> None:
     assert fields["city"].description == "own"
 
 
-def test_all_of_is_not_walked() -> None:
-    schema = {"allOf": [{"type": "object", "properties": {"id": {"type": "string"}}}]}
-    assert _fields(schema) == {}
+def _obj(title: str, *names: str, **extra: Any) -> dict[str, Any]:
+    return {"title": title, "type": "object",
+            "properties": {n: {"type": "string"} for n in names}, **extra}  # fmt: skip
+
+
+RESPONSE: dict[str, Any] = {  # Sendcloud POST /shipments responses/201, all inline allOf
+    "type": "object",
+    "properties": {"data": {
+        "title": "Shipment response Object", "type": "object",
+        "allOf": [
+            {"title": "Base shipment response Object", "allOf": [
+                {"title": "Shipment common Object", "allOf": [
+                    _obj("common", "id", "brand_id", required=["id"]),
+                    {"type": "object", "properties": {"parcels": {"type": "array", "items": {
+                        "type": "object", "properties": {"tracking_number": {"type": "string"}}}}}},
+                ]},
+                _obj("base", "status", "carrier"),
+            ]},
+            {"type": "object", "properties": {"label_details": {
+                "type": "object", "properties": {"dpi": {"type": "integer"}}}}},
+        ],
+    }},
+}  # fmt: skip
+
+
+def test_inline_all_of_members_are_merged_recursively() -> None:
+    fields = _fields(RESPONSE)
+    assert {"data", "data.id", "data.brand_id", "data.status", "data.carrier",
+            "data.parcels", "data.parcels[].tracking_number", "data.label_details",
+            "data.label_details.dpi"} <= set(fields)  # fmt: skip
+    assert fields["data.id"].required is True  # a member's required applies (allOf: all hold)
+    assert fields["data.status"].description is None  # allOf is no alternative: no mark
+
+
+def test_an_all_of_member_that_is_a_ref_is_not_followed() -> None:
+    schema = {"type": "object", "properties": {"data": {"allOf": [
+        {"$ref": "#/$defs/Entity"}, _obj("own", "name")]}},
+        "$defs": {"Entity": _obj("Entity", "entity_field")}}  # fmt: skip
+    fields = _fields(schema)
+    assert "data.name" in fields
+    assert "data.entity_field" not in fields
+
+
+def test_all_of_members_have_their_own_depth_budget() -> None:
+    deep = {"type": "object", "properties": {"a": {"type": "object", "properties": {"b": {
+        "type": "object", "properties": {"c": {"type": "object", "properties": {
+            "d": {"type": "string"}}}}}}}}}  # fmt: skip
+    fields = _fields({"type": "object", "properties": {"data": {"allOf": [deep]}}})
+    assert {"data.a", "data.a.b", "data.a.b.c"} <= set(fields)
+    assert "data.a.b.c.d" not in fields  # past ALLOF_DEPTH (Shopware's entity graph)

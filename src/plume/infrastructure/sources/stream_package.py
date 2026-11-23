@@ -278,9 +278,11 @@ def _walk_fields(
     yield from _member_fields(schema, location, pointer, prefix, depth, scope, max_depth, emitted)
 
 
-# allOf is not walked: on Shopware its members are the entity graph (data.stateMachineState.
-# orders[].documents[]...), +889k facts (569k -> 1.46M) against +23k for oneOf / anyOf.
-COMBINATORS: tuple[str, ...] = ("oneOf", "anyOf")
+# allOf: only INLINE members (no $ref) are walked. A $ref'd member is a whole model, and on
+# Shopware those are the entity graph (data.stateMachineState.orders[].documents[]...): +889k
+# facts. Sendcloud's shipment responses nest inline objects in allOf (data.parcels[]...).
+COMBINATORS: tuple[str, ...] = ("allOf", "oneOf", "anyOf")
+ALLOF_DEPTH = 2
 
 
 def _member_fields(
@@ -302,16 +304,20 @@ def _member_fields(
     raw_required = schema.get("required")
     required = set(raw_required) if isinstance(raw_required, list) else set()
     for key in COMBINATORS:
-        members = [(i, m) for i, m in enumerate(schema.get(key) or []) if isinstance(m, dict)]
+        members = [(i, m) for i, m in enumerate(schema.get(key) or []) if isinstance(m, dict)
+                   and (key != "allOf" or "$ref" not in m)]  # fmt: skip
         if not members:
             continue
         alternatives = key != "allOf" and len(members) > 1
         merged: dict[str, FieldSpec] = {}
         found_in: dict[str, list[str]] = {}
         labels = [_member_label(m, i, scope) for i, m in members]
+        # an allOf member walks at most ALLOF_DEPTH levels below the composed object (Shopware
+        # nests its entity graph in inline allOf members)
+        budget = min(max_depth, depth + ALLOF_DEPTH) if key == "allOf" else max_depth
         for (i, member), label in zip(members, labels, strict=True):
             walk = _walk_fields(member, location, f"{pointer}/{key}/{i}", prefix, depth, scope,
-                                max_depth)  # fmt: skip
+                                budget)  # fmt: skip
             for f in walk:
                 if f.name in emitted:
                     continue
