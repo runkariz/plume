@@ -976,9 +976,10 @@ class StreamPackageSource:
         icon, extra_hashed = self._icon(connector, package_root)
         export = package_root / "knowledge-export"
         if export.is_dir() and knowledge_export.detect(export):
-            documents = _apply_export(
-                documents, knowledge_export.load(export), warnings, info.versions
+            loaded = knowledge_export.without_sample_calls(
+                knowledge_export.load(export), knowledge_export.load_unit_links(export)
             )
+            documents = _apply_export(documents, loaded, warnings, info.versions)
         elif export.is_dir():
             for path in sorted(export.rglob("*.md")):
                 add(self._export_page(path, export), str(path.relative_to(export)))
@@ -1896,9 +1897,11 @@ def _link_unit(
         if target is None:
             warnings.append(f"knowledge {doc.source_id}: unknown endpoint {item}")
             continue
-        basis_of.setdefault(target, str(bases.get(item) or CONNECTOR_BASIS))
-        if doc.doc_id not in guides_of.setdefault(target, []):
-            guides_of[target].append(doc.doc_id)
+        basis = basis_of.setdefault(target, str(bases.get(item) or CONNECTOR_BASIS))
+        # a guide whose sample only calls the endpoint is listed apart from its guides
+        key = f"{SAMPLE_GUIDES_PREFIX}{target}" if basis == knowledge_export.SAMPLE_CALL else target
+        if doc.doc_id not in guides_of.setdefault(key, []):
+            guides_of[key].append(doc.doc_id)
     links = [{"endpoint": t, "linkBasis": b} for t, b in basis_of.items()]
     return replace(doc, raw={**raw, "endpoints": list(basis_of), "endpointLinks": links})
 
@@ -1923,13 +1926,22 @@ def _scope_endpoints(documents: list[Document]) -> dict[str, dict[str, list[str]
     return out
 
 
+SAMPLE_GUIDES_PREFIX = "sample-call:"
+
+
 def _with_links(
     doc: Document,
     guides_of: dict[str, list[str]],
     scope_endpoints: dict[str, dict[str, list[str]]],
 ) -> Document:
-    if doc.kind is DocumentKind.ENDPOINT and doc.doc_id in guides_of:
-        return replace(doc, raw={**(doc.raw or {}), "x-plume-guides": guides_of[doc.doc_id]})
+    sample = guides_of.get(f"{SAMPLE_GUIDES_PREFIX}{doc.doc_id}")
+    if doc.kind is DocumentKind.ENDPOINT and (doc.doc_id in guides_of or sample):
+        raw = {**(doc.raw or {})}
+        if doc.doc_id in guides_of:
+            raw["x-plume-guides"] = guides_of[doc.doc_id]
+        if sample:
+            raw["x-plume-sample-guides"] = sample
+        return replace(doc, raw=raw)
     if doc.kind is DocumentKind.AUTH and doc.source_id in scope_endpoints:
         links = scope_endpoints[doc.source_id]
         return replace(doc, raw={**(doc.raw or {}), "scopeEndpoints": links})

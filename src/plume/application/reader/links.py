@@ -61,6 +61,14 @@ def linked_guides(doc: Document) -> list[str]:
     return _ids(_raw(doc).get("x-plume-guides"))
 
 
+def sample_guides(doc: Document) -> list[str]:
+    """The knowledge units whose sample merely calls this endpoint (unit-links sample-call):
+    not its documentation, listed apart."""
+    if doc.kind is not DocumentKind.ENDPOINT:
+        return []
+    return _ids(_raw(doc).get("x-plume-sample-guides"))
+
+
 def scope_endpoints(doc: Document) -> dict[str, list[str]]:
     """An auth scheme's scopes -> the endpoints that require them."""
     if doc.kind is not DocumentKind.AUTH:

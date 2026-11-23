@@ -542,6 +542,11 @@ class DocumentOut(Schema):
         default_factory=list,
         description="Endpoint: the knowledge units that name it (endpointId/endpointIds).",
     )
+    sample_guides: list[str] = Field(
+        default_factory=list,
+        description="Endpoint: guides that call this endpoint in a sample (unit-links "
+        "sample-call): not its documentation.",
+    )
     conflicts: list[DocConflict] = Field(
         default_factory=list,
         description="x-kariz-conflicts: the docs state different values for a limit; every "

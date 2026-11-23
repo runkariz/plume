@@ -45,4 +45,6 @@ async def test_compact_by_default_and_full_on_request(packages: Any, monkeypatch
         assert more["fields"][0]["name"] != compact["fields"][0]["name"]
         full = await get(full=True)
         assert "## Response fields" in full["text"]
-        assert "fields" not in full
+        assert len(full["fields"]) == compact["fields_total"]  # every field, not a page
+        assert "next_cursor" not in full
+        assert full["fields"][0]["name"] == compact["fields"][0]["name"]

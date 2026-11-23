@@ -109,12 +109,27 @@ def document_payload(r: DocumentResult) -> Json:
         "scopes": list(d.scopes),
         "required_scopes": links.required_scopes(d),
         "guides": links.linked_guides(d),
+        "sample_guides": links.sample_guides(d),
         "linked_endpoints": links.linked_endpoints(d),
         "endpoint_links": links.endpoint_links(d),
         "rule_sources": links.rule_sources(d),
         "conflicts": conflicts_payload(d),
         "text": d.text,
         "citation": citation_payload(r.citation),
+        # every field, whole (the compact form pages them with shortened descriptions)
+        "fields": [
+            {
+                "name": f.name,
+                "location": f.location.value,
+                "type": f.type,
+                "required": f.required,
+                "description": f.description,
+            }
+            | ({"model_id": f.model_id} if f.model_id else {})
+            | ({"source_url": f.source_url} if f.source_url else {})
+            | ({"constraints": f.constraint_dict} if f.constraints else {})
+            for f in d.fields
+        ],
     }
 
 

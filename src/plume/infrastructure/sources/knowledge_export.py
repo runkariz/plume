@@ -24,6 +24,8 @@ import yaml
 from plume.domain.knowledge.document import CONFLICTS_KEY
 
 SCHEMA_V1 = "plume.knowledge-export.v1"
+# a unit-links basis: the unit's sample merely calls the endpoint (it is not about it)
+SAMPLE_CALL = "sample-call"
 ZWSP = "\u200b"
 MAX_SECTION_CHARS = 6000
 # A page guide is a navigation aid (intro, property overview, resource rules), not a second copy
@@ -70,6 +72,8 @@ class ExportPage:
     sections: dict[str, tuple[str, str]] = field(default_factory=dict)  # item id -> (anchor, text)
     items: list[tuple[str, str]] = field(default_factory=list)  # (item id, "METHOD name")
     conflicts: list[Any] = field(default_factory=list)  # the index entry's x-kariz-conflicts
+    # endpoint items the page only calls in a sample (every unit link to them is sample-call)
+    sample_calls: list[str] = field(default_factory=list)
 
     @property
     def split(self) -> bool:
@@ -264,3 +268,26 @@ def load_unit_links(root: Path) -> dict[str, tuple[tuple[str, ...], str]]:
             basis = entry.get("linkBasis")
             out[entry["unitId"]] = (ids, basis if isinstance(basis, str) and basis else "export")
     return out
+
+
+def without_sample_calls(
+    export: KnowledgeExport, links: dict[str, tuple[tuple[str, ...], str]]
+) -> KnowledgeExport:
+    """A page's endpoint item that its knowledge units link to ONLY by sample-call is not what
+    the page documents (Meta's reminder-ads page lists POST /act_{id}/campaigns because its
+    sample creates a campaign): it leaves the page's items and sections, so the page's rules
+    and its "documentation page" role do not reach that endpoint."""
+    for page in export.pages:
+        units = [i.removeprefix("knowledge:") for i, _ in page.items if i.startswith("knowledge:")]
+        dropped = []
+        for item_id, _ in page.items:
+            if item_id.startswith("knowledge:"):
+                continue
+            bases = [links[u][1] for u in units if u in links and item_id in links[u][0]]
+            if bases and all(b == SAMPLE_CALL for b in bases):
+                dropped.append(item_id)
+        if dropped:
+            page.items = [(i, label) for i, label in page.items if i not in dropped]
+            page.sections = {i: v for i, v in page.sections.items() if i not in dropped}
+            page.sample_calls = dropped
+    return export

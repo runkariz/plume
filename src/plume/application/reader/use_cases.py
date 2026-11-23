@@ -1565,7 +1565,9 @@ class CheckCall:
             self._real_path(r.build.build_id, endpoint.owner_id),
             note=note,
             matched_server=(
-                servers[endpoint.owner_id].label if endpoint.owner_id in servers else None
+                servers[endpoint.owner_id].label
+                if endpoint.owner_id in servers
+                else self._server_label(build_id, endpoint.owner_id)
             ),
             missing_required=missing,
         )
@@ -1712,6 +1714,15 @@ class CheckCall:
                 return "not_documented", why, missing
             note = f"{why}; {note}" if note else why
         return verdict, note, missing
+
+    def _server_label(self, build_id: BuildId, owner_id: str) -> str | None:
+        """The endpoint's server ("api_2: https://ads-api.facebook.com", the default
+        environment's URL) when the API lists separate servers; None for a single-server API."""
+        key = self._endpoint_server(build_id, owner_id)
+        envs = self._environments(build_id)
+        if key is None or not envs or not any(e.servers for e in envs):
+            return None
+        return f"{key}: {envs[0].url_of(key)}"
 
     def _environments(self, build_id: BuildId) -> list[Environment]:
         if self._documents is None:
