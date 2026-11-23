@@ -999,3 +999,38 @@ def topic_docs_give_way(
         order.remove(doc)
         order.insert(min(window - 1, len(order)), doc)
     return order
+
+
+_HOW_TO = re.compile(
+    r"^\s*(how (do|can|should|would) (i|we|you)|how to|where (can|do) (i|we)|"
+    r"is there a way to|can i|what('s| is) the way to)\b",
+    re.IGNORECASE,
+)
+# Rule lists and page summaries: about a topic, not the operation that does the task.
+# (Validation, workflow and best-practice units are often the answer to a how-to themselves:
+# letting them give way too moved 65 tuning questions down, 15 with these two.)
+_KNOWLEDGE_UNITS = ("guide:resource-rules-", "guide:page-")
+
+
+def endpoints_before_units_on_how_to(ranked: Sequence[str], k: int, query: str) -> list[str]:
+    """A how-to question ("how do I upload many products in one call") is answered by an
+    operation: every endpoint in the top k goes before the rule lists and page summaries
+    ranked above it,
+    in its own order (Facebook Catalog items_batch was 5th behind resource rules and page
+    guides). Vendor guides, auth and environment documents keep their place; a question
+    about the structure (fields / schema) keeps the order."""
+    if not _HOW_TO.search(query) or _STRUCTURE_QUERY.search(query):
+        return list(ranked)
+    top = list(ranked[:k])
+    endpoints = [d for d in top if d.startswith("endpoint:")]
+    if not endpoints:
+        return list(ranked)
+    first = next(i for i, d in enumerate(top) if d.startswith("endpoint:"))
+    units = [d for d in top[:first] if d.startswith(_KNOWLEDGE_UNITS)]
+    if not units:
+        return list(ranked)
+    at = top.index(units[0])  # the endpoints take the first unit's place, in their order
+    rest = [d for d in top if d not in endpoints]
+    head = list(rest[:at])
+    out = head + endpoints + list(rest[at:])
+    return out + list(ranked[k:])

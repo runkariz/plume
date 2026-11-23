@@ -274,3 +274,26 @@ def test_an_endpoint_already_above_its_model_stays() -> None:
     above = ["endpoint:GET~/logs", "model:tl02", "endpoint:GET~/lines", "guide:a"]
     assert endpoints_before_returned_models(above, 5, "max page size of logs", lookup) == [
         "endpoint:GET~/logs", "endpoint:GET~/lines", "model:tl02", "guide:a"]  # fmt: skip
+
+
+def test_how_to_questions_put_endpoints_before_knowledge_units() -> None:
+    from plume.application.reader.ranking import endpoints_before_units_on_how_to  # noqa: PLC0415
+
+    ranked = ["guide:page-diagnostics", "guide:page-batch-api", "endpoint:POST~/items_batch",
+              "endpoint:GET~/check_batch_request_status", "guide:resource-rules-api-2"]  # fmt: skip
+    out = endpoints_before_units_on_how_to(
+        ranked, 5, "how do I get the list of invalid items in a batch"
+    )
+    assert out == [
+        "endpoint:POST~/items_batch", "endpoint:GET~/check_batch_request_status",
+        "guide:page-diagnostics", "guide:page-batch-api", "guide:resource-rules-api-2",
+    ]  # fmt: skip
+    workflow = ["guide:workflow-x", "endpoint:POST~/a", "guide:page-y"]  # a workflow stays first
+    assert endpoints_before_units_on_how_to(workflow, 3, "how do I do x") == workflow
+    assert endpoints_before_units_on_how_to(ranked, 5, "what is the maximum payload size") == ranked
+    assert (
+        endpoints_before_units_on_how_to(ranked, 5, "how do I see the fields of a batch") == ranked
+    )
+    vendor = ["auth:oauth2", "guide:page-x", "endpoint:POST~/a"]
+    assert endpoints_before_units_on_how_to(vendor, 3, "how do I create a") == [
+        "auth:oauth2", "endpoint:POST~/a", "guide:page-x"]  # fmt: skip
