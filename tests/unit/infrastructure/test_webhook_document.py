@@ -5,6 +5,7 @@
 import json
 import shutil
 from pathlib import Path
+from typing import Any
 
 from tests.fakes.knowledge import WordEmbedder
 from tests.fakes.stack import FakeStack
@@ -103,7 +104,7 @@ def test_a_bare_mechanism_still_gets_a_guide(packages: Path, tmp_path: Path) -> 
     assert "The package states no signature verification for this mechanism." in doc.text
 
 
-def _hook_with(packages: Path, tmp_path: Path, verification: dict[str, str]) -> FakeStack:
+def _hook_with(packages: Path, tmp_path: Path, verification: dict[str, Any]) -> FakeStack:
     dst = tmp_path / "shopify"
     shutil.copytree(packages / "shopify-mini", dst)
     path = dst / "connector" / "triggers" / "webhooks" / f"{HOOK}.json"
@@ -159,3 +160,19 @@ def test_a_free_text_signed_payload_is_not_shown_but_warned(packages: Path, tmp_
     app = next(d for d in stack.documents.list_documents(build) if d.kind.value == "app")
     assert any(w.startswith("plume-signed-payload-not-template: webhook ")
                for w in (app.raw or {})["package_warnings"])  # fmt: skip
+
+
+def test_body_null_or_empty_sign_the_raw_body(packages: Path, tmp_path: Path) -> None:
+    """Core: a missing / null / empty signedPayload, or exactly "body", is the raw request body
+    bytes (valid; no warning)."""
+    base: dict[str, Any] = {"kind": "hmac", "algorithm": "sha256", "header": "X-Signature",
+            "secretSource": "userProvided"}  # fmt: skip
+    extras: list[dict[str, Any]] = [{"signedPayload": "body"}, {"signedPayload": None}, {},
+              {"signedPayload": ""}]  # fmt: skip
+    for i, extra in enumerate(extras):
+        stack = _hook_with(packages, tmp_path / str(i), {**base, **extra})
+        doc = stack.get_document().execute("shopify", f"guide:webhook-delivery-{HOOK}").document
+        assert "The signed string is the raw request body." in doc.text, extra
+        build = stack.resolver().resolve("shopify").build.build_id
+        app = next(d for d in stack.documents.list_documents(build) if d.kind.value == "app")
+        assert not any("signed-payload" in w for w in (app.raw or {}).get("package_warnings") or [])
