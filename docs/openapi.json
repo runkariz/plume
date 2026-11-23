@@ -2074,6 +2074,14 @@
             "title": "Rulesources",
             "type": "array"
           },
+          "sampleGuides": {
+            "description": "Endpoint: guides that call this endpoint in a sample (unit-links sample-call): not its documentation.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Sampleguides",
+            "type": "array"
+          },
           "scopes": {
             "items": {
               "type": "string"
