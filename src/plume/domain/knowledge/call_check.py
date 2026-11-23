@@ -139,3 +139,54 @@ def without_server_base(path: str, bases: list[ServerBase]) -> list[tuple[Server
         tail = "/" + "/".join(segs[len(pre) :])
         out.append((b, tail + (f"?{query}" if query else "")))
     return out
+
+
+@dataclass(frozen=True, slots=True)
+class Environment:
+    """One environment of the environments guide: its base URL and the servers listed with their
+    own URL (a server not listed is served by the base URL)."""
+
+    name: str
+    base: str
+    servers: tuple[tuple[str, str], ...]
+
+    def url_of(self, server: str | None) -> str:
+        return dict(self.servers).get(server or "", self.base)
+
+
+def environments_of(environments_text: str) -> list[Environment]:
+    envs: list[tuple[str, str, list[tuple[str, str]]]] = []
+    for line in environments_text.splitlines():
+        if m := _ENV_LINE.match(line):
+            envs.append((m.group(1), m.group(2).rstrip(".;)"), []))
+        elif (m := _SUB_LINE.match(line)) and envs:
+            envs[-1][2].append((m.group(1), m.group(2).rstrip(".;)")))
+    return [Environment(n, b, tuple(s)) for n, b, s in envs]
+
+
+def _host(url: str) -> str:
+    return (urlsplit(url).hostname or "").lower()
+
+
+def host_problem(call: str, server: str | None, envs: list[Environment]) -> tuple[str, str] | None:
+    """A full-URL call on a host that does not serve the endpoint: ("other_server", why) when the
+    host is another server of this API (Meta's ads-api / mcp hosts for a graph endpoint), else
+    ("unknown_host", why). None: a relative path, a matching host, or hosts Plume cannot check
+    (a templated host such as {{app_env.vars.host}}, no environments)."""
+    given = call.strip()
+    if not re.match(r"^[a-z]+://", given, re.I) or not envs:
+        return None
+    host = _host(given)
+    expected = {_host(e.url_of(server)) for e in envs}
+    if not host or host in expected or any(not h or "{" in h for h in expected):
+        return None
+    owners: dict[str, str] = {}
+    for e in envs:
+        owners.setdefault(_host(e.base), f"the {e.name} base URL")
+        for key, url in e.servers:
+            owners.setdefault(_host(url), f"the {key} server")
+    where = ", ".join(sorted(expected))
+    on = f"the {server} server" if server else "the base URL"
+    if host in owners:
+        return "other_server", f"{host} is {owners[host]}; this endpoint is on {on} ({where})"
+    return "unknown_host", f"{host} is not a server of this API for this endpoint ({on}: {where})"

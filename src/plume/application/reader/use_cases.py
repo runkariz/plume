@@ -76,8 +76,11 @@ from plume.domain.eval.metrics import K
 from plume.domain.knowledge.api import ApiInfo
 from plume.domain.knowledge.asset import ICON
 from plume.domain.knowledge.call_check import (
+    Environment,
     ServerBase,
     endpoint_server,
+    environments_of,
+    host_problem,
     normalize_call_path,
     path_matches,
     server_bases,
@@ -1545,12 +1548,7 @@ class CheckCall:
         _, _, endpoint, matched_path, checks = scored[0]
         alternatives = tuple(x[1] for x in scored[1:])
         complete = endpoint.complete
-        verdict = "documented" if all(c.found for c in checks) else "not_documented"
-        missing = self._missing_required(build_id, endpoint.owner_id, [n for n, _ in names])
-        note = None
-        if missing and verdict == "documented":
-            listed = "; ".join(f"{where}: {', '.join(fields)}" for where, fields in missing)
-            note = f"documented, but these required fields are missing: {listed}"
+        verdict, note, missing = self._verdict(build_id, endpoint.owner_id, path, checks, names)
         return CheckCallResult(
             _ref(r),
             method,
@@ -1687,6 +1685,39 @@ class CheckCall:
             return []
         doc = self._documents.get_document(build_id, ENVIRONMENTS_DOC_ID)
         return server_bases(doc.text) if doc is not None else []
+
+    def _verdict(
+        self,
+        build_id: BuildId,
+        owner_id: str,
+        path: str,
+        checks: Sequence[ParamCheck],
+        names: Sequence[tuple[str, FieldLocation | None]],
+    ) -> tuple[str, str | None, tuple[tuple[str, tuple[str, ...]], ...]]:
+        """documented when every parameter is found; the note on missing required fields; and a
+        full URL on a host that does not serve the endpoint (another server's host: not
+        documented; an unknown host: a warning)."""
+        verdict = "documented" if all(c.found for c in checks) else "not_documented"
+        missing = self._missing_required(build_id, owner_id, [n for n, _ in names])
+        note = None
+        if missing and verdict == "documented":
+            listed = "; ".join(f"{where}: {', '.join(fields)}" for where, fields in missing)
+            note = f"documented, but these required fields are missing: {listed}"
+        problem = host_problem(
+            path, self._endpoint_server(build_id, owner_id), self._environments(build_id)
+        )
+        if problem is not None:
+            kind, why = problem
+            if kind == "other_server":  # not this endpoint's surface: its params don't apply
+                return "not_documented", why, missing
+            note = f"{why}; {note}" if note else why
+        return verdict, note, missing
+
+    def _environments(self, build_id: BuildId) -> list[Environment]:
+        if self._documents is None:
+            return []
+        doc = self._documents.get_document(build_id, ENVIRONMENTS_DOC_ID)
+        return environments_of(doc.text) if doc is not None else []
 
     def _endpoint_server(self, build_id: BuildId, owner_id: str) -> str | None:
         doc = self._documents.get_document(build_id, owner_id) if self._documents else None

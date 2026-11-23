@@ -2313,6 +2313,21 @@
             "title": "Present",
             "type": "boolean"
           },
+          "serverEndpoints": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many endpoints each server ({{app_env.servers.<key>}}) serves.",
+            "title": "Serverendpoints"
+          },
           "variablesSchema": {
             "anyOf": [
               {

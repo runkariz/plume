@@ -1051,6 +1051,10 @@ class EnvironmentsOut(Schema):
     )
     versioning: dict[str, Any] | None = Field(description="app.json apiVersioning, verbatim.")
     base_urls: list[str] | None
+    server_endpoints: dict[str, int] | None = Field(
+        default=None,
+        description="How many endpoints each server ({{app_env.servers.<key>}}) serves.",
+    )
     variables_schema: dict[str, Any] | None = Field(
         description="connector/environment.variables.schema.json, verbatim."
     )
