@@ -4,9 +4,15 @@ from collections.abc import Sequence
 from typing import Any
 
 from sqlalchemy import Engine, text
+from sqlalchemy.exc import OperationalError
 
 from plume.application.ports.embedder import Vector
-from plume.application.ports.search_index import ChunkHit, DocumentSummary
+from plume.application.ports.search_index import (
+    ChunkHit,
+    DocumentSummary,
+    FactKey,
+    QueryTooBroadError,
+)
 from plume.domain.knowledge.document import FIELDS_BOUNDED_KEY, DocumentKind, FieldLocation
 from plume.domain.knowledge.fact import Fact, FactKind
 from plume.domain.shared.ids import BuildId
@@ -193,9 +199,64 @@ _FACT_COLUMNS = (
 )
 
 
+_FIND_WHERE = (
+    "build_id = :b AND (lower(name) = lower(:nm) OR lower(name) LIKE :suffix ESCAPE '\\') "
+    "AND (CAST(:kind AS text) IS NULL OR kind = :kind) "
+    "AND (CAST(:owner AS text) IS NULL OR owner_id = :owner) "
+    "AND (CAST(:res AS text) IS NULL OR lower(resource) = lower(:res)) "
+    "AND (CAST(:loc AS text) IS NULL OR location = :loc)"
+)
+_FIND_ORDER = "kind, owner_id, name, coalesce(location, '')"
+
+
 class PostgresFactQuery:
-    def __init__(self, engine: Engine) -> None:
+    def __init__(self, engine: Engine, statement_timeout_ms: int = 0) -> None:
         self._engine = engine
+        self._timeout = statement_timeout_ms  # reader lookups only; 0 = none
+
+    def find_page(
+        self,
+        build_id: BuildId,
+        name: str,
+        *,
+        kind: FactKind | None = None,
+        owner_id: str | None = None,
+        resource: str | None = None,
+        location: FieldLocation | None = None,
+        limit: int,
+        after: FactKey | None = None,
+    ) -> tuple[list[Fact], int]:
+        """Keyset paging in SQL: the name or a dotted suffix of it (find's condition), at most
+        ``limit`` rows after ``after``, and the count; under the statement timeout."""
+        params: dict[str, Any] = {
+            "b": build_id.value, "nm": name, "suffix": f"%.{_like(name)}",
+            "kind": kind.value if kind else None, "owner": owner_id, "res": resource,
+            "loc": location.value if location else None, "n": max(0, limit),
+        }  # fmt: skip
+        page = ""
+        if after is not None:
+            page = f"AND ({_FIND_ORDER}) > (:ak, :ao, :an, :al) "
+            params |= dict(zip(("ak", "ao", "an", "al"), after, strict=True))
+        try:
+            with self._engine.begin() as conn:
+                if self._timeout:
+                    conn.execute(text(f"SET LOCAL statement_timeout = {int(self._timeout)}"))
+                rows = conn.execute(
+                    text(
+                        f"SELECT {_FACT_COLUMNS} FROM facts WHERE {_FIND_WHERE} {page}"  # noqa: S608
+                        f"ORDER BY {_FIND_ORDER} LIMIT :n"
+                    ),
+                    params,
+                ).all()
+                total = conn.execute(
+                    text(f"SELECT count(*) FROM facts WHERE {_FIND_WHERE}"),  # noqa: S608
+                    params,
+                ).scalar_one()
+        except OperationalError as exc:
+            if getattr(exc.orig, "sqlstate", None) == "57014":  # query_canceled
+                raise QueryTooBroadError(str(exc.orig).splitlines()[0]) from exc
+            raise
+        return [fact_from_row(r) for r in rows], int(total)
 
     def find(
         self,

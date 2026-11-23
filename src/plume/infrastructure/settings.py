@@ -99,6 +99,12 @@ class Settings(BaseSettings):
         default=None,
         description="The web UI's public base URL; model share links are <this>/models/{id}.",
     )
+    reader_statement_timeout_ms: int = Field(
+        default=5000,
+        ge=0,
+        description="Time limit for a reader lookup's database queries (find_fact); past it the "
+        "call answers 'too broad'. 0 = none.",
+    )
     reports: bool = Field(
         default=False,
         description="PLUME_REPORTS=on gives readers' LLMs the tools to report questions Plume "

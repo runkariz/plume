@@ -205,7 +205,7 @@ class Container:
 
     @cached_property
     def fact_query(self) -> PostgresFactQuery:
-        return PostgresFactQuery(self.engine)
+        return PostgresFactQuery(self.engine, self.settings.reader_statement_timeout_ms)
 
     @cached_property
     def embedder(self) -> Embedder:

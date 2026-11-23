@@ -91,6 +91,9 @@ class FindFactResult:
     wording: str
     incomplete_sources: tuple[str, ...] = field(default=())
     reasons: tuple[str, ...] = field(default=())
+    total: int = 0  # every match, across pages
+    next_cursor: str | None = None  # the next page, when matches were capped
+    hint: str | None = None  # how to narrow a capped lookup
 
 
 @dataclass(frozen=True, slots=True)

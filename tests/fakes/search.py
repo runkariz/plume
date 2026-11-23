@@ -4,7 +4,7 @@ import re
 from collections.abc import Sequence
 
 from plume.application.ports.embedder import Vector
-from plume.application.ports.search_index import ChunkHit, DocumentSummary
+from plume.application.ports.search_index import ChunkHit, DocumentSummary, FactKey, fact_key
 from plume.domain.knowledge.document import (
     FIELDS_BOUNDED_KEY,
     Document,
@@ -145,6 +145,23 @@ class InMemoryFactQuery:
                 f.location.value if f.location else "",
             ),
         )
+
+    def find_page(
+        self,
+        build_id: BuildId,
+        name: str,
+        *,
+        kind: FactKind | None = None,
+        owner_id: str | None = None,
+        resource: str | None = None,
+        location: FieldLocation | None = None,
+        limit: int,
+        after: FactKey | None = None,
+    ) -> tuple[list[Fact], int]:
+        rows = self.find(build_id, name, kind=kind, owner_id=owner_id, resource=resource,
+                         location=location)  # fmt: skip
+        rest = [f for f in rows if after is None or fact_key(f) > after]
+        return rest[:limit], len(rows)
 
     def for_owner(self, build_id: BuildId, owner_id: str) -> list[Fact]:
         return [f for f in self._facts.list_facts(build_id) if f.owner_id == owner_id]

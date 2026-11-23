@@ -34,9 +34,17 @@ def _find(_b: BuildId, name: str, **kw: Any) -> list[Fact]:
     return [f for f in pool if f.name.lower() == name.lower() and kind in (None, f.kind)]
 
 
+def _find_page(
+    b: BuildId, name: str, *, limit: int, after: object = None, **k: Any
+) -> tuple[list[Fact], int]:
+    rows = _find(b, name, **k)
+    return rows[:limit], len(rows)
+
+
 FACTS = SimpleNamespace(
     endpoints=lambda _b: ENDPOINTS,
     find=_find,
+    find_page=_find_page,
     for_owner=lambda _b, owner: [f for f in METHODS if f.owner_id == owner],
     incomplete_owners=lambda *_a, **_k: ["model:orderresult"],
     bounded_owners=lambda *_a, **_k: {},

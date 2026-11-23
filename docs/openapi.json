@@ -2594,6 +2594,19 @@
       },
       "FindFactRequest": {
         "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "next_cursor of the previous page.",
+            "title": "Cursor"
+          },
           "kind": {
             "anyOf": [
               {
@@ -2610,6 +2623,14 @@
               }
             ],
             "title": "Kind"
+          },
+          "limit": {
+            "default": 50,
+            "description": "Matches per page (at most 50).",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
           },
           "location": {
             "anyOf": [
@@ -2702,6 +2723,18 @@
             "title": "Found",
             "type": "boolean"
           },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How to narrow a capped lookup.",
+            "title": "Hint"
+          },
           "incompleteReasons": {
             "items": {
               "type": "string"
@@ -2727,12 +2760,30 @@
             "title": "Name",
             "type": "string"
           },
+          "nextCursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when more matches follow: pass it as cursor.",
+            "title": "Nextcursor"
+          },
           "textMentions": {
             "items": {
               "$ref": "#/components/schemas/SearchHit"
             },
             "title": "Textmentions",
             "type": "array"
+          },
+          "total": {
+            "default": 0,
+            "description": "Every match, across pages.",
+            "title": "Total",
+            "type": "integer"
           },
           "wording": {
             "title": "Wording",

@@ -68,6 +68,17 @@ class SearchIndex(Protocol):
         ...
 
 
+FactKey = tuple[str, str, str, str]  # kind, owner_id, name, location ("" when none): find's order
+
+
+def fact_key(f: Fact) -> FactKey:
+    return (f.kind.value, f.owner_id, f.name, f.location.value if f.location else "")
+
+
+class QueryTooBroadError(Exception):
+    """A reader query ran past its time limit."""
+
+
 class FactQuery(Protocol):
     def find(
         self,
@@ -80,6 +91,23 @@ class FactQuery(Protocol):
         location: FieldLocation | None = None,
     ) -> list[Fact]:
         """Facts whose name equals ``name`` or ends with ``.<name>`` (case-insensitive)."""
+        ...
+
+    def find_page(
+        self,
+        build_id: BuildId,
+        name: str,
+        *,
+        kind: FactKind | None = None,
+        owner_id: str | None = None,
+        resource: str | None = None,
+        location: FieldLocation | None = None,
+        limit: int,
+        after: FactKey | None = None,
+    ) -> tuple[list[Fact], int]:
+        """One page of ``find`` (at most ``limit`` facts after the key ``after``, in find's
+        order) and the total number of matches; bounded in the database, never all rows.
+        Raises QueryTooBroadError when the database gives up (statement timeout)."""
         ...
 
     def for_owner(self, build_id: BuildId, owner_id: str) -> list[Fact]: ...
