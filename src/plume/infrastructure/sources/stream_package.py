@@ -231,7 +231,8 @@ def _walk_fields(
 ) -> Iterator[FieldSpec]:
     """Every field of a schema as dotted paths (`line_items[].sku`). `$ref`s to the same file or
     to sibling schema files are followed (bounded depth, cycle-safe); a field found through a
-    reference keeps that file in its pointer (`orderlineitem.schema.json#/properties/sku`)."""
+    reference keeps that file in its pointer (`orderlineitem.schema.json#/properties/sku`).
+    `oneOf` / `anyOf` members are walked too (see ``_member_fields``)."""
     if depth > max_depth:
         return
     if scope is None:
@@ -248,12 +249,14 @@ def _walk_fields(
     props = schema.get("properties")
     raw_required = schema.get("required")
     required: list[Any] = raw_required if isinstance(raw_required, list) else []
+    emitted: set[str] = set()  # names this schema's own properties gave (members repeat them)
     if isinstance(props, dict):
         for name, sub in props.items():
             if not isinstance(sub, dict):
                 continue
             full = f"{prefix}.{name}" if prefix else name
             sub_pointer = f"{pointer}/properties/{name}"
+            emitted.add(full)
             yield FieldSpec(
                 name=full,
                 location=location,
@@ -264,12 +267,81 @@ def _walk_fields(
                 constraints=constraints_of(sub),
                 model_id=_model_of(sub, scope),
             )
-            yield from _walk_fields(sub, location, sub_pointer, full, depth + 1, scope, max_depth)
+            for f in _walk_fields(sub, location, sub_pointer, full, depth + 1, scope, max_depth):
+                emitted.add(f.name)
+                yield f
     items = schema.get("items")
     if isinstance(items, dict):
         yield from _walk_fields(
             items, location, f"{pointer}/items", f"{prefix}[]", depth + 1, scope, max_depth
         )
+    yield from _member_fields(schema, location, pointer, prefix, depth, scope, max_depth, emitted)
+
+
+# allOf is not walked: on Shopware its members are the entity graph (data.stateMachineState.
+# orders[].documents[]...), +889k facts (569k -> 1.46M) against +23k for oneOf / anyOf.
+COMBINATORS: tuple[str, ...] = ("oneOf", "anyOf")
+
+
+def _member_fields(
+    schema: Mapping[str, Any],
+    location: FieldLocation,
+    pointer: str,
+    prefix: str,
+    depth: int,
+    scope: _RefScope,
+    max_depth: int,
+    emitted: set[str],
+) -> Iterator[FieldSpec]:
+    """The fields of the members of each combinator in COMBINATORS, at the schema's own level
+    (Sendcloud POST /shipments: to_address -> $defs.ToAddress -> oneOf [Address Object] gave
+    no to_address.city). allOf, or a single member: its fields as plain fields. Several
+    alternatives: the union of their fields, one each (the first member's spec), a field that
+    is not in every alternative saying which ones it is in. The schema's own ``required``
+    applies to its direct fields; with alternatives, a member's own ``required`` is not."""
+    raw_required = schema.get("required")
+    required = set(raw_required) if isinstance(raw_required, list) else set()
+    for key in COMBINATORS:
+        members = [(i, m) for i, m in enumerate(schema.get(key) or []) if isinstance(m, dict)]
+        if not members:
+            continue
+        alternatives = key != "allOf" and len(members) > 1
+        merged: dict[str, FieldSpec] = {}
+        found_in: dict[str, list[str]] = {}
+        labels = [_member_label(m, i, scope) for i, m in members]
+        for (i, member), label in zip(members, labels, strict=True):
+            walk = _walk_fields(member, location, f"{pointer}/{key}/{i}", prefix, depth, scope,
+                                max_depth)  # fmt: skip
+            for f in walk:
+                if f.name in emitted:
+                    continue
+                found_in.setdefault(f.name, []).append(label)
+                merged.setdefault(f.name, f)
+        for name, f in merged.items():
+            child = name[len(prefix) + 1 :] if prefix else name
+            direct = "." not in child and "[" not in child
+            req = (child in required) or (f.required and not alternatives) if direct else f.required
+            description = f.description
+            if alternatives and len(set(found_in[name])) < len(labels):
+                where = ", ".join(dict.fromkeys(found_in[name]))
+                mark = f"(only in the alternative(s): {where})"
+                description = f"{description} {mark}" if description else mark
+            emitted.add(name)
+            yield replace(f, required=bool(req), description=description)
+
+
+def _member_label(member: Mapping[str, Any], index: int, scope: _RefScope) -> str:
+    """How an alternative is named: its title, its $ref'd schema's title or name, or its
+    position."""
+    if _str(member.get("title")):
+        return str(member["title"])
+    ref = member.get("$ref")
+    if isinstance(ref, str):
+        resolved = _resolve_ref(ref, scope)
+        if resolved is not None and _str(resolved[0].get("title")):
+            return str(resolved[0]["title"])
+        return ref.rsplit("/", 1)[-1].removesuffix(".schema.json")
+    return f"alternative {index + 1}"
 
 
 def _ref_description(sub: Mapping[str, Any], scope: _RefScope) -> str | None:
