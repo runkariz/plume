@@ -95,6 +95,7 @@ from plume.domain.knowledge.document import (
     STANDARD_HEADER_NOTE,
     SUMMARY_HEADING,
     SUMMARY_LABEL,
+    Document,
     DocumentKind,
     FieldLocation,
     conflicts_of,
@@ -1713,7 +1714,20 @@ class CheckCall:
             if kind == "other_server":  # not this endpoint's surface: its params don't apply
                 return "not_documented", why, missing
             note = f"{why}; {note}" if note else why
+        deprecation = self._deprecation(build_id, owner_id)
+        if deprecation is not None:  # the contract still holds: a note, not a verdict
+            note = f"{note}; {deprecation}" if note else deprecation
         return verdict, note, missing
+
+    def _deprecation(self, build_id: BuildId, owner_id: str) -> str | None:
+        """For a deprecated endpoint: "this endpoint is deprecated: <the package's words>" (its
+        deprecation notice, else its first rule line about it), plain when it states none."""
+        doc = self._documents.get_document(build_id, owner_id) if self._documents else None
+        if doc is None or not doc.deprecated:
+            return None
+        return "this endpoint is deprecated" + (
+            f": {why}" if (why := deprecation_text(doc)) else ""
+        )
 
     def _server_label(self, build_id: BuildId, owner_id: str) -> str | None:
         """The endpoint's server ("api_2: https://ads-api.facebook.com", the default
@@ -1858,3 +1872,32 @@ class CheckCall:
                     continue
             checks.append(ParamCheck(p, False, None))
         return checks
+
+
+_RULE_SUFFIX = re.compile(
+    r"\s*\((?:constraint|rule|precondition|effect|limit|state-transition)[^)]*\)\s*$"
+)
+
+
+def deprecation_text(doc: Document) -> str | None:
+    """The package's words on why an endpoint is deprecated: its request's deprecation notice
+    (message / notes / note / reason / sunset), else its first line about deprecation under a
+    "Rules" heading (never a field line)."""
+    raw = doc.raw if isinstance(doc.raw, dict) else {}
+    notice = raw.get("deprecation")
+    if isinstance(notice, dict):
+        words = [str(notice[k]).strip() for k in ("message", "notes", "note", "reason", "sunset")
+                 if isinstance(notice.get(k), str) and notice[k].strip()]  # fmt: skip
+        if words:
+            return " ".join(words)
+    elif isinstance(notice, str) and notice.strip():
+        return notice.strip()
+    in_rules = False
+    for line in doc.text.splitlines():
+        if line.startswith("#"):
+            in_rules = line.lstrip("#").strip().lower().startswith("rules")
+            continue
+        text = _RULE_SUFFIX.sub("", line.strip().removeprefix("- ")).strip()
+        if in_rules and line.lstrip().startswith("- ") and "deprecat" in text.lower():
+            return text  # the rule's own words (its quoted source may mention it in passing)
+    return None
