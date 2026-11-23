@@ -46,6 +46,7 @@ from plume.application.reader.ranking import (
     context_after_named_endpoint,
     endpoint_before_its_model,
     endpoints_before_returned_models,
+    endpoints_before_units_on_how_to,
     error_codes_after_endpoint,
     is_page,
     keep_endpoints,
@@ -381,7 +382,8 @@ def rank_order(
         lambda d: scoped_parts(documents, build_id, d),
         lambda d, topic: covers_topic(documents, build_id, d, topic),
     )
-    return keep_endpoints(order, k)
+    # after keep_endpoints: it brings endpoints from below the top k into it
+    return endpoints_before_units_on_how_to(keep_endpoints(order, k), k, query)
 
 
 def all_endpoint_ids(index: SearchIndex, build_id: BuildId) -> list[str]:
