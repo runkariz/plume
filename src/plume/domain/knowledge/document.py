@@ -67,6 +67,9 @@ class FieldSpec:
     # (JSON text, so the spec stays hashable); see ``constraint_dict``.
     constraints: str | None = None
     model_id: str | None = None  # the model document a $ref'd type is (model:orderlineitem)
+    # the page that documents this field when it is not its document's (x-source-url): Meta's
+    # custom_data properties live in POST /{pixel_id}/events but are documented on a page
+    source_url: str | None = None
 
     @property
     def constraint_dict(self) -> dict[str, Any]:
