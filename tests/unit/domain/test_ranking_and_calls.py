@@ -47,7 +47,7 @@ def test_normalize_call_path_and_specificity() -> None:
     assert normalize_call_path("https://shop.test/admin/api/2026-10/products/1.json?x=1") == (
         "/admin/api/{version}/products/1.json"
     )
-    assert specificity("/a/{id}/b") == 2
+    assert specificity("/a/{id}/b") == 4  # two literal segments (2 each)
 
 
 def test_semantic_fusion_keeps_a_clear_dense_winner_that_text_misses() -> None:
@@ -88,3 +88,25 @@ def test_environment_words_expand_only_where_the_api_lacks_them() -> None:
     assert "test account" in expanded
     assert expand_text_query(q, lambda _w: True) == q  # the API documents its sandbox
     assert expand_text_query("list orders", lambda _w: False) == "list orders"
+
+
+def test_a_variable_inside_a_segment_matches() -> None:
+    """Meta act_{AD_ACCOUNT_ID}, Google's {id}:verb, Shopify's {id}.json, {a}-{b}."""
+    assert path_matches("/act_{AD_ACCOUNT_ID}/campaigns", "/act_123/campaigns")
+    assert path_matches("/act_{AD_ACCOUNT_ID}/campaigns", "/act_{AD_ACCOUNT_ID}/campaigns")
+    assert not path_matches("/act_{AD_ACCOUNT_ID}/campaigns", "/123/campaigns")  # no act_ prefix
+    assert not path_matches("/act_{AD_ACCOUNT_ID}/campaigns", "/act_/campaigns")  # empty value
+    assert path_matches("/accounts/{id}:listSubaccounts", "/accounts/7:listSubaccounts")
+    assert path_matches("/orders/{id}.json", "/orders/42.json")
+    assert path_matches("/rates/{from}-{to}", "/rates/EUR-USD")
+    assert not path_matches("/rates/{from}-{to}", "/rates/EURUSD")
+
+
+def test_the_more_literal_template_wins() -> None:
+    """GET /accounts/{v}/accounts/7:listSubaccounts matched the plain account endpoint too."""
+    plain, verb = "/accounts/{accountsId}", "/accounts/{accountsId}:listSubaccounts"
+    call = "/accounts/7:listSubaccounts"
+    assert path_matches(plain, call)  # {accountsId} takes "7:listSubaccounts"
+    assert path_matches(verb, call)
+    assert specificity(verb) > specificity(plain)
+    assert specificity("/act_{id}/campaigns") > specificity("/{id}/campaigns")

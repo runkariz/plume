@@ -14,24 +14,35 @@ def _segments(path: str) -> list[str]:
 
 
 def path_matches(template: str, path: str) -> bool:
-    """``/orders/{id}.json`` matches ``/orders/42.json``; ``{version}`` matches any version."""
+    """``/orders/{id}.json`` matches ``/orders/42.json``; ``{version}`` matches any version; a
+    variable inside a segment matches there too (``act_{AD_ACCOUNT_ID}`` matches ``act_123``,
+    ``{a}-{b}`` matches ``1-2``)."""
     t, p = _segments(template), _segments(path)
     if len(t) != len(p):
         return False
     for ts, ps in zip(t, p, strict=True):
         if ts == ps or _PARAM.fullmatch(ts):
             continue
-        # A templated segment with a suffix, e.g. "{product_id}.json" vs "42.json".
-        m = re.fullmatch(r"\{[^/{}]+\}(\.[A-Za-z0-9]+)", ts)
-        if m and ps.endswith(m.group(1)) and len(ps) > len(m.group(1)):
+        if "{" in ts and _segment_pattern(ts).fullmatch(ps):
             continue
         return False
     return True
 
 
+_VAR = re.compile(r"\{[^/{}]+\}")
+
+
+def _segment_pattern(segment: str) -> re.Pattern[str]:
+    """A templated segment as a pattern: its literal text exactly, each {variable} one or more
+    characters other than "/"."""
+    parts = _VAR.split(segment)
+    return re.compile("[^/]+".join(re.escape(x) for x in parts))
+
+
 def specificity(template: str) -> int:
-    """More literal segments = more specific (preferred when several templates match)."""
-    return sum(1 for s in _segments(template) if "{" not in s)
+    """More literal text = more specific (preferred when several templates match): a literal
+    segment counts 2, a segment that mixes text and a variable (act_{id}) 1, a variable 0."""
+    return sum(2 if "{" not in s else 0 if _PARAM.fullmatch(s) else 1 for s in _segments(template))
 
 
 def normalize_call_path(path: str, known_versions: tuple[str, ...] = ()) -> str:
