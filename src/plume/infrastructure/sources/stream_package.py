@@ -538,6 +538,7 @@ def _with_package_warnings(documents: list[Document], produced: object) -> list[
         for h in (d.raw or {}).get("webhooks") or []
         if isinstance(h, dict) and isinstance(h.get("verification"), dict)
         and isinstance(h["verification"].get("signedPayload"), str)
+        and not _signs_body(h["verification"]["signedPayload"])
         and not _is_template(h["verification"]["signedPayload"])
     ]  # fmt: skip
     warnings = [*(produced if isinstance(produced, list) else []), *misused, *unknown,
@@ -568,9 +569,18 @@ _PLACEHOLDERS = {
 SIGNED_PAYLOAD_NOT_TEMPLATE = "plume-signed-payload-not-template"
 
 
+RAW_BODY = "the raw request body"
+
+
+def _signs_body(payload: object) -> bool:
+    """Core's WebhookSignatureVerifier: a missing, null or empty signedPayload, or exactly
+    "body", signs the raw request body bytes."""
+    return payload is None or (isinstance(payload, str) and payload.strip() in ("", "body"))
+
+
 def _is_template(payload: str) -> bool:
-    """A Core template names what is signed ({body} / {timestamp}); "body" or "raw request
-    body" (older packages) would read as signing those literal words, so it is not shown."""
+    """A Core template names what is signed ({body} / {timestamp}, literal text around them).
+    Any other free text ("raw request body") is signed literally by Core: not shown."""
     return any(key in payload for key in _PLACEHOLDERS)
 
 
@@ -617,7 +627,10 @@ def _webhook_document(api_name: str, hook: object, several: bool = False) -> Doc
             ) if x
         )  # fmt: skip
         lines = ["## Verifying a delivery", f"Each delivery is signed: {how}."]
-        if payload and _is_template(payload):
+        raw_payload = verification.get("signedPayload")
+        if _signs_body(raw_payload):
+            lines.append(f"The signed string is {RAW_BODY}.")
+        elif payload and _is_template(payload):
             lines.append(_signed_string(payload))
         secret = SECRET_SOURCES.get(_str(verification.get("secretSource")) or "")
         if secret:
