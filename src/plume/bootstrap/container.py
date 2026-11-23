@@ -41,6 +41,7 @@ from plume.application.reader.use_cases import (
     FindFact,
     GetDocument,
     ListApiOverviews,
+    LookupLimit,
     SearchDocs,
 )
 from plume.application.reports.hosts import ApiHosts
@@ -523,8 +524,15 @@ class Container:
     def get_document(self) -> GetDocument:
         return GetDocument(self.resolver(), self.documents)
 
+    @cached_property
+    def lookup_limit(self) -> LookupLimit:
+        """One per process: every find_fact shares it."""
+        return LookupLimit(self.settings.reader_max_concurrent_lookups)
+
     def find_fact(self) -> FindFact:
-        return FindFact(self.resolver(), self.fact_query, self.search_index, self.documents)
+        return FindFact(
+            self.resolver(), self.fact_query, self.search_index, self.documents, self.lookup_limit
+        )
 
     def check_call(self) -> CheckCall:
         return CheckCall(self.resolver(), self.fact_query, self.search_index, self.documents)

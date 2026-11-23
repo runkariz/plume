@@ -42,6 +42,7 @@ from plume.application.reader.use_cases import (
     FindFact,
     GetDocument,
     ListApiOverviews,
+    ReaderBusyError,
     ReaderInputError,
     SearchDocs,
 )
@@ -233,6 +234,12 @@ def create_app(deps: HttpDependencies) -> FastAPI:
     @app.exception_handler(ModelWriterUnavailableError)
     async def llm_unavailable(_: Request, exc: ModelWriterUnavailableError) -> JSONResponse:
         return error(503, exc.code, str(exc))
+
+    @app.exception_handler(ReaderBusyError)
+    async def reader_busy(_: Request, exc: ReaderBusyError) -> JSONResponse:
+        response = error(503, exc.code, str(exc))
+        response.headers["Retry-After"] = "2"
+        return response
 
     @app.exception_handler(ModelWriterError)
     async def llm_failed(_: Request, exc: ModelWriterError) -> JSONResponse:

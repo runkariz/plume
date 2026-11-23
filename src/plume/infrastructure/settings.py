@@ -105,6 +105,12 @@ class Settings(BaseSettings):
         description="Time limit for a reader lookup's database queries (find_fact); past it the "
         "call answers 'too broad'. 0 = none.",
     )
+    reader_max_concurrent_lookups: int = Field(
+        default=2,
+        ge=1,
+        description="find_fact database lookups running at once per process; one more waits "
+        "0.5 s for a slot, then answers 'busy, retry' (HTTP 503) instead of queueing.",
+    )
     reports: bool = Field(
         default=False,
         description="PLUME_REPORTS=on gives readers' LLMs the tools to report questions Plume "

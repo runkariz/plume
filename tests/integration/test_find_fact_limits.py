@@ -12,6 +12,7 @@ from sqlalchemy import Engine, event
 from plume.application.ports.search_index import QueryTooBroadError, fact_key
 from plume.bootstrap.container import Container
 from plume.bootstrap.servers import http_app
+from plume.domain.knowledge.fact import Fact
 from plume.domain.shared.ids import BuildId
 from plume.infrastructure.search.postgres_search import PostgresFactQuery
 from plume.infrastructure.settings import Settings
@@ -36,10 +37,11 @@ def test_keyset_pages_walk_every_match_once(container: Container) -> None:
     build = _build(container)
     every = facts.find(build, "id")
     assert len(every) > 6
-    seen, after = [], None
+    seen: list[Fact] = []
+    after = None
     while True:
         page, total = facts.find_page(build, "id", limit=4, after=after)
-        assert total == len(every)
+        assert total == len(every) - len(seen)  # what matches from this page on
         assert len(page) <= 4
         if not page:
             break
@@ -89,3 +91,33 @@ def test_a_lookup_past_the_statement_timeout_is_too_broad(container: Container) 
         assert page
     finally:
         event.remove(engine, "before_cursor_execute", slow)
+
+
+def test_one_query_per_call_and_busy_over_http(container: Container) -> None:
+    from plume.application.reader.use_cases import LookupLimit  # noqa: PLC0415
+
+    statements: list[str] = []
+
+    def seen(_conn: Any, _cur: Any, statement: str, *_a: Any) -> None:
+        if " FROM facts " in statement:
+            statements.append(statement)
+
+    event.listen(container.engine, "before_cursor_execute", seen)
+    try:
+        page, total = PostgresFactQuery(container.engine, 5000).find_page(
+            _build(container), "id", limit=3
+        )
+    finally:
+        event.remove(container.engine, "before_cursor_execute", seen)
+    assert len(page) == 3
+    assert total == len(PostgresFactQuery(container.engine).find(_build(container), "id"))
+    assert len(statements) == 1  # the page and its count in one statement
+    assert "count(*) OVER ()" in statements[0]
+
+    container.__dict__["lookup_limit"] = LookupLimit(1, wait=0.05)
+    client = TestClient(http_app(container))
+    with container.lookup_limit:  # every slot taken
+        busy = client.post("/v1/apis/shopify/find-fact", json={"name": "id"})
+    assert busy.status_code == 503
+    assert busy.headers["retry-after"] == "2"
+    assert "busy" in busy.text
