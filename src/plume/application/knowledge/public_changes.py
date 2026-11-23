@@ -127,22 +127,16 @@ class PublicChanges:
 
     def docs_updated(self, api: str) -> dict[str, Any] | None:
         """For API cards: the latest build's visible changes (wording-only excluded), or None
-        when it has none (or no notes)."""
-        chain = self.chain(api)
-        if not chain:
-            return None
-        latest = chain[0]
-        items = [i for i in _visible(latest) if not i["wordingOnly"]]
-        if not items:
-            return None
-        c = _counts(items)
-        return {
-            "build": latest["to"],
-            "at": latest["toDocsAsOf"],
-            "confirmed": c["confirmed"],
-            "likely": c["likely"],
-            "breaking": c["breaking"],
-        }
+        when it has none (or no notes). Only the latest build's notes are read (the chain's
+        first link), never the chain."""
+        tag = self._tags.get(ApiId(api), TagName(LATEST))
+        notes = self._notes.get(tag.build_id.value) if tag else None
+        return _docs_updated(api, notes)
+
+    def docs_updated_many(self, latest: dict[str, str]) -> dict[str, dict[str, Any] | None]:
+        """docs_updated for many APIs ({api: its latest build}) in one read of their notes."""
+        notes = self._notes.card_notes(list(latest.values()))
+        return {api: _docs_updated(api, notes.get(build)) for api, build in latest.items()}
 
     def timeline(self, api: str) -> list[dict[str, Any]]:
         latest = self._tags.get(ApiId(api), TagName(LATEST))
@@ -228,3 +222,21 @@ class PublicChanges:
             "items": [public_item(api, i) for i in page],
             "nextCursor": cursor + limit if cursor + limit < len(items) else None,
         }
+
+
+def _docs_updated(api: str, latest: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The latest build's visible changes for an API card (wording-only excluded), or None:
+    no notes, notes of another API (as the chain stops), or nothing visible."""
+    if latest is None or latest.get("api") != api:
+        return None
+    items = [i for i in _visible(latest) if not i["wordingOnly"]]
+    if not items:
+        return None
+    c = _counts(items)
+    return {
+        "build": latest["to"],
+        "at": latest["toDocsAsOf"],
+        "confirmed": c["confirmed"],
+        "likely": c["likely"],
+        "breaking": c["breaking"],
+    }

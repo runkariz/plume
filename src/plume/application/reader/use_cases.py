@@ -13,6 +13,7 @@ from typing import Any, Literal
 from urllib.parse import parse_qsl, urlsplit
 
 from plume.application.errors import ApplicationError, NotFoundError
+from plume.application.ports.api_list import ApiListQuery, ApiListRow
 from plume.application.ports.api_repo import ApiRepo
 from plume.application.ports.asset_repo import AssetRepo
 from plume.application.ports.build_repo import BuildRepo
@@ -71,6 +72,7 @@ from plume.application.reader.ranking import (
 )
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
 from plume.domain.eval.metrics import K
+from plume.domain.knowledge.api import ApiInfo
 from plume.domain.knowledge.asset import ICON
 from plume.domain.knowledge.call_check import (
     ServerBase,
@@ -96,6 +98,7 @@ from plume.domain.knowledge.document import (
 )
 from plume.domain.knowledge.fact import Fact, FactKind
 from plume.domain.knowledge.ranking import Fusion, expand_text_query, reciprocal_rank_fusion
+from plume.domain.knowledge.tag import LATEST
 from plume.domain.shared.ids import BuildId
 
 DEFAULT_FUSION = Fusion()
@@ -186,7 +189,9 @@ class ListApiOverviews:
         index: SearchIndex,
         evals: EvalRepo | None = None,
         assets: AssetRepo | None = None,
+        bulk: ApiListQuery | None = None,
     ) -> None:
+        self._bulk = bulk  # the list in a few queries (else one API at a time)
         self._assets = assets
         self._evals = evals
         self._apis = apis
@@ -205,17 +210,39 @@ class ListApiOverviews:
             embed_model=spec.embed_model if spec else None,
             dims=spec.dims if spec else None,
             eval=self._evals.get(r.build.build_id) if self._evals else None,
-            has_icon=bool(self._assets and self._assets.get(r.build.build_id, ICON)),
+            has_icon=bool(self._assets and self._assets.has(r.build.build_id, ICON)),
         )
 
     def execute(self) -> list[ApiOverview]:
+        infos = self._apis.list()
+        if self._bulk is not None:
+            rows = self._bulk.rows([i.api_id for i in infos])
+            return [self._from_row(info, rows[info.api_id]) for info in infos]
         out = []
-        for info in self._apis.list():
+        for info in infos:
             try:
                 out.append(self._overview(info.api_id.value, None))
             except NotFoundError:
                 out.append(ApiOverview(info, None, {}, (), None, None))  # no published build
         return out
+
+    @staticmethod
+    def _from_row(info: ApiInfo, row: ApiListRow) -> ApiOverview:
+        """The same overview as ``_overview(api, None)``: no latest tag, no published build."""
+        if row.latest is None:
+            return ApiOverview(info, None, {}, (), None, None)
+        latest = row.latest
+        spec = latest.spec
+        return ApiOverview(
+            info=info,
+            ref=BuildRef(info.api_id.value, latest.build_id, LATEST, latest.docs_as_of),
+            counts=dict(row.counts),
+            tags=row.tags,
+            embed_model=spec.embed_model if spec else None,
+            dims=spec.dims if spec else None,
+            eval=row.eval,
+            has_icon=row.has_icon,
+        )
 
     def one(self, api: str, version: str | None = None) -> ApiOverview:
         return self._overview(api, version)

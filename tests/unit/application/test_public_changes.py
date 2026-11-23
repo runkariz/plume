@@ -69,6 +69,10 @@ def test_confirmed_changes_are_public_and_nothing_else(
     assert updated is not None
     assert (updated["confirmed"], updated["breaking"]) == (1, 0)
     assert [t["latest"] for t in public.timeline(API)] == [True]
+    latest = public.latest(API)
+    assert latest is not None
+    many = public.docs_updated_many({API: latest, "second-catalog-api": latest})
+    assert many == {API: updated, "second-catalog-api": None}  # notes of another API: none
 
 
 def test_extraction_problems_and_rolled_back_builds_are_never_public(
