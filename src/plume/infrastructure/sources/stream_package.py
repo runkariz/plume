@@ -266,6 +266,7 @@ def _walk_fields(
                 pointer=sub_pointer,
                 constraints=constraints_of(sub),
                 model_id=_model_of(sub, scope),
+                source_url=_str(sub.get("x-source-url")),
             )
             for f in _walk_fields(sub, location, sub_pointer, full, depth + 1, scope, max_depth):
                 emitted.add(f.name)
@@ -1615,6 +1616,7 @@ def _attach_page_rules(
     """Rules not placed yet go to the pages they are stated on: one guide per page (appended to
     ``out``), or, for a one-endpoint page that could not be cut, into that endpoint."""
     page_of = _rule_pages(export, used_rules)
+    cited = _fields_by_page(out)
     owner: dict[str, int] = {}  # a repeated rule id belongs to the rule a page claims first
     for number, page in enumerate(export.pages):
         page_rules = []
@@ -1646,11 +1648,41 @@ def _attach_page_rules(
             continue
         guide = _page_guide(page, page_rules, endpoints)
         if guide is not None:
+            guide = replace(guide, fields=cited.get(url_key(page.source_url), ()))
             out.append(_with_conflicts(_with_rule_sources(guide, page_rules), page.conflicts))
         else:  # no page guide: the page's conflicts go where its text went, its endpoints
             for i in dict.fromkeys(indexes):
                 out[i] = _with_conflicts(out[i], page.conflicts)
     used_rules.update(owner)
+
+
+def _fields_by_page(documents: list[Document]) -> dict[str, tuple[FieldSpec, ...]]:
+    """The fields each documentation page documents (a property's x-source-url): the page
+    guide lists them, each saying which endpoint(s) and path it belongs to (Meta's custom-data
+    page: its table's 67 parameters, documented in POST /{pixel_id}/events). One field per name
+    and location (the same path in several endpoints: one field naming them all)."""
+    found: dict[str, dict[tuple[str, FieldLocation], tuple[FieldSpec, list[str]]]] = {}
+    for d in documents:
+        if d.kind is not DocumentKind.ENDPOINT:
+            continue
+        where = f"{d.method} {d.path}" if d.method and d.path else d.doc_id
+        own = url_key(d.source_url) if d.source_url else None
+        for f in d.fields:
+            if not f.source_url or url_key(f.source_url) == own:
+                continue
+            on_page = found.setdefault(url_key(f.source_url), {})
+            spec, owners = on_page.setdefault((f.name, f.location), (f, []))
+            if where not in owners:
+                owners.append(where)
+    out: dict[str, tuple[FieldSpec, ...]] = {}
+    for page, fields in found.items():
+        specs = []
+        for spec, owners in fields.values():
+            text = f"{spec.description} " if spec.description else ""
+            where = f"(in {', '.join(owners)}: {spec.name})"
+            specs.append(replace(spec, pointer=None, description=f"{text}{where}"))
+        out[page] = tuple(specs)
+    return out
 
 
 def url_key(url: str) -> str:

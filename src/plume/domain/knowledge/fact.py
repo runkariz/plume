@@ -63,10 +63,12 @@ def facts_of(document: Document) -> list[Fact]:
                 owner_id=document.doc_id,
                 owner_kind=document.kind,
                 name=spec.name,
+                # a field documented on its own page cites that page (the pointer into the
+                # package file would read as an anchor of the page: dropped)
                 evidence=Citation(
                     doc_id=document.doc_id,
-                    source_url=document.source_url,
-                    anchor=spec.pointer,
+                    source_url=spec.source_url or document.source_url,
+                    anchor=None if spec.source_url else spec.pointer,
                     quote=spec.description,
                 ),
                 resource=document.resource,
