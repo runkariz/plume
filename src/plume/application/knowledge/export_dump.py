@@ -13,6 +13,7 @@ from plume.application.ports.dump_store import BuildImporter, BuildSnapshot, Dum
 from plume.application.ports.eval_repo import EvalRepo
 from plume.application.ports.fact_index import FactIndex
 from plume.application.ports.release_notes_repo import ReleaseNotesRepo
+from plume.application.ports.table_stats import TableStats
 from plume.domain.knowledge.build import Build
 from plume.domain.knowledge.fact import facts_of
 from plume.domain.shared.ids import BuildId
@@ -31,6 +32,7 @@ class RestoreResult:
     chunks: int
     facts: int
     tags: tuple[str, ...]
+    analyzed_seconds: float | None = None  # the planner statistics' refresh, when restored
 
 
 def snapshot_of(
@@ -126,16 +128,21 @@ class ExportDump:
 
 
 class RestoreDump:
-    def __init__(self, store: DumpStore, importer: BuildImporter) -> None:
+    def __init__(
+        self, store: DumpStore, importer: BuildImporter, stats: TableStats | None = None
+    ) -> None:
         self._store = store
         self._importer = importer
+        self._stats = stats
 
     def execute(self, ref: str, tags: Sequence[str] = ()) -> RestoreResult:
         snap = self._store.read(ref)
         verify(snap)
         exists = self._importer.exists(snap.build.build_id)
+        analyzed = None
         if not exists:
             self._importer.restore(snap, tags)
+            analyzed = self._stats.refresh() if self._stats is not None else None
         return RestoreResult(
             api=snap.api.api_id.value,
             build=snap.build.build_id.value,
@@ -144,4 +151,5 @@ class RestoreDump:
             chunks=len(snap.chunks),
             facts=len(snap.facts),
             tags=tuple(tags) if not exists else (),
+            analyzed_seconds=analyzed,
         )

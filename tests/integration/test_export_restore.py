@@ -2,6 +2,7 @@
 
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from sqlalchemy import Engine, text
@@ -68,11 +69,15 @@ def test_restore_into_empty_database_gives_the_same_answers(
     for ref in dumps:
         r = dst.restore_dump().execute(ref, ["latest"])
         assert r.restored
+        assert r.analyzed_seconds is not None  # planner statistics refreshed after it
+    assert _analyzed(dst) == {"documents", "chunks", "facts", "build_items"}
     assert _answers(dst) == expected
     assert dst.evals.get(shop) == src.evals.get(shop)
     # A restored build is sealed and identical: exporting it again gives the same bytes.
     assert dst.export_dump().bytes(shop) == src.export_dump().bytes(shop)
-    assert dst.restore_dump().execute(dumps[0]).restored is False
+    again = dst.restore_dump().execute(dumps[0])
+    assert again.restored is False
+    assert again.analyzed_seconds is None  # nothing written: nothing to analyze
     src.engine.dispose()
     dst.engine.dispose()
 
@@ -140,3 +145,28 @@ def test_api_display_name_survives_reloads_and_travels_with_the_dump(
     assert dst.api_display().set("test-catalog-api", None)["nameSource"] == "package"
     src.engine.dispose()
     dst.engine.dispose()
+
+
+def _analyzed(c: Any) -> set[str]:
+    """The knowledge tables Postgres has statistics for from an explicit ANALYZE."""
+    with c.engine.connect() as conn:
+        rows = conn.execute(
+            text("SELECT relname FROM pg_stat_user_tables WHERE last_analyze IS NOT NULL "
+                 "AND relname IN ('documents', 'chunks', 'facts', 'build_items')")
+        ).all()  # fmt: skip
+    return {r.relname for r in rows}
+
+
+def test_a_load_refreshes_the_planner_statistics(
+    clean_engine: Engine, pg_url: str, packages: Path, tmp_path: Path
+) -> None:
+    from tests.fakes.knowledge import RecordingEvents  # noqa: PLC0415
+
+    c = _container(pg_url, tmp_path)
+    events = RecordingEvents()
+    c.build_pipeline(events).execute("job", str(packages / "test-catalog"))
+    assert _analyzed(c) == {"documents", "chunks", "facts", "build_items"}
+    steps = events.steps()
+    assert ("analyze", "done") in steps
+    assert steps.index(("analyze", "done")) < steps.index(("tag", "started"))  # before the tag
+    c.engine.dispose()
