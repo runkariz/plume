@@ -311,6 +311,9 @@ class InMemoryReleaseNotesRepo:
         n = self.notes.get(to_build)
         return json.loads(json.dumps(n)) if n is not None else None
 
+    def card_notes(self, to_builds: list[str]) -> dict[str, dict[str, Any]]:
+        return {b: n for b in to_builds if (n := self.get(b)) is not None}
+
     def for_api(self, api_id: str) -> list[dict[str, Any]]:
         rows = [n for n in self.notes.values() if n["api"] == api_id]
         return [

@@ -106,8 +106,9 @@ class FactQuery(Protocol):
         after: FactKey | None = None,
     ) -> tuple[list[Fact], int]:
         """One page of ``find`` (at most ``limit`` facts after the key ``after``, in find's
-        order) and the total number of matches; bounded in the database, never all rows.
-        Raises QueryTooBroadError when the database gives up (statement timeout)."""
+        order) and how many match from the page start on (every match when ``after`` is
+        None); bounded in the database, never all rows. Raises QueryTooBroadError when the
+        database gives up (statement timeout)."""
         ...
 
     def for_owner(self, build_id: BuildId, owner_id: str) -> list[Fact]: ...

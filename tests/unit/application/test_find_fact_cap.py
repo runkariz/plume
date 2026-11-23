@@ -68,3 +68,34 @@ def test_a_lookup_the_database_gives_up_on_is_too_broad(stack: FakeStack) -> Non
     stack.fact_query.find_page = give_up  # type: ignore[method-assign]
     with pytest.raises(ReaderInputError, match="too broad"):
         stack.find_fact().execute("shopify", "id")
+
+
+def test_a_full_lookup_limit_answers_busy(stack: FakeStack) -> None:
+    from plume.application.reader.use_cases import (  # noqa: PLC0415
+        FindFact,
+        LookupLimit,
+        ReaderBusyError,
+    )
+
+    limit = LookupLimit(1, wait=0.05)
+    find = FindFact(stack.resolver(), stack.fact_query, stack.search_index, stack.documents, limit)
+    with limit, pytest.raises(ReaderBusyError, match="busy"):  # the one slot is taken
+        find.execute("shopify", "id")
+    assert find.execute("shopify", "id").matches  # free again
+
+
+def test_the_cursor_carries_the_total_and_old_cursors_still_page(stack: FakeStack) -> None:
+    import base64  # noqa: PLC0415
+    import json  # noqa: PLC0415
+
+    find = stack.find_fact()
+    first = find.execute("shopify", "id", limit=2)
+    assert first.next_cursor is not None
+    key = json.loads(
+        base64.urlsafe_b64decode(first.next_cursor + "=" * (-len(first.next_cursor) % 4))
+    )
+    assert key[-1] == first.total
+    old = base64.urlsafe_b64encode(json.dumps(key[:4]).encode()).decode().rstrip("=")  # v2.1
+    second = find.execute("shopify", "id", limit=2, cursor=old)
+    assert second.matches
+    assert second.total == first.total - 2  # a v2.1 cursor: what is left from that page on

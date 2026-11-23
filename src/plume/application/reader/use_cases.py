@@ -1,9 +1,11 @@
 """Reader use cases. Retrieval only: Claude writes the answers, Plume returns cited material."""
 
 import base64
+import contextlib
 import dataclasses
 import json
 import re
+import threading
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import replace
@@ -11,6 +13,7 @@ from typing import Any, Literal
 from urllib.parse import parse_qsl, urlsplit
 
 from plume.application.errors import ApplicationError, NotFoundError
+from plume.application.ports.api_list import ApiListQuery, ApiListRow
 from plume.application.ports.api_repo import ApiRepo
 from plume.application.ports.asset_repo import AssetRepo
 from plume.application.ports.build_repo import BuildRepo
@@ -70,6 +73,7 @@ from plume.application.reader.ranking import (
 )
 from plume.application.reader.resolve import BuildResolver, ResolvedBuild
 from plume.domain.eval.metrics import K
+from plume.domain.knowledge.api import ApiInfo
 from plume.domain.knowledge.asset import ICON
 from plume.domain.knowledge.call_check import (
     ServerBase,
@@ -95,6 +99,7 @@ from plume.domain.knowledge.document import (
 )
 from plume.domain.knowledge.fact import Fact, FactKind
 from plume.domain.knowledge.ranking import Fusion, expand_text_query, reciprocal_rank_fusion
+from plume.domain.knowledge.tag import LATEST
 from plume.domain.shared.ids import BuildId
 
 DEFAULT_FUSION = Fusion()
@@ -185,7 +190,9 @@ class ListApiOverviews:
         index: SearchIndex,
         evals: EvalRepo | None = None,
         assets: AssetRepo | None = None,
+        bulk: ApiListQuery | None = None,
     ) -> None:
+        self._bulk = bulk  # the list in a few queries (else one API at a time)
         self._assets = assets
         self._evals = evals
         self._apis = apis
@@ -204,17 +211,39 @@ class ListApiOverviews:
             embed_model=spec.embed_model if spec else None,
             dims=spec.dims if spec else None,
             eval=self._evals.get(r.build.build_id) if self._evals else None,
-            has_icon=bool(self._assets and self._assets.get(r.build.build_id, ICON)),
+            has_icon=bool(self._assets and self._assets.has(r.build.build_id, ICON)),
         )
 
     def execute(self) -> list[ApiOverview]:
+        infos = self._apis.list()
+        if self._bulk is not None:
+            rows = self._bulk.rows([i.api_id for i in infos])
+            return [self._from_row(info, rows[info.api_id]) for info in infos]
         out = []
-        for info in self._apis.list():
+        for info in infos:
             try:
                 out.append(self._overview(info.api_id.value, None))
             except NotFoundError:
                 out.append(ApiOverview(info, None, {}, (), None, None))  # no published build
         return out
+
+    @staticmethod
+    def _from_row(info: ApiInfo, row: ApiListRow) -> ApiOverview:
+        """The same overview as ``_overview(api, None)``: no latest tag, no published build."""
+        if row.latest is None:
+            return ApiOverview(info, None, {}, (), None, None)
+        latest = row.latest
+        spec = latest.spec
+        return ApiOverview(
+            info=info,
+            ref=BuildRef(info.api_id.value, latest.build_id, LATEST, latest.docs_as_of),
+            counts=dict(row.counts),
+            tags=row.tags,
+            embed_model=spec.embed_model if spec else None,
+            dims=spec.dims if spec else None,
+            eval=row.eval,
+            has_icon=row.has_icon,
+        )
 
     def one(self, api: str, version: str | None = None) -> ApiOverview:
         return self._overview(api, version)
@@ -922,20 +951,49 @@ FIND_FACT_LIMIT = 50  # matches per call (Shopware "id": 25k facts in 844 docume
 FIND_FACT_MAX_BYTES = 200_000  # a backstop on one page's matches
 
 
-def _cursor(key: FactKey) -> str:
-    return base64.urlsafe_b64encode(json.dumps(list(key)).encode()).decode().rstrip("=")
+def _cursor(key: FactKey, total: int) -> str:
+    """The last match's key and the lookup's total (so later pages need no count)."""
+    raw = json.dumps([*key, total]).encode()
+    return base64.urlsafe_b64encode(raw).decode().rstrip("=")
 
 
-def _after(cursor: str | None) -> FactKey | None:
+def _after(cursor: str | None) -> tuple[FactKey | None, int | None]:
+    """The key to page after and the total the first page counted (None: a v2.1 cursor)."""
     if not cursor:
-        return None
+        return None, None
     try:
         raw = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
     except (ValueError, TypeError) as exc:
         raise ReaderInputError("cursor is not one find_fact returned") from exc
-    if not (isinstance(raw, list) and len(raw) == 4 and all(isinstance(x, str) for x in raw)):
+    ok = isinstance(raw, list) and len(raw) in (4, 5) and all(isinstance(x, str) for x in raw[:4])
+    if not ok or (len(raw) == 5 and not isinstance(raw[4], int)):
         raise ReaderInputError("cursor is not one find_fact returned")
-    return (raw[0], raw[1], raw[2], raw[3])
+    return (raw[0], raw[1], raw[2], raw[3]), (raw[4] if len(raw) == 5 else None)
+
+
+class ReaderBusyError(ApplicationError):
+    """Too many lookups at once in this process: retry in a moment."""
+
+    code = "busy"
+
+
+class LookupLimit:
+    """At most ``n`` concurrent database lookups of one kind per process; a caller waits up to
+    ``wait`` seconds for a slot, then gets ReaderBusyError (never an unbounded queue)."""
+
+    def __init__(self, n: int, wait: float = 0.5) -> None:
+        self._slots = threading.BoundedSemaphore(max(1, n))
+        self._wait = wait
+        self.n = max(1, n)
+
+    def __enter__(self) -> None:
+        if not self._slots.acquire(timeout=self._wait):
+            raise ReaderBusyError(
+                f"busy: {self.n} lookups are already running on this server; retry in a few seconds"
+            )
+
+    def __exit__(self, *_exc: object) -> None:
+        self._slots.release()
 
 
 def _match_bytes(m: FactMatch) -> int:
@@ -953,11 +1011,13 @@ class FindFact:
         facts: FactQuery,
         index: SearchIndex,
         documents: DocumentRepo | None = None,
+        limit: LookupLimit | None = None,
     ) -> None:
         self._resolver = resolver
         self._facts = facts
         self._index = index
         self._documents = documents
+        self._limit = limit  # concurrent paged lookups per process (None: unbounded)
 
     def _conflict_note(
         self, build_id: BuildId, fact: Fact, docs: dict[str, Any] | None = None
@@ -1095,10 +1155,11 @@ class FindFact:
         """One page of matches (the database bounds it), the total, whether more follow, and
         the reasons an endpoint form gives."""
         try:
-            found, total = self._facts.find_page(
-                build_id, name, kind=fact_kind, owner_id=owner, resource=resource, location=loc,
-                limit=limit + 1, after=after,
-            )  # fmt: skip
+            with self._limit if self._limit is not None else contextlib.nullcontext():
+                found, total = self._facts.find_page(
+                    build_id, name, kind=fact_kind, owner_id=owner, resource=resource,
+                    location=loc, limit=limit + 1, after=after,
+                )  # fmt: skip
         except QueryTooBroadError as exc:
             raise ReaderInputError(
                 f"too broad: looking up {name!r} in {api} took too long; narrow it with "
@@ -1139,7 +1200,7 @@ class FindFact:
                 break
             matches.append(m)
         kept = found[: len(matches)]
-        next_cursor = _cursor(fact_key(kept[-1])) if more and kept else None
+        next_cursor = _cursor(fact_key(kept[-1]), max(total, len(found))) if more and kept else None
         hint = None
         if next_cursor is not None:
             hint = (
@@ -1166,7 +1227,7 @@ class FindFact:
         ``cursor``; the total counts every match."""
         name = name.strip()
         limit = max(1, min(limit, FIND_FACT_LIMIT))
-        after = _after(cursor)
+        after, known_total = _after(cursor)
         if not name:
             raise ReaderInputError("name is empty")
         try:
@@ -1180,6 +1241,8 @@ class FindFact:
         found, total, more, endpoint_reasons = self._fetch(
             api, build_id, name, fact_kind, owner, resource, loc, limit, after
         )
+        if known_total is not None:  # later pages: the first page's total (no count query)
+            total = known_total
         titles = {
             k: s.title
             for k, s in self._index.summaries(build_id, [f.owner_id for f in found]).items()

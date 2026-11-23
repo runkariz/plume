@@ -161,7 +161,7 @@ class InMemoryFactQuery:
         rows = self.find(build_id, name, kind=kind, owner_id=owner_id, resource=resource,
                          location=location)  # fmt: skip
         rest = [f for f in rows if after is None or fact_key(f) > after]
-        return rest[:limit], len(rows)
+        return rest[:limit], len(rest)
 
     def for_owner(self, build_id: BuildId, owner_id: str) -> list[Fact]:
         return [f for f in self._facts.list_facts(build_id) if f.owner_id == owner_id]

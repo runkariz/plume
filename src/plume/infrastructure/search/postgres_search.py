@@ -199,8 +199,11 @@ _FACT_COLUMNS = (
 )
 
 
+# The name, or a dotted suffix of it ("id" finds "results[].id"), on the reversed lower-case
+# name so both use the facts_name_reversed index (migration 0021): = 'di' OR LIKE 'di.%'.
 _FIND_WHERE = (
-    "build_id = :b AND (lower(name) = lower(:nm) OR lower(name) LIKE :suffix ESCAPE '\\') "
+    "build_id = :b AND (reverse(lower(name)) = :rn OR reverse(lower(name)) LIKE :rsuffix "
+    "ESCAPE '\\') "
     "AND (CAST(:kind AS text) IS NULL OR kind = :kind) "
     "AND (CAST(:owner AS text) IS NULL OR owner_id = :owner) "
     "AND (CAST(:res AS text) IS NULL OR lower(resource) = lower(:res)) "
@@ -226,10 +229,11 @@ class PostgresFactQuery:
         limit: int,
         after: FactKey | None = None,
     ) -> tuple[list[Fact], int]:
-        """Keyset paging in SQL: the name or a dotted suffix of it (find's condition), at most
-        ``limit`` rows after ``after``, and the count; under the statement timeout."""
+        """Keyset paging in ONE query: at most ``limit`` rows after ``after`` in find's order,
+        and (count(*) OVER ()) how many match from the page start on; under the statement
+        timeout."""
         params: dict[str, Any] = {
-            "b": build_id.value, "nm": name, "suffix": f"%.{_like(name)}",
+            "b": build_id.value, "rn": name.lower()[::-1], "rsuffix": f"{_like(name[::-1])}.%",
             "kind": kind.value if kind else None, "owner": owner_id, "res": resource,
             "loc": location.value if location else None, "n": max(0, limit),
         }  # fmt: skip
@@ -243,15 +247,12 @@ class PostgresFactQuery:
                     conn.execute(text(f"SET LOCAL statement_timeout = {int(self._timeout)}"))
                 rows = conn.execute(
                     text(
-                        f"SELECT {_FACT_COLUMNS} FROM facts WHERE {_FIND_WHERE} {page}"  # noqa: S608
-                        f"ORDER BY {_FIND_ORDER} LIMIT :n"
+                        f"SELECT {_FACT_COLUMNS}, count(*) OVER () AS matches FROM facts "  # noqa: S608
+                        f"WHERE {_FIND_WHERE} {page}ORDER BY {_FIND_ORDER} LIMIT :n"
                     ),
                     params,
                 ).all()
-                total = conn.execute(
-                    text(f"SELECT count(*) FROM facts WHERE {_FIND_WHERE}"),  # noqa: S608
-                    params,
-                ).scalar_one()
+                total = rows[0].matches if rows else 0
         except OperationalError as exc:
             if getattr(exc.orig, "sqlstate", None) == "57014":  # query_canceled
                 raise QueryTooBroadError(str(exc.orig).splitlines()[0]) from exc

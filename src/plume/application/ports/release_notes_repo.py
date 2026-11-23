@@ -25,6 +25,12 @@ class ReleaseNotesRepo(Protocol):
 
     def get(self, to_build: str) -> dict[str, Any] | None: ...
 
+    def card_notes(self, to_builds: list[str]) -> dict[str, dict[str, Any]]:
+        """For API cards: several builds' notes in one read, reduced to api, to, toDocsAsOf and
+        each user-visible item's class / breaking / wordingOnly / kind (builds without notes are
+        absent). A database may project them; returning the whole notes is also correct."""
+        ...
+
     def for_api(self, api_id: str) -> list[dict[str, Any]]:
         """Every build's notes of an API, newest first."""
         ...

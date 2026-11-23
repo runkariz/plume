@@ -41,6 +41,7 @@ from plume.application.reader.use_cases import (
     FindFact,
     GetDocument,
     ListApiOverviews,
+    LookupLimit,
     SearchDocs,
 )
 from plume.application.reports.hosts import ApiHosts
@@ -54,6 +55,7 @@ from plume.infrastructure.clock import SystemClock
 from plume.infrastructure.db.alembic_migrator import AlembicMigrator
 from plume.infrastructure.db.archive import PostgresBuildImporter
 from plume.infrastructure.db.engine import make_engine
+from plume.infrastructure.db.repos.api_list_query import PostgresApiListQuery
 from plume.infrastructure.db.repos.api_removal import PostgresApiRemoval
 from plume.infrastructure.db.repos.api_repo import PostgresApiRepo
 from plume.infrastructure.db.repos.asset_repo import PostgresAssetRepo
@@ -502,8 +504,9 @@ class Container:
 
     def overviews(self) -> ListApiOverviews:
         return ListApiOverviews(
-            self.apis, self.builds, self.tags, self.search_index, self.evals, self.assets
-        )
+            self.apis, self.builds, self.tags, self.search_index, self.evals, self.assets,
+            PostgresApiListQuery(self.engine),
+        )  # fmt: skip
 
     def sections(self) -> PackageSections:
         return PackageSections(
@@ -525,8 +528,15 @@ class Container:
     def get_document(self) -> GetDocument:
         return GetDocument(self.resolver(), self.documents)
 
+    @cached_property
+    def lookup_limit(self) -> LookupLimit:
+        """One per process: every find_fact shares it."""
+        return LookupLimit(self.settings.reader_max_concurrent_lookups)
+
     def find_fact(self) -> FindFact:
-        return FindFact(self.resolver(), self.fact_query, self.search_index, self.documents)
+        return FindFact(
+            self.resolver(), self.fact_query, self.search_index, self.documents, self.lookup_limit
+        )
 
     def check_call(self) -> CheckCall:
         return CheckCall(self.resolver(), self.fact_query, self.search_index, self.documents)

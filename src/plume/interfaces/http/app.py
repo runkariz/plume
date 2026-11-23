@@ -42,6 +42,7 @@ from plume.application.reader.use_cases import (
     FindFact,
     GetDocument,
     ListApiOverviews,
+    ReaderBusyError,
     ReaderInputError,
     SearchDocs,
 )
@@ -234,6 +235,12 @@ def create_app(deps: HttpDependencies) -> FastAPI:
     async def llm_unavailable(_: Request, exc: ModelWriterUnavailableError) -> JSONResponse:
         return error(503, exc.code, str(exc))
 
+    @app.exception_handler(ReaderBusyError)
+    async def reader_busy(_: Request, exc: ReaderBusyError) -> JSONResponse:
+        response = error(503, exc.code, str(exc))
+        response.headers["Retry-After"] = "2"
+        return response
+
     @app.exception_handler(ModelWriterError)
     async def llm_failed(_: Request, exc: ModelWriterError) -> JSONResponse:
         return error(502, exc.code, str(exc))
@@ -266,7 +273,18 @@ def create_app(deps: HttpDependencies) -> FastAPI:
 
     @app.get("/v1/apis", response_model=s.ApiList, tags=["reader"], responses=responses)
     def list_apis() -> s.ApiList:
-        return s.ApiList(items=[_with_docs(_summary(o)) for o in deps.overviews().execute()])
+        overviews = deps.overviews().execute()
+        items = [_summary(o) for o in overviews]
+        if deps.public_changes is None:
+            return s.ApiList(items=items)
+        latest = {o.info.api_id.value: o.ref.build for o in overviews if o.ref is not None}
+        updated = deps.public_changes().docs_updated_many(latest)  # one read of the notes
+        return s.ApiList(items=[_docs(i, updated.get(i.id)) for i in items])
+
+    def _docs(summary: s.ApiSummary, updated: dict[str, Any] | None) -> s.ApiSummary:
+        return summary.model_copy(
+            update={"docs_updated": s.DocsUpdated(**updated) if updated else None}
+        )
 
     def _with_docs(summary: s.ApiSummary) -> s.ApiSummary:
         if deps.public_changes is None:

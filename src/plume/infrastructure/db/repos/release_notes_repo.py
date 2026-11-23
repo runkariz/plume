@@ -59,6 +59,28 @@ class PostgresReleaseNotesRepo:
             ).scalar()
         return _j(v) if v is not None else None
 
+    def card_notes(self, to_builds: list[str]) -> dict[str, dict[str, Any]]:
+        """Projected in the database: the latest notes of 45 APIs are 5 MB of items, a card
+        needs four fields of the visible ones."""
+        if not to_builds:
+            return {}
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT to_build, jsonb_build_object("
+                    "'api', body->'api', 'to', body->'to', 'toDocsAsOf', body->'toDocsAsOf', "
+                    "'items', coalesce((SELECT jsonb_agg(jsonb_build_object("
+                    "'visibleToUsers', i->'visibleToUsers', 'class', i->'class', "
+                    "'breaking', i->'breaking', 'wordingOnly', i->'wordingOnly', "
+                    "'kind', i->'kind')) "
+                    "FROM jsonb_array_elements(body->'items') i "
+                    "WHERE i->'visibleToUsers' = 'true'::jsonb), '[]'::jsonb)) AS card "
+                    "FROM release_notes WHERE to_build = ANY(:t)"
+                ),
+                {"t": list(to_builds)},
+            ).all()
+        return {r.to_build: _j(r.card) for r in rows}
+
     def for_api(self, api_id: str) -> list[dict[str, Any]]:
         with self._engine.connect() as conn:
             rows = conn.execute(
