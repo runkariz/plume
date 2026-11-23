@@ -231,12 +231,24 @@ def _parent_of(key: str, names: tuple[str, ...]) -> str:
     return next((key[: -len(n)] for n in names if key != n and key.endswith(n)), "")
 
 
+_ID_VARIABLE = re.compile(r"^\{\{?\s*([A-Za-z0-9]+?)[_-]?(?:id|ID|Id)\s*\}?\}$")
+
+
 def _under(path: str, main: tuple[str, ...]) -> bool:
-    """A literal segment of the path names a main concept (/customers/search.json)."""
-    return any(
-        seg and "{" not in seg and concept_key(seg.split(".", 1)[0]) in main
-        for seg in path.strip("/").split("/")
-    )
+    """A literal segment of the path names a main concept (/customers/search.json), or the
+    path STARTS with its id (only variables such as {version} before it): /{order_id}/items,
+    /{ORDER_ID}/payments. Graph-style APIs name no collection, and their packages may label
+    these resources Payment or Api. An id deeper in another resource's path
+    (/delivery-proposals/{orderId}) is that resource's."""
+    literal_seen = False
+    for seg in path.strip("/").split("/"):
+        if seg and "{" not in seg and concept_key(seg.split(".", 1)[0]) in main:
+            return True
+        m = _ID_VARIABLE.match(seg)
+        if m and not literal_seen and concept_key(m.group(1)) in main:
+            return True
+        literal_seen = literal_seen or bool(seg and "{" not in seg)
+    return False
 
 
 def _child_of(key: str, main: tuple[str, ...], children: set[str]) -> bool:

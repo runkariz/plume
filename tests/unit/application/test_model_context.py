@@ -197,3 +197,18 @@ def test_a_concept_synonym_counts_only_when_the_api_lacks_the_concept_name() -> 
     assert groups["item"] == [items]  # its group built on the spot
     with_products = {"product": [_model("model:product")]}
     assert _synonyms(("product",), with_products, [items]) == []
+
+
+def test_a_path_starting_with_the_concepts_id_is_under_it() -> None:
+    """meta-commerce-platform: GET /{order_id}/items, /{ORDER_ID}/payments and /{order_id}/
+    shipments (the package labels them Payment / Api) belong in an Order context."""
+    from plume.application.models.sessions import _under  # noqa: PLC0415
+
+    order = ("order",)
+    for path in ("/{order_id}/items", "/{ORDER_ID}/payments", "/{orderId}/shipments",
+                 "/{version}/{order_id}/items", "/orders/{id}"):  # fmt: skip
+        assert _under(path, order), path
+    others = ("/{PAGE_ID}/commerce_orders", "/{order_line_id}/x", "/{cms_id}/apps",
+              "/shipment-management/delivery-proposals/{orderId}")  # fmt: skip
+    for path in others:
+        assert not _under(path, order), path  # another resource's id, or deeper in its path
