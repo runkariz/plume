@@ -2,6 +2,8 @@
 = decoded, trailing slash, host case), then without a query when only one page has the
 path. A leftover warning names examples."""
 
+from dataclasses import replace
+
 from plume.domain.knowledge.document import Document, DocumentKind
 from plume.infrastructure.sources.knowledge_export import ExportPage, KnowledgeExport, Rule
 from plume.infrastructure.sources.stream_package import _apply_export, _rule_pages, url_key
@@ -92,7 +94,8 @@ def test_a_one_endpoint_page_folds_its_rules_into_the_endpoint() -> None:
         file="two.md", source_url="https://d.example/two", title="Two", intro="x",
         items=[("get-a", "GET a"), ("get-b", "GET b")],
     )  # fmt: skip
-    rules = [_rule("r1", "https://d.example/one"), _rule("r2", "https://d.example/two")]
+    rules = [replace(_rule("r1", "https://d.example/one"), resource="Order"),
+             replace(_rule("r2", "https://d.example/two"), resource="Order")]  # fmt: skip
     export = KnowledgeExport(complete=True, pages=[one, two], rules=rules, gold_path=None)
     docs = [_endpoint("get-one"), _endpoint("get-a"), _endpoint("get-b")]
     out = {d.doc_id: d for d in _apply_export(docs, export, [])}
@@ -101,3 +104,27 @@ def test_a_one_endpoint_page_folds_its_rules_into_the_endpoint() -> None:
     assert len(guides) == 1  # no rules-only guide duplicating the one endpoint
     assert "text r2" in guides[0].text  # a page with two endpoints keeps its guide
     assert "text r2" not in out["endpoint:GET~/get-a"].text
+
+
+def test_a_page_only_rule_stays_on_the_page_guide() -> None:
+    """Stream's marker (no endpointIds, empty resource): the rule belongs to its page, not to
+    the page's lone endpoint (Meta's build-offers-integration page and GET /{order_id}/items)."""
+    one = ExportPage(
+        file="one.md", source_url="https://d.example/offers", title="Offers", intro="x",
+        items=[("get-one", "GET one")],
+    )  # fmt: skip
+    page_only = _rule("p1", "https://d.example/offers")
+    about_it = replace(_rule("r1", "https://d.example/offers"), resource="Order")
+    export = KnowledgeExport(complete=True, pages=[one], rules=[page_only, about_it],
+                             gold_path=None)  # fmt: skip
+    out = {d.doc_id: d for d in _apply_export([_endpoint("get-one")], export, [])}
+    endpoint = out["endpoint:GET~/get-one"].text
+    assert "text r1" in endpoint  # a resource rule still folds into the lone endpoint
+    assert "text p1" not in endpoint
+    guides = [d for d in out.values() if d.kind is DocumentKind.GUIDE]
+    assert len(guides) == 1
+    assert "text p1" in guides[0].text
+    assert "text r1" not in guides[0].text
+    only = KnowledgeExport(complete=True, pages=[one], rules=[page_only], gold_path=None)
+    out = {d.doc_id: d for d in _apply_export([_endpoint("get-one")], only, [])}
+    assert "## Rules" not in out["endpoint:GET~/get-one"].text  # nothing for the endpoint

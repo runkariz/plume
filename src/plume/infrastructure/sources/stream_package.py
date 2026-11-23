@@ -1669,20 +1669,31 @@ def _attach_page_rules(
         endpoints = [out[i].doc_id for i in indexes]
         if not page.split and page_rules and len(set(indexes)) == 1:
             # A one-endpoint page that could not be cut: its rules-only guide would just
-            # duplicate the endpoint in search; the rules go into the endpoint instead.
-            doc = out[indexes[0]]
-            out[indexes[0]] = _with_conflicts(
-                _with_rule_sources(
-                    replace(
-                        doc,
-                        text=doc.text
-                        + "\n\n## Rules (documentation page)\n"
-                        + "\n".join(r.line() for r in page_rules),
+            # duplicate the endpoint in search; the rules go into the endpoint instead, except
+            # page-only rules (no endpointIds, no resource: stream's marker), which stay on the
+            # page's guide (Meta's build-offers-integration page and GET /{order_id}/items).
+            page_only = [r for r in page_rules if _page_only(r)]
+            to_endpoint = [r for r in page_rules if not _page_only(r)]
+            if to_endpoint:
+                doc = out[indexes[0]]
+                out[indexes[0]] = _with_conflicts(
+                    _with_rule_sources(
+                        replace(
+                            doc,
+                            text=doc.text
+                            + "\n\n## Rules (documentation page)\n"
+                            + "\n".join(r.line() for r in to_endpoint),
+                        ),
+                        to_endpoint,
                     ),
-                    page_rules,
-                ),
-                page.conflicts,
-            )
+                    page.conflicts,
+                )
+            if page_only:
+                guide = _page_guide(page, page_only, endpoints)
+                if guide is not None:
+                    guide = replace(guide, fields=cited.get(url_key(page.source_url), ()))
+                    conflicts = [] if to_endpoint else page.conflicts  # not twice
+                    out.append(_with_conflicts(_with_rule_sources(guide, page_only), conflicts))
             continue
         guide = _page_guide(page, page_rules, endpoints)
         if guide is not None:
@@ -1692,6 +1703,12 @@ def _attach_page_rules(
             for i in dict.fromkeys(indexes):
                 out[i] = _with_conflicts(out[i], page.conflicts)
     used_rules.update(owner)
+
+
+def _page_only(rule: "knowledge_export.Rule") -> bool:
+    """Stream's page-only marker: a rule with no endpointIds and an empty resource belongs to
+    its page, never to an endpoint (nor to a resource)."""
+    return not rule.endpoint_ids and not (rule.resource or "").strip()
 
 
 def _fields_by_page(documents: list[Document]) -> dict[str, tuple[FieldSpec, ...]]:
