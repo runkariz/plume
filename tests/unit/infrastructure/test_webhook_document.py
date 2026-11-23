@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 """The webhook delivery mechanism is a searchable guide whose headers find_fact finds
 (Shopify gate F2: X-Shopify-Hmac-SHA256 was only reachable through list_triggers)."""
 
@@ -12,7 +13,7 @@ HOOK = "post-admin-api-latest-webhooks-json-2026-10"
 VERIFICATION = {
     "algorithm": "sha256", "encoding": "base64", "header": "X-Shopify-Hmac-SHA256",
     "headerFormat": "raw", "kind": "hmac", "secretSource": "userProvided",
-    "signedPayload": "raw request body",
+    "signedPayload": "{body}",
 }  # fmt: skip
 
 
@@ -33,10 +34,9 @@ def test_webhook_verification_is_searchable_and_findable(packages: Path, tmp_pat
     stack = _stack(packages, tmp_path)
     doc_id = f"guide:webhook-delivery-{HOOK}"
     doc = stack.get_document().execute("shopify", doc_id).document
-    assert (
-        "HMAC-SHA256 over the raw request body base64-encoded in the `X-Shopify-Hmac-SHA256`"
-        in (doc.text)
-    )
+    assert "HMAC-SHA256 base64-encoded in the `X-Shopify-Hmac-SHA256` header" in doc.text
+    assert "The signed string is `{body}`, where {body} is the raw request body." in doc.text
+    assert "The key is a secret you set." in doc.text
     assert "`X-Shopify-Webhook-Id` header" in doc.text
     for name in ("X-Shopify-Hmac-SHA256", "x-shopify-hmac-sha256", "X-Shopify-Hmac-Sha256"):
         found = stack.find_fact().execute("shopify", name)
@@ -101,3 +101,61 @@ def test_a_bare_mechanism_still_gets_a_guide(packages: Path, tmp_path: Path) -> 
     doc = stack.get_document().execute("shopify", f"guide:webhook-delivery-{HOOK}").document
     assert doc.title == "Shopify webhooks: delivery and verification"  # one mechanism: no name
     assert "The package states no signature verification for this mechanism." in doc.text
+
+
+def _hook_with(packages: Path, tmp_path: Path, verification: dict[str, str]) -> FakeStack:
+    dst = tmp_path / "shopify"
+    shutil.copytree(packages / "shopify-mini", dst)
+    path = dst / "connector" / "triggers" / "webhooks" / f"{HOOK}.json"
+    hook = json.loads(path.read_text())
+    hook["verification"] = verification
+    path.write_text(json.dumps(hook))
+    stack = FakeStack(embedder=WordEmbedder())
+    stack.load(str(dst))
+    return stack
+
+
+def test_a_timestamped_template_names_both_placeholders(packages: Path, tmp_path: Path) -> None:
+    stack = _hook_with(packages, tmp_path, {
+        "kind": "hmac", "algorithm": "sha256", "encoding": "hex", "header": "X-Signature",
+        "signedPayload": "{timestamp}.{body}", "secretSource": "subscribeResponse",
+    })  # fmt: skip
+    doc = stack.get_document().execute("shopify", f"guide:webhook-delivery-{HOOK}").document
+    assert (
+        "The signed string is `{timestamp}.{body}`, where {body} is the raw request body and "
+        "{timestamp} is the delivery timestamp." in doc.text
+    )
+    assert "The key is the secret returned when you subscribe." in doc.text
+    assert "over the" not in doc.text
+
+
+def test_an_unknown_secret_source_is_not_shown_but_warned(packages: Path, tmp_path: Path) -> None:
+    stack = _hook_with(packages, tmp_path, {
+        "kind": "hmac", "algorithm": "sha256", "header": "X-Signature",
+        "signedPayload": "v0:{timestamp}", "secretSource": "the merchant's API key",
+    })  # fmt: skip
+    doc = stack.get_document().execute("shopify", f"guide:webhook-delivery-{HOOK}").document
+    assert "The key is" not in doc.text
+    assert "the merchant's API key" not in doc.text
+    assert "where {timestamp} is the delivery timestamp." in doc.text  # only what is present
+    build = stack.resolver().resolve("shopify").build.build_id
+    app = next(d for d in stack.documents.list_documents(build) if d.kind.value == "app")
+    warnings = (app.raw or {})["package_warnings"]
+    assert any(w.startswith("plume-secret-source-unknown: webhook ") for w in warnings)
+
+
+def test_a_free_text_signed_payload_is_not_shown_but_warned(packages: Path, tmp_path: Path) -> None:
+    """Older packages wrote "body" / "raw request body": as Core's template that would sign
+    those literal words, so Plume does not render it and warns the maintainers."""
+    stack = _hook_with(packages, tmp_path, {
+        "kind": "hmac", "algorithm": "sha256", "encoding": "base64", "header": "X-Shopify-Hmac-SHA256",
+        "signedPayload": "raw request body", "secretSource": "userProvided",
+    })  # fmt: skip
+    doc = stack.get_document().execute("shopify", f"guide:webhook-delivery-{HOOK}").document
+    assert "signed string" not in doc.text
+    assert "raw request body" not in doc.text.split("## From the docs")[0]
+    assert "HMAC-SHA256 base64-encoded in the `X-Shopify-Hmac-SHA256` header" in doc.text
+    build = stack.resolver().resolve("shopify").build.build_id
+    app = next(d for d in stack.documents.list_documents(build) if d.kind.value == "app")
+    assert any(w.startswith("plume-signed-payload-not-template: webhook ")
+               for w in (app.raw or {})["package_warnings"])  # fmt: skip
