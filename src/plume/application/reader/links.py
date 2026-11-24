@@ -5,6 +5,7 @@ unit's endpoints, an auth scheme's endpoints per scope. Missing links read as em
 from typing import Any
 
 from plume.domain.knowledge.document import RULE_SOURCES_KEY, Document, DocumentKind
+from plume.domain.knowledge.enum_values import enum_values
 
 
 def _raw(doc: Document) -> dict[str, Any]:
@@ -105,3 +106,10 @@ def rule_sources(doc: Document) -> list[dict[str, Any]]:
 
 def _str(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
+
+
+def model_values(doc: Document) -> list[dict[str, str | None]]:
+    """A scalar enum model's values [{value, description}] (from its stored schema); [] else."""
+    if doc.kind is not DocumentKind.MODEL:
+        return []
+    return [{"value": v, "description": d} for v, d in enum_values(_raw(doc))]
