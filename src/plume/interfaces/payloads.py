@@ -110,6 +110,7 @@ def document_payload(r: DocumentResult) -> Json:
         "required_scopes": links.required_scopes(d),
         "guides": links.linked_guides(d),
         "sample_guides": links.sample_guides(d),
+        "values": links.model_values(d),
         "linked_endpoints": links.linked_endpoints(d),
         "endpoint_links": links.endpoint_links(d),
         "rule_sources": links.rule_sources(d),

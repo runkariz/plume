@@ -2115,6 +2115,24 @@
             "title": "Title",
             "type": "string"
           },
+          "values": {
+            "description": "Model: a scalar enum model's own values [{value, description}].",
+            "items": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            "title": "Values",
+            "type": "array"
+          },
           "versionFixed": {
             "default": false,
             "description": "The package fixes this operation's API version.",

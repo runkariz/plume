@@ -54,6 +54,7 @@ from plume.domain.knowledge.document import (
     standard_header,
     url_path,
 )
+from plume.domain.knowledge.enum_values import enum_values
 from plume.domain.knowledge.model_names import display_names, parse_bundled_title
 from plume.domain.shared.errors import InvalidIdentifierError
 from plume.infrastructure.sources import knowledge_export
@@ -1197,6 +1198,10 @@ class StreamPackageSource:
         section = _fields_section("Fields", fields, level)
         if section:
             parts.append(section)
+        values = enum_values(data)
+        if values:  # a scalar enum model (TriggerType): its values are what it documents
+            lines = [f"- `{v}`" + (f": {d}" if d else "") for v, d in values]
+            parts.append("## Values\n" + "\n".join(lines))
         return Document(
             doc_id=slug_doc_id(DocumentKind.MODEL, _slug(stem)),
             kind=DocumentKind.MODEL,

@@ -542,6 +542,10 @@ class DocumentOut(Schema):
         default_factory=list,
         description="Endpoint: the knowledge units that name it (endpointId/endpointIds).",
     )
+    values: list[dict[str, str | None]] = Field(
+        default_factory=list,
+        description="Model: a scalar enum model's own values [{value, description}].",
+    )
     sample_guides: list[str] = Field(
         default_factory=list,
         description="Endpoint: guides that call this endpoint in a sample (unit-links "
