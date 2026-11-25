@@ -470,6 +470,8 @@ def create_app(deps: HttpDependencies) -> FastAPI:
             guides=links.linked_guides(d),
             sample_guides=links.sample_guides(d),
             values=links.model_values(d),
+            used_by=[s.ModelUse(doc_id=u, where=list(w), basis=b) for u, w, b in r.used_by],
+            used_by_total=r.used_by_total,
             linked_endpoints=links.linked_endpoints(d),
             conflicts=[s.DocConflict(**c) for c in payloads.conflicts_payload(d)],
             endpoint_links=[

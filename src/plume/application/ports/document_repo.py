@@ -24,6 +24,12 @@ class DocumentRepo(Protocol):
         left out."""
         ...
 
+    def model_users(self, build_id: BuildId, model_id: str) -> list[tuple[str, tuple[str, ...]]]:
+        """The endpoints and triggers with a field whose type is the model (its ``model_id``:
+        a $ref, or stream's x-kariz-model on an inline copy), each with the field locations
+        (request places / response / payload), ordered by doc id."""
+        ...
+
     def replace_chunks(self, build_id: BuildId, chunks: Sequence[Chunk]) -> None:
         """Set the build's chunks (drops chunks not in ``chunks``)."""
         ...

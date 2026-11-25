@@ -123,6 +123,16 @@ class InMemoryDocumentRepo:
             if d.kind is kind and d.source_id and d.source_id in wanted
         }
 
+    def model_users(self, build_id: BuildId, model_id: str) -> list[tuple[str, tuple[str, ...]]]:
+        out = []
+        for d in sorted(self.documents.get(build_id.value, {}).values(), key=lambda d: d.doc_id):
+            if d.kind not in (DocumentKind.ENDPOINT, DocumentKind.TRIGGER):
+                continue
+            where = sorted({f.location.value for f in d.fields if f.model_id == model_id})
+            if where:
+                out.append((d.doc_id, tuple(where)))
+        return out
+
     def replace_chunks(self, build_id: BuildId, chunks: Sequence[Chunk]) -> None:
         old = self.chunks.get(build_id.value, {})
         vectors = self.vectors.setdefault(build_id.value, {})

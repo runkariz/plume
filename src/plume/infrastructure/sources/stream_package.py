@@ -141,12 +141,33 @@ class _RefScope:
 def _model_of(schema: Mapping[str, Any], scope: _RefScope) -> str | None:
     """The model document a field's type refers to: a ``$ref`` (directly, as array items, or
     the single typed member of a composition) to an existing schema file in the package's
-    models folder, or to a local definition named like one (#/$defs/Address -> address)."""
+    models folder, or to a local definition named like one (#/$defs/Address -> address).
+    Stream's x-kariz-model ("adsinsights.schema.json") on an inline copy of a model (or on its
+    array items) counts exactly like a $ref to that file; the inline schema is still walked."""
+    marked = _marker(schema)
+    models = _models_folder(scope.folder) if marked and scope.folder is not None else None
+    if marked and models is not None and (models / marked).is_file():
+        return slug_doc_id(DocumentKind.MODEL, _slug(marked.removesuffix(".schema.json")))
     ref = _type_ref(schema)
     path = _model_path(ref, scope.folder) if ref and scope.folder is not None else None
     if path is None:
         return None
     return slug_doc_id(DocumentKind.MODEL, _slug(path.name.removesuffix(".schema.json")))
+
+
+MODEL_MARKER = "x-kariz-model"
+
+
+def _marker(schema: Mapping[str, Any]) -> str | None:
+    """x-kariz-model on the schema or its array items, as a models-folder file name."""
+    items = schema.get("items")
+    value = schema.get(MODEL_MARKER) or (
+        items.get(MODEL_MARKER) if isinstance(items, dict) else None
+    )
+    if not isinstance(value, str) or not value.strip():
+        return None
+    name = value.strip().rsplit("/", 1)[-1]
+    return name if name.endswith(".schema.json") else f"{name}.schema.json"
 
 
 def _type_ref(schema: Mapping[str, Any]) -> str | None:

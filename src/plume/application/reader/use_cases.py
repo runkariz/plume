@@ -872,6 +872,10 @@ class SearchDocs:
         return SearchResult(_ref(r), query, mode, tuple(enriched), tuple(trace), total)
 
 
+MAX_USED_BY = 50  # a shared model (Money) is used by hundreds of endpoints
+RETURNED_BY_KEY = "x-plume-returned-by"
+
+
 class GetDocument:
     def __init__(self, resolver: BuildResolver, documents: DocumentRepo) -> None:
         self._resolver = resolver
@@ -882,7 +886,26 @@ class GetDocument:
         doc = self._documents.get_document(r.build.build_id, doc_id)
         if doc is None:
             raise NotFoundError(f"{doc_id} is not in build {r.build.build_id}")
-        return DocumentResult(_ref(r), doc, Citation(doc.doc_id, doc.source_url, doc.anchor, None))
+        used = self._used_by(r.build.build_id, doc) if doc.kind is DocumentKind.MODEL else []
+        return DocumentResult(
+            _ref(r),
+            doc,
+            Citation(doc.doc_id, doc.source_url, doc.anchor, None),
+            tuple(used[:MAX_USED_BY]),
+            len(used),
+        )
+
+    def _used_by(self, build_id: BuildId, doc: Document) -> list[tuple[str, tuple[str, ...], str]]:
+        """The endpoints whose fields have the model's type, then those the package says
+        return it by a bundled response title (x-plume-returned-by), each once."""
+        out = [(d, where, "ref") for d, where in self._documents.model_users(build_id, doc.doc_id)]
+        seen = {d for d, _, _ in out}
+        returned = doc.raw.get(RETURNED_BY_KEY) if isinstance(doc.raw, dict) else None
+        for d in returned if isinstance(returned, list) else []:
+            if isinstance(d, str) and d not in seen:
+                out.append((d, ("response",), "returned-by"))
+                seen.add(d)
+        return out
 
 
 def _match(fact: Fact, titles: dict[str, str]) -> FactMatch:
