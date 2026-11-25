@@ -61,3 +61,18 @@ def test_content_hash_covers_title_text_and_source() -> None:
             doc_id="guide:x", kind=DocumentKind.GUIDE, title="X", text="t", source_url="u"
         ).content_hash
     )
+
+
+def test_a_generic_alias_after_the_version_is_a_literal_segment() -> None:
+    """WooCommerce GET /wp-json/wc/v3/data/currencies/current is not .../currencies/{version}
+    (it collided with .../currencies/{currency}); Metro .../export/latest likewise."""
+    from plume.domain.knowledge.document import normalize_endpoint_path as norm  # noqa: PLC0415
+
+    assert norm("/wp-json/wc/v3/data/currencies/current") == (
+        "/wp-json/wc/{version}/data/currencies/current"
+    )
+    assert norm("/openapi/v1/product-list/export/latest") == (
+        "/openapi/{version}/product-list/export/latest"
+    )
+    assert norm("/admin/api/latest/products.json") == "/admin/api/{version}/products.json"
+    assert norm("/api/current/orders") == "/api/{version}/orders"  # the alias IS the version
