@@ -394,6 +394,11 @@ class CallPick(Schema):
     options: list[CallPickOption]
 
 
+class CallCandidate(Schema):
+    doc_id: str
+    documents: list[str] = Field(description="The call's params this operation documents.")
+
+
 class CheckCallResponse(Schema):
     api: str
     build: str
@@ -421,6 +426,12 @@ class CheckCallResponse(Schema):
         description="Required parameters the endpoint documents that the call did not pass, "
         "per place (query, body, header). A nested field is listed only when its parent was "
         "passed. Extra information: the verdict does not change.",
+    )
+    candidates: list[CallCandidate] = Field(
+        default_factory=list,
+        description="Several operations match the call equally (the same route shape under "
+        "different parents, Graph-style /{campaign_id}/copies and /{ad_id}/copies): each one "
+        "with the call's params it documents. ambiguous when none documents all of them.",
     )
 
 
