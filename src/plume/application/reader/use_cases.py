@@ -1569,16 +1569,13 @@ class CheckCall:
                         note=f"no operation at {method} {best[2]} has {asked}",
                     )  # fmt: skip
                 tied = [c for c in tied if c[1].owner_id in chosen]
-        scored = []
-        for _, f, f_path in tied:
-            checks = self._param_checks(build_id, f.owner_id, names)
-            scored.append((-sum(c.found for c in checks), f.owner_id, f, f_path, checks))
-        scored.sort(key=lambda x: (x[0], x[1]))
+        scored, deprecated = self._score(build_id, tied, names)
         _, _, endpoint, matched_path, checks = scored[0]
         alternatives = tuple(x[1] for x in scored[1:])
-        per_candidate = _per_candidate(scored) if len(scored) > 1 else ()
+        per_candidate = _per_candidate(scored, deprecated) if len(scored) > 1 else ()
         if not all(c.found for c in checks) and per_candidate:
-            if split := self._split(r, method, path, matched_path, scored, names, checked):
+            if split := self._split(r, method, path, matched_path, scored, names, checked,
+                                    deprecated):  # fmt: skip
                 return split
             checks = _with_sibling_params(checks, scored)
         complete = endpoint.complete
@@ -1607,6 +1604,26 @@ class CheckCall:
             candidates=per_candidate,
         )
 
+    def _score(
+        self,
+        build_id: BuildId,
+        tied: Sequence[tuple[int, Fact, str]],
+        names: Sequence[tuple[str, FieldLocation | None]],
+    ) -> tuple[list[tuple[int, str, Fact, str, list[ParamCheck]]], frozenset[str]]:
+        """The equal candidates best first: the most of these params documented, then not
+        deprecated (Meta POST /{ad_id}/adlabels is, /{ad_creative_id}/adlabels is not), then
+        by id; and the deprecated ones among them."""
+        scored = []
+        for _, f, f_path in tied:
+            checks = self._param_checks(build_id, f.owner_id, names)
+            scored.append((-sum(c.found for c in checks), f.owner_id, f, f_path, checks))
+        summaries = (
+            self._index.summaries(build_id, [x[1] for x in scored]) if len(scored) > 1 else {}
+        )
+        deprecated = frozenset(o for o, s in summaries.items() if s.deprecated)
+        scored.sort(key=lambda x: (x[0], x[1] in deprecated, x[1]))
+        return scored, deprecated
+
     @staticmethod
     def _split(
         r: ResolvedBuild,
@@ -1616,6 +1633,7 @@ class CheckCall:
         scored: Sequence[tuple[int, str, Fact, str, list[ParamCheck]]],
         names: Sequence[tuple[str, FieldLocation | None]],
         checked: dict[str, int],
+        deprecated: frozenset[str] = frozenset(),
     ) -> CheckCallResult | None:
         """Equal candidates and no one documents all the params, but together they do: the
         call is ambiguous (which parent node is it?), with the params each one documents.
@@ -1627,8 +1645,11 @@ class CheckCall:
                     found_by.setdefault(c.name, []).append(owner)
         if any(n not in found_by for n, _ in names):
             return None
-        per = _per_candidate(scored)
-        listed = "; ".join(f"{o}: {', '.join(p) or 'none of them'}" for o, p in per)
+        per = _per_candidate(scored, deprecated)
+        listed = "; ".join(
+            f"{o}{' (deprecated)' if dep else ''}: {', '.join(p) or 'none of them'}"
+            for o, p, dep in per
+        )
         note = (
             f"ambiguous: {len(scored)} operations match {method} {path} equally and none "
             f"documents all these params ({listed}); call the one for your parent object"
@@ -1994,6 +2015,7 @@ def _with_sibling_params(
 
 def _per_candidate(
     scored: Sequence[tuple[int, str, Fact, str, list[ParamCheck]]],
-) -> tuple[tuple[str, tuple[str, ...]], ...]:
-    """(operation id, the call's params it documents) per equal candidate."""
-    return tuple((x[1], tuple(c.name for c in x[4] if c.found)) for x in scored)
+    deprecated: frozenset[str] = frozenset(),
+) -> tuple[tuple[str, tuple[str, ...], bool], ...]:
+    """(operation id, the call's params it documents, deprecated) per equal candidate."""
+    return tuple((x[1], tuple(c.name for c in x[4] if c.found), x[1] in deprecated) for x in scored)

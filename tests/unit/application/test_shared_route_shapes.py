@@ -27,6 +27,7 @@ ENDPOINTS = {  # folder: (method, path, {query param: schema})
     "post-creative-adlabels": ("POST", "/{ad_creative_id}/adlabels",
                                {"adlabels": {"type": "string"}}),
 }  # fmt: skip
+DEPRECATED = {"post-creative-adlabels"}  # sorts first by id, so the tie-break must override it
 
 
 @pytest.fixture(scope="module")
@@ -42,7 +43,7 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> FakeStack:
         (d / "request.json").write_text(json.dumps({
             "endpointId": folder, "name": folder, "method": method, "url": API + path,
             "resource": "Thing", "bodyType": "NONE", "paramsContractRef": "params.schema.json",
-            "responses": [],
+            "responses": [], "isDeprecated": folder in DEPRECATED,
         }))  # fmt: skip
     s = FakeStack()
     s.load(str(dst))
@@ -98,3 +99,18 @@ def test_a_single_value_enum_does_not_pick_across_parents(stack: FakeStack) -> N
     assert r["verdict"] == "documented"
     assert r["matched"]["doc_id"] == "endpoint:POST~/{ad_id}/adlabels"
     assert r["pick"] is None
+
+
+def test_a_non_deprecated_candidate_wins_a_tie_and_deprecated_ones_are_marked(
+    stack: FakeStack,
+) -> None:
+    """Both document adlabels: the non-deprecated one is matched, though the deprecated one
+    sorts first by id."""
+    r = _check(stack, "POST", "/123/adlabels", ["adlabels"])
+    assert r["matched"]["doc_id"] == "endpoint:POST~/{ad_id}/adlabels"
+    assert {c["doc_id"]: c["deprecated"] for c in r["candidates"]} == {
+        "endpoint:POST~/{ad_creative_id}/adlabels": True,
+        "endpoint:POST~/{ad_id}/adlabels": False,
+    }
+    bare = _check(stack, "POST", "/123/adlabels", [])  # no params: still the non-deprecated one
+    assert bare["matched"]["doc_id"] == "endpoint:POST~/{ad_id}/adlabels"
