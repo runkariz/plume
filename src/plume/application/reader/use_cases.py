@@ -83,6 +83,7 @@ from plume.domain.knowledge.call_check import (
     host_problem,
     normalize_call_path,
     path_matches,
+    route_shape,
     server_bases,
     specificity,
     without_server_base,
@@ -1522,10 +1523,14 @@ class CheckCall:
             )
         candidates.sort(key=lambda c: (-c[0], c[2], c[1].owner_id))
         best = candidates[0]
-        # Several operations at the same METHOD + path: the one that documents the most of
-        # these params; the others are named as alternatives.
-        tied = [c for c in candidates if c[2] == best[2]]
-        if len(tied) > 1:  # RPC by name: a fixed parameter value picks the operation
+        # Several operations at the same METHOD + path, or the same route shape under different
+        # parents (Graph-style GET /{campaign_id}/copies and /{ad_id}/copies): the one that
+        # documents the most of these params; the others are named as alternatives.
+        shape = route_shape(best[2])
+        tied = [c for c in candidates if c[0] == best[0] and route_shape(c[2]) == shape]
+        # RPC by name (one path, AliExpress POST /sync): a fixed parameter value picks the
+        # operation; not across parents, where a single-value enum is just a constraint
+        if len(tied) > 1 and len({c[2] for c in tied}) == 1:
             owners = [c[1].owner_id for c in tied]
             by_owner, picks = fixed_values(self._facts, build_id, owners, [p for p, _ in names])
             if picks:
@@ -1548,6 +1553,11 @@ class CheckCall:
         scored.sort(key=lambda x: (x[0], x[1]))
         _, _, endpoint, matched_path, checks = scored[0]
         alternatives = tuple(x[1] for x in scored[1:])
+        per_candidate = _per_candidate(scored) if len(scored) > 1 else ()
+        if not all(c.found for c in checks) and per_candidate:
+            if split := self._split(r, method, path, matched_path, scored, names, checked):
+                return split
+            checks = _with_sibling_params(checks, scored)
         complete = endpoint.complete
         verdict, note, missing = self._verdict(build_id, endpoint.owner_id, path, checks, names)
         return CheckCallResult(
@@ -1571,7 +1581,44 @@ class CheckCall:
                 else self._server_label(build_id, endpoint.owner_id)
             ),
             missing_required=missing,
+            candidates=per_candidate,
         )
+
+    @staticmethod
+    def _split(
+        r: ResolvedBuild,
+        method: str,
+        path: str,
+        matched: str,
+        scored: Sequence[tuple[int, str, Fact, str, list[ParamCheck]]],
+        names: Sequence[tuple[str, FieldLocation | None]],
+        checked: dict[str, int],
+    ) -> CheckCallResult | None:
+        """Equal candidates and no one documents all the params, but together they do: the
+        call is ambiguous (which parent node is it?), with the params each one documents.
+        None when some param is documented by none of them."""
+        found_by: dict[str, list[str]] = {}
+        for _, owner, _, _, checks in scored:
+            for c in checks:
+                if c.found:
+                    found_by.setdefault(c.name, []).append(owner)
+        if any(n not in found_by for n, _ in names):
+            return None
+        per = _per_candidate(scored)
+        listed = "; ".join(f"{o}: {', '.join(p) or 'none of them'}" for o, p in per)
+        note = (
+            f"ambiguous: {len(scored)} operations match {method} {path} equally and none "
+            f"documents all these params ({listed}); call the one for your parent object"
+        )
+        params = tuple(
+            ParamCheck(n, True, None, note=f"documented on {', '.join(found_by[n])}")
+            for n, _ in names
+        )
+        owners = tuple(x[1] for x in scored)
+        return CheckCallResult(
+            _ref(r), method, path, "ambiguous", True, None, method, matched, params, checked,
+            None, owners, note=note, candidates=per,
+        )  # fmt: skip
 
     def _missing_required(
         self, build_id: BuildId, owner_id: str, passed: Sequence[str]
@@ -1901,3 +1948,29 @@ def deprecation_text(doc: Document) -> str | None:
         if in_rules and line.lstrip().startswith("- ") and "deprecat" in text.lower():
             return text  # the rule's own words (its quoted source may mention it in passing)
     return None
+
+
+def _with_sibling_params(
+    checks: Sequence[ParamCheck],
+    scored: Sequence[tuple[int, str, Fact, str, list[ParamCheck]]],
+) -> list[ParamCheck]:
+    """A param the matched endpoint lacks but an equal candidate documents is found there
+    (never not_documented for a param a candidate documents), with a note naming it."""
+    out = []
+    for c in checks:
+        sibling = next(
+            (o for _, o, _, _, cs in scored[1:] for x in cs if x.name == c.name and x.found), None
+        )
+        out.append(
+            c if c.found or sibling is None else ParamCheck(
+                c.name, True, None, note=f"documented on {sibling}, not on the matched operation"
+            )
+        )  # fmt: skip
+    return out
+
+
+def _per_candidate(
+    scored: Sequence[tuple[int, str, Fact, str, list[ParamCheck]]],
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """(operation id, the call's params it documents) per equal candidate."""
+    return tuple((x[1], tuple(c.name for c in x[4] if c.found)) for x in scored)

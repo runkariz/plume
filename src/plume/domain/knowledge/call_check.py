@@ -45,6 +45,12 @@ def specificity(template: str) -> int:
     return sum(2 if "{" not in s else 0 if _PARAM.fullmatch(s) else 1 for s in _segments(template))
 
 
+def route_shape(template: str) -> str:
+    """The template with its variable names blanked (/{campaign_id}/copies -> /{}/copies): two
+    endpoints with the same shape match the same calls."""
+    return "/".join(re.sub(r"\{[^}]*\}", "{}", s) for s in _segments(template))
+
+
 def normalize_call_path(path: str, known_versions: tuple[str, ...] = ()) -> str:
     stripped = re.sub(r"^[a-z]+://[^/]+", "", path.strip())
     return normalize_endpoint_path(stripped, known_versions)

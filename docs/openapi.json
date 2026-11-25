@@ -1287,6 +1287,28 @@
         "title": "BuildOut",
         "type": "object"
       },
+      "CallCandidate": {
+        "properties": {
+          "docId": {
+            "title": "Docid",
+            "type": "string"
+          },
+          "documents": {
+            "description": "The call's params this operation documents.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Documents",
+            "type": "array"
+          }
+        },
+        "required": [
+          "docId",
+          "documents"
+        ],
+        "title": "CallCandidate",
+        "type": "object"
+      },
       "CallPick": {
         "properties": {
           "options": {
@@ -1410,6 +1432,14 @@
           "build": {
             "title": "Build",
             "type": "string"
+          },
+          "candidates": {
+            "description": "Several operations match the call equally (the same route shape under different parents, Graph-style /{campaign_id}/copies and /{ad_id}/copies): each one with the call's params it documents. ambiguous when none documents all of them.",
+            "items": {
+              "$ref": "#/components/schemas/CallCandidate"
+            },
+            "title": "Candidates",
+            "type": "array"
           },
           "checked": {
             "$ref": "#/components/schemas/Checked"
