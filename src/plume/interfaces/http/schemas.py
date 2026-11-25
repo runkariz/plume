@@ -518,6 +518,15 @@ class DocConflict(Schema):
     statements: list[ConflictStatementOut]
 
 
+class ModelUse(Schema):
+    doc_id: str
+    where: list[str] = Field(description="Where the model is used: query, body, response, ...")
+    basis: str = Field(
+        description="ref: a field's type is the model ($ref, or x-kariz-model on an inline "
+        "copy); returned-by: the package names it as the response by a bundled title."
+    )
+
+
 class DocumentOut(Schema):
     api: str
     build: str
@@ -553,6 +562,12 @@ class DocumentOut(Schema):
         default_factory=list,
         description="Endpoint: the knowledge units that name it (endpointId/endpointIds).",
     )
+    used_by: list[ModelUse] = Field(
+        default_factory=list,
+        description="Model: the endpoints and triggers that use it (at most 50, used_by_total "
+        "counts all). linked_endpoints is for knowledge units only.",
+    )
+    used_by_total: int = 0
     values: list[dict[str, str | None]] = Field(
         default_factory=list,
         description="Model: a scalar enum model's own values [{value, description}].",

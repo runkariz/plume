@@ -150,6 +150,19 @@ class PostgresDocumentRepo:
         docs = [document_from_row(r) for r in rows]
         return {d.source_id: d for d in docs if d.source_id}
 
+    def model_users(self, build_id: BuildId, model_id: str) -> list[tuple[str, tuple[str, ...]]]:
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT d.doc_id, array_agg(DISTINCT f->>'location') FROM documents d, "
+                    "jsonb_array_elements(d.fields) f WHERE d.build_id = :b "
+                    "AND d.kind IN ('endpoint', 'trigger') AND d.fields @> CAST(:pat AS jsonb) "
+                    "AND f->>'model_id' = :m GROUP BY d.doc_id ORDER BY d.doc_id"
+                ),
+                {"b": build_id.value, "m": model_id, "pat": json.dumps([{"model_id": model_id}])},
+            ).all()
+        return [(r[0], tuple(sorted(x for x in r[1] if x))) for r in rows]
+
     def replace_chunks(self, build_id: BuildId, chunks: Sequence[Chunk]) -> None:
         with self._engine.begin() as conn:
             replace_chunks(conn, build_id, chunks)

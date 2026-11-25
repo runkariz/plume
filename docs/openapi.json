@@ -2145,6 +2145,19 @@
             "title": "Title",
             "type": "string"
           },
+          "usedBy": {
+            "description": "Model: the endpoints and triggers that use it (at most 50, used_by_total counts all). linked_endpoints is for knowledge units only.",
+            "items": {
+              "$ref": "#/components/schemas/ModelUse"
+            },
+            "title": "Usedby",
+            "type": "array"
+          },
+          "usedByTotal": {
+            "default": 0,
+            "title": "Usedbytotal",
+            "type": "integer"
+          },
           "values": {
             "description": "Model: a scalar enum model's own values [{value, description}].",
             "items": {
@@ -4009,6 +4022,34 @@
           "title"
         ],
         "title": "ModelRef",
+        "type": "object"
+      },
+      "ModelUse": {
+        "properties": {
+          "basis": {
+            "description": "ref: a field's type is the model ($ref, or x-kariz-model on an inline copy); returned-by: the package names it as the response by a bundled title.",
+            "title": "Basis",
+            "type": "string"
+          },
+          "docId": {
+            "title": "Docid",
+            "type": "string"
+          },
+          "where": {
+            "description": "Where the model is used: query, body, response, ...",
+            "items": {
+              "type": "string"
+            },
+            "title": "Where",
+            "type": "array"
+          }
+        },
+        "required": [
+          "docId",
+          "where",
+          "basis"
+        ],
+        "title": "ModelUse",
         "type": "object"
       },
       "NotModeled": {

@@ -101,6 +101,11 @@ class DocumentResult:
     ref: BuildRef
     document: Document
     citation: Citation
+    # a model: the endpoints/triggers that use it, (doc id, where, basis) with basis "ref" (a
+    # field's type is the model: $ref or x-kariz-model) or "returned-by" (a bundled response
+    # title); capped at MAX_USED_BY, used_by_total counts them all
+    used_by: tuple[tuple[str, tuple[str, ...], str], ...] = ()
+    used_by_total: int = 0
 
 
 @dataclass(frozen=True, slots=True)

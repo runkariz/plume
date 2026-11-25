@@ -198,6 +198,28 @@ def test_documents_by_source_ids(store: Store) -> None:
     assert store.documents.by_source_ids(build.build_id, DOC.kind, []) == {}
 
 
+def test_model_users(store: Store) -> None:
+    """Endpoints/triggers with a field whose type is the model, with the field locations."""
+    from dataclasses import replace  # noqa: PLC0415
+
+    build = _draft(store)
+    money = "model:money"
+    uses = replace(DOC, fields=(
+        FieldSpec("total", FieldLocation.RESPONSE, "object", model_id=money),
+        FieldSpec("lines[].price", FieldLocation.RESPONSE, "object", model_id=money),
+        FieldSpec("refund", FieldLocation.BODY, "object", model_id=money),
+        FieldSpec("limit", FieldLocation.QUERY, "integer"),
+    ))  # fmt: skip
+    other = replace(DOC, doc_id="endpoint:GET~/carts", fields=(
+        FieldSpec("x", FieldLocation.RESPONSE, "object", model_id="model:moneybag"),))  # fmt: skip
+    model = Document(doc_id=money, kind=DocumentKind.MODEL, title="Money", text="# Money",
+                     fields=(FieldSpec("self", FieldLocation.MODEL, model_id=money),))  # fmt: skip
+    store.documents.add_documents(build.build_id, [uses, other, model, GUIDE])
+    assert store.documents.model_users(build.build_id, money) == [
+        (DOC.doc_id, ("body", "response"))]  # fmt: skip
+    assert store.documents.model_users(build.build_id, "model:none") == []
+
+
 def test_assets(store: Store, request: pytest.FixtureRequest) -> None:
     from plume.domain.knowledge.asset import Asset  # noqa: PLC0415
     from plume.infrastructure.db.repos.asset_repo import PostgresAssetRepo  # noqa: PLC0415
