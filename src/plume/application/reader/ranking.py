@@ -124,6 +124,26 @@ def pair_units_with_endpoints(
 MIN_ENDPOINTS = 2
 
 
+def endpoint_after_window(
+    ranked: Sequence[str], k: int, wider: Callable[[], Sequence[str]]
+) -> list[str]:
+    """A top-k with no endpoint (only guides) gets the best endpoint for the question right
+    after it, at k + 1, from the pool or, when the pool has none near, from ``wider`` (the
+    endpoints ranked for the question on their own). The top-k itself is never changed: the
+    guides there are often the answer. (Meta Commerce "upload translated product data": eight
+    localization guides filled the pool; POST /{catalog_id}/localized_items_batch is the first
+    endpoint for the question.)"""
+    if len(ranked) <= k or any(d.startswith("endpoint:") for d in ranked[:k]):
+        return list(ranked)
+    best = next((d for d in ranked[k : 2 * k] if d.startswith("endpoint:")), None)
+    if best is None:
+        best = next((d for d in wider() if d.startswith("endpoint:")), None)
+    if best is None:
+        return list(ranked)
+    rest = [d for d in ranked[k:] if d != best]
+    return [*ranked[:k], best, *rest]
+
+
 def keep_endpoints(ranked: Sequence[str], k: int, minimum: int = MIN_ENDPOINTS) -> list[str]:
     """At least ``minimum`` endpoints in the top-k when the pool has them: the best-ranked
     endpoints below the top-k replace its lowest-ranked other results (which move to the front
