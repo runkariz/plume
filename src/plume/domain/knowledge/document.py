@@ -119,20 +119,17 @@ def normalize_endpoint_path(path: str, known_versions: Iterable[str] = ()) -> st
     """Replace the API-version segment of a path with ``{version}``.
 
     A segment counts as a version when it is one of ``known_versions``, a generic alias
-    (``latest``, ``unstable``...), a date (``2026-10``) or ``v1``/``v2.1``.
+    (``latest``, ``unstable``...), a date (``2026-10``) or ``v1``/``v2.1``. A generic alias
+    AFTER a version segment is a literal resource name (WooCommerce
+    /wp-json/wc/v3/data/currencies/current, Metro /openapi/v1/product-list/export/latest).
     """
     known = frozenset(known_versions)
     query_free = path.split("?", 1)[0]
-    segments = query_free.split("/")
-    out = [
-        VERSION_PLACEHOLDER
-        if seg in known
-        or seg in _GENERIC_VERSIONS
-        or _DATE_VERSION.fullmatch(seg)
-        or _SEMVER_VERSION.fullmatch(seg)
-        else seg
-        for seg in segments
-    ]
+    out: list[str] = []
+    for seg in query_free.split("/"):
+        explicit = seg in known or _DATE_VERSION.fullmatch(seg) or _SEMVER_VERSION.fullmatch(seg)
+        alias = seg in _GENERIC_VERSIONS and VERSION_PLACEHOLDER not in out
+        out.append(VERSION_PLACEHOLDER if explicit or alias else seg)
     normalized = "/".join(out)
     return normalized if normalized.startswith("/") else "/" + normalized
 
