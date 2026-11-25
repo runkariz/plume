@@ -592,7 +592,10 @@ def create_app(deps: HttpDependencies) -> FastAPI:
                 else None
             ),
             missing_required={where: list(names) for where, names in r.missing_required},
-            candidates=[s.CallCandidate(doc_id=o, documents=list(ps)) for o, ps in r.candidates],
+            candidates=[
+                s.CallCandidate(doc_id=o, documents=list(ps), deprecated=dep)
+                for o, ps, dep in r.candidates
+            ],
         )
 
     @app.post(

@@ -142,5 +142,5 @@ class CheckCallResult:
     # documented required parameters the call did not pass: (place, names) per place
     missing_required: tuple[tuple[str, tuple[str, ...]], ...] = ()
     # several endpoints match equally (Graph-style /{campaign_id}/copies vs /{ad_id}/copies):
-    # (operation id, the call's params it documents) per candidate
-    candidates: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    # (operation id, the call's params it documents, deprecated) per candidate
+    candidates: tuple[tuple[str, tuple[str, ...], bool], ...] = ()

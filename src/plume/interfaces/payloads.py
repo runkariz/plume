@@ -264,7 +264,9 @@ def check_call_payload(r: CheckCallResult) -> Json:
         "alternatives": list(r.alternatives),
         "note": r.note,
         "missingRequired": {where: list(names) for where, names in r.missing_required},
-        "candidates": [{"doc_id": o, "documents": list(ps)} for o, ps in r.candidates],
+        "candidates": [
+            {"doc_id": o, "documents": list(ps), "deprecated": dep} for o, ps, dep in r.candidates
+        ],
         "pick": (
             {
                 "param": r.pick_param,

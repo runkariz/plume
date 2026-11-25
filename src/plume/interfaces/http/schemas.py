@@ -397,6 +397,7 @@ class CallPick(Schema):
 class CallCandidate(Schema):
     doc_id: str
     documents: list[str] = Field(description="The call's params this operation documents.")
+    deprecated: bool = False
 
 
 class CheckCallResponse(Schema):

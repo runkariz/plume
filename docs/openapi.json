@@ -1289,6 +1289,11 @@
       },
       "CallCandidate": {
         "properties": {
+          "deprecated": {
+            "default": false,
+            "title": "Deprecated",
+            "type": "boolean"
+          },
           "docId": {
             "title": "Docid",
             "type": "string"
