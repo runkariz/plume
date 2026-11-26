@@ -92,7 +92,7 @@ const keyOf = (c: DocConflict, i: number) => `${c.field ?? ''}-${c.limit}-${i}`;
 
 /**
  * What the docs say that a caller has to know about a value. A disagreement: a limit stated with different values,
- * every statement with its place, examples marked, none picked. A condition (kind "condition"): a field applies only
+ * every statement with its place, examples marked, none picked. A condition (kind "condition"): a field is required only
  * in the stated case; that is not a disagreement and is shown apart. Nothing when there are none.
  */
 export function DocConflicts({ conflicts }: { conflicts: DocConflict[] | undefined }) {
@@ -126,7 +126,7 @@ export function DocConflicts({ conflicts }: { conflicts: DocConflict[] | undefin
         <Card className="pad doc-conditions" role="region" aria-label="Conditions">
           <h2 className="h2-sm">Conditions</h2>
           <p className="muted small">
-            These apply only in the case the docs state. They are not a disagreement.
+            When the docs state these fields are required. They are not a disagreement.
           </p>
           {conditions.map((c, i) => (
             <Entry
@@ -134,8 +134,7 @@ export function DocConflicts({ conflicts }: { conflicts: DocConflict[] | undefin
               c={c}
               heading={
                 <>
-                  Condition on <Subject text={c.field ?? c.limit} /> (send it only when this
-                  applies):
+                  Condition on <Subject text={c.field ?? c.limit} /> (required only in this case):
                 </>
               }
             />

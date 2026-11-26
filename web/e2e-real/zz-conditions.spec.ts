@@ -20,7 +20,7 @@ for (const theme of THEMES) {
       const card = page.getByRole('region', { name: 'Conditions' });
       await expect(card.getByRole('heading', { level: 3 })).toHaveCount(3);
       await expect(card).toContainText(
-        'Condition on retailer_id (send it only when this applies):',
+        'Condition on items[].retailer_id (required only in this case):',
       );
       await expect(page.getByRole('region', { name: 'Conflicting statements' })).toHaveCount(0);
       await expect(page.getByText('The docs disagree')).toHaveCount(0);
@@ -57,7 +57,7 @@ for (const theme of THEMES) {
       // names match only in full: the nested field is passed with its path
       const item = page.getByRole('listitem').filter({ hasText: 'items[].retailer_id' }).first();
       await expect(item).toContainText(
-        'Condition on retailer_id (send it only when this applies):',
+        'Condition on items[].retailer_id (required only in this case):',
       );
       await expect(item).toContainText('Required if item_id is not provided.');
       // the server's lines stay lines
