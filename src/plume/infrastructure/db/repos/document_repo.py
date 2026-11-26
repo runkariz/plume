@@ -150,6 +150,18 @@ class PostgresDocumentRepo:
         docs = [document_from_row(r) for r in rows]
         return {d.source_id: d for d in docs if d.source_id}
 
+    def operation_ids(self, build_id: BuildId) -> list[tuple[str, str]]:
+        with self._engine.connect() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT raw->>'specOperationId', doc_id FROM documents WHERE build_id = :b "
+                    "AND kind = 'endpoint' AND jsonb_typeof(raw->'specOperationId') = 'string' "
+                    "ORDER BY doc_id"
+                ),
+                {"b": build_id.value},
+            ).all()
+        return [(r[0], r[1]) for r in rows]
+
     def model_users(self, build_id: BuildId, model_id: str) -> list[tuple[str, tuple[str, ...]]]:
         with self._engine.connect() as conn:
             rows = conn.execute(

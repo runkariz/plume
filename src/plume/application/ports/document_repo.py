@@ -24,6 +24,12 @@ class DocumentRepo(Protocol):
         left out."""
         ...
 
+    def operation_ids(self, build_id: BuildId) -> list[tuple[str, str]]:
+        """(request.json specOperationId, endpoint doc id) for the build's endpoints that have
+        one, ordered by doc id (a few ms; listing every document costs seconds on a large
+        build)."""
+        ...
+
     def model_users(self, build_id: BuildId, model_id: str) -> list[tuple[str, tuple[str, ...]]]:
         """The endpoints and triggers with a field whose type is the model (its ``model_id``:
         a $ref, or stream's x-kariz-model on an inline copy), each with the field locations

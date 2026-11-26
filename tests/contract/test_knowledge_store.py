@@ -198,6 +198,20 @@ def test_documents_by_source_ids(store: Store) -> None:
     assert store.documents.by_source_ids(build.build_id, DOC.kind, []) == {}
 
 
+def test_operation_ids(store: Store) -> None:
+    """(specOperationId, endpoint doc id) for endpoints with a string one, by doc id."""
+    from dataclasses import replace  # noqa: PLC0415
+
+    build = _draft(store)
+    a = replace(DOC, doc_id="endpoint:GET~/b", raw={"specOperationId": "A02"})
+    b = replace(DOC, doc_id="endpoint:GET~/a", raw={"specOperationId": "OR11"})
+    none = replace(DOC, doc_id="endpoint:GET~/c", raw={"specOperationId": 7})
+    guide = replace(GUIDE, raw={"specOperationId": "X1"})
+    store.documents.add_documents(build.build_id, [a, b, none, guide])
+    assert store.documents.operation_ids(build.build_id) == [
+        ("OR11", "endpoint:GET~/a"), ("A02", "endpoint:GET~/b")]  # fmt: skip
+
+
 def test_model_users(store: Store) -> None:
     """Endpoints/triggers with a field whose type is the model, with the field locations."""
     from dataclasses import replace  # noqa: PLC0415

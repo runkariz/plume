@@ -341,16 +341,15 @@ _OWNERS: dict[str, dict[str, str]] = {}
 
 def operation_owners(documents: DocumentRepo, build_id: BuildId) -> dict[str, str]:
     """{operation code: endpoint doc id} from request.json specOperationId (Mirakl "A02");
-    sealed builds never change, so it is computed once per build (bounded cache)."""
+    sealed builds never change, so it is computed once per build (bounded cache). One narrow
+    query: listing every document made the first search per build and process take seconds
+    (Shopware: 6.3 s of a 7.6 s first search, 3,123 documents decoded for 1,238 ids)."""
     cached = _OWNERS.get(build_id.value)
     if cached is None:
         cached = {}
-        for d in documents.list_documents(build_id):
-            if d.kind is not DocumentKind.ENDPOINT:
-                continue
-            op = (d.raw or {}).get("specOperationId")
-            if isinstance(op, str) and op.strip():
-                cached.setdefault(op.strip().lower(), d.doc_id)
+        for op, doc_id in documents.operation_ids(build_id):
+            if op.strip():
+                cached.setdefault(op.strip().lower(), doc_id)
         if len(_OWNERS) > OWNER_CACHE:
             _OWNERS.clear()
         _OWNERS[build_id.value] = cached
