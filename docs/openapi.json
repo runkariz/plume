@@ -1864,7 +1864,7 @@
           },
           "kind": {
             "default": "conflict",
-            "description": "conflict: the docs disagree (every statement shown, none picked); condition: a field applies only in a stated case (send it only then).",
+            "description": "conflict: the docs disagree (every statement shown, none picked); condition: the docs state a field is required in a stated case (the quote).",
             "title": "Kind",
             "type": "string"
           },

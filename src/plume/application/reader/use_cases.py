@@ -1062,7 +1062,7 @@ class FindFact:
         if fact.owner_id not in cache:
             cache[fact.owner_id] = self._documents.get_document(build_id, fact.owner_id)
         doc = cache[fact.owner_id]
-        conflicts = conflicts_of(doc.raw) if doc is not None else ()
+        conflicts = conflicts_of(doc.raw, [f.name for f in doc.fields]) if doc is not None else ()
         hits = [
             c for c in conflicts
             if (fact.kind is FactKind.ENDPOINT and c.field is None)
@@ -1876,10 +1876,8 @@ class CheckCall:
         """The docs' different values for this parameter (x-kariz-conflicts), every statement
         with its place; the check itself stays the vendor's text (never one value picked)."""
         doc = self._documents.get_document(build_id, owner_id) if self._documents else None
-        texts = [
-            c.text for c in (conflicts_of(doc.raw) if doc is not None else ())
-            if conflict_concerns(c, name)
-        ]  # fmt: skip
+        found = conflicts_of(doc.raw, [f.name for f in doc.fields]) if doc is not None else ()
+        texts = [c.text for c in found if conflict_concerns(c, name)]
         return "\n".join(texts) or None
 
     def _paging_guide(

@@ -7,7 +7,7 @@ are built from the HTTP method and the path with the API-version segment replace
 
 import json
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
@@ -278,17 +278,18 @@ class ConflictStatement:
 class Conflict:
     limit: str  # what is limited, in the docs' words
     statements: tuple[ConflictStatement, ...]
-    # "condition": the docs make a field depend on another ("Required if item_id is not
-    # provided"): one statement, to apply when it holds, not a disagreement
+    # "condition": the docs make a field required in a stated case ("Required if item_id is
+    # not provided"): one statement, not a disagreement; Plume says no more than that
     kind: str = "conflict"
     field: str | None = None  # the field it is about (a property's path, or a condition's)
 
     @property
     def text(self) -> str:
         """\"The docs state different values for <limit>:\" (a condition: \"Condition on
-        <limit>, send it when it applies:\") and each quote with its place."""
+        <field> (required only in this case):\", restating required-ness only; the quote is the
+        evidence) and each quote with its place."""
         lines = [
-            f"Condition on {self.field or self.limit} (send it only when this applies):"
+            f"Condition on {self.field or self.limit} (required only in this case):"
             if self.kind == CONDITION
             else f"The docs state different values for {self.limit}:"
         ]
@@ -302,10 +303,12 @@ CONDITION = "condition"
 _CONDITION_FIELD = re.compile(r"^field\s+(\S+)\s+required\b", re.IGNORECASE)
 
 
-def conflicts_of(raw: object) -> tuple[Conflict, ...]:
+def conflicts_of(raw: object, fields: Sequence[str] = ()) -> tuple[Conflict, ...]:
     """The document's x-kariz-conflicts (raw JSON), skipping malformed items (no limit; fewer
     than two statements, or none for a condition). A condition's field comes from "field
-    <name> required"; a property-level conflict lifted by the loader carries its field."""
+    <name> required"; a property-level conflict lifted by the loader carries its field.
+    ``fields``: the document's field names; a bare name that exactly one of them ends with
+    becomes that path (retailer_id -> items[].retailer_id)."""
     items = raw.get(CONFLICTS_KEY) if isinstance(raw, Mapping) else None
     out: list[Conflict] = []
     for item in items if isinstance(items, list) else []:
@@ -326,6 +329,9 @@ def conflicts_of(raw: object) -> tuple[Conflict, ...]:
         if kind == CONDITION and field is None:
             m = _CONDITION_FIELD.match(item["limit"].strip())
             field = m.group(1) if m else None
+        if field and "." not in field and field not in fields:
+            nested = [f for f in fields if f.endswith((f".{field}", f"[].{field}"))]
+            field = nested[0] if len(nested) == 1 else field
         if len(statements) >= (1 if kind == CONDITION else 2):
             out.append(Conflict(item["limit"], statements, kind, field))
     return tuple(out)
