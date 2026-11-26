@@ -7,6 +7,7 @@
 
 import json
 import shutil
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -24,6 +25,9 @@ FOLDER = "post-refunds"
 CONDITION = {"kind": "condition", "limit": "field retailer_id required",
              "statements": [{"quote": "Required if item_id is not provided.",
                              "where": "description"}]}  # fmt: skip
+RESPONSE_ITEM = {"limit": "item_id type", "field": "items[].item_id", "where": "response:200",
+                 "statements": [{"where": "inline schema", "quote": "item_id: string"},
+                                {"where": "model", "quote": "item_id: integer"}]}  # fmt: skip
 TRANSACTION = {"limit": "transaction_type values", "statements": [
     {"where": "page", "quote": "Allowed values are: SALE or REFUND."},
     {"where": "page", "quote": "transaction_type Reason code for the transaction"}]}  # fmt: skip
@@ -45,7 +49,7 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> FakeStack:
         "endpointId": FOLDER, "name": "Refund", "method": "POST",
         "url": "{{app_env.servers.api}}/orders/{order_id}/refunds", "resource": "Refund",
         "bodyType": "JSON", "bodyContractRef": "body.schema.json", "responses": [],
-        "x-kariz-conflicts": [CONDITION],
+        "x-kariz-conflicts": [CONDITION, RESPONSE_ITEM],
     }))  # fmt: skip
     model = {"title": "TransactionDetail", "type": "object", "properties": {
         "transaction_type": {"type": "string", "enum": ["SALE", "REFUND"],
@@ -61,8 +65,9 @@ def _doc(stack: FakeStack, doc_id: str) -> dict[str, Any]:
 
 
 def test_a_condition_is_shown_as_a_condition_on_its_field(stack: FakeStack) -> None:
-    [c] = _doc(stack, "endpoint:POST~/orders/{order_id}/refunds")["conflicts"]
-    assert (c["kind"], c["field"]) == ("condition", "items[].retailer_id")  # the field's path
+    c, response = _doc(stack, "endpoint:POST~/orders/{order_id}/refunds")["conflicts"]
+    assert (c["kind"], c["field"], c["where"]) == ("condition", "items[].retailer_id", None)
+    assert (response["field"], response["where"]) == ("items[].item_id", "response:200")
     assert c["text"] == (
         "Condition on items[].retailer_id (required only in this case):\n"
         '- description: "Required if item_id is not provided."'
@@ -77,7 +82,7 @@ def test_check_call_notes_a_sent_conditional_field(stack: FakeStack) -> None:
     assert notes["items[].retailer_id"].startswith(
         "Condition on items[].retailer_id (required only in this case):"
     )
-    assert not notes["items[].item_id"]
+    assert not notes["items[].item_id"]  # its conflict is placed in the response
 
 
 def test_a_property_conflict_is_lifted_with_its_field(stack: FakeStack) -> None:
@@ -99,3 +104,52 @@ def test_conflicts_of_rules() -> None:
     assert conflict_concerns(nested, "data[].transaction_type")
     assert conflict_concerns(nested, "transaction_type")
     assert not conflict_concerns(nested, "type")
+
+
+def test_the_producers_field_and_where_win_over_the_fallbacks() -> None:
+    """Stream's explicit field is used as given (no suffix match, no limit pattern); its
+    item-level where is kept."""
+    explicit = {**CONDITION, "field": "retailer_id", "where": "body"}
+    [c] = conflicts_of({"x-kariz-conflicts": [explicit]}, ["items[].retailer_id"])
+    assert (c.field, c.place) == ("retailer_id", "body")
+    [bare] = conflicts_of({"x-kariz-conflicts": [CONDITION]}, ["items[].retailer_id"])
+    assert bare.field == "items[].retailer_id"  # fallback: the pattern, then the suffix match
+    placed = Conflict("t", (ConflictStatement("a", "q"),), "conflict", "end_time", "response:200")
+    assert conflict_concerns(placed, "end_time")
+    assert not conflict_concerns(placed, "end_time", request=True)
+
+
+def test_one_item_per_path_with_the_same_limit_all_survive_and_match_their_own_path(
+    tmp_path: Path,
+) -> None:
+    """Core ruling: the same field name required at several places (Google Merchant shipping
+    settings: prices at 4-5 paths) is ONE item per path, each with its own field and where and
+    the SAME limit text. None is merged away; each matches only its own path."""
+    from tests.conftest import PACKAGES  # noqa: PLC0415
+
+    paths = ["services[].rateGroups[].mainTable.rows[].cells[].prices",
+             "services[].rateGroups[].subtables[].rows[].cells[].prices",
+             "warehouses[].prices"]  # fmt: skip
+    items = [{"kind": "condition", "limit": "field prices required", "field": p, "where": "body",
+              "statements": [{"where": "description", "quote": f"Required at {p}."}]}
+             for p in paths]  # fmt: skip
+    assert [c.field for c in conflicts_of({"x-kariz-conflicts": items})] == paths
+    dst = tmp_path / "shopify"
+    shutil.copytree(PACKAGES / "shopify-mini", dst)
+    d = dst / "connector" / "endpoints" / "put-shipping"
+    d.mkdir()
+    (d / "request.json").write_text(json.dumps({
+        "endpointId": "put-shipping", "name": "Shipping", "method": "PUT",
+        "url": "{{app_env.servers.api}}/shippingsettings", "resource": "Shipping",
+        "bodyType": "NONE", "responses": [], "x-kariz-conflicts": items,
+    }))  # fmt: skip
+    s = FakeStack()
+    s.load(str(dst))
+    got = s.get_document().execute("shopify", "endpoint:PUT~/shippingsettings")
+    doc = payloads.document_payload(got)
+    assert [c["field"] for c in doc["conflicts"]] == paths
+    assert {c["limit"] for c in doc["conflicts"]} == {"field prices required"}
+    found = conflicts_of(got.document.raw)
+    for p in paths:  # a call sending one path is concerned by that path's item only
+        mine = [c for c in found if conflict_concerns(c, p, request=True)]
+        assert [c.field for c in mine] == [p]

@@ -1883,6 +1883,18 @@
             "description": "\"The docs state different values for <limit>:\" + quotes.",
             "title": "Text",
             "type": "string"
+          },
+          "where": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where that field is, as the producer states it: \"body\", \"params\" or \"response:<status>\".",
+            "title": "Where"
           }
         },
         "required": [

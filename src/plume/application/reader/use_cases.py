@@ -1877,7 +1877,7 @@ class CheckCall:
         with its place; the check itself stays the vendor's text (never one value picked)."""
         doc = self._documents.get_document(build_id, owner_id) if self._documents else None
         found = conflicts_of(doc.raw, [f.name for f in doc.fields]) if doc is not None else ()
-        texts = [c.text for c in found if conflict_concerns(c, name)]
+        texts = [c.text for c in found if conflict_concerns(c, name, request=True)]
         return "\n".join(texts) or None
 
     def _paging_guide(
