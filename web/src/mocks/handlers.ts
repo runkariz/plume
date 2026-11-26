@@ -225,6 +225,26 @@ function linksOf(docId: string, kind: string, method: string | null) {
             },
           ],
         },
+        // a property-level disagreement names its field
+        {
+          limit: 'the allowed values',
+          kind: 'conflict',
+          field: 'orders[].financial_status',
+          statements: [
+            { where: 'description', quote: 'One of paid or pending.' },
+            {
+              where: 'page:https://shopify.dev/docs/api/usage',
+              quote: 'One of paid, pending or voided.',
+            },
+          ],
+        },
+        // a condition: one statement, not a disagreement
+        {
+          limit: 'field ids required if since_id is not provided',
+          kind: 'condition',
+          field: 'ids',
+          statements: [{ where: 'param:ids', quote: 'Required if since_id is not provided.' }],
+        },
       ],
     };
   if (docId === 'guide:pagination')

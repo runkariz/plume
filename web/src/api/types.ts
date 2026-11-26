@@ -873,10 +873,17 @@ export interface ConflictStatement {
   isExample?: boolean;
 }
 
-/** The docs state different values for `limit` (e.g. a page size of 128 here and 256 there). */
+/** The docs state different values for `limit` (e.g. a page size of 128 here and 256 there), or a condition. */
 export interface DocConflict {
   limit: string;
-  /** "The docs state different values for <limit>:" and the quotes, as the server words it. */
+  /**
+   * "conflict" (the default, absent on older servers): the docs disagree; "condition": a field applies only in a stated
+   * case ("Required if item_id is not provided"), which is not a disagreement.
+   */
+  kind?: string;
+  /** The field it is about (a property's dotted path, or a condition's), if one. */
+  field?: string | null;
+  /** The server's own wording with the quotes. */
   text?: string;
   statements: ConflictStatement[];
 }
