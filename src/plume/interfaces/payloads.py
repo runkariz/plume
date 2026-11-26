@@ -144,6 +144,7 @@ def conflicts_payload(d: Document) -> list[Json]:
             "limit": c.limit,
             "kind": c.kind,
             "field": c.field,
+            "where": c.place,
             "text": c.text,
             "statements": [
                 {"where": st.where, "quote": st.quote, "source_url": st.source_url,

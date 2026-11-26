@@ -521,6 +521,11 @@ class DocConflict(Schema):
         "condition: the docs state a field is required in a stated case (the quote).",
     )
     field: str | None = Field(default=None, description="The field it is about, if one.")
+    where: str | None = Field(
+        default=None,
+        description='Where that field is, as the producer states it: "body", "params" or '
+        '"response:<status>".',
+    )
     text: str = Field(description='"The docs state different values for <limit>:" + quotes.')
     statements: list[ConflictStatementOut]
 

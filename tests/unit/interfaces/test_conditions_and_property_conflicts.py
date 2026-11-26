@@ -24,6 +24,9 @@ FOLDER = "post-refunds"
 CONDITION = {"kind": "condition", "limit": "field retailer_id required",
              "statements": [{"quote": "Required if item_id is not provided.",
                              "where": "description"}]}  # fmt: skip
+RESPONSE_ITEM = {"limit": "item_id type", "field": "items[].item_id", "where": "response:200",
+                 "statements": [{"where": "inline schema", "quote": "item_id: string"},
+                                {"where": "model", "quote": "item_id: integer"}]}  # fmt: skip
 TRANSACTION = {"limit": "transaction_type values", "statements": [
     {"where": "page", "quote": "Allowed values are: SALE or REFUND."},
     {"where": "page", "quote": "transaction_type Reason code for the transaction"}]}  # fmt: skip
@@ -45,7 +48,7 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> FakeStack:
         "endpointId": FOLDER, "name": "Refund", "method": "POST",
         "url": "{{app_env.servers.api}}/orders/{order_id}/refunds", "resource": "Refund",
         "bodyType": "JSON", "bodyContractRef": "body.schema.json", "responses": [],
-        "x-kariz-conflicts": [CONDITION],
+        "x-kariz-conflicts": [CONDITION, RESPONSE_ITEM],
     }))  # fmt: skip
     model = {"title": "TransactionDetail", "type": "object", "properties": {
         "transaction_type": {"type": "string", "enum": ["SALE", "REFUND"],
@@ -61,8 +64,9 @@ def _doc(stack: FakeStack, doc_id: str) -> dict[str, Any]:
 
 
 def test_a_condition_is_shown_as_a_condition_on_its_field(stack: FakeStack) -> None:
-    [c] = _doc(stack, "endpoint:POST~/orders/{order_id}/refunds")["conflicts"]
-    assert (c["kind"], c["field"]) == ("condition", "items[].retailer_id")  # the field's path
+    c, response = _doc(stack, "endpoint:POST~/orders/{order_id}/refunds")["conflicts"]
+    assert (c["kind"], c["field"], c["where"]) == ("condition", "items[].retailer_id", None)
+    assert (response["field"], response["where"]) == ("items[].item_id", "response:200")
     assert c["text"] == (
         "Condition on items[].retailer_id (required only in this case):\n"
         '- description: "Required if item_id is not provided."'
@@ -77,7 +81,7 @@ def test_check_call_notes_a_sent_conditional_field(stack: FakeStack) -> None:
     assert notes["items[].retailer_id"].startswith(
         "Condition on items[].retailer_id (required only in this case):"
     )
-    assert not notes["items[].item_id"]
+    assert not notes["items[].item_id"]  # its conflict is placed in the response
 
 
 def test_a_property_conflict_is_lifted_with_its_field(stack: FakeStack) -> None:
@@ -99,3 +103,16 @@ def test_conflicts_of_rules() -> None:
     assert conflict_concerns(nested, "data[].transaction_type")
     assert conflict_concerns(nested, "transaction_type")
     assert not conflict_concerns(nested, "type")
+
+
+def test_the_producers_field_and_where_win_over_the_fallbacks() -> None:
+    """Stream's explicit field is used as given (no suffix match, no limit pattern); its
+    item-level where is kept."""
+    explicit = {**CONDITION, "field": "retailer_id", "where": "body"}
+    [c] = conflicts_of({"x-kariz-conflicts": [explicit]}, ["items[].retailer_id"])
+    assert (c.field, c.place) == ("retailer_id", "body")
+    [bare] = conflicts_of({"x-kariz-conflicts": [CONDITION]}, ["items[].retailer_id"])
+    assert bare.field == "items[].retailer_id"  # fallback: the pattern, then the suffix match
+    placed = Conflict("t", (ConflictStatement("a", "q"),), "conflict", "end_time", "response:200")
+    assert conflict_concerns(placed, "end_time")
+    assert not conflict_concerns(placed, "end_time", request=True)

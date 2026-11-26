@@ -282,6 +282,8 @@ class Conflict:
     # not provided"): one statement, not a disagreement; Plume says no more than that
     kind: str = "conflict"
     field: str | None = None  # the field it is about (a property's path, or a condition's)
+    # where that field is, as the producer states it: "body" | "params" | "response:<status>"
+    place: str | None = None
 
     @property
     def text(self) -> str:
@@ -325,21 +327,28 @@ def conflicts_of(raw: object, fields: Sequence[str] = ()) -> tuple[Conflict, ...
             if isinstance(st, Mapping) and isinstance(st.get("quote"), str)
         )
         kind = CONDITION if item.get("kind") == CONDITION else "conflict"
-        field = item.get("field") if isinstance(item.get("field"), str) else None
-        if kind == CONDITION and field is None:
+        explicit = item.get("field") if isinstance(item.get("field"), str) else None
+        field = explicit.strip() or None if explicit else None  # the producer's path wins
+        if kind == CONDITION and field is None:  # fallback: "field <name> required"
             m = _CONDITION_FIELD.match(item["limit"].strip())
             field = m.group(1) if m else None
-        if field and "." not in field and field not in fields:
+        if field and not explicit and "." not in field and field not in fields:
             nested = [f for f in fields if f.endswith((f".{field}", f"[].{field}"))]
             field = nested[0] if len(nested) == 1 else field
+        where = item.get("where")
+        place = where.strip() if isinstance(where, str) and where.strip() else None
         if len(statements) >= (1 if kind == CONDITION else 2):
-            out.append(Conflict(item["limit"], statements, kind, field))
+            out.append(Conflict(item["limit"], statements, kind, field, place))
     return tuple(out)
 
 
-def conflict_concerns(conflict: Conflict, name: str) -> bool:
+def conflict_concerns(conflict: Conflict, name: str, request: bool = False) -> bool:
     """The conflict is about this field or parameter: a statement at param:<name>, or its field
-    (a nested name matches by its last parts: items[].retailer_id and retailer_id)."""
+    (a nested name matches by its last parts: items[].retailer_id and retailer_id).
+    ``request``: the name is one a call sends, so a conflict the producer places in a
+    response ("response:200") is not about it."""
+    if request and (conflict.place or "").lower().startswith("response"):
+        return False
     want = name.lower().replace("[]", "")
     if any(st.where.lower() == f"param:{name.lower()}" for st in conflict.statements):
         return True
