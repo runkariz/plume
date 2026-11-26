@@ -21,8 +21,9 @@ function Conflict({ c }: { c: SourceConflict }) {
         <b>{c.unit}</b> <span className="mono">{c.field}</span>
       </p>
       <ul className="plain small">
-        {(c.values ?? []).map((v) => (
-          <li key={v.url}>
+        {/* one page can state two values */}
+        {(c.values ?? []).map((v, i) => (
+          <li key={`${v.url}/${i}`}>
             <span className="mono">{plain(v.value)}</span> <span className="faint">from</span>{' '}
             <Link url={v.url} />
           </li>
@@ -129,8 +130,9 @@ export function SourcesPanel({ n }: { n: ReleaseNotes }) {
       ) : null}
       {conflicts.length > 0 ? (
         <ul className="plain stack" aria-label="Source conflicts">
-          {conflicts.map((c) => (
-            <Conflict key={`${c.unit}/${c.field}`} c={c} />
+          {/* stream can report one unit and field more than once: the index keeps the rows apart */}
+          {conflicts.map((c, i) => (
+            <Conflict key={`${c.unit}/${c.field}/${i}`} c={c} />
           ))}
         </ul>
       ) : null}
