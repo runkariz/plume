@@ -657,6 +657,31 @@ def _signed_string(template: str) -> str:
     return f"The signed string is `{template}`{where}."
 
 
+_GENERIC_SPEC_SEGMENTS = frozenset(
+    {"webhooks", "webhook", "api", "apis", "spec", "specs", "openapi", "swagger", "docs",
+     "reference", "events", "event"}
+)  # fmt: skip
+
+
+def _spec_label(url: object) -> str | None:
+    """What a mechanism's evidence spec file is about, from its folder: Sendcloud
+    .../v3/event-subscriptions/openapi.yaml -> "event subscriptions" (its two mechanisms are
+    "portal" and "portal-2", names nobody asks with); generic segments (webhooks, api, a
+    version) name nothing."""
+    if not isinstance(url, str):
+        return None
+    path = re.sub(r"^[a-z]+://[^/]+", "", url).split("?", 1)[0]
+    segs = [x for x in path.split("/") if x and not x.startswith(".")]
+    if not segs or not segs[-1].lower().endswith((".yaml", ".yml", ".json")):
+        return None  # a docs page (Shopify .../resources/webhook), not a spec file
+    for seg in reversed(segs[:-1]):
+        if seg.lower() not in _GENERIC_SPEC_SEGMENTS and not re.fullmatch(
+            r"v\d+(\.\d+)*", seg.lower()
+        ):
+            return seg.replace("-", " ").replace("_", " ")
+    return None
+
+
 def _webhook_document(api_name: str, hook: object, several: bool = False) -> Document | None:
     """A webhook delivery mechanism (connector/triggers/webhooks/*.json) as a searchable guide:
     how a delivery is verified (HMAC header, algorithm, encoding, signed payload) or that the
@@ -672,9 +697,8 @@ def _webhook_document(api_name: str, hook: object, several: bool = False) -> Doc
     handshake = _obj(hook.get("handshake"))
     provenance = _obj(hook.get("provenance"))
     mode = _str(hook.get("mode"))
-    which = (
-        f" ({hook['id']}{f', {mode}' if mode and mode != hook['id'] else ''})" if several else ""
-    )
+    names = [_spec_label(provenance.get("evidenceUrl")), hook["id"], mode]
+    which = f" ({', '.join(dict.fromkeys(n for n in names if n))})" if several else ""
     title = f"{api_name} webhooks{which}: delivery and verification"
     parts = [f"# {title}"]
     fields: list[FieldSpec] = []
