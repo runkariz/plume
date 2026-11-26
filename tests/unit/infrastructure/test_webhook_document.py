@@ -176,3 +176,29 @@ def test_body_null_or_empty_sign_the_raw_body(packages: Path, tmp_path: Path) ->
         build = stack.resolver().resolve("shopify").build.build_id
         app = next(d for d in stack.documents.list_documents(build) if d.kind.value == "app")
         assert not any("signed-payload" in w for w in (app.raw or {}).get("package_warnings") or [])
+
+
+def test_a_mechanism_is_named_by_its_evidence_spec() -> None:
+    """Sendcloud's mechanisms are "portal" and "portal-2"; the event-subscriptions one is named
+    by its spec's path, so "verify an event subscription webhook" finds it (it states no
+    signature). Generic segments (webhooks, a version, a dot folder) name nothing."""
+    from plume.infrastructure.sources.stream_package import (  # noqa: PLC0415
+        _spec_label,
+        _webhook_document,
+    )
+
+    url = "https://sendcloud.dev/.openapi/v3/event-subscriptions/openapi.yaml"
+    assert _spec_label(url) == "event subscriptions"
+    assert _spec_label("https://sendcloud.dev/.openapi/v3/webhooks/openapi.yaml") is None
+    assert _spec_label("https://example.com/event-subscriptions.yaml") is None
+    assert _spec_label(None) is None
+    hook = {"id": "portal", "mode": "portal", "provenance": {"evidenceUrl": url}}
+    doc = _webhook_document("Sendcloud", hook, several=True)
+    assert doc is not None
+    assert (
+        doc.title == "Sendcloud webhooks (event subscriptions, portal): delivery and verification"
+    )
+    assert doc.doc_id == "guide:webhook-delivery-portal"  # the id does not change
+    alone = _webhook_document("Sendcloud", hook)
+    assert alone is not None
+    assert alone.title == "Sendcloud webhooks: delivery and verification"
