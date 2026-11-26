@@ -100,6 +100,7 @@ from plume.domain.knowledge.document import (
     Document,
     DocumentKind,
     FieldLocation,
+    conflict_concerns,
     conflicts_of,
     constraint_dict,
 )
@@ -1062,11 +1063,10 @@ class FindFact:
             cache[fact.owner_id] = self._documents.get_document(build_id, fact.owner_id)
         doc = cache[fact.owner_id]
         conflicts = conflicts_of(doc.raw) if doc is not None else ()
-        name = fact.name.lower()
         hits = [
             c for c in conflicts
-            if fact.kind is FactKind.ENDPOINT
-            or any(st.where.lower() == f"param:{name}" for st in c.statements)
+            if (fact.kind is FactKind.ENDPOINT and c.field is None)
+            or conflict_concerns(c, fact.name)
         ]  # fmt: skip
         return "\n".join(c.text for c in hits) or None
 
@@ -1876,10 +1876,9 @@ class CheckCall:
         """The docs' different values for this parameter (x-kariz-conflicts), every statement
         with its place; the check itself stays the vendor's text (never one value picked)."""
         doc = self._documents.get_document(build_id, owner_id) if self._documents else None
-        want = f"param:{name.lower()}"
         texts = [
             c.text for c in (conflicts_of(doc.raw) if doc is not None else ())
-            if any(st.where.lower() == want for st in c.statements)
+            if conflict_concerns(c, name)
         ]  # fmt: skip
         return "\n".join(texts) or None
 
