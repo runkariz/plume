@@ -37,10 +37,11 @@ class PostgresReleaseNotesRepo:
             conn.execute(
                 text(
                     "INSERT INTO release_notes (to_build, api_id, from_build, computed_at, review, "
-                    "body) VALUES (:t, :a, :f, :c, :r, CAST(:b AS jsonb)) ON CONFLICT (to_build) "
+                    "body, card) VALUES (:t, :a, :f, :c, :r, CAST(:b AS jsonb), "
+                    "CAST(:card AS jsonb)) ON CONFLICT (to_build) "
                     "DO UPDATE SET api_id = EXCLUDED.api_id, from_build = EXCLUDED.from_build, "
                     "computed_at = EXCLUDED.computed_at, review = EXCLUDED.review, "
-                    "body = EXCLUDED.body"
+                    "body = EXCLUDED.body, card = EXCLUDED.card"
                 ),
                 {
                     "t": notes["to"],
@@ -49,6 +50,7 @@ class PostgresReleaseNotesRepo:
                     "c": datetime.fromisoformat(notes["computedAt"]),
                     "r": notes["review"],
                     "b": json.dumps(dict(notes), ensure_ascii=False),
+                    "card": json.dumps(card_of(notes), ensure_ascii=False),
                 },
             )
 
@@ -60,21 +62,15 @@ class PostgresReleaseNotesRepo:
         return _j(v) if v is not None else None
 
     def card_notes(self, to_builds: list[str]) -> dict[str, dict[str, Any]]:
-        """Projected in the database: the latest notes of 45 APIs are 5 MB of items, a card
-        needs four fields of the visible ones."""
+        """The stored card projection (card_of; migration 0022 backfilled older rows): the
+        latest notes' bodies are megabytes of items (Shopware 66,826), a card needs four fields
+        of the visible ones."""
         if not to_builds:
             return {}
         with self._engine.connect() as conn:
             rows = conn.execute(
                 text(
-                    "SELECT to_build, jsonb_build_object("
-                    "'api', body->'api', 'to', body->'to', 'toDocsAsOf', body->'toDocsAsOf', "
-                    "'items', coalesce((SELECT jsonb_agg(jsonb_build_object("
-                    "'visibleToUsers', i->'visibleToUsers', 'class', i->'class', "
-                    "'breaking', i->'breaking', 'wordingOnly', i->'wordingOnly', "
-                    "'kind', i->'kind')) "
-                    "FROM jsonb_array_elements(body->'items') i "
-                    "WHERE i->'visibleToUsers' = 'true'::jsonb), '[]'::jsonb)) AS card "
+                    f"SELECT to_build, coalesce(card, {CARD_SQL}) AS card "  # noqa: S608
                     "FROM release_notes WHERE to_build = ANY(:t)"
                 ),
                 {"t": list(to_builds)},
@@ -91,3 +87,30 @@ class PostgresReleaseNotesRepo:
                 {"a": api_id},
             ).all()
         return [_j(r.body) for r in rows]
+
+
+CARD_ITEM_KEYS = ("visibleToUsers", "class", "breaking", "wordingOnly", "kind")
+# the same projection in SQL (migration 0022's backfill, and rows saved without a card)
+CARD_SQL = (
+    "jsonb_build_object('api', body->'api', 'to', body->'to', 'toDocsAsOf', body->'toDocsAsOf', "
+    "'items', coalesce((SELECT jsonb_agg(jsonb_build_object('visibleToUsers', i->'visibleToUsers', "
+    "'class', i->'class', 'breaking', i->'breaking', 'wordingOnly', i->'wordingOnly', "
+    "'kind', i->'kind')) FROM jsonb_array_elements(body->'items') i "
+    "WHERE i->'visibleToUsers' = 'true'::jsonb), '[]'::jsonb))"
+)
+
+
+def card_of(notes: Mapping[str, Any]) -> dict[str, Any]:
+    """What an API card needs of its latest notes: api, to, toDocsAsOf and, of the items
+    visible to users, these five keys (missing ones as null, like jsonb_build_object)."""
+    items = notes.get("items") or []
+    return {
+        "api": notes.get("api"),
+        "to": notes.get("to"),
+        "toDocsAsOf": notes.get("toDocsAsOf"),
+        "items": [
+            {k: i.get(k) for k in CARD_ITEM_KEYS}
+            for i in items
+            if isinstance(i, dict) and i.get("visibleToUsers") is True
+        ],
+    }

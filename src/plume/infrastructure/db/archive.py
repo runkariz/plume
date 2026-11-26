@@ -15,6 +15,7 @@ from plume.infrastructure.db.repos.asset_repo import put_assets
 from plume.infrastructure.db.repos.build_repo import save_build
 from plume.infrastructure.db.repos.document_repo import insert_documents, replace_chunks
 from plume.infrastructure.db.repos.eval_repo import save_eval
+from plume.infrastructure.db.repos.release_notes_repo import card_of
 from plume.infrastructure.db.repos.tag_repo import set_tag
 from plume.infrastructure.search.postgres_fact_index import replace_facts
 
@@ -90,8 +91,8 @@ class PostgresBuildImporter:
                 conn.execute(
                     text(
                         "INSERT INTO release_notes (to_build, api_id, from_build, computed_at, "
-                        "review, body) VALUES (:t, :a, :f, :c, :r, CAST(:j AS jsonb)) "
-                        "ON CONFLICT (to_build) DO NOTHING"
+                        "review, body, card) VALUES (:t, :a, :f, :c, :r, CAST(:j AS jsonb), "
+                        "CAST(:card AS jsonb)) ON CONFLICT (to_build) DO NOTHING"
                     ),
                     {
                         "t": n["to"],
@@ -100,6 +101,8 @@ class PostgresBuildImporter:
                         "c": datetime.fromisoformat(n["computedAt"]),
                         "r": n["review"],
                         "j": json.dumps(dict(n), ensure_ascii=False),
+                        # the API list reads this projection, not the body (migration 0022)
+                        "card": json.dumps(card_of(n), ensure_ascii=False),
                     },
                 )
             for name in tags:
