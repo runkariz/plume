@@ -151,7 +151,7 @@ def conflicts_payload(d: Document) -> list[Json]:
                 for st in c.statements
             ],
         }
-        for c in conflicts_of(d.raw)
+        for c in conflicts_of(d.raw, [f.name for f in d.fields])
     ]  # fmt: skip
 
 

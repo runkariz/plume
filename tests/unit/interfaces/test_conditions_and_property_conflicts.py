@@ -62,9 +62,9 @@ def _doc(stack: FakeStack, doc_id: str) -> dict[str, Any]:
 
 def test_a_condition_is_shown_as_a_condition_on_its_field(stack: FakeStack) -> None:
     [c] = _doc(stack, "endpoint:POST~/orders/{order_id}/refunds")["conflicts"]
-    assert (c["kind"], c["field"]) == ("condition", "retailer_id")
+    assert (c["kind"], c["field"]) == ("condition", "items[].retailer_id")  # the field's path
     assert c["text"] == (
-        "Condition on retailer_id (send it only when this applies):\n"
+        "Condition on items[].retailer_id (required only in this case):\n"
         '- description: "Required if item_id is not provided."'
     )
 
@@ -74,7 +74,9 @@ def test_check_call_notes_a_sent_conditional_field(stack: FakeStack) -> None:
     call = stack.check_call().execute("shopify", "POST", "/orders/1/refunds", sent)
     r = payloads.check_call_payload(call)
     notes = {p["name"]: p["note"] for p in r["params"]}
-    assert notes["items[].retailer_id"].startswith("Condition on retailer_id")
+    assert notes["items[].retailer_id"].startswith(
+        "Condition on items[].retailer_id (required only in this case):"
+    )
     assert not notes["items[].item_id"]
 
 
