@@ -123,6 +123,16 @@ class InMemoryDocumentRepo:
             if d.kind is kind and d.source_id and d.source_id in wanted
         }
 
+    def operation_ids(self, build_id: BuildId) -> list[tuple[str, str]]:
+        docs = sorted(self.documents.get(build_id.value, {}).values(), key=lambda d: d.doc_id)
+        return [
+            (d.raw["specOperationId"], d.doc_id)
+            for d in docs
+            if d.kind is DocumentKind.ENDPOINT
+            and isinstance(d.raw, dict)
+            and isinstance(d.raw.get("specOperationId"), str)
+        ]
+
     def model_users(self, build_id: BuildId, model_id: str) -> list[tuple[str, tuple[str, ...]]]:
         out = []
         for d in sorted(self.documents.get(build_id.value, {}).values(), key=lambda d: d.doc_id):
