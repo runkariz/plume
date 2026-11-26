@@ -7,6 +7,7 @@
 
 import json
 import shutil
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -116,3 +117,39 @@ def test_the_producers_field_and_where_win_over_the_fallbacks() -> None:
     placed = Conflict("t", (ConflictStatement("a", "q"),), "conflict", "end_time", "response:200")
     assert conflict_concerns(placed, "end_time")
     assert not conflict_concerns(placed, "end_time", request=True)
+
+
+def test_one_item_per_path_with_the_same_limit_all_survive_and_match_their_own_path(
+    tmp_path: Path,
+) -> None:
+    """Core ruling: the same field name required at several places (Google Merchant shipping
+    settings: prices at 4-5 paths) is ONE item per path, each with its own field and where and
+    the SAME limit text. None is merged away; each matches only its own path."""
+    from tests.conftest import PACKAGES  # noqa: PLC0415
+
+    paths = ["services[].rateGroups[].mainTable.rows[].cells[].prices",
+             "services[].rateGroups[].subtables[].rows[].cells[].prices",
+             "warehouses[].prices"]  # fmt: skip
+    items = [{"kind": "condition", "limit": "field prices required", "field": p, "where": "body",
+              "statements": [{"where": "description", "quote": f"Required at {p}."}]}
+             for p in paths]  # fmt: skip
+    assert [c.field for c in conflicts_of({"x-kariz-conflicts": items})] == paths
+    dst = tmp_path / "shopify"
+    shutil.copytree(PACKAGES / "shopify-mini", dst)
+    d = dst / "connector" / "endpoints" / "put-shipping"
+    d.mkdir()
+    (d / "request.json").write_text(json.dumps({
+        "endpointId": "put-shipping", "name": "Shipping", "method": "PUT",
+        "url": "{{app_env.servers.api}}/shippingsettings", "resource": "Shipping",
+        "bodyType": "NONE", "responses": [], "x-kariz-conflicts": items,
+    }))  # fmt: skip
+    s = FakeStack()
+    s.load(str(dst))
+    got = s.get_document().execute("shopify", "endpoint:PUT~/shippingsettings")
+    doc = payloads.document_payload(got)
+    assert [c["field"] for c in doc["conflicts"]] == paths
+    assert {c["limit"] for c in doc["conflicts"]} == {"field prices required"}
+    found = conflicts_of(got.document.raw)
+    for p in paths:  # a call sending one path is concerned by that path's item only
+        mine = [c for c in found if conflict_concerns(c, p, request=True)]
+        assert [c.field for c in mine] == [p]
