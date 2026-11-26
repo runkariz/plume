@@ -113,6 +113,14 @@ def test_release_notes_are_computed_on_postgres_and_travel_with_the_dump(
     assert restored == src.release_notes_repo.get(second.build_id.value)
     assert restored is not None
     assert restored["review"] == "rolled_back"
+    with dst.engine.connect() as conn:  # the API list's projection is stored on restore too
+        from sqlalchemy import text  # noqa: PLC0415
+
+        card = conn.execute(
+            text("SELECT card FROM release_notes WHERE to_build = :b"), {"b": second.build_id.value}
+        ).scalar_one()
+    assert card is not None
+    assert card == dst.release_notes_repo.card_notes([second.build_id.value])[second.build_id.value]
     assert dst.release_notes_repo.get_meta(second.build_id.value) == (
         src.release_notes_repo.get_meta(second.build_id.value)
     )
