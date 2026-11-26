@@ -1850,6 +1850,24 @@
       },
       "DocConflict": {
         "properties": {
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The field it is about, if one.",
+            "title": "Field"
+          },
+          "kind": {
+            "default": "conflict",
+            "description": "conflict: the docs disagree (every statement shown, none picked); condition: a field applies only in a stated case (send it only then).",
+            "title": "Kind",
+            "type": "string"
+          },
           "limit": {
             "title": "Limit",
             "type": "string"

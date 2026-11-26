@@ -830,6 +830,22 @@ _REQUEST_SCHEMAS = (
 )
 
 
+def _endpoint_property_conflicts(folder: Path, req: JsonObj) -> list[dict[str, Any]]:
+    """Property-level x-kariz-conflicts in the endpoint's request schemas and 2xx responses."""
+    refs = [_str(req.get(key)) for key, _, _ in _REQUEST_SCHEMAS]
+    refs += [
+        _str(r.get("contentContractRef"))
+        for r in req.get("responses") or []
+        if isinstance(r, dict)
+        and isinstance(r.get("statusCode"), int)
+        and 200 <= r["statusCode"] < 300
+    ]
+    out: list[dict[str, Any]] = []
+    for ref in dict.fromkeys(r for r in refs if r):
+        out += property_conflicts(_opt_json(folder / ref))
+    return out
+
+
 def _endpoint_fields(
     folder: Path, req: JsonObj
 ) -> tuple[dict[str, list[FieldSpec]], list[FieldSpec], dict[str, int]]:
@@ -1154,7 +1170,7 @@ class StreamPackageSource:
         # recall on the frozen gold sets (Shopify -2.5, Woo -2.7 points at recall@5).
         fixed = real_path(req, path, rolling)
         limit = rate_limits.resolve(req, limits or [])
-        return Document(
+        doc = Document(
             doc_id=endpoint_doc_id(method, path),
             kind=DocumentKind.ENDPOINT,
             title=name,
@@ -1182,6 +1198,7 @@ class StreamPackageSource:
             real_path=fixed,
             rate_limit=limit,
         )
+        return _with_conflicts(doc, _endpoint_property_conflicts(folder, req))
 
     def _guides_and_auth(self, connector: Path, warnings: list[str]) -> list[tuple[Document, str]]:
         out: list[tuple[Document, str]] = []
@@ -1223,7 +1240,7 @@ class StreamPackageSource:
         if values:  # a scalar enum model (TriggerType): its values are what it documents
             lines = [f"- `{v}`" + (f": {d}" if d else "") for v, d in values]
             parts.append("## Values\n" + "\n".join(lines))
-        return Document(
+        doc = Document(
             doc_id=slug_doc_id(DocumentKind.MODEL, _slug(stem)),
             kind=DocumentKind.MODEL,
             title=title,
@@ -1236,6 +1253,7 @@ class StreamPackageSource:
             shape=shape_hash(data),
             raw=data if level is None else {**data, FIELDS_BOUNDED_KEY: level + 1},
         )
+        return _with_conflicts(doc, property_conflicts(data))
 
     @staticmethod
     def _guide(path: Path) -> Document | None:
@@ -1837,6 +1855,28 @@ def _with_rule_sources(doc: Document, rules: "list[knowledge_export.Rule]") -> D
     raw = dict(doc.raw) if isinstance(doc.raw, dict) else {}
     merged = {**(raw.get(RULE_SOURCES_KEY) or {}), **sources}
     return replace(doc, raw={**raw, RULE_SOURCES_KEY: merged})
+
+
+def property_conflicts(schema: object, prefix: str = "") -> list[dict[str, Any]]:
+    """x-kariz-conflicts set on properties (at any depth, array items as []), each with the
+    property's dotted path as its "field" (Meta Commerce transaction-detail transaction_type:
+    SALE/REFUND on one page, six reason codes on another). $refs are not followed."""
+    out: list[dict[str, Any]] = []
+    if not isinstance(schema, dict):
+        return out
+    props = schema.get("properties")
+    for name, sub in (props if isinstance(props, dict) else {}).items():
+        if not isinstance(sub, dict):
+            continue
+        path = f"{prefix}.{name}" if prefix else str(name)
+        for c in sub.get(CONFLICTS_KEY) or []:
+            if isinstance(c, dict):
+                out.append({**c, "field": c.get("field") or path})
+        out += property_conflicts(sub, path)
+    items = schema.get("items")
+    if isinstance(items, dict):
+        out += property_conflicts(items, f"{prefix}[]" if prefix else "[]")
+    return out
 
 
 def _with_conflicts(doc: Document, items: "list[Any]") -> Document:

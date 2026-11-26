@@ -515,6 +515,12 @@ class ConflictStatementOut(Schema):
 
 class DocConflict(Schema):
     limit: str
+    kind: str = Field(
+        default="conflict",
+        description="conflict: the docs disagree (every statement shown, none picked); "
+        "condition: a field applies only in a stated case (send it only then).",
+    )
+    field: str | None = Field(default=None, description="The field it is about, if one.")
     text: str = Field(description='"The docs state different values for <limit>:" + quotes.')
     statements: list[ConflictStatementOut]
 

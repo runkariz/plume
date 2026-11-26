@@ -278,20 +278,34 @@ class ConflictStatement:
 class Conflict:
     limit: str  # what is limited, in the docs' words
     statements: tuple[ConflictStatement, ...]
+    # "condition": the docs make a field depend on another ("Required if item_id is not
+    # provided"): one statement, to apply when it holds, not a disagreement
+    kind: str = "conflict"
+    field: str | None = None  # the field it is about (a property's path, or a condition's)
 
     @property
     def text(self) -> str:
-        """\"The docs state different values for <limit>:\" and each quote with its place."""
-        lines = [f"The docs state different values for {self.limit}:"]
+        """\"The docs state different values for <limit>:\" (a condition: \"Condition on
+        <limit>, send it when it applies:\") and each quote with its place."""
+        lines = [
+            f"Condition on {self.field or self.limit} (send it only when this applies):"
+            if self.kind == CONDITION
+            else f"The docs state different values for {self.limit}:"
+        ]
         for st in self.statements:
             mark = " (example)" if st.is_example else ""
             lines.append(f'- {st.where}{mark}: "{st.quote}"')
         return "\n".join(lines)
 
 
+CONDITION = "condition"
+_CONDITION_FIELD = re.compile(r"^field\s+(\S+)\s+required\b", re.IGNORECASE)
+
+
 def conflicts_of(raw: object) -> tuple[Conflict, ...]:
-    """The document's x-kariz-conflicts (raw JSON), skipping malformed items (fewer than two
-    statements, no limit)."""
+    """The document's x-kariz-conflicts (raw JSON), skipping malformed items (no limit; fewer
+    than two statements, or none for a condition). A condition's field comes from "field
+    <name> required"; a property-level conflict lifted by the loader carries its field."""
     items = raw.get(CONFLICTS_KEY) if isinstance(raw, Mapping) else None
     out: list[Conflict] = []
     for item in items if isinstance(items, list) else []:
@@ -307,9 +321,26 @@ def conflicts_of(raw: object) -> tuple[Conflict, ...]:
             for st in item.get("statements") or []
             if isinstance(st, Mapping) and isinstance(st.get("quote"), str)
         )
-        if len(statements) >= 2:
-            out.append(Conflict(item["limit"], statements))
+        kind = CONDITION if item.get("kind") == CONDITION else "conflict"
+        field = item.get("field") if isinstance(item.get("field"), str) else None
+        if kind == CONDITION and field is None:
+            m = _CONDITION_FIELD.match(item["limit"].strip())
+            field = m.group(1) if m else None
+        if len(statements) >= (1 if kind == CONDITION else 2):
+            out.append(Conflict(item["limit"], statements, kind, field))
     return tuple(out)
+
+
+def conflict_concerns(conflict: Conflict, name: str) -> bool:
+    """The conflict is about this field or parameter: a statement at param:<name>, or its field
+    (a nested name matches by its last parts: items[].retailer_id and retailer_id)."""
+    want = name.lower().replace("[]", "")
+    if any(st.where.lower() == f"param:{name.lower()}" for st in conflict.statements):
+        return True
+    if conflict.field is None:
+        return False
+    field = conflict.field.lower().replace("[]", "")
+    return want == field or want.endswith("." + field) or field.endswith("." + want)
 
 
 def standard_header(scheme: Mapping[str, object]) -> bool:
