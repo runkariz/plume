@@ -877,7 +877,7 @@ export interface ConflictStatement {
 export interface DocConflict {
   limit: string;
   /**
-   * "conflict" (the default, absent on older servers): the docs disagree; "condition": a field applies only in a stated
+   * "conflict" (the default, absent on older servers): the docs disagree; "condition": a field is required only in a stated
    * case ("Required if item_id is not provided"), which is not a disagreement.
    */
   kind?: string;

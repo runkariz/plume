@@ -20,7 +20,12 @@ describe('a condition', () => {
   it('is not a disagreement: its own card, worded as a condition on the field', () => {
     render(<DocConflicts conflicts={[condition]} />);
     const card = screen.getByRole('region', { name: 'Conditions' });
-    expect(card).toHaveTextContent('Condition on item_group_id (send it only when this applies):');
+    expect(card).toHaveTextContent('Condition on item_group_id (required only in this case):');
+    // the subtitle says no more than the vendor does (no "send it only then")
+    expect(card).toHaveTextContent(
+      'When the docs state these fields are required. They are not a disagreement.',
+    );
+    expect(card).not.toHaveTextContent(/only when|send it/);
     expect(card).toHaveTextContent('Required if item_id is not provided');
     expect(card).toHaveTextContent('in parameter item_group_id');
     expect(
@@ -33,7 +38,7 @@ describe('a condition', () => {
   it('without a field is worded on what the server calls it', () => {
     render(<DocConflicts conflicts={[{ ...condition, field: null, limit: 'the update mask' }]} />);
     expect(screen.getByRole('region', { name: 'Conditions' })).toHaveTextContent(
-      'Condition on the update mask (send it only when this applies):',
+      'Condition on the update mask (required only in this case):',
     );
   });
 });
@@ -90,6 +95,6 @@ describe('on a document page', () => {
     const conditions = screen.getByRole('region', { name: 'Conditions' });
     expect(disagree).toHaveTextContent('different values for orders[].financial_status:');
     expect(disagree).not.toHaveTextContent('Required if since_id is not provided.');
-    expect(conditions).toHaveTextContent('Condition on ids (send it only when this applies):');
+    expect(conditions).toHaveTextContent('Condition on ids (required only in this case):');
   });
 });

@@ -14,7 +14,7 @@ for (const theme of THEMES) {
       await expect(card).toContainText('different values for orders[].financial_status:');
       // a condition is not a disagreement: its own card
       const conditions = page.getByRole('region', { name: 'Conditions' });
-      await expect(conditions).toContainText('Condition on ids (send it only when this applies):');
+      await expect(conditions).toContainText('Condition on ids (required only in this case):');
       await expect(card).not.toContainText('Required if since_id');
       await expect(card.getByText('example', { exact: true })).toBeVisible();
       await settle(page);
