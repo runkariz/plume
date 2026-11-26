@@ -80,3 +80,22 @@ def test_card_notes_give_the_same_counts_as_the_whole_notes(container: Container
     assert many["test-catalog-api"] is None
     card = repo.card_notes([latest["shopify"]])[latest["shopify"]]
     assert len(json.dumps(card)) < 1000  # the projection, not the quotes
+
+
+def test_a_note_without_a_stored_card_is_projected_from_its_body(container: Container) -> None:
+    """Rows saved before migration 0022 (card NULL) still give their card, the old way."""
+    from sqlalchemy import text  # noqa: PLC0415
+
+    build = container.resolver().resolve("shopify").build.build_id.value
+    base = container.resolver().resolve("second-catalog-api").build.build_id.value
+    visible = {"subject": {"docId": "model:order"}, "op": "added", "kind": "property",
+               "class": "confirmed", "breaking": False, "wordingOnly": False,
+               "visibleToUsers": True}  # fmt: skip
+    hidden = {**visible, "visibleToUsers": False}
+    repo = container.release_notes_repo
+    repo.save(_note("shopify", build, base, [visible, hidden]))
+    stored = repo.card_notes([build])[build]
+    with container.engine.begin() as conn:
+        conn.execute(text("UPDATE release_notes SET card = NULL WHERE to_build = :b"), {"b": build})
+    assert repo.card_notes([build])[build] == stored
+    assert [i["class"] for i in stored["items"]] == ["confirmed"]
